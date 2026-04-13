@@ -14,7 +14,7 @@ export default async function CompetitionPage() {
   };
 
   return (
-    <div className="p-8 max-w-[1200px]">
+    <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white">Competition</h1>
         <p className="text-text-secondary text-sm mt-0.5">Competitor analysis and market positioning</p>
@@ -39,7 +39,7 @@ export default async function CompetitionPage() {
             </div>
 
             <div className="p-6">
-              <div className="grid grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                 {/* Social Presence */}
                 <div>
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-3">Social Presence</h4>

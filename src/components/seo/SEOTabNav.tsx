@@ -16,14 +16,14 @@ export function SEOTabNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex gap-1 border-b border-border/50 mb-6">
+    <nav className="flex gap-1 border-b border-border/50 mb-6 overflow-x-auto scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
       {tabs.map((tab) => {
         const isActive = pathname === tab.href;
         return (
           <Link
             key={tab.href}
             href={tab.href}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors relative
+            className={`px-3 md:px-4 py-2.5 text-xs md:text-sm font-medium transition-colors relative whitespace-nowrap touch-manipulation
               ${isActive
                 ? "text-white"
                 : "text-text-muted hover:text-text-secondary"

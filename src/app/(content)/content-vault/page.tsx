@@ -21,7 +21,7 @@ export default async function ContentVaultPage() {
   const scheduledCount = saved.filter((c) => c.status === "scheduled").length;
 
   return (
-    <div className="p-8 max-w-[1200px]">
+    <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">Content Vault</h1>
@@ -35,7 +35,7 @@ export default async function ContentVaultPage() {
       <ContentExtractor />
 
       {/* Stats bar */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Total Saved</p>
           <p className="text-2xl font-bold text-white mt-1">{saved.length}</p>
@@ -54,9 +54,9 @@ export default async function ContentVaultPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
         {/* Saved Content - takes 3 columns */}
-        <div className="col-span-3">
+        <div className="col-span-1 lg:col-span-3">
           <div className="bg-card rounded-xl border border-border/50">
             <div className="p-5 border-b border-border/50 flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-white">
@@ -137,7 +137,7 @@ export default async function ContentVaultPage() {
         </div>
 
         {/* Trending Content - takes 2 columns */}
-        <div className="col-span-2">
+        <div className="col-span-1 lg:col-span-2">
           <div className="bg-card rounded-xl border border-border/50">
             <div className="p-5 border-b border-border/50">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-white">

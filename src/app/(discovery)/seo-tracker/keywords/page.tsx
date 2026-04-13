@@ -22,7 +22,7 @@ export default async function KeywordsPage() {
       <KeywordSeedInput />
 
       {/* Summary */}
-      <div className="grid grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Total Keywords</p>
           <p className="text-2xl font-bold text-white mt-1">{totalKeywords}</p>

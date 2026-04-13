@@ -26,9 +26,9 @@ export default async function SERPAnalysisPage() {
       </div>
 
       {featured && (
-        <div className="grid grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
           {/* SERP Results */}
-          <div className="col-span-3 space-y-3">
+          <div className="col-span-1 lg:col-span-3 space-y-3">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-white">
                 Top Results for &ldquo;{featured.keyword}&rdquo;
@@ -84,7 +84,7 @@ export default async function SERPAnalysisPage() {
           </div>
 
           {/* Analysis Sidebar */}
-          <div className="col-span-2 space-y-4">
+          <div className="col-span-1 lg:col-span-2 space-y-4">
             {/* Recommendations */}
             <div className="bg-card rounded-xl p-5 border border-border/50">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-white mb-3">To Rank for This Keyword</h3>

@@ -24,7 +24,7 @@ export default async function LeadsPage() {
   const newCount = leads.filter((l) => l.status === "new").length;
 
   return (
-    <div className="p-8 max-w-[1200px]">
+    <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">Leads & Outreach</h1>
@@ -36,7 +36,7 @@ export default async function LeadsPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Total Leads</p>
           <p className="text-2xl font-bold text-white mt-1">{leads.length}</p>
@@ -56,7 +56,8 @@ export default async function LeadsPage() {
       </div>
 
       {/* Lead table */}
-      <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+      <div className="overflow-x-auto -mx-4 md:mx-0">
+        <div className="bg-card rounded-xl border border-border/50 overflow-hidden min-w-[800px] md:min-w-0">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border/50">
@@ -91,6 +92,7 @@ export default async function LeadsPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

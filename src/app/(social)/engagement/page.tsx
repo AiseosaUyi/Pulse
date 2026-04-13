@@ -17,7 +17,7 @@ export default async function EngagementPage() {
   const sentimentColors: Record<string, string> = { positive: "bg-status-green/10 text-status-green", neutral: "bg-border/50 text-text-muted", negative: "bg-status-red/10 text-status-red", question: "bg-status-yellow/10 text-status-yellow" };
 
   return (
-    <div className="p-8 max-w-[1200px]">
+    <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">Engagement Inbox</h1>
@@ -26,7 +26,7 @@ export default async function EngagementPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Unread</p>
           <p className="text-2xl font-bold text-status-red mt-1">{unread}</p>

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { ArrowUpRight, Bell } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { PlatformBreakdown } from "@/components/dashboard/PlatformBreakdown";
@@ -22,13 +22,12 @@ export default async function DashboardPage() {
 
   if (!tenant || !stats) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <p className="text-text-secondary">Tenant not found.</p>
       </div>
     );
   }
 
-  // Format ad spend with tenant currency
   const adSpendFormatted = {
     ...stats.adSpend,
     value:
@@ -45,22 +44,22 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div className="p-8 max-w-[1200px]">
+    <div className="p-4 md:p-8 max-w-[1200px]">
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6 md:mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
           <p className="text-text-secondary text-sm mt-0.5">
             Week of {weekLabel}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <NotificationBell tenantSlug={tenantSlug} />
-          <Link href="/weekly-report" className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm text-white hover:bg-card-hover transition-colors duration-150 active:scale-[0.98]">
+          <Link href="/weekly-report" className="flex items-center gap-2 px-3 md:px-4 py-2 border border-border rounded-lg text-xs md:text-sm text-white hover:bg-card-hover transition-colors duration-150 active:scale-[0.98] touch-manipulation">
             Weekly report
             <ArrowUpRight size={14} />
           </Link>
-          <button className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm text-white hover:bg-card-hover transition-colors duration-150 active:scale-[0.98]">
+          <button className="flex items-center gap-2 px-3 md:px-4 py-2 border border-border rounded-lg text-xs md:text-sm text-white hover:bg-card-hover transition-colors duration-150 active:scale-[0.98] touch-manipulation">
             Ask Pulse
             <ArrowUpRight size={14} />
           </button>
@@ -68,7 +67,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <StatCard data={stats.socialReach} />
         <StatCard data={stats.profileScore} scoreMax={100} />
         <StatCard data={stats.activeLeads} />
@@ -76,7 +75,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Two-column bottom */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <PlatformBreakdown platforms={platforms} />
         <PulseSuggestions suggestions={suggestions} />
       </div>

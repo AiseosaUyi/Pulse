@@ -7,7 +7,7 @@ export default async function PlatformScorePage() {
   const data = mockPlatformScores[tenantSlug] ?? mockPlatformScores.gruve;
 
   return (
-    <div className="p-8 max-w-[1200px]">
+    <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white">Platform Score</h1>
         <p className="text-text-secondary text-sm mt-0.5">Cross-platform health scorecard</p>
@@ -52,7 +52,7 @@ export default async function PlatformScorePage() {
       </div>
 
       {/* Per-platform cards */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {data.platforms.map((p) => (
           <div key={p.platform} className="bg-card rounded-xl p-6 border border-border/50">
             <div className="flex items-center justify-between mb-4">

@@ -10,13 +10,13 @@ export default async function ViralTrendsPage() {
   const typeIcons: Record<string, string> = { video: "▶", image: "◻", carousel: "⊞", text: "¶" };
 
   return (
-    <div className="p-8 max-w-[1200px]">
+    <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white">Viral Trends</h1>
         <p className="text-text-secondary text-sm mt-0.5">Trending hashtags and top-performing content</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         {/* Trending Hashtags */}
         <div className="bg-card rounded-xl p-6 border border-border/50">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-white mb-5">Trending Hashtags</h2>
@@ -68,7 +68,7 @@ export default async function ViralTrendsPage() {
       {/* Content Type Performance */}
       <div className="bg-card rounded-xl p-6 border border-border/50 mt-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-white mb-5">Content Type Performance</h2>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {[
             { type: "Video", icon: "▶", avgReach: "3.5K", avgEng: "10.2%" },
             { type: "Carousel", icon: "⊞", avgReach: "2.6K", avgEng: "6.8%" },

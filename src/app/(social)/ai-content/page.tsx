@@ -15,7 +15,7 @@ export default async function AIContentPage() {
   };
 
   return (
-    <div className="p-8 max-w-[1200px]">
+    <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">AI Content Engine</h1>
@@ -29,7 +29,7 @@ export default async function AIContentPage() {
       {/* Content Calendar */}
       <div className="bg-card rounded-xl p-6 border border-border/50 mb-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-white mb-4">This Week</h2>
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 sm:gap-2">
           {calendar.map((day) => (
             <div key={day.date} className="text-center">
               <p className="text-text-muted text-xs mb-1">{day.dayLabel}</p>

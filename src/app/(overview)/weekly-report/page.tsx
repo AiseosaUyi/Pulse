@@ -13,8 +13,8 @@ export default async function WeeklyReportPage() {
   const currency = tenant?.currency ?? "NGN";
 
   return (
-    <div className="p-8 max-w-[900px]">
-      <div className="flex items-center gap-3 mb-8">
+    <div className="p-4 md:p-8 max-w-[900px]">
+      <div className="flex items-center gap-3 mb-6 md:mb-8">
         <Link href="/dashboard" className="text-text-muted hover:text-white transition-colors">
           <ArrowLeft size={20} />
         </Link>
@@ -40,7 +40,7 @@ export default async function WeeklyReportPage() {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
         <div className="bg-card rounded-xl p-5 border border-border/50">
           <p className="text-text-secondary text-xs">Social Reach</p>
           <p className="text-3xl font-bold text-white mt-1">{(report.socialReach.value / 1000).toFixed(1)}K</p>
@@ -90,7 +90,7 @@ export default async function WeeklyReportPage() {
       </div>
 
       {/* Activity Summary */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <div className="bg-card rounded-xl p-4 border border-border/50 text-center">
           <p className="text-text-secondary text-xs">Leads Generated</p>
           <p className="text-xl font-bold text-white mt-1">{report.leadsGenerated}</p>

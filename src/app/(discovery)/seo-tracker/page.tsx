@@ -28,7 +28,7 @@ export default async function SEODashboardPage() {
   return (
     <div>
       {/* Metrics Grid */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {metrics.map((m) => (
           <div key={m.label} className="bg-card rounded-xl p-4 border border-border/50">
             <p className="text-text-secondary text-xs">{m.label}</p>
@@ -43,7 +43,7 @@ export default async function SEODashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Link href="/seo-tracker/keywords" className="bg-card rounded-xl p-5 border border-border/50 hover:border-accent-purple/50 transition-colors group">
           <div className="w-10 h-10 rounded-lg bg-accent-purple/10 flex items-center justify-center mb-3">
             <Search size={20} className="text-accent-purple" />
@@ -67,7 +67,7 @@ export default async function SEODashboardPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
         {/* Top Keywords */}
         <div className="bg-card rounded-xl border border-border/50">
           <div className="p-5 border-b border-border/50 flex items-center justify-between">

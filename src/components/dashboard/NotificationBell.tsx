@@ -38,7 +38,7 @@ export function NotificationBell({ tenantSlug }: NotificationBellProps) {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-[380px] bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden">
+          <div className="fixed inset-x-4 top-16 md:absolute md:inset-x-auto md:right-0 md:top-full mt-2 md:w-[380px] bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden">
             <div className="p-4 border-b border-border/50 flex items-center justify-between">
               <h3 className="text-white font-semibold text-sm">Notifications</h3>
               <span className="text-text-muted text-xs">{unreadCount} unread</span>

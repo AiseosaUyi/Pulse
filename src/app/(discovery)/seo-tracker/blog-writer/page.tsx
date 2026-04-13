@@ -36,9 +36,9 @@ export default async function BlogWriterPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
         {/* Post list */}
-        <div className="col-span-2 space-y-3">
+        <div className="col-span-1 lg:col-span-2 space-y-3">
           {posts.map((post) => (
             <div
               key={post.id}
@@ -63,7 +63,7 @@ export default async function BlogWriterPage() {
 
         {/* Detail panel */}
         {featuredPost && (
-          <div className="col-span-3 space-y-4">
+          <div className="col-span-1 lg:col-span-3 space-y-4">
             {/* Heading Structure */}
             <div className="bg-card rounded-xl p-5 border border-border/50">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-white mb-3">Heading Structure</h3>
