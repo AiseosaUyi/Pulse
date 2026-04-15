@@ -40,10 +40,11 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "SEO & DISCOVERY",
+    label: "INTELLIGENCE",
     items: [
+      { label: "Intel feed", href: "/intel-feed", iconName: "Eye" },
+      { label: "Content briefs", href: "/content-briefs", iconName: "FileText" },
       { label: "SEO command center", href: "/seo-tracker", iconName: "Search" },
-      { label: "Competition", href: "/competition", iconName: "Radio" },
     ],
   },
 ];

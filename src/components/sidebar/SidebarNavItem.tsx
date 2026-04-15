@@ -15,6 +15,8 @@ import {
   Search,
   MessageCircle,
   Clock,
+  Eye,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,6 +33,8 @@ const iconMap: Record<string, LucideIcon> = {
   Search,
   MessageCircle,
   Clock,
+  Eye,
+  FileText,
 };
 
 interface SidebarNavItemProps {
