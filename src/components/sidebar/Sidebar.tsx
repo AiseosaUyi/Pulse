@@ -18,7 +18,7 @@ export function Sidebar({ tenants, currentTenantSlug }: SidebarProps) {
           </span>
         </h1>
         <p className="text-[11px] font-medium uppercase tracking-widest text-text-muted mt-0.5">
-          Gruve Marketing OS
+          Marketing OS
         </p>
       </div>
 

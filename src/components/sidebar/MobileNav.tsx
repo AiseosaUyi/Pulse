@@ -55,7 +55,7 @@ export function MobileNav({ tenants, currentTenantSlug }: MobileNavProps) {
               </span>
             </h1>
             <p className="text-[11px] font-medium uppercase tracking-widest text-text-muted mt-0.5">
-              Gruve Marketing OS
+              Marketing OS
             </p>
           </div>
           <button
@@ -66,13 +66,15 @@ export function MobileNav({ tenants, currentTenantSlug }: MobileNavProps) {
           </button>
         </div>
 
-        {/* Nav — clicking any link closes the menu */}
-        <div onClick={() => setIsOpen(false)}>
+        {/* Nav — clicking any link closes the menu. min-h-0 constrains height so SidebarNav's overflow-y-auto scrolls */}
+        <div className="flex-1 min-h-0 flex flex-col" onClick={() => setIsOpen(false)}>
           <SidebarNav />
         </div>
 
-        {/* Tenant switcher */}
-        <TenantSwitcher tenants={tenants} currentSlug={currentTenantSlug} />
+        {/* Tenant switcher — pinned to bottom */}
+        <div className="shrink-0">
+          <TenantSwitcher tenants={tenants} currentSlug={currentTenantSlug} />
+        </div>
       </div>
     </>
   );
