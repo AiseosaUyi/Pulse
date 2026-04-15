@@ -18,6 +18,7 @@ export function SidebarNavGroup({ group }: SidebarNavGroupProps) {
             label={item.label}
             href={item.href}
             iconName={item.iconName}
+            children={item.children}
           />
         ))}
       </div>

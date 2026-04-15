@@ -54,9 +54,6 @@ export function MobileNav({ tenants, currentTenantSlug }: MobileNavProps) {
                 PULSE
               </span>
             </h1>
-            <p className="text-[11px] font-medium uppercase tracking-widest text-text-muted mt-0.5">
-              Marketing OS
-            </p>
           </div>
           <button
             onClick={() => setIsOpen(false)}

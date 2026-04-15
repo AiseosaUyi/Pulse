@@ -2,6 +2,7 @@ export interface NavItem {
   label: string;
   href: string;
   iconName: string;
+  children?: NavItem[];
 }
 
 export interface NavGroup {
@@ -17,15 +18,17 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "CONTENT",
-    items: [
-      { label: "Content vault", href: "/content-vault", iconName: "FolderOpen" },
-      { label: "AI content engine", href: "/ai-content", iconName: "Sparkles" },
-    ],
-  },
-  {
     label: "SOCIAL",
     items: [
+      {
+        label: "Content",
+        href: "/content-vault",
+        iconName: "FolderOpen",
+        children: [
+          { label: "Vault", href: "/content-vault", iconName: "FolderOpen" },
+          { label: "AI content engine", href: "/ai-content", iconName: "Sparkles" },
+        ],
+      },
       { label: "Engagement inbox", href: "/engagement", iconName: "MessageCircle" },
       { label: "Platform score", href: "/platform-score", iconName: "CircleDot" },
       { label: "Viral trends", href: "/viral-trends", iconName: "TrendingUp" },
@@ -42,8 +45,15 @@ export const navGroups: NavGroup[] = [
   {
     label: "INTELLIGENCE",
     items: [
-      { label: "Intel feed", href: "/intel-feed", iconName: "Eye" },
-      { label: "Content briefs", href: "/content-briefs", iconName: "FileText" },
+      {
+        label: "Intel feed",
+        href: "/intel-feed",
+        iconName: "Eye",
+        children: [
+          { label: "Feed", href: "/intel-feed", iconName: "Eye" },
+          { label: "Content briefs", href: "/content-briefs", iconName: "FileText" },
+        ],
+      },
       { label: "SEO command center", href: "/seo-tracker", iconName: "Search" },
     ],
   },

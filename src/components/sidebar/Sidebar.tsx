@@ -17,9 +17,6 @@ export function Sidebar({ tenants, currentTenantSlug }: SidebarProps) {
             PULSE
           </span>
         </h1>
-        <p className="text-[11px] font-medium uppercase tracking-widest text-text-muted mt-0.5">
-          Marketing OS
-        </p>
       </div>
 
       {/* Navigation */}
