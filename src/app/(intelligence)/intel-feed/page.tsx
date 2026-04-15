@@ -1,9 +1,12 @@
 import { cookies } from "next/headers";
 import { getIntelFeed, getMorningBrief, getWeeklyDigest, getCompetitors } from "@/lib/services/intelligence";
 import { getContentBriefs } from "@/lib/services/content";
+import { detectCrossBrandPatterns, detectAnomalies } from "@/lib/services/cross-brand";
 import { MorningBriefing } from "@/components/intelligence/MorningBriefing";
 import { IntelCard } from "@/components/intelligence/IntelCard";
 import { WeeklyDigest } from "@/components/intelligence/WeeklyDigest";
+import { CrossBrandInsights } from "@/components/intelligence/CrossBrandInsights";
+import { AnomalyAlerts } from "@/components/intelligence/AnomalyAlerts";
 import { IntelFeedClient } from "./client";
 
 export default async function IntelFeedPage() {
@@ -11,13 +14,16 @@ export default async function IntelFeedPage() {
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
   const tenantName = tenantSlug === "gruve" ? "Gruve" : "Sippy";
 
-  const [feed, morningBrief, digest, briefs, competitors] = await Promise.all([
-    getIntelFeed(tenantSlug),
-    getMorningBrief(tenantSlug),
-    getWeeklyDigest(tenantSlug),
-    getContentBriefs(tenantSlug),
-    getCompetitors(tenantSlug),
-  ]);
+  const [feed, morningBrief, digest, briefs, competitors, patterns, anomalies] =
+    await Promise.all([
+      getIntelFeed(tenantSlug),
+      getMorningBrief(tenantSlug),
+      getWeeklyDigest(tenantSlug),
+      getContentBriefs(tenantSlug),
+      getCompetitors(tenantSlug),
+      detectCrossBrandPatterns(),
+      detectAnomalies(tenantSlug),
+    ]);
 
   return (
     <div className="flex h-full">
@@ -34,8 +40,14 @@ export default async function IntelFeedPage() {
           <IntelFeedClient competitors={competitors} tenantSlug={tenantSlug} />
         </div>
 
+        {/* Anomaly Alerts */}
+        <AnomalyAlerts alerts={anomalies} />
+
         {/* Morning Briefing */}
         <MorningBriefing items={morningBrief} />
+
+        {/* Cross-Brand Insights */}
+        <CrossBrandInsights patterns={patterns} />
 
         {/* Feed */}
         {feed.length === 0 ? (
