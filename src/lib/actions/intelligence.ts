@@ -1,6 +1,16 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { supabase } from "@/lib/supabase/client";
+
 export async function submitCompetitorPost(formData: FormData) {
+  const competitorId = formData.get("competitorId") as string;
+  const competitorName = formData.get("competitorName") as string;
+  const competitorType = formData.get("competitorType") as string;
+  const tenantId = formData.get("tenantId") as string;
+  const platform = formData.get("platform") as string;
+  const contentType = formData.get("contentType") as string;
+  const postUrl = formData.get("postUrl") as string;
   const summary = formData.get("summary") as string;
   const views = formData.get("views") as string;
   const likes = formData.get("likes") as string;
@@ -18,38 +28,99 @@ export async function submitCompetitorPost(formData: FormData) {
     return { success: false, error: "At least one engagement metric is required" };
   }
 
-  // Phase 1: mock success. Phase 1.5: store in Supabase + call OpenAI
-  return {
-    success: true,
-    cardId: `intel-${Date.now()}`,
-    message: "Competitor post added. AI analysis will appear shortly.",
+  const metrics = {
+    views: views ? Number(views) : undefined,
+    likes: likes ? Number(likes) : undefined,
+    comments: comments ? Number(comments) : undefined,
+    shares: shares ? Number(shares) : undefined,
+    engagement: Number(likes || 0) + Number(comments || 0) + Number(shares || 0),
+    engagementRate: 0,
+    vsAverage: null,
   };
+
+  // Calculate engagement rate if views exist
+  if (metrics.views && metrics.views > 0) {
+    metrics.engagementRate = Number(((metrics.engagement / metrics.views) * 100).toFixed(1));
+  }
+
+  const { data, error } = await supabase
+    .from("intel_cards")
+    .insert({
+      tenant_id: tenantId,
+      competitor_id: competitorId,
+      competitor_name: competitorName,
+      competitor_type: competitorType,
+      platform,
+      content_type: contentType,
+      summary: summary.trim(),
+      post_url: postUrl || null,
+      metrics,
+      ai_recommendation: {
+        impact: "medium",
+        urgency: "fyi",
+        analysis: "AI analysis pending. Manual review recommended.",
+        action: "Review this competitor activity and decide on a response.",
+        contentBriefReady: false,
+      },
+      source: "manual",
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath("/intel-feed");
+  return { success: true, cardId: data.id };
 }
 
 export async function generateContentBrief(
   intelCardId: string,
   tenantSlug: string
 ) {
-  // Phase 1: mock brief. Phase 1.5: call OpenAI gpt-4o with brand voice
-  return {
-    success: true,
-    brief: {
-      id: `brief-${Date.now()}`,
-      tenantId: tenantSlug,
-      triggeredBy: intelCardId,
-      platform: "instagram",
-      contentType: "reel",
-      title: "BTS Reel: Your Version",
-      outline: [
-        "15-second BTS clip from next event/venue",
-        "Lo-fi edit with trending afrobeats audio",
-        "No hard sell — pure vibes and atmosphere",
-        "Caption: location tease + FOMO trigger",
-      ],
-      draftContent:
-        "When the sunset hits different at your venue... 🌅 Shot on iPhone, lo-fi edit. No filter needed when the vibes are this real. 📍 Drop a 🔥 if you'd pull up.",
-      status: "draft" as const,
-      generatedAt: new Date().toISOString(),
-    },
+  // Get the intel card for context
+  const { data: card } = await supabase
+    .from("intel_cards")
+    .select("*")
+    .eq("id", intelCardId)
+    .single();
+
+  if (!card) {
+    return { success: false, error: "Intel card not found" };
+  }
+
+  // Phase 2: Call OpenAI gpt-4o with brand voice context
+  // For now: generate a template brief based on the card data
+  const brief = {
+    tenant_id: tenantSlug,
+    triggered_by: intelCardId,
+    platform: card.platform,
+    content_type: card.content_type,
+    title: `Response to ${card.competitor_name}: ${card.content_type} strategy`,
+    outline: [
+      `Study ${card.competitor_name}'s approach: ${card.summary.slice(0, 80)}...`,
+      `Adapt the format for your brand voice and audience`,
+      `Key differentiator: what makes your version uniquely yours`,
+      `Optimal posting time based on your audience data`,
+      `Hashtags and caption strategy`,
+    ],
+    draft_content: `Inspired by ${card.competitor_name}'s ${card.content_type} on ${card.platform}. Their approach: ${card.summary.slice(0, 120)}... Adapt this for your brand with your unique angle.`,
+    seo_keywords: [],
+    status: "draft",
   };
+
+  const { data, error } = await supabase
+    .from("content_briefs")
+    .insert(brief)
+    .select("id")
+    .single();
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath("/intel-feed");
+  revalidatePath("/content-briefs");
+  return { success: true, briefId: data.id };
 }

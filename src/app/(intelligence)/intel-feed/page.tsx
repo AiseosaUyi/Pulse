@@ -1,20 +1,22 @@
 import { cookies } from "next/headers";
-import { getIntelFeed, getMorningBrief, getWeeklyDigest } from "@/lib/services/intelligence";
+import { getIntelFeed, getMorningBrief, getWeeklyDigest, getCompetitors } from "@/lib/services/intelligence";
 import { getContentBriefs } from "@/lib/services/content";
 import { MorningBriefing } from "@/components/intelligence/MorningBriefing";
 import { IntelCard } from "@/components/intelligence/IntelCard";
 import { WeeklyDigest } from "@/components/intelligence/WeeklyDigest";
+import { IntelFeedClient } from "./client";
 
 export default async function IntelFeedPage() {
   const cookieStore = await cookies();
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
   const tenantName = tenantSlug === "gruve" ? "Gruve" : "Sippy";
 
-  const [feed, morningBrief, digest, briefs] = await Promise.all([
+  const [feed, morningBrief, digest, briefs, competitors] = await Promise.all([
     getIntelFeed(tenantSlug),
     getMorningBrief(tenantSlug),
     getWeeklyDigest(tenantSlug),
     getContentBriefs(tenantSlug),
+    getCompetitors(tenantSlug),
   ]);
 
   return (
@@ -29,9 +31,7 @@ export default async function IntelFeedPage() {
               Competitor activity across {tenantName}&apos;s landscape
             </p>
           </div>
-          <button className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-accent-purple to-accent-pink hover:opacity-90 transition-opacity">
-            + Add Competitor Post
-          </button>
+          <IntelFeedClient competitors={competitors} tenantSlug={tenantSlug} />
         </div>
 
         {/* Morning Briefing */}
