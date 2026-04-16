@@ -50,7 +50,7 @@ export default async function LoginPage({
         </div>
         <div>
           <Label htmlFor="login-password">Password</Label>
-          <PasswordInput name="password" required autoComplete="current-password" />
+          <PasswordInput name="password" required autoComplete="current-password" placeholder="Enter your password" />
         </div>
         <Button type="submit" size="xl" className="w-full">
           Sign in

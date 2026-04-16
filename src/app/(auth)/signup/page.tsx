@@ -63,7 +63,7 @@ export default async function SignupPage({
         <form action={completeCompany} className="space-y-5">
           <div>
             <Label htmlFor="sc-name">Company name</Label>
-            <Input id="sc-name" type="text" name="companyName" required />
+            <Input id="sc-name" type="text" name="companyName" required placeholder="Acme Co." />
           </div>
           <div>
             <Label htmlFor="sc-slug">Company handle</Label>
@@ -128,12 +128,12 @@ export default async function SignupPage({
         </div>
         <div>
           <Label htmlFor="su-password">Password</Label>
-          <PasswordInput name="password" required minLength={8} autoComplete="new-password" />
+          <PasswordInput name="password" required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" />
           <p className="mt-1 text-xs text-gray-500">8 characters minimum.</p>
         </div>
         <div>
           <Label htmlFor="su-display">Display name</Label>
-          <Input id="su-display" type="text" name="displayName" required />
+          <Input id="su-display" type="text" name="displayName" required placeholder="Your full name" />
         </div>
 
         {!invite && (
@@ -141,7 +141,7 @@ export default async function SignupPage({
             <div className="pt-2 border-t border-white-200" />
             <div>
               <Label htmlFor="su-cname">Company name</Label>
-              <Input id="su-cname" type="text" name="companyName" required />
+              <Input id="su-cname" type="text" name="companyName" required placeholder="Acme Co." />
             </div>
             <div>
               <Label htmlFor="su-cslug">Company handle</Label>

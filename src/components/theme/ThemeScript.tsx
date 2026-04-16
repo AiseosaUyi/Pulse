@@ -5,7 +5,7 @@ export function ThemeScript() {
 (function() {
   try {
     var stored = localStorage.getItem('pulse-theme');
-    var theme = stored === 'light' || stored === 'dark' ? stored : 'dark';
+    var theme = stored === 'dark' ? 'dark' : 'light';
     var root = document.documentElement;
     if (theme === 'dark') root.classList.add('dark');
     else root.classList.remove('dark');

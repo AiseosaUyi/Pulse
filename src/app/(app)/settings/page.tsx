@@ -163,6 +163,7 @@ export default async function SettingsPage() {
               name="displayName"
               defaultValue={user.displayName ?? ""}
               required
+              placeholder="Your full name"
             />
           </div>
           <div>
@@ -174,6 +175,7 @@ export default async function SettingsPage() {
               defaultValue={user.username ?? ""}
               pattern="[a-z0-9_-]{2,40}"
               required
+              placeholder="lowercase-handle"
             />
           </div>
         </SettingsForm>
@@ -324,16 +326,33 @@ export default async function SettingsPage() {
         >
           <div>
             <Label htmlFor="s-current">Current password</Label>
-            <PasswordInput name="currentPassword" required autoComplete="current-password" />
+            <PasswordInput
+              name="currentPassword"
+              required
+              autoComplete="current-password"
+              placeholder="Your current password"
+            />
           </div>
           <div>
             <Label htmlFor="s-new">New password</Label>
-            <PasswordInput name="newPassword" required minLength={8} autoComplete="new-password" />
+            <PasswordInput
+              name="newPassword"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              placeholder="At least 8 characters"
+            />
             <p className="mt-1 text-xs text-gray-500">8 characters minimum.</p>
           </div>
           <div>
             <Label htmlFor="s-confirm">Confirm new password</Label>
-            <PasswordInput name="confirmPassword" required minLength={8} autoComplete="new-password" />
+            <PasswordInput
+              name="confirmPassword"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              placeholder="Repeat new password"
+            />
           </div>
         </SettingsForm>
       </section>

@@ -230,31 +230,31 @@ html.dark {
   --sidebar:         #111219;
   --card:            #181923;
   --card-hover:      #23252f;
-  --border:          #2f3142;   /* bumped — strokes now perceptible */
-  --text-secondary:  #b4b7c6;   /* was #9ca3af — better readable */
-  --text-muted:      #8b8ea3;   /* was #6b7280 — AA pass */
-  --purple:          #a855f7;   /* brighter purple — accent + CTA */
-  --pink:            #ec4899;
-  --purple-light:    #c084fc;
+  --border:          #2f3142;   /* strokes perceptible, soft */
+  --text-secondary:  #b4b7c6;
+  --text-muted:      #8b8ea3;
+  --purple:          #c7434e;   /* brand maroon, brightened for dark */
+  --pink:            #ea445a;   /* primary-1000 — accent red */
+  --purple-light:    #d85a64;
   --green:           #4ade80;
   --yellow:          #facc15;
   --red:             #f87171;
   --teal:            #2dd4bf;
 
-  /* Gruve primary — purple in dark */
-  --color-primary-50:   rgba(168, 85, 247, 0.14);
-  --color-primary-100:  rgba(168, 85, 247, 0.22);
-  --color-primary-200:  rgba(168, 85, 247, 0.32);
-  --color-primary-300:  #c084fc;
-  --color-primary-400:  #b57af8;
-  --color-primary-500:  #a855f7;   /* brand purple */
-  --color-primary-600:  #9333ea;
-  --color-primary-700:  #7e22ce;
-  --color-primary-800:  #6b21a8;
-  --color-primary-900:  #581c87;
-  --color-primary-1000: #ec4899;   /* pink accent */
-  --color-primary-1100: #f472b6;
-  --color-primary-1200: #f9a8d4;
+  /* Gruve primary — MAROON in dark (brightened for AA contrast) */
+  --color-primary-50:   rgba(234, 68, 90, 0.12);
+  --color-primary-100:  rgba(234, 68, 90, 0.20);
+  --color-primary-200:  rgba(234, 68, 90, 0.30);
+  --color-primary-300:  #f39b9b;
+  --color-primary-400:  #d85a64;
+  --color-primary-500:  #c7434e;   /* brand maroon, dark-mode-tuned */
+  --color-primary-600:  #b5313b;   /* hover (slight darken still OK on dark) */
+  --color-primary-700:  #a52833;
+  --color-primary-800:  #8a1f28;
+  --color-primary-900:  #5e0716;
+  --color-primary-1000: #ea445a;   /* warmer red accent */
+  --color-primary-1100: #f690a2;
+  --color-primary-1200: #e5b1bb;
 
   /* Gruve gray — INVERTED for dark (light text, dark surfaces) */
   --color-gray-50:   #181923;

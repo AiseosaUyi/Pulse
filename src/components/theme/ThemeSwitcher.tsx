@@ -7,9 +7,9 @@ import { cn } from "@/lib/utils";
 type Theme = "light" | "dark";
 
 function readTheme(): Theme {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return "light";
   const stored = window.localStorage.getItem("pulse-theme");
-  return stored === "light" ? "light" : "dark";
+  return stored === "dark" ? "dark" : "light";
 }
 
 function applyTheme(theme: Theme) {
@@ -20,7 +20,7 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeSwitcher() {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {

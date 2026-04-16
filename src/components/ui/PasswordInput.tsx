@@ -9,6 +9,7 @@ interface PasswordInputProps {
   autoComplete?: "current-password" | "new-password";
   minLength?: number;
   required?: boolean;
+  placeholder?: string;
   className?: string;
 }
 
@@ -17,6 +18,7 @@ export function PasswordInput({
   autoComplete = "current-password",
   minLength,
   required,
+  placeholder,
   className,
 }: PasswordInputProps) {
   const [visible, setVisible] = useState(false);
@@ -29,6 +31,7 @@ export function PasswordInput({
         required={required}
         minLength={minLength}
         autoComplete={autoComplete}
+        placeholder={placeholder}
         className={cn(
           "flex h-12 w-full rounded-lg border border-white-200 bg-transparent px-4 pr-12 py-3 text-sm",
           "placeholder:text-gray-1000 text-gray-1200 outline-none transition-colors duration-200",
