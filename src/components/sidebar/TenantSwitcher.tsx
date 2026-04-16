@@ -71,7 +71,7 @@ export function TenantSwitcher({ tenants, currentSlug }: TenantSwitcherProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full left-3 right-3 mb-2 bg-white border border-white-200 rounded-xl shadow-custom-100 overflow-hidden py-1">
+        <div className="absolute bottom-full left-3 right-3 mb-2 bg-card border border-white-200 rounded-xl shadow-custom-100 overflow-hidden py-1">
           <p className="px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-gray-400">
             Workspaces
           </p>

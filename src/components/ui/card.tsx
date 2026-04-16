@@ -9,7 +9,7 @@ export function Card({
     <div
       data-slot="card"
       className={cn(
-        "rounded-2xl bg-white border border-white-200 transition-shadow duration-200",
+        "rounded-2xl bg-card border border-white-200 transition-shadow duration-200",
         "hover:shadow-custom-100",
         className
       )}

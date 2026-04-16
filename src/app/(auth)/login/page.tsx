@@ -14,7 +14,7 @@ export default async function LoginPage({
   const params = await searchParams;
 
   return (
-    <div className="bg-white border border-white-200 rounded-2xl p-8">
+    <div className="bg-card border border-white-200 rounded-2xl p-8">
       <h2
         className="text-xl text-gray-1100 mb-1"
         style={{ fontFamily: "'Satoshi-900', var(--font-sans)" }}
