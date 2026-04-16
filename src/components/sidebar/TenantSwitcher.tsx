@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut } from "lucide-react";
+import { ChevronDown, LogOut, Settings } from "lucide-react";
 import type { TenantMembership } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 
@@ -66,7 +67,7 @@ export function TenantSwitcher({ tenants, currentSlug }: TenantSwitcherProps) {
             <button
               key={tenant.slug}
               onClick={() => switchTenant(tenant.slug)}
-              className={`flex items-center gap-3 w-full px-3 py-2.5 text-sm transition-colors duration-150 hover:bg-card-hover
+              className={`flex items-center gap-3 w-full px-3 py-2.5 text-sm transition-colors duration-150 hover:bg-card-hover cursor-pointer
                 ${tenant.slug === currentSlug ? "text-white" : "text-text-secondary"}
               `}
             >
@@ -75,9 +76,17 @@ export function TenantSwitcher({ tenants, currentSlug }: TenantSwitcherProps) {
               <span className="text-text-muted text-xs ml-auto capitalize">{tenant.role}</span>
             </button>
           ))}
+          <Link
+            href="/settings"
+            onClick={() => setIsOpen(false)}
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-text-secondary hover:bg-card-hover border-t border-border transition-colors duration-150 cursor-pointer"
+          >
+            <Settings size={14} className="text-text-muted" />
+            <span>Settings</span>
+          </Link>
           <button
             onClick={signOut}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-text-secondary hover:bg-card-hover border-t border-border transition-colors duration-150"
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-text-secondary hover:bg-card-hover border-t border-border transition-colors duration-150 cursor-pointer"
           >
             <LogOut size={14} className="text-text-muted" />
             <span>Sign out</span>

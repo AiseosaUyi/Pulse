@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { signup, completeCompany } from "./actions";
 
 interface InviteContext {
@@ -79,7 +80,7 @@ export default async function SignupPage({
           </div>
           <button
             type="submit"
-            className="w-full py-2.5 rounded-lg text-sm font-semibold text-white gradient-purple-pink hover:opacity-90 transition-opacity"
+            className="w-full py-2.5 rounded-lg text-sm font-semibold text-white gradient-purple-pink hover:opacity-90 transition-opacity cursor-pointer"
           >
             Create company
           </button>
@@ -130,14 +131,7 @@ export default async function SignupPage({
           <label className="block text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">
             Password
           </label>
-          <input
-            type="password"
-            name="password"
-            required
-            minLength={8}
-            autoComplete="new-password"
-            className="w-full px-3 py-2.5 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent-purple"
-          />
+          <PasswordInput name="password" required minLength={8} autoComplete="new-password" />
           <p className="mt-1 text-xs text-text-muted">8 characters minimum.</p>
         </div>
         <div>
@@ -184,7 +178,7 @@ export default async function SignupPage({
 
         <button
           type="submit"
-          className="w-full py-2.5 rounded-lg text-sm font-semibold text-white gradient-purple-pink hover:opacity-90 transition-opacity"
+          className="w-full py-2.5 rounded-lg text-sm font-semibold text-white gradient-purple-pink hover:opacity-90 transition-opacity cursor-pointer"
         >
           {invite ? "Join company" : "Create account"}
         </button>

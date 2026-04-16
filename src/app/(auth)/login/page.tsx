@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { login } from "./actions";
 
 export default async function LoginPage({
@@ -42,17 +43,11 @@ export default async function LoginPage({
           <label className="block text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">
             Password
           </label>
-          <input
-            type="password"
-            name="password"
-            required
-            autoComplete="current-password"
-            className="w-full px-3 py-2.5 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent-purple"
-          />
+          <PasswordInput name="password" required autoComplete="current-password" />
         </div>
         <button
           type="submit"
-          className="w-full py-2.5 rounded-lg text-sm font-semibold text-white gradient-purple-pink hover:opacity-90 transition-opacity"
+          className="w-full py-2.5 rounded-lg text-sm font-semibold text-white gradient-purple-pink hover:opacity-90 transition-opacity cursor-pointer"
         >
           Sign in
         </button>
