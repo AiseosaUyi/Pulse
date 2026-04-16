@@ -217,25 +217,92 @@ span { font-family: inherit !important; font-weight: inherit !important; }
 }
 
 /* ──────────────────────────────────────────────────────────
-   Dark theme — the original PULSE palette.
+   Dark theme — the original PULSE palette, tuned for AA
+   contrast and soft edges. Every Gruve palette token is
+   overridden so tokens like `text-gray-1100`, `bg-primary-50`,
+   `border-white-200` render with dark-appropriate values.
    Users opt in via the Settings theme switcher.
    ────────────────────────────────────────────────────────── */
 html.dark {
-  --background:      #0a0a0f;
-  --foreground:      #ffffff;
-  --sidebar:         #111118;
-  --card:            #1a1a24;
-  --card-hover:      #1f1f2b;
-  --border:          #2a2a3a;
-  --text-secondary:  #9ca3af;
-  --text-muted:      #6b7280;
-  --purple:          #7c3aed;  /* restore original accent */
+  /* Legacy back-compat */
+  --background:      #0c0d14;   /* slightly warmer than pure black */
+  --foreground:      #e9eaf1;   /* off-white — softer than #ffffff */
+  --sidebar:         #111219;
+  --card:            #181923;
+  --card-hover:      #23252f;
+  --border:          #2f3142;   /* bumped — strokes now perceptible */
+  --text-secondary:  #b4b7c6;   /* was #9ca3af — better readable */
+  --text-muted:      #8b8ea3;   /* was #6b7280 — AA pass */
+  --purple:          #a855f7;   /* brighter purple — accent + CTA */
   --pink:            #ec4899;
-  --purple-light:    #a855f7;
-  --green:           #22c55e;
-  --yellow:          #eab308;
-  --red:             #ef4444;
-  --teal:            #14b8a6;
+  --purple-light:    #c084fc;
+  --green:           #4ade80;
+  --yellow:          #facc15;
+  --red:             #f87171;
+  --teal:            #2dd4bf;
+
+  /* Gruve primary — purple in dark */
+  --color-primary-50:   rgba(168, 85, 247, 0.14);
+  --color-primary-100:  rgba(168, 85, 247, 0.22);
+  --color-primary-200:  rgba(168, 85, 247, 0.32);
+  --color-primary-300:  #c084fc;
+  --color-primary-400:  #b57af8;
+  --color-primary-500:  #a855f7;   /* brand purple */
+  --color-primary-600:  #9333ea;
+  --color-primary-700:  #7e22ce;
+  --color-primary-800:  #6b21a8;
+  --color-primary-900:  #581c87;
+  --color-primary-1000: #ec4899;   /* pink accent */
+  --color-primary-1100: #f472b6;
+  --color-primary-1200: #f9a8d4;
+
+  /* Gruve gray — INVERTED for dark (light text, dark surfaces) */
+  --color-gray-50:   #181923;
+  --color-gray-100:  #23252f;
+  --color-gray-200:  #2f3142;
+  --color-gray-300:  #3a3c4f;
+  --color-gray-400:  #4b4e64;
+  --color-gray-500:  #8b8ea3;
+  --color-gray-600:  #b4b7c6;
+  --color-gray-700:  #cbcdd8;
+  --color-gray-800:  #dcdee7;
+  --color-gray-900:  #e9eaf1;
+  --color-gray-1000: #8b8ea3;
+  --color-gray-1100: #f5f6fa;   /* headings — INVERTED */
+  --color-gray-1200: #e9eaf1;   /* body text — INVERTED */
+  --color-gray-1300: #9ca3af;
+  --color-gray-1400: #a8adbe;
+  --color-gray-1500: #cbcdd8;
+  --color-gray-1700: #b4b7c6;
+
+  /* Gruve white (surfaces + borders) — repoint to dark equivalents */
+  --color-white-50:  #181923;
+  --color-white-100: #1e1f2a;
+  --color-white-200: #2f3142;
+  --color-white-300: #3a3c4f;
+  --color-white-400: #23252f;
+  --color-white-500: #23252f;
+  --color-white-600: #181923;
+  --color-white-700: #14151e;
+
+  /* Semantic — softer but still visible on dark */
+  --color-success-500:  #4ade80;
+  --color-success-1000: rgba(74, 222, 128, 0.12);
+  --color-warning-500:  #facc15;
+  --color-warning-50:   rgba(250, 204, 21, 0.12);
+  --color-error-500:    #f87171;
+
+  /* Blue focus ring — brighter on dark */
+  --color-blue-50:  rgba(96, 165, 250, 0.14);
+  --color-blue-100: rgba(96, 165, 250, 0.22);
+  --color-blue-500: #60a5fa;
+  --color-blue-600: #3b82f6;
+  --color-blue-1000: #60a5fa;
+
+  /* Secondary */
+  --color-secondary-100: rgba(116, 148, 243, 0.14);
+  --color-secondary-500: #818cf8;
+  --color-secondary-700: #a5b4fc;
 }
 
 /* Softer scrollbar on dark */
@@ -243,7 +310,7 @@ html.dark ::-webkit-scrollbar-thumb {
   background: var(--border);
 }
 html.dark ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a4c;
+  background: #42455a;
 }
 
 /* Skeleton pulse — same motion, lighter opacity range */

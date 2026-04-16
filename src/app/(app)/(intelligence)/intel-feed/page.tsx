@@ -70,7 +70,7 @@ export default async function IntelFeedPage() {
       </div>
 
       {/* Right: Weekly Digest (hidden on mobile/tablet, visible on lg+) */}
-      <div className="hidden lg:block w-80 border-l border-border/50 bg-[#0d0d14] overflow-y-auto shrink-0">
+      <div className="hidden lg:block w-80 border-l border-border bg-sidebar overflow-y-auto shrink-0">
         <WeeklyDigest
           digest={digest}
           tenantName={tenantName}
