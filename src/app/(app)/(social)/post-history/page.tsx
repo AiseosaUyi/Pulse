@@ -22,7 +22,7 @@ export default async function PostHistoryPage() {
   return (
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Post History</h1>
+        <h1 className="text-2xl font-bold text-foreground">Post History</h1>
         <p className="text-text-secondary text-sm mt-0.5">Content performance over time</p>
       </div>
 
@@ -30,7 +30,7 @@ export default async function PostHistoryPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Total Reach</p>
-          <p className="text-2xl font-bold text-white mt-1">{(totalReach / 1000).toFixed(1)}K</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{(totalReach / 1000).toFixed(1)}K</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Avg. Engagement</p>
@@ -42,7 +42,7 @@ export default async function PostHistoryPage() {
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Above Average</p>
-          <p className="text-2xl font-bold text-white mt-1">{aboveAvg}/{posts.length}</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{aboveAvg}/{posts.length}</p>
         </div>
       </div>
 
@@ -69,12 +69,12 @@ export default async function PostHistoryPage() {
                 <td className="px-5 py-3.5">
                   <div className="flex items-center gap-2">
                     <span className="text-xs px-1.5 py-0.5 rounded bg-background text-text-muted capitalize">{post.type}</span>
-                    <span className="text-sm text-white font-medium truncate max-w-[220px]">{post.title}</span>
+                    <span className="text-sm text-foreground font-medium truncate max-w-[220px]">{post.title}</span>
                   </div>
                 </td>
                 <td className={`px-3 py-3.5 text-sm font-medium ${platformColors[post.platform]}`}>{post.platform}</td>
                 <td className="px-3 py-3.5 text-sm text-text-secondary">{post.postedAt}</td>
-                <td className="px-3 py-3.5 text-sm text-white text-right">{post.reach.toLocaleString()}</td>
+                <td className="px-3 py-3.5 text-sm text-foreground text-right">{post.reach.toLocaleString()}</td>
                 <td className="px-3 py-3.5 text-sm text-text-secondary text-right">{post.likes.toLocaleString()}</td>
                 <td className="px-3 py-3.5 text-sm text-text-secondary text-right">{post.comments}</td>
                 <td className="px-3 py-3.5 text-sm text-text-secondary text-right">{post.shares}</td>

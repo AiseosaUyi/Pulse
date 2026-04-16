@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Enable `dark:` prefix when .dark is on the html/body or any ancestor. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ──────────────────────────────────────────────────────────
    Satoshi — variable font at four named weights.
    Drop the .woff2 files into public/fonts/ to activate.
@@ -35,25 +38,25 @@
    names; repointing keeps them rendering Gruve-correct).
    ────────────────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
+  --background: #fbfbfd;       /* white-50 — page bg (subtle tint) */
   --foreground: #2d2b4a;       /* gray-1200 */
-  --sidebar: #ffffff;
-  --card: #ffffff;
+  --sidebar:    #ffffff;       /* pure white, stands above page */
+  --card:       #ffffff;
   --card-hover: #f6f7f7;       /* gray-50 */
-  --border: #e1e1e8;           /* white-200 */
+  --border:     #eceff2;       /* softer than white-200 */
   --text-secondary: #4f5153;   /* gray-600 */
-  --text-muted: #666481;       /* gray-1000 */
+  --text-muted:     #666481;   /* gray-1000 */
 
   /* Accents: repoint purple→maroon, pink→primary-1000 */
   --purple: #ad112c;           /* primary-500 */
-  --pink: #ea445a;             /* primary-1000 */
+  --pink:   #ea445a;           /* primary-1000 */
   --purple-light: #ad112c;
 
   /* Status semantics */
-  --green: #27ae60;            /* success-500 */
+  --green:  #27ae60;           /* success-500 */
   --yellow: #ff8001;           /* warning-500 */
-  --red: #ff2e00;              /* error-500 */
-  --teal: #7494f3;             /* secondary-500 */
+  --red:    #ff2e00;           /* error-500 */
+  --teal:   #7494f3;           /* secondary-500 */
 }
 
 @theme inline {
@@ -202,14 +205,45 @@ span { font-family: inherit !important; font-weight: inherit !important; }
    Utilities used across the app
    ────────────────────────────────────────────────────────── */
 
-/* Legacy utility — kept for back-compat. Maps to flat maroon
-   per §1 ("no gradients in-app"). Visual is flat even though
-   the class name still says gradient. */
+/* Legacy gradient utility — flat maroon in light, real gradient in dark. */
 .gradient-purple-pink {
   background: var(--purple);
 }
+.dark .gradient-purple-pink {
+  background: linear-gradient(135deg, var(--purple), var(--pink));
+}
 .gradient-border-left {
   border-left: 2px solid var(--purple);
+}
+
+/* ──────────────────────────────────────────────────────────
+   Dark theme — the original PULSE palette.
+   Users opt in via the Settings theme switcher.
+   ────────────────────────────────────────────────────────── */
+html.dark {
+  --background:      #0a0a0f;
+  --foreground:      #ffffff;
+  --sidebar:         #111118;
+  --card:            #1a1a24;
+  --card-hover:      #1f1f2b;
+  --border:          #2a2a3a;
+  --text-secondary:  #9ca3af;
+  --text-muted:      #6b7280;
+  --purple:          #7c3aed;  /* restore original accent */
+  --pink:            #ec4899;
+  --purple-light:    #a855f7;
+  --green:           #22c55e;
+  --yellow:          #eab308;
+  --red:             #ef4444;
+  --teal:            #14b8a6;
+}
+
+/* Softer scrollbar on dark */
+html.dark ::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3a3a4c;
 }
 
 /* Skeleton pulse — same motion, lighter opacity range */

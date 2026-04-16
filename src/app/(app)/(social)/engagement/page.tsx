@@ -20,7 +20,7 @@ export default async function EngagementPage() {
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Engagement Inbox</h1>
+          <h1 className="text-2xl font-bold text-foreground">Engagement Inbox</h1>
           <p className="text-text-secondary text-sm mt-0.5">Comments, DMs, and mentions across all platforms</p>
         </div>
       </div>
@@ -37,7 +37,7 @@ export default async function EngagementPage() {
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">DMs</p>
-          <p className="text-2xl font-bold text-white mt-1">{dms}</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{dms}</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Mentions</p>
@@ -59,7 +59,7 @@ export default async function EngagementPage() {
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-white text-sm font-semibold">{item.from.name}</span>
+                    <span className="text-foreground text-sm font-semibold">{item.from.name}</span>
                     <span className="text-text-muted text-xs">{item.from.handle}</span>
                     <span className="text-text-muted text-xs">·</span>
                     <span className={`text-xs font-medium ${platformColors[item.platform]}`}>{item.platform}</span>

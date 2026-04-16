@@ -25,7 +25,7 @@ export function SEOTabNav() {
             href={tab.href}
             className={`px-3 md:px-4 py-2.5 text-xs md:text-sm font-medium transition-colors relative whitespace-nowrap touch-manipulation
               ${isActive
-                ? "text-white"
+                ? "text-foreground"
                 : "text-text-muted hover:text-text-secondary"
               }
             `}

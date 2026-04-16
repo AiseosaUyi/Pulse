@@ -31,7 +31,7 @@ export default async function BlogWriterPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <p className="text-text-muted text-sm">{posts.length} blog posts</p>
-        <button className="px-4 py-2 gradient-purple-pink text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity active:scale-[0.98]">
+        <button className="px-4 py-2 gradient-purple-pink text-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity active:scale-[0.98]">
           Generate New Post
         </button>
       </div>
@@ -49,7 +49,7 @@ export default async function BlogWriterPage() {
               <div className="flex items-start gap-3">
                 <ContentScoreRing score={post.contentScore} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-medium leading-tight">{post.title}</p>
+                  <p className="text-foreground text-sm font-medium leading-tight">{post.title}</p>
                   <div className="flex items-center gap-2 mt-1.5">
                     <Badge variant={statusVariant[post.status] ?? "planned"}>{post.status}</Badge>
                     <span className="text-text-muted text-xs">{post.wordCount.toLocaleString()} words</span>
@@ -66,7 +66,7 @@ export default async function BlogWriterPage() {
           <div className="col-span-1 lg:col-span-3 space-y-4">
             {/* Heading Structure */}
             <div className="bg-card rounded-xl p-5 border border-border/50">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-white mb-3">Heading Structure</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-3">Heading Structure</h3>
               <div className="space-y-1.5">
                 {featuredPost.headingStructure.map((h, i) => (
                   <div key={i} className={`flex items-center gap-2 ${h.level === "h2" ? "ml-4" : h.level === "h3" ? "ml-8" : ""}`}>
@@ -82,7 +82,7 @@ export default async function BlogWriterPage() {
             {featuredScore && (
               <div className="bg-card rounded-xl p-5 border border-border/50">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-white">Content Score</h3>
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground">Content Score</h3>
                   <ContentScoreRing score={featuredScore.overall} size={48} strokeWidth={4} />
                 </div>
                 <div className="space-y-2.5">
@@ -104,7 +104,7 @@ export default async function BlogWriterPage() {
                 </div>
                 {/* Improvement suggestions */}
                 <div className="mt-4 pt-3 border-t border-border/30">
-                  <p className="text-xs font-medium text-white mb-2">Improvement Suggestions</p>
+                  <p className="text-xs font-medium text-foreground mb-2">Improvement Suggestions</p>
                   <div className="space-y-1.5">
                     {featuredScore.imageAltTags < 7 && (
                       <p className="text-xs text-status-yellow">Add alt tags to all images ({featuredScore.imageAltTags}/10)</p>
@@ -128,7 +128,7 @@ export default async function BlogWriterPage() {
 
             {/* SERP Preview */}
             <div className="bg-card rounded-xl p-5 border border-border/50">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-white mb-3">Google Preview</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-3">Google Preview</h3>
               <SERPPreview
                 title={featuredPost.title}
                 url={`https://${tenantSlug === "gruve" ? "gruve.events" : "sippy.ng"}/blog/${featuredPost.slug}`}
@@ -139,11 +139,11 @@ export default async function BlogWriterPage() {
             {/* FAQ Items */}
             {featuredPost.faqItems.length > 0 && (
               <div className="bg-card rounded-xl p-5 border border-border/50">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-white mb-3">FAQ Schema</h3>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-3">FAQ Schema</h3>
                 <div className="space-y-3">
                   {featuredPost.faqItems.map((faq, i) => (
                     <div key={i} className="p-3 rounded-lg bg-background">
-                      <p className="text-white text-sm font-medium">{faq.question}</p>
+                      <p className="text-foreground text-sm font-medium">{faq.question}</p>
                       <p className="text-text-secondary text-xs mt-1 line-clamp-2">{faq.answer}</p>
                     </div>
                   ))}

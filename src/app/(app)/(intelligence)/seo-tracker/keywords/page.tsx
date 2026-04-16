@@ -25,7 +25,7 @@ export default async function KeywordsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Total Keywords</p>
-          <p className="text-2xl font-bold text-white mt-1">{totalKeywords}</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{totalKeywords}</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Informational</p>
@@ -51,7 +51,7 @@ export default async function KeywordsPage() {
           <div key={group.id} className="bg-card rounded-xl border border-border/50 overflow-hidden">
             <div className="p-5 border-b border-border/50 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <h3 className="text-white font-semibold">{group.name}</h3>
+                <h3 className="text-foreground font-semibold">{group.name}</h3>
                 <Badge variant={group.dominantIntent as "informational" | "transactional" | "navigational" | "commercial"}>
                   {group.dominantIntent}
                 </Badge>
@@ -79,7 +79,7 @@ export default async function KeywordsPage() {
                   <tr key={kw.id} className="border-b border-border/20 last:border-0 hover:bg-card-hover transition-colors">
                     <td className="px-5 py-2.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-white text-sm">{kw.keyword}</span>
+                        <span className="text-foreground text-sm">{kw.keyword}</span>
                         {kw.isLongTail && <span className="text-[9px] px-1.5 py-0.5 rounded bg-accent-purple/10 text-accent-purple">long-tail</span>}
                       </div>
                     </td>

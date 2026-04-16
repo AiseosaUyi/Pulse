@@ -31,12 +31,12 @@ export function WeeklyDigest({ digest, tenantName, briefCount }: WeeklyDigestPro
       {/* Winning Formats */}
       {digest.winningFormats.length > 0 && (
         <div className="bg-card rounded-lg border border-border/50 p-3.5">
-          <h3 className="text-[13px] font-semibold text-white mb-2">
+          <h3 className="text-[13px] font-semibold text-foreground mb-2">
             Content Formats Winning
           </h3>
           {digest.winningFormats.map((fmt) => (
             <div key={fmt.format} className="mb-2 last:mb-0">
-              <p className="text-xs text-white/80">{fmt.format}</p>
+              <p className="text-xs text-foreground/80">{fmt.format}</p>
               <p className="text-[11px] text-text-muted">{fmt.evidence}</p>
               {fmt.multiplier > 0 && (
                 <div className="flex items-center gap-1.5 mt-1">
@@ -58,7 +58,7 @@ export function WeeklyDigest({ digest, tenantName, briefCount }: WeeklyDigestPro
 
       {/* Recommended Actions */}
       <div className="bg-card rounded-lg border border-border/50 p-3.5">
-        <h3 className="text-[13px] font-semibold text-white mb-2">
+        <h3 className="text-[13px] font-semibold text-foreground mb-2">
           Recommended Actions
         </h3>
         <ol className="space-y-1.5">
@@ -67,7 +67,7 @@ export function WeeklyDigest({ digest, tenantName, briefCount }: WeeklyDigestPro
               <span className="text-xs font-bold text-accent-purple shrink-0">
                 {action.priority}.
               </span>
-              <span className="text-xs text-white/80">
+              <span className="text-xs text-foreground/80">
                 {action.action}
                 {action.deadline && (
                   <span className="text-status-red ml-1">
@@ -82,7 +82,7 @@ export function WeeklyDigest({ digest, tenantName, briefCount }: WeeklyDigestPro
 
       {/* Strategic Brief */}
       <div className="bg-card rounded-lg border border-border/50 p-3.5">
-        <h3 className="text-[13px] font-semibold text-white mb-2">
+        <h3 className="text-[13px] font-semibold text-foreground mb-2">
           Strategic Brief
         </h3>
         <p className="text-xs leading-relaxed text-text-secondary">

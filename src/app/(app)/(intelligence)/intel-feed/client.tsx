@@ -16,7 +16,7 @@ export function IntelFeedClient({ competitors, tenantSlug }: IntelFeedClientProp
     <>
       <button
         onClick={() => setShowModal(true)}
-        className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-accent-purple to-accent-pink hover:opacity-90 transition-opacity"
+        className="px-4 py-2 rounded-lg text-sm font-semibold text-foreground bg-gradient-to-r from-accent-purple to-accent-pink hover:opacity-90 transition-opacity"
       >
         + Add Competitor Post
       </button>

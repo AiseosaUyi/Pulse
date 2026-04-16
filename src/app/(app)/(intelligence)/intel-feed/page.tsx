@@ -32,7 +32,7 @@ export default async function IntelFeedPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white">Intelligence Feed</h1>
+            <h1 className="text-2xl font-bold text-foreground">Intelligence Feed</h1>
             <p className="text-text-secondary text-sm mt-0.5">
               Competitor activity across {tenantName}&apos;s landscape
             </p>
@@ -53,7 +53,7 @@ export default async function IntelFeedPage() {
         {feed.length === 0 ? (
           <div className="rounded-xl border-2 border-dashed border-border p-12 text-center">
             <div className="text-2xl mb-3">📡</div>
-            <h3 className="text-white font-semibold mb-1">
+            <h3 className="text-foreground font-semibold mb-1">
               Add your first competitor to start tracking
             </h3>
             <p className="text-text-muted text-sm">

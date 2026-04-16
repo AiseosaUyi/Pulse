@@ -24,7 +24,7 @@ export default async function ContentVaultPage() {
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Content Vault</h1>
+          <h1 className="text-2xl font-bold text-foreground">Content Vault</h1>
           <p className="text-text-secondary text-sm mt-0.5">
             Save, extract, and organize content for your platforms
           </p>
@@ -38,7 +38,7 @@ export default async function ContentVaultPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Total Saved</p>
-          <p className="text-2xl font-bold text-white mt-1">{saved.length}</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{saved.length}</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Ready to Use</p>
@@ -59,14 +59,14 @@ export default async function ContentVaultPage() {
         <div className="col-span-1 lg:col-span-3">
           <div className="bg-card rounded-xl border border-border/50">
             <div className="p-5 border-b border-border/50 flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-white">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
                 Saved Content
               </h2>
               <div className="flex gap-2">
-                <button className="px-2.5 py-1 text-xs bg-background rounded-md text-text-secondary hover:text-white transition-colors">All</button>
-                <button className="px-2.5 py-1 text-xs bg-background rounded-md text-text-secondary hover:text-white transition-colors">Videos</button>
-                <button className="px-2.5 py-1 text-xs bg-background rounded-md text-text-secondary hover:text-white transition-colors">Memes</button>
-                <button className="px-2.5 py-1 text-xs bg-background rounded-md text-text-secondary hover:text-white transition-colors">Images</button>
+                <button className="px-2.5 py-1 text-xs bg-background rounded-md text-text-secondary hover:text-foreground transition-colors">All</button>
+                <button className="px-2.5 py-1 text-xs bg-background rounded-md text-text-secondary hover:text-foreground transition-colors">Videos</button>
+                <button className="px-2.5 py-1 text-xs bg-background rounded-md text-text-secondary hover:text-foreground transition-colors">Memes</button>
+                <button className="px-2.5 py-1 text-xs bg-background rounded-md text-text-secondary hover:text-foreground transition-colors">Images</button>
               </div>
             </div>
             <div className="divide-y divide-border/30">
@@ -82,7 +82,7 @@ export default async function ContentVaultPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="text-white text-sm font-medium leading-tight">
+                          <p className="text-foreground text-sm font-medium leading-tight">
                             {content.title}
                           </p>
                           <div className="flex items-center gap-2 mt-1">
@@ -140,7 +140,7 @@ export default async function ContentVaultPage() {
         <div className="col-span-1 lg:col-span-2">
           <div className="bg-card rounded-xl border border-border/50">
             <div className="p-5 border-b border-border/50">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-white">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
                 Trending in Your Niche
               </h2>
               <p className="text-text-muted text-xs mt-1">Content formats going viral right now</p>
@@ -153,7 +153,7 @@ export default async function ContentVaultPage() {
                       {item.thumbnailEmoji}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm font-medium leading-tight group-hover:text-accent-purple transition-colors">
+                      <p className="text-foreground text-sm font-medium leading-tight group-hover:text-accent-purple transition-colors">
                         {item.title}
                       </p>
                       <div className="flex items-center gap-2 mt-1">

@@ -23,7 +23,7 @@ export function MorningBriefing({ items }: MorningBriefingProps) {
         {items.map((item) => (
           <li key={item.intelCardId} className="flex items-start gap-3">
             <Badge variant={impactVariant[item.impact]}>{item.impact}</Badge>
-            <span className="text-[15px] leading-snug text-white/90">
+            <span className="text-[15px] leading-snug text-foreground/90">
               {item.summary}
             </span>
           </li>

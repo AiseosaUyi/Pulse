@@ -16,7 +16,7 @@ export default async function CompetitionPage() {
   return (
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Competition</h1>
+        <h1 className="text-2xl font-bold text-foreground">Competition</h1>
         <p className="text-text-secondary text-sm mt-0.5">Competitor analysis and market positioning</p>
       </div>
 
@@ -28,7 +28,7 @@ export default async function CompetitionPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-3">
-                    <h3 className="text-white font-semibold text-lg">{comp.name}</h3>
+                    <h3 className="text-foreground font-semibold text-lg">{comp.name}</h3>
                     <Badge variant={threatBadge[comp.threatLevel].variant}>
                       {threatBadge[comp.threatLevel].label}
                     </Badge>
@@ -48,7 +48,7 @@ export default async function CompetitionPage() {
                       <div key={p.name} className="flex items-center justify-between">
                         <span className="text-text-secondary text-sm">{p.name}</span>
                         <div className="text-right">
-                          <span className="text-white text-sm font-medium">{p.followers.toLocaleString()}</span>
+                          <span className="text-foreground text-sm font-medium">{p.followers.toLocaleString()}</span>
                           <span className="text-text-muted text-xs ml-2">{p.engagement}</span>
                         </div>
                       </div>

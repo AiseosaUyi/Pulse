@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { UserCircle, Users, Lock, Bell, Mail, Trash2 } from "lucide-react";
+import { UserCircle, Users, Lock, Bell, Mail, Trash2, Palette } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, getCurrentTenant } from "@/lib/auth";
 import { PasswordInput } from "@/components/ui/PasswordInput";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { SettingsForm } from "@/components/settings/SettingsForm";
 import { InviteLink } from "@/components/settings/InviteLink";
 import { AvatarUpload } from "@/components/settings/AvatarUpload";
+import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
 import {
   updateProfile,
   changePassword,
@@ -138,7 +139,7 @@ export default async function SettingsPage() {
       </header>
 
       {/* Profile */}
-      <section className="bg-white border border-white-200 rounded-2xl p-6">
+      <section className="bg-card border border-border rounded-2xl p-6">
         <SectionHeading icon={UserCircle} title="Profile" />
 
         <div className="mb-6 pb-6 border-b border-white-200 space-y-4">
@@ -179,7 +180,7 @@ export default async function SettingsPage() {
       </section>
 
       {/* Team */}
-      <section className="bg-white border border-white-200 rounded-2xl p-6">
+      <section className="bg-card border border-border rounded-2xl p-6">
         <SectionHeading icon={Users} title="Team" />
 
         <ul className="divide-y divide-white-200 mb-6">
@@ -292,8 +293,27 @@ export default async function SettingsPage() {
         )}
       </section>
 
+      {/* Appearance */}
+      <section className="bg-card border border-border rounded-2xl p-6">
+        <SectionHeading icon={Palette} title="Appearance" />
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <p
+              className="text-sm text-gray-1200 dark:text-foreground"
+              style={{ fontFamily: "'Satoshi-500', var(--font-sans)" }}
+            >
+              Theme
+            </p>
+            <p className="text-xs text-gray-1000 dark:text-text-muted mt-1">
+              Choose how PULSE looks. Applies only to this device.
+            </p>
+          </div>
+          <ThemeSwitcher />
+        </div>
+      </section>
+
       {/* Security */}
-      <section className="bg-white border border-white-200 rounded-2xl p-6">
+      <section className="bg-card border border-border rounded-2xl p-6">
         <SectionHeading icon={Lock} title="Security" />
 
         <SettingsForm
@@ -319,7 +339,7 @@ export default async function SettingsPage() {
       </section>
 
       {/* Notifications */}
-      <section className="bg-white border border-white-200 rounded-2xl p-6">
+      <section className="bg-card border border-border rounded-2xl p-6">
         <SectionHeading icon={Bell} title="Email notifications" />
         <div className="space-y-3 opacity-60 pointer-events-none">
           {[

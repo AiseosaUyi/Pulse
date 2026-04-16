@@ -71,11 +71,11 @@ export function IntelCard({ card, tenantSlug }: IntelCardProps) {
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-border/50 flex items-center justify-center text-sm font-bold text-white/70">
+          <div className="w-9 h-9 rounded-full bg-border/50 flex items-center justify-center text-sm font-bold text-foreground/70">
             {initials}
           </div>
           <div>
-            <div className="text-sm font-semibold text-white">
+            <div className="text-sm font-semibold text-foreground">
               {card.competitorName}
             </div>
             <div className="text-xs text-text-muted">
@@ -99,7 +99,7 @@ export function IntelCard({ card, tenantSlug }: IntelCardProps) {
       </div>
 
       {/* Summary */}
-      <div className="bg-sidebar rounded-lg p-3.5 mb-3.5 text-[13px] leading-relaxed text-white/80 border-l-2 border-border">
+      <div className="bg-sidebar rounded-lg p-3.5 mb-3.5 text-[13px] leading-relaxed text-foreground/80 border-l-2 border-border">
         {card.summary}
       </div>
 
@@ -107,7 +107,7 @@ export function IntelCard({ card, tenantSlug }: IntelCardProps) {
       <div className="flex gap-5 mb-3.5">
         {card.metrics.views != null && (
           <div>
-            <div className="text-base font-bold text-white">
+            <div className="text-base font-bold text-foreground">
               {formatNumber(card.metrics.views)}
             </div>
             <div className="text-[11px] uppercase tracking-wide text-text-muted">
@@ -116,7 +116,7 @@ export function IntelCard({ card, tenantSlug }: IntelCardProps) {
           </div>
         )}
         <div>
-          <div className="text-base font-bold text-white">
+          <div className="text-base font-bold text-foreground">
             {card.metrics.engagementRate}%
           </div>
           <div className="text-[11px] uppercase tracking-wide text-text-muted">
@@ -125,7 +125,7 @@ export function IntelCard({ card, tenantSlug }: IntelCardProps) {
         </div>
         {card.metrics.shares != null && (
           <div>
-            <div className="text-base font-bold text-white">
+            <div className="text-base font-bold text-foreground">
               {formatNumber(card.metrics.shares)}
             </div>
             <div className="text-[11px] uppercase tracking-wide text-text-muted">
@@ -160,10 +160,10 @@ export function IntelCard({ card, tenantSlug }: IntelCardProps) {
                   card.aiRecommendation.urgency.slice(1)}
             </Badge>
           </div>
-          <p className="text-[13px] leading-relaxed text-white/80 mb-2">
+          <p className="text-[13px] leading-relaxed text-foreground/80 mb-2">
             {card.aiRecommendation.analysis}
           </p>
-          <p className="text-[13px] leading-relaxed text-white/90 font-medium">
+          <p className="text-[13px] leading-relaxed text-foreground/90 font-medium">
             {card.aiRecommendation.action}
           </p>
           {card.aiRecommendation.contentBriefReady && (

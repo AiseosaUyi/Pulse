@@ -25,7 +25,7 @@ export function ContentScoreRing({ score, size = 40, strokeWidth = 3 }: ContentS
           strokeDashoffset={offset}
         />
       </svg>
-      <span className="absolute text-[10px] font-bold text-white">{score}</span>
+      <span className="absolute text-[10px] font-bold text-foreground">{score}</span>
     </div>
   );
 }

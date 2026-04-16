@@ -25,10 +25,10 @@ export default async function TopicalMapPage() {
       <div className="bg-card rounded-xl p-5 border border-border/50 mb-6">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-white font-semibold">Topical Coverage</h2>
+            <h2 className="text-foreground font-semibold">Topical Coverage</h2>
             <p className="text-text-muted text-xs mt-0.5">How comprehensively your content covers your key topics</p>
           </div>
-          <span className="text-3xl font-bold text-white">{avgCoverage}%</span>
+          <span className="text-3xl font-bold text-foreground">{avgCoverage}%</span>
         </div>
         <div className="h-3 bg-border/50 rounded-full overflow-hidden">
           <div className="h-full rounded-full gradient-purple-pink transition-all" style={{ width: `${avgCoverage}%` }} />
@@ -51,7 +51,7 @@ export default async function TopicalMapPage() {
               <div className="p-5 border-b border-border/50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <h3 className="text-white font-semibold">{cluster.pillarTopic}</h3>
+                    <h3 className="text-foreground font-semibold">{cluster.pillarTopic}</h3>
                     <Badge variant={statusVariant[cluster.pillarStatus]}>{cluster.pillarStatus}</Badge>
                   </div>
                   <div className="flex items-center gap-4">
@@ -63,11 +63,11 @@ export default async function TopicalMapPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-text-muted">Volume</p>
-                      <p className="text-sm font-semibold text-white">{cluster.totalVolume.toLocaleString()}</p>
+                      <p className="text-sm font-semibold text-foreground">{cluster.totalVolume.toLocaleString()}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-text-muted">Articles</p>
-                      <p className="text-sm text-white"><span className="text-status-green">{pubCount}</span>/{cluster.supportingArticles.length}</p>
+                      <p className="text-sm text-foreground"><span className="text-status-green">{pubCount}</span>/{cluster.supportingArticles.length}</p>
                     </div>
                   </div>
                 </div>
@@ -90,7 +90,7 @@ export default async function TopicalMapPage() {
                         </div>
                       )}
                       <div className="min-w-0">
-                        <p className={`text-sm truncate ${article.status === "gap" ? "text-text-muted italic" : "text-white"}`}>
+                        <p className={`text-sm truncate ${article.status === "gap" ? "text-text-muted italic" : "text-foreground"}`}>
                           {article.title}
                         </p>
                         <p className="text-text-muted text-xs">{article.targetKeyword} · {article.volume.toLocaleString()} vol.</p>
@@ -125,7 +125,7 @@ export default async function TopicalMapPage() {
       <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
         <div className="p-5 border-b border-border/50 flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-white">Internal Links</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">Internal Links</h2>
             <p className="text-text-muted text-xs mt-0.5">{allLinks.length} links tracked · {suggestedLinks} suggested</p>
           </div>
         </div>
@@ -142,7 +142,7 @@ export default async function TopicalMapPage() {
           <tbody>
             {allLinks.map((link) => (
               <tr key={link.id} className="border-b border-border/20 last:border-0 hover:bg-card-hover transition-colors">
-                <td className="px-5 py-2.5 text-sm text-white truncate max-w-[200px]">{link.sourceTitle}</td>
+                <td className="px-5 py-2.5 text-sm text-foreground truncate max-w-[200px]">{link.sourceTitle}</td>
                 <td className="px-3 py-2.5 text-sm text-text-secondary truncate max-w-[200px]">{link.targetTitle}</td>
                 <td className="px-3 py-2.5 text-xs text-accent-purple">{link.anchorText}</td>
                 <td className="px-3 py-2.5 text-center">

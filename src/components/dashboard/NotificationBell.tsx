@@ -29,7 +29,7 @@ export function NotificationBell({ tenantSlug }: NotificationBellProps) {
       >
         <Bell size={18} className="text-text-secondary" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full gradient-purple-pink flex items-center justify-center text-[9px] font-bold text-white">
+          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full gradient-purple-pink flex items-center justify-center text-[9px] font-bold text-foreground">
             {unreadCount}
           </span>
         )}
@@ -40,7 +40,7 @@ export function NotificationBell({ tenantSlug }: NotificationBellProps) {
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
           <div className="fixed inset-x-4 top-16 md:absolute md:inset-x-auto md:right-0 md:top-full mt-2 md:w-[380px] bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden">
             <div className="p-4 border-b border-border/50 flex items-center justify-between">
-              <h3 className="text-white font-semibold text-sm">Notifications</h3>
+              <h3 className="text-foreground font-semibold text-sm">Notifications</h3>
               <span className="text-text-muted text-xs">{unreadCount} unread</span>
             </div>
             <div className="max-h-[420px] overflow-y-auto divide-y divide-border/20">
@@ -57,7 +57,7 @@ export function NotificationBell({ tenantSlug }: NotificationBellProps) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className={`text-sm font-medium ${!n.read ? "text-white" : "text-text-secondary"}`}>{n.title}</p>
+                        <p className={`text-sm font-medium ${!n.read ? "text-foreground" : "text-text-secondary"}`}>{n.title}</p>
                         {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-accent-purple flex-shrink-0" />}
                       </div>
                       <p className="text-text-muted text-xs mt-0.5 line-clamp-2">{n.description}</p>

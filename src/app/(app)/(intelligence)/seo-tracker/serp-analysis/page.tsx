@@ -17,7 +17,7 @@ export default async function SERPAnalysisPage() {
           <button
             key={a.id}
             className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-              i === 0 ? "gradient-purple-pink text-white" : "bg-card border border-border/50 text-text-secondary hover:text-white"
+              i === 0 ? "gradient-purple-pink text-foreground" : "bg-card border border-border/50 text-text-secondary hover:text-foreground"
             }`}
           >
             {a.keyword}
@@ -30,7 +30,7 @@ export default async function SERPAnalysisPage() {
           {/* SERP Results */}
           <div className="col-span-1 lg:col-span-3 space-y-3">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-white">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
                 Top Results for &ldquo;{featured.keyword}&rdquo;
               </h2>
               <span className="text-text-muted text-xs">{featured.volume.toLocaleString()} monthly searches</span>
@@ -52,7 +52,7 @@ export default async function SERPAnalysisPage() {
                       #{result.position}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm font-medium">{result.title}</p>
+                      <p className="text-foreground text-sm font-medium">{result.title}</p>
                       <p className="text-status-green text-xs mt-0.5 truncate">{result.url}</p>
                       <div className="flex items-center gap-3 mt-2 flex-wrap">
                         <span className="text-text-muted text-xs">DA: <span className="text-text-secondary">{result.domainAuthority}</span></span>
@@ -64,7 +64,7 @@ export default async function SERPAnalysisPage() {
                         {result.hasVideo && <span className="text-[9px] px-1.5 py-0.5 rounded bg-status-teal/10 text-status-teal">Video</span>}
                       </div>
                     </div>
-                    {isUs && <span className="text-[9px] px-2 py-1 rounded gradient-purple-pink text-white font-medium">YOU</span>}
+                    {isUs && <span className="text-[9px] px-2 py-1 rounded gradient-purple-pink text-foreground font-medium">YOU</span>}
                   </div>
                 </div>
               );
@@ -87,19 +87,19 @@ export default async function SERPAnalysisPage() {
           <div className="col-span-1 lg:col-span-2 space-y-4">
             {/* Recommendations */}
             <div className="bg-card rounded-xl p-5 border border-border/50">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-white mb-3">To Rank for This Keyword</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-3">To Rank for This Keyword</h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-text-secondary text-xs">Recommended Word Count</span>
-                  <span className="text-white text-sm font-semibold">{featured.recommendedWordCount.toLocaleString()}+</span>
+                  <span className="text-foreground text-sm font-semibold">{featured.recommendedWordCount.toLocaleString()}+</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-text-secondary text-xs">Avg. Competitor DA</span>
-                  <span className="text-white text-sm font-semibold">{featured.avgDomainAuthority}</span>
+                  <span className="text-foreground text-sm font-semibold">{featured.avgDomainAuthority}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-text-secondary text-xs">Avg. Competitor Words</span>
-                  <span className="text-white text-sm font-semibold">{featured.avgWordCount.toLocaleString()}</span>
+                  <span className="text-foreground text-sm font-semibold">{featured.avgWordCount.toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-text-secondary text-xs">Difficulty</span>
@@ -112,7 +112,7 @@ export default async function SERPAnalysisPage() {
 
             {/* Recommended Headings */}
             <div className="bg-card rounded-xl p-5 border border-border/50">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-white mb-3">Recommended Headings</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-3">Recommended Headings</h3>
               <div className="space-y-1.5">
                 {featured.recommendedHeadings.map((h, i) => (
                   <div key={i} className="flex items-center gap-2">
@@ -125,7 +125,7 @@ export default async function SERPAnalysisPage() {
 
             {/* Content Gaps */}
             <div className="bg-card rounded-xl p-5 border border-border/50">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-white mb-3">Content Gaps</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-3">Content Gaps</h3>
               <p className="text-text-muted text-xs mb-3">Topics competitors cover that you don&apos;t:</p>
               <div className="space-y-2">
                 {featured.contentGaps.map((gap, i) => (
@@ -140,7 +140,7 @@ export default async function SERPAnalysisPage() {
             {/* CTA */}
             <Link
               href="/seo-tracker/blog-writer"
-              className="block w-full px-4 py-3 gradient-purple-pink text-white text-sm font-medium rounded-xl hover:opacity-90 transition-opacity text-center active:scale-[0.98]"
+              className="block w-full px-4 py-3 gradient-purple-pink text-foreground text-sm font-medium rounded-xl hover:opacity-90 transition-opacity text-center active:scale-[0.98]"
             >
               Generate Blog Post from This Analysis
             </Link>

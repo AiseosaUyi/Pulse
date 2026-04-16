@@ -22,7 +22,7 @@ export default async function ProgrammaticPage() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Total Pages</p>
-          <p className="text-2xl font-bold text-white mt-1">{totalPages}</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{totalPages}</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Indexed</p>
@@ -30,11 +30,11 @@ export default async function ProgrammaticPage() {
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Index Rate</p>
-          <p className="text-2xl font-bold text-white mt-1">{totalPages > 0 ? Math.round((indexedPages / totalPages) * 100) : 0}%</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{totalPages > 0 ? Math.round((indexedPages / totalPages) * 100) : 0}%</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Impressions</p>
-          <p className="text-2xl font-bold text-white mt-1">{(totalImpressions / 1000).toFixed(1)}K</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{(totalImpressions / 1000).toFixed(1)}K</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Clicks</p>
@@ -48,7 +48,7 @@ export default async function ProgrammaticPage() {
           <div className="p-5 border-b border-border/50">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-white font-semibold">{template.name}</h3>
+                <h3 className="text-foreground font-semibold">{template.name}</h3>
                 <p className="text-accent-purple text-sm mt-0.5 font-mono">{template.pattern}</p>
               </div>
               <div className="flex items-center gap-4 text-xs text-text-muted">
@@ -86,7 +86,7 @@ export default async function ProgrammaticPage() {
             <tbody>
               {template.generatedPages.map((page) => (
                 <tr key={page.id} className="border-b border-border/20 last:border-0 hover:bg-card-hover transition-colors">
-                  <td className="px-5 py-2.5 text-sm text-white">{page.title}</td>
+                  <td className="px-5 py-2.5 text-sm text-foreground">{page.title}</td>
                   <td className="px-3 py-2.5 text-xs text-text-muted font-mono">/{page.slug}</td>
                   <td className="px-3 py-2.5 text-center">
                     <Badge variant={pageStatusVariant[page.status]}>{page.status.replace("_", " ")}</Badge>

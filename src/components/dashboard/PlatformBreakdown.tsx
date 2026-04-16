@@ -36,7 +36,7 @@ export function PlatformBreakdown({ platforms }: PlatformBreakdownProps) {
   if (connectedPlatforms.length === 0) {
     return (
       <div className="bg-card rounded-xl p-6 border border-border/50">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-white mb-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-4">
           Platform Breakdown
         </h2>
         <div className="text-center py-8">
@@ -51,7 +51,7 @@ export function PlatformBreakdown({ platforms }: PlatformBreakdownProps) {
 
   return (
     <div className="bg-card rounded-xl p-6 border border-border/50">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-white mb-5">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-5">
         Platform Breakdown
       </h2>
       <div className="flex flex-col gap-5">
@@ -68,7 +68,7 @@ export function PlatformBreakdown({ platforms }: PlatformBreakdownProps) {
             {/* Info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-1">
-                <span className="font-semibold text-white text-sm">
+                <span className="font-semibold text-foreground text-sm">
                   {platformNames[platform.platform]}
                 </span>
                 {platform.status !== "inactive" && (

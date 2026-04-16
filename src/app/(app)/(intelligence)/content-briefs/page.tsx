@@ -12,7 +12,7 @@ export default async function ContentBriefsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Content Briefs</h1>
+          <h1 className="text-2xl font-bold text-foreground">Content Briefs</h1>
           <p className="text-text-secondary text-sm mt-0.5">
             AI-generated content strategies from competitive intelligence
           </p>
@@ -26,7 +26,7 @@ export default async function ContentBriefsPage() {
       {briefs.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-border p-12 text-center">
           <div className="text-2xl mb-3">📝</div>
-          <h3 className="text-white font-semibold mb-1">No briefs yet</h3>
+          <h3 className="text-foreground font-semibold mb-1">No briefs yet</h3>
           <p className="text-text-muted text-sm mb-4">
             Head to the{" "}
             <a
@@ -51,7 +51,7 @@ export default async function ContentBriefsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2.5">
-                      <h3 className="text-white font-semibold">{brief.title}</h3>
+                      <h3 className="text-foreground font-semibold">{brief.title}</h3>
                       <Badge
                         variant={
                           brief.status === "published"
@@ -102,7 +102,7 @@ export default async function ContentBriefsPage() {
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2">
                     Draft Content
                   </h4>
-                  <div className="bg-sidebar rounded-lg p-4 text-sm leading-relaxed text-white/80 border-l-2 border-accent-purple/30">
+                  <div className="bg-sidebar rounded-lg p-4 text-sm leading-relaxed text-foreground/80 border-l-2 border-accent-purple/30">
                     {brief.draftContent}
                   </div>
                 </div>

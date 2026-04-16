@@ -9,7 +9,7 @@ export default async function PlatformScorePage() {
   return (
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Platform Score</h1>
+        <h1 className="text-2xl font-bold text-foreground">Platform Score</h1>
         <p className="text-text-secondary text-sm mt-0.5">Cross-platform health scorecard</p>
       </div>
 
@@ -19,7 +19,7 @@ export default async function PlatformScorePage() {
           <div>
             <p className="text-text-secondary text-sm mb-1">Overall Score</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-5xl font-extrabold text-white">{data.overall}</span>
+              <span className="text-5xl font-extrabold text-foreground">{data.overall}</span>
               <span className="text-xl font-semibold text-text-muted">/100</span>
             </div>
             <p className="text-text-secondary text-sm mt-2">
@@ -46,7 +46,7 @@ export default async function PlatformScorePage() {
                 </linearGradient>
               </defs>
             </svg>
-            <span className="text-2xl font-bold text-white">{data.overall}%</span>
+            <span className="text-2xl font-bold text-foreground">{data.overall}%</span>
           </div>
         </div>
       </div>
@@ -56,7 +56,7 @@ export default async function PlatformScorePage() {
         {data.platforms.map((p) => (
           <div key={p.platform} className="bg-card rounded-xl p-6 border border-border/50">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-semibold">{p.platform}</h3>
+              <h3 className="text-foreground font-semibold">{p.platform}</h3>
               <div className="flex items-center gap-2">
                 <span className={`text-sm font-semibold ${p.score >= 70 ? "text-status-green" : p.score >= 50 ? "text-status-yellow" : "text-status-red"}`}>
                   {p.score}/100

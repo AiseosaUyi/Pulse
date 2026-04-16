@@ -50,7 +50,7 @@ export function ContentExtractor() {
     <div className="bg-card rounded-xl p-5 border border-border/50 mb-6">
       <div className="flex items-center gap-2 mb-3">
         <Link2 size={16} className="text-accent-purple" />
-        <h2 className="text-sm font-semibold text-white">Extract Content</h2>
+        <h2 className="text-sm font-semibold text-foreground">Extract Content</h2>
         <span className="text-text-muted text-xs ml-2">
           Paste a TikTok, Instagram, Twitter, or YouTube link
         </span>
@@ -66,14 +66,14 @@ export function ContentExtractor() {
               if (status !== "idle") setStatus("idle");
             }}
             placeholder="https://tiktok.com/@user/video/123456..."
-            className="w-full bg-background border border-border/50 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-text-muted
+            className="w-full bg-background border border-border/50 rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-text-muted
               focus:outline-none focus:ring-2 focus:ring-accent-purple focus:border-transparent transition-all"
           />
         </div>
         <button
           onClick={handleExtract}
           disabled={!url.trim() || status === "extracting"}
-          className="px-5 py-2.5 gradient-purple-pink text-white text-sm font-medium rounded-lg
+          className="px-5 py-2.5 gradient-purple-pink text-foreground text-sm font-medium rounded-lg
             hover:opacity-90 transition-opacity active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed
             flex items-center gap-2"
         >
@@ -100,7 +100,7 @@ export function ContentExtractor() {
                 <Check size={16} className="text-status-green" />
               </div>
               <div>
-                <p className="text-white text-sm font-medium">Content extracted successfully</p>
+                <p className="text-foreground text-sm font-medium">Content extracted successfully</p>
                 <p className="text-text-muted text-xs mt-0.5">
                   {extracted.platform} · {extracted.type} · {extracted.duration} · Watermark removed
                 </p>
@@ -115,7 +115,7 @@ export function ContentExtractor() {
               </button>
               <button
                 onClick={() => { setStatus("idle"); setExtracted(null); }}
-                className="px-3 py-1.5 bg-background text-text-secondary text-xs rounded-md hover:text-white transition-colors border border-border/50"
+                className="px-3 py-1.5 bg-background text-text-secondary text-xs rounded-md hover:text-foreground transition-colors border border-border/50"
               >
                 Discard
               </button>

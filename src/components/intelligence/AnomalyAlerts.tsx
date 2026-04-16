@@ -49,7 +49,7 @@ export function AnomalyAlerts({ alerts: initialAlerts }: AnomalyAlertsProps) {
                 {alert.competitorName} · {alert.platform}
               </span>
             </div>
-            <p className="text-sm text-white/80 leading-snug">
+            <p className="text-sm text-foreground/80 leading-snug">
               {alert.message}
             </p>
           </div>

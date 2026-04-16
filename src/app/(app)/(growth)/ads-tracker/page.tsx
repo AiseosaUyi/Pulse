@@ -30,10 +30,10 @@ export default async function AdsTrackerPage() {
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Ads Tracker</h1>
+          <h1 className="text-2xl font-bold text-foreground">Ads Tracker</h1>
           <p className="text-text-secondary text-sm mt-0.5">Campaign performance and spend tracking</p>
         </div>
-        <button className="px-4 py-2 gradient-purple-pink text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity active:scale-[0.98]">
+        <button className="px-4 py-2 gradient-purple-pink text-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity active:scale-[0.98]">
           New Campaign
         </button>
       </div>
@@ -42,7 +42,7 @@ export default async function AdsTrackerPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4">
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Total Spend</p>
-          <p className="text-2xl font-bold text-white mt-1">{formatCurrency(totalSpend, currency)}</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{formatCurrency(totalSpend, currency)}</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Total Revenue</p>
@@ -61,19 +61,19 @@ export default async function AdsTrackerPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Impressions</p>
-          <p className="text-xl font-bold text-white mt-1">{(totalImpressions / 1000).toFixed(1)}K</p>
+          <p className="text-xl font-bold text-foreground mt-1">{(totalImpressions / 1000).toFixed(1)}K</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Clicks</p>
-          <p className="text-xl font-bold text-white mt-1">{totalClicks.toLocaleString()}</p>
+          <p className="text-xl font-bold text-foreground mt-1">{totalClicks.toLocaleString()}</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Active Campaigns</p>
-          <p className="text-xl font-bold text-white mt-1">{activeCampaigns}</p>
+          <p className="text-xl font-bold text-foreground mt-1">{activeCampaigns}</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Avg. Cost/Conversion</p>
-          <p className="text-xl font-bold text-white mt-1">{totalConversions > 0 ? formatCurrency(Math.round(totalSpend / totalConversions), currency) : "—"}</p>
+          <p className="text-xl font-bold text-foreground mt-1">{totalConversions > 0 ? formatCurrency(Math.round(totalSpend / totalConversions), currency) : "—"}</p>
         </div>
       </div>
 
@@ -97,12 +97,12 @@ export default async function AdsTrackerPage() {
           <tbody>
             {campaigns.map((c) => (
               <tr key={c.id} className="border-b border-border/30 last:border-0 hover:bg-card-hover transition-colors">
-                <td className="px-5 py-3.5 text-sm text-white font-medium">{c.name}</td>
+                <td className="px-5 py-3.5 text-sm text-foreground font-medium">{c.name}</td>
                 <td className="px-5 py-3.5 text-sm text-text-secondary">{c.platform}</td>
                 <td className="px-5 py-3.5">
                   <Badge variant={statusBadge[c.status].variant}>{statusBadge[c.status].label}</Badge>
                 </td>
-                <td className="px-4 py-3.5 text-sm text-white text-right">{c.spend > 0 ? formatCurrency(c.spend, currency) : "—"}</td>
+                <td className="px-4 py-3.5 text-sm text-foreground text-right">{c.spend > 0 ? formatCurrency(c.spend, currency) : "—"}</td>
                 <td className="px-4 py-3.5 text-sm text-status-green text-right">{c.revenue > 0 ? formatCurrency(c.revenue, currency) : "—"}</td>
                 <td className="px-4 py-3.5 text-right">
                   {c.roas > 0 ? (

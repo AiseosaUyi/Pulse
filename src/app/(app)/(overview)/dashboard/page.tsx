@@ -48,18 +48,18 @@ export default async function DashboardPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6 md:mb-8">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Dashboard</h1>
           <p className="text-text-secondary text-sm mt-0.5">
             Week of {weekLabel}
           </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           <NotificationBell tenantSlug={tenantSlug} />
-          <Link href="/weekly-report" className="flex items-center gap-2 px-3 md:px-4 py-2 border border-border rounded-lg text-xs md:text-sm text-white hover:bg-card-hover transition-colors duration-150 active:scale-[0.98] touch-manipulation">
+          <Link href="/weekly-report" className="flex items-center gap-2 px-3 md:px-4 py-2 border border-border rounded-lg text-xs md:text-sm text-foreground hover:bg-card-hover transition-colors duration-150 active:scale-[0.98] touch-manipulation">
             Weekly report
             <ArrowUpRight size={14} />
           </Link>
-          <button className="flex items-center gap-2 px-3 md:px-4 py-2 border border-border rounded-lg text-xs md:text-sm text-white hover:bg-card-hover transition-colors duration-150 active:scale-[0.98] touch-manipulation">
+          <button className="flex items-center gap-2 px-3 md:px-4 py-2 border border-border rounded-lg text-xs md:text-sm text-foreground hover:bg-card-hover transition-colors duration-150 active:scale-[0.98] touch-manipulation">
             Ask Pulse
             <ArrowUpRight size={14} />
           </button>

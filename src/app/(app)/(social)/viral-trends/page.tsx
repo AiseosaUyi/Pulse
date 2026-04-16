@@ -12,14 +12,14 @@ export default async function ViralTrendsPage() {
   return (
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Viral Trends</h1>
+        <h1 className="text-2xl font-bold text-foreground">Viral Trends</h1>
         <p className="text-text-secondary text-sm mt-0.5">Trending hashtags and top-performing content</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         {/* Trending Hashtags */}
         <div className="bg-card rounded-xl p-6 border border-border/50">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-white mb-5">Trending Hashtags</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-5">Trending Hashtags</h2>
           <div className="space-y-3">
             {data.hashtags.map((tag) => (
               <div key={tag.tag} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
@@ -40,7 +40,7 @@ export default async function ViralTrendsPage() {
 
         {/* Top Content */}
         <div className="bg-card rounded-xl p-6 border border-border/50">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-white mb-5">Top Performing Content</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-5">Top Performing Content</h2>
           <div className="space-y-4">
             {data.topContent.map((c, i) => (
               <div key={i} className="flex items-start gap-3 p-3 rounded-lg hover:bg-card-hover transition-colors">
@@ -48,7 +48,7 @@ export default async function ViralTrendsPage() {
                   {typeIcons[c.type]}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-medium truncate">{c.title}</p>
+                  <p className="text-foreground text-sm font-medium truncate">{c.title}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-text-muted text-xs">{c.platform}</span>
                     <span className="text-text-muted text-xs">·</span>
@@ -56,7 +56,7 @@ export default async function ViralTrendsPage() {
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-white text-sm font-semibold">{c.reach}</p>
+                  <p className="text-foreground text-sm font-semibold">{c.reach}</p>
                   <p className="text-status-green text-xs">{c.engagement} eng.</p>
                 </div>
               </div>
@@ -67,7 +67,7 @@ export default async function ViralTrendsPage() {
 
       {/* Content Type Performance */}
       <div className="bg-card rounded-xl p-6 border border-border/50 mt-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-white mb-5">Content Type Performance</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-5">Content Type Performance</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {[
             { type: "Video", icon: "▶", avgReach: "3.5K", avgEng: "10.2%" },
@@ -77,7 +77,7 @@ export default async function ViralTrendsPage() {
           ].map((item) => (
             <div key={item.type} className="text-center p-4 rounded-lg bg-background">
               <div className="text-2xl mb-2">{item.icon}</div>
-              <p className="text-white font-semibold text-sm">{item.type}</p>
+              <p className="text-foreground font-semibold text-sm">{item.type}</p>
               <p className="text-text-secondary text-xs mt-1">Avg. reach: {item.avgReach}</p>
               <p className="text-status-green text-xs">Avg. eng: {item.avgEng}</p>
             </div>

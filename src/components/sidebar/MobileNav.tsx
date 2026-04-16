@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { SidebarNav } from "./SidebarNav";
 import { TenantSwitcher } from "./TenantSwitcher";
+import { Logo } from "@/components/ui/Logo";
 import type { TenantMembership } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -17,13 +18,8 @@ export function MobileNav({ tenants, currentTenantSlug }: MobileNavProps) {
 
   return (
     <>
-      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-white-200 h-14 flex items-center justify-between px-4">
-        <h1
-          className="text-lg tracking-tight text-gray-1100"
-          style={{ fontFamily: "'Satoshi-900', var(--font-sans)" }}
-        >
-          PULSE
-        </h1>
+      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-sidebar border-b border-border h-14 flex items-center justify-between px-4">
+        <Logo size="sm" />
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="p-2 rounded-full hover:bg-gray-50 transition-colors cursor-pointer"
@@ -42,23 +38,18 @@ export function MobileNav({ tenants, currentTenantSlug }: MobileNavProps) {
 
       <div
         className={cn(
-          "md:hidden fixed top-0 left-0 bottom-0 w-[280px] bg-white z-50 flex flex-col",
-          "transition-transform duration-300 ease-in-out border-r border-white-200",
+          "md:hidden fixed top-0 left-0 bottom-0 w-[280px] bg-sidebar z-50 flex flex-col",
+          "transition-transform duration-300 ease-in-out border-r border-border",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="px-6 pt-6 pb-4 flex items-center justify-between">
-          <h1
-            className="text-xl tracking-tight text-gray-1100"
-            style={{ fontFamily: "'Satoshi-900', var(--font-sans)" }}
-          >
-            PULSE
-          </h1>
+          <Logo size="md" />
           <button
             onClick={() => setIsOpen(false)}
-            className="p-2 rounded-full hover:bg-gray-50 transition-colors cursor-pointer"
+            className="p-2 rounded-full hover:bg-card-hover transition-colors cursor-pointer"
           >
-            <X size={16} className="text-gray-500" />
+            <X size={16} className="text-text-muted" />
           </button>
         </div>
 

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { ThemeScript } from "@/components/theme/ThemeScript";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,8 +19,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full">
-      <body className="h-full bg-white text-gray-1200 antialiased">
+    <html lang="en" className="h-full" suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
+      <body className="h-full bg-background text-foreground antialiased">
         {children}
       </body>
     </html>

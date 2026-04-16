@@ -33,7 +33,7 @@ export default async function SEODashboardPage() {
           <div key={m.label} className="bg-card rounded-xl p-4 border border-border/50">
             <p className="text-text-secondary text-xs">{m.label}</p>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-xl font-bold text-white">{m.value}</span>
+              <span className="text-xl font-bold text-foreground">{m.value}</span>
               <span className={`text-xs font-medium ${m.direction === "up" ? "text-status-green" : "text-status-red"}`}>
                 {m.change}
               </span>
@@ -48,21 +48,21 @@ export default async function SEODashboardPage() {
           <div className="w-10 h-10 rounded-lg bg-accent-purple/10 flex items-center justify-center mb-3">
             <Search size={20} className="text-accent-purple" />
           </div>
-          <h3 className="text-white font-semibold text-sm group-hover:text-accent-purple transition-colors">Research Keywords</h3>
+          <h3 className="text-foreground font-semibold text-sm group-hover:text-accent-purple transition-colors">Research Keywords</h3>
           <p className="text-text-muted text-xs mt-1">Discover high-value keyword opportunities with AI</p>
         </Link>
         <Link href="/seo-tracker/blog-writer" className="bg-card rounded-xl p-5 border border-border/50 hover:border-accent-purple/50 transition-colors group">
           <div className="w-10 h-10 rounded-lg bg-accent-pink/10 flex items-center justify-center mb-3">
             <FileText size={20} className="text-accent-pink" />
           </div>
-          <h3 className="text-white font-semibold text-sm group-hover:text-accent-purple transition-colors">Write Blog Post</h3>
+          <h3 className="text-foreground font-semibold text-sm group-hover:text-accent-purple transition-colors">Write Blog Post</h3>
           <p className="text-text-muted text-xs mt-1">AI-generated SEO-optimized articles with scoring</p>
         </Link>
         <Link href="/seo-tracker/serp-analysis" className="bg-card rounded-xl p-5 border border-border/50 hover:border-accent-purple/50 transition-colors group">
           <div className="w-10 h-10 rounded-lg bg-status-teal/10 flex items-center justify-center mb-3">
             <BarChart3 size={20} className="text-status-teal" />
           </div>
-          <h3 className="text-white font-semibold text-sm group-hover:text-accent-purple transition-colors">Analyze SERP</h3>
+          <h3 className="text-foreground font-semibold text-sm group-hover:text-accent-purple transition-colors">Analyze SERP</h3>
           <p className="text-text-muted text-xs mt-1">Reverse-engineer what ranks and why</p>
         </Link>
       </div>
@@ -71,7 +71,7 @@ export default async function SEODashboardPage() {
         {/* Top Keywords */}
         <div className="bg-card rounded-xl border border-border/50">
           <div className="p-5 border-b border-border/50 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-white">Top Keywords</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">Top Keywords</h2>
             <Link href="/seo-tracker/keywords" className="text-xs text-accent-purple hover:underline">View all</Link>
           </div>
           <table className="w-full">
@@ -88,7 +88,7 @@ export default async function SEODashboardPage() {
                 const change = kw.previousPosition - kw.position;
                 return (
                   <tr key={kw.keyword} className="border-b border-border/20 last:border-0">
-                    <td className="px-5 py-2.5 text-sm text-white">{kw.keyword}</td>
+                    <td className="px-5 py-2.5 text-sm text-foreground">{kw.keyword}</td>
                     <td className="px-3 py-2.5 text-center">
                       <span className={`text-sm font-bold ${kw.position <= 3 ? "text-status-green" : kw.position <= 10 ? "text-status-yellow" : "text-text-secondary"}`}>
                         #{kw.position}
@@ -110,7 +110,7 @@ export default async function SEODashboardPage() {
         {/* Recent Blog Posts */}
         <div className="bg-card rounded-xl border border-border/50">
           <div className="p-5 border-b border-border/50 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-white">Recent Blog Posts</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">Recent Blog Posts</h2>
             <Link href="/seo-tracker/blog-writer" className="text-xs text-accent-purple hover:underline">View all</Link>
           </div>
           <div className="divide-y divide-border/30">
@@ -119,7 +119,7 @@ export default async function SEODashboardPage() {
                 <div className="flex items-start gap-3">
                   <ContentScoreRing score={post.contentScore} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{post.title}</p>
+                    <p className="text-foreground text-sm font-medium truncate">{post.title}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <Badge variant={statusVariant[post.status] ?? "planned"}>
                         {post.status}

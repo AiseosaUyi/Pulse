@@ -25,7 +25,7 @@ export function CrossBrandInsights({ patterns }: CrossBrandInsightsProps) {
             className="bg-card/50 rounded-lg p-3.5 border border-border/30"
           >
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm font-medium text-white">
+              <span className="text-sm font-medium text-foreground">
                 {pattern.pattern}
               </span>
               <span className="text-xs font-bold text-status-green">

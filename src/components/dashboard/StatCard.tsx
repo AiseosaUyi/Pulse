@@ -10,7 +10,7 @@ export function StatCard({ data, scoreMax }: StatCardProps) {
     <div className="bg-card rounded-xl p-5 border border-border/50 hover:border-border transition-colors duration-150">
       <p className="text-text-secondary text-[13px] mb-2">{data.label}</p>
       <div className="flex items-baseline gap-1">
-        <span className="text-4xl font-extrabold tracking-tight text-white">
+        <span className="text-4xl font-extrabold tracking-tight text-foreground">
           {data.value}
         </span>
         {scoreMax && (

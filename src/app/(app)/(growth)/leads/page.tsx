@@ -27,10 +27,10 @@ export default async function LeadsPage() {
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Leads & Outreach</h1>
+          <h1 className="text-2xl font-bold text-foreground">Leads & Outreach</h1>
           <p className="text-text-secondary text-sm mt-0.5">Track and manage your marketing leads</p>
         </div>
-        <button className="px-4 py-2 gradient-purple-pink text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity active:scale-[0.98]">
+        <button className="px-4 py-2 gradient-purple-pink text-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity active:scale-[0.98]">
           Add Lead
         </button>
       </div>
@@ -39,7 +39,7 @@ export default async function LeadsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Total Leads</p>
-          <p className="text-2xl font-bold text-white mt-1">{leads.length}</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{leads.length}</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Warm</p>
@@ -73,7 +73,7 @@ export default async function LeadsPage() {
           <tbody>
             {leads.map((lead) => (
               <tr key={lead.id} className="border-b border-border/30 last:border-0 hover:bg-card-hover transition-colors">
-                <td className="px-5 py-3.5 text-sm text-white font-medium">{lead.name}</td>
+                <td className="px-5 py-3.5 text-sm text-foreground font-medium">{lead.name}</td>
                 <td className="px-5 py-3.5 text-sm text-text-secondary">{lead.company}</td>
                 <td className="px-5 py-3.5 text-xs text-text-muted">{typeLabels[lead.type]}</td>
                 <td className="px-5 py-3.5">
