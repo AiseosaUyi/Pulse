@@ -7,6 +7,7 @@ export interface UserProfile {
   email: string;
   username: string | null;
   displayName: string | null;
+  avatarUrl: string | null;
 }
 
 export interface TenantMembership {
@@ -23,7 +24,7 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("username, display_name")
+    .select("username, display_name, avatar_url")
     .eq("id", user.id)
     .single();
 
@@ -32,6 +33,7 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
     email: user.email ?? "",
     username: profile?.username ?? null,
     displayName: profile?.display_name ?? null,
+    avatarUrl: profile?.avatar_url ?? null,
   };
 }
 

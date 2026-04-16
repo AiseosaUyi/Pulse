@@ -3,8 +3,10 @@ import { UserCircle, Users, Lock, Bell, Mail, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, getCurrentTenant } from "@/lib/auth";
 import { PasswordInput } from "@/components/ui/PasswordInput";
+import { Avatar } from "@/components/ui/Avatar";
 import { SettingsForm } from "@/components/settings/SettingsForm";
 import { InviteLink } from "@/components/settings/InviteLink";
+import { AvatarUpload } from "@/components/settings/AvatarUpload";
 import {
   updateProfile,
   changePassword,
@@ -18,6 +20,7 @@ interface Member {
   role: "owner" | "admin" | "member";
   displayName: string;
   username: string;
+  avatarUrl: string | null;
   joinedAt: string;
 }
 
@@ -40,15 +43,19 @@ async function loadTeam(tenantSlug: string): Promise<{ members: Member[]; invite
     .order("created_at", { ascending: true });
 
   const userIds = (memberships ?? []).map((m) => m.user_id);
-  const profileMap = new Map<string, { display_name: string | null; username: string | null }>();
+  const profileMap = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
 
   if (userIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, display_name, username")
+      .select("id, display_name, username, avatar_url")
       .in("id", userIds);
     for (const p of profiles ?? []) {
-      profileMap.set(p.id, { display_name: p.display_name, username: p.username });
+      profileMap.set(p.id, {
+        display_name: p.display_name,
+        username: p.username,
+        avatar_url: p.avatar_url,
+      });
     }
   }
 
@@ -59,6 +66,7 @@ async function loadTeam(tenantSlug: string): Promise<{ members: Member[]; invite
       role: m.role,
       displayName: profile?.display_name ?? "—",
       username: profile?.username ?? "",
+      avatarUrl: profile?.avatar_url ?? null,
       joinedAt: m.created_at,
     };
   });
@@ -107,18 +115,16 @@ export default async function SettingsPage() {
           <h2 className="text-sm font-semibold uppercase tracking-wide">Profile</h2>
         </div>
 
-        <div className="mb-5 pb-5 border-b border-border flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full gradient-purple-pink flex items-center justify-center text-lg font-bold text-white">
-            {(user.displayName ?? user.email).charAt(0).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{user.displayName ?? user.email}</p>
-            <p className="text-xs text-text-muted truncate flex items-center gap-1">
-              <Mail size={12} />
-              {user.email}
-            </p>
-          </div>
-          <span className="text-xs text-text-muted italic">Avatar upload — coming soon</span>
+        <div className="mb-5 pb-5 border-b border-border space-y-4">
+          <AvatarUpload
+            userId={user.id}
+            currentUrl={user.avatarUrl}
+            displayName={user.displayName ?? user.email}
+          />
+          <p className="text-xs text-text-muted truncate flex items-center gap-1">
+            <Mail size={12} />
+            {user.email}
+          </p>
         </div>
 
         <SettingsForm action={updateProfile} submitLabel="Save profile" className="space-y-4">
@@ -160,9 +166,7 @@ export default async function SettingsPage() {
         <ul className="divide-y divide-border mb-6">
           {members.map((m) => (
             <li key={m.userId} className="py-3 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-background border border-border flex items-center justify-center text-sm font-semibold">
-                {m.displayName.charAt(0).toUpperCase()}
-              </div>
+              <Avatar url={m.avatarUrl} name={m.displayName} size="md" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{m.displayName}</p>
                 {m.username && <p className="text-xs text-text-muted truncate">@{m.username}</p>}

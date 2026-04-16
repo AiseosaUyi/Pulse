@@ -10,6 +10,22 @@ function result(success: boolean, message: string) {
   return { success, message };
 }
 
+export async function saveAvatarUrl(url: string | null) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ avatar_url: url })
+    .eq("id", user.id);
+
+  if (error) return result(false, error.message);
+
+  revalidatePath("/settings");
+  return result(true, url ? "Avatar updated" : "Avatar removed");
+}
+
 export async function updateProfile(formData: FormData) {
   const displayName = String(formData.get("displayName") ?? "").trim();
   const username = String(formData.get("username") ?? "").trim().toLowerCase();
