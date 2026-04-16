@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown } from "lucide-react";
-import type { Tenant } from "@/lib/types/tenant";
+import { ChevronDown, LogOut } from "lucide-react";
+import type { TenantMembership } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/client";
 
 interface TenantSwitcherProps {
-  tenants: Tenant[];
+  tenants: TenantMembership[];
   currentSlug: string;
 }
 
@@ -27,11 +28,20 @@ export function TenantSwitcher({ tenants, currentSlug }: TenantSwitcherProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  async function switchTenant(slug: string) {
+  function switchTenant(slug: string) {
     document.cookie = `tenant=${slug};path=/;max-age=${60 * 60 * 24 * 365}`;
     setIsOpen(false);
     router.refresh();
   }
+
+  async function signOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
+
+  if (!current) return null;
 
   return (
     <div ref={ref} className="relative px-3 py-4 border-t border-border">
@@ -42,7 +52,7 @@ export function TenantSwitcher({ tenants, currentSlug }: TenantSwitcherProps) {
       >
         <span className="w-2.5 h-2.5 rounded-full gradient-purple-pink flex-shrink-0" />
         <span className="text-text-secondary truncate flex-1 text-left">
-          {current.domain}
+          {current.name}
         </span>
         <ChevronDown
           size={14}
@@ -61,10 +71,17 @@ export function TenantSwitcher({ tenants, currentSlug }: TenantSwitcherProps) {
               `}
             >
               <span className="w-2 h-2 rounded-full gradient-purple-pink flex-shrink-0" />
-              <span className="truncate">{tenant.name}</span>
-              <span className="text-text-muted text-xs ml-auto">{tenant.domain}</span>
+              <span className="truncate flex-1 text-left">{tenant.name}</span>
+              <span className="text-text-muted text-xs ml-auto capitalize">{tenant.role}</span>
             </button>
           ))}
+          <button
+            onClick={signOut}
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-text-secondary hover:bg-card-hover border-t border-border transition-colors duration-150"
+          >
+            <LogOut size={14} className="text-text-muted" />
+            <span>Sign out</span>
+          </button>
         </div>
       )}
     </div>

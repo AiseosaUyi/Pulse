@@ -1,10 +1,11 @@
 import type { Competitor, IntelCard, MorningBriefItem, WeeklyDigest } from "@/lib/types/intelligence";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/server";
 import { mockMorningBrief, mockWeeklyDigest } from "@/lib/data/mock-intelligence";
 
 export async function getCompetitors(
   tenantSlug: string
 ): Promise<Competitor[]> {
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("competitors")
     .select("*")
@@ -30,6 +31,7 @@ export async function getCompetitors(
 export async function getIntelFeed(
   tenantSlug: string
 ): Promise<IntelCard[]> {
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("intel_cards")
     .select("*")
@@ -58,15 +60,11 @@ export async function getIntelFeed(
 export async function getMorningBrief(
   tenantSlug: string
 ): Promise<MorningBriefItem[]> {
-  // Phase 2: Generate from top 3 intel cards by impact in last 24h
-  // For now: use mock data since morning brief is an aggregation
   return mockMorningBrief[tenantSlug] ?? [];
 }
 
 export async function getWeeklyDigest(
   tenantSlug: string
 ): Promise<WeeklyDigest | null> {
-  // Phase 2: Generate via Vercel Cron + cache
-  // For now: use mock data since digest is an AI-generated aggregation
   return mockWeeklyDigest[tenantSlug] ?? null;
 }

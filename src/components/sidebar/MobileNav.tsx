@@ -4,10 +4,10 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { SidebarNav } from "./SidebarNav";
 import { TenantSwitcher } from "./TenantSwitcher";
-import type { Tenant } from "@/lib/types/tenant";
+import type { TenantMembership } from "@/lib/auth";
 
 interface MobileNavProps {
-  tenants: Tenant[];
+  tenants: TenantMembership[];
   currentTenantSlug: string;
 }
 

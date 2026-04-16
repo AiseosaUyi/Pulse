@@ -8,7 +8,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 const {
-  SUPABASE_URL,
+  NEXT_PUBLIC_SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY,
   SEED_EMAIL,
   SEED_PASSWORD,
@@ -16,8 +16,10 @@ const {
   SEED_DISPLAY_NAME,
 } = process.env;
 
+const SUPABASE_URL = NEXT_PUBLIC_SUPABASE_URL;
+
 const missing = [];
-if (!SUPABASE_URL) missing.push("SUPABASE_URL");
+if (!SUPABASE_URL) missing.push("NEXT_PUBLIC_SUPABASE_URL");
 if (!SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
 if (!SEED_EMAIL) missing.push("SEED_EMAIL");
 if (!SEED_PASSWORD) missing.push("SEED_PASSWORD");

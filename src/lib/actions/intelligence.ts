@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/server";
 
 export async function submitCompetitorPost(formData: FormData) {
   const competitorId = formData.get("competitorId") as string;
@@ -38,11 +38,11 @@ export async function submitCompetitorPost(formData: FormData) {
     vsAverage: null,
   };
 
-  // Calculate engagement rate if views exist
   if (metrics.views && metrics.views > 0) {
     metrics.engagementRate = Number(((metrics.engagement / metrics.views) * 100).toFixed(1));
   }
 
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("intel_cards")
     .insert({
@@ -79,7 +79,7 @@ export async function generateContentBrief(
   intelCardId: string,
   tenantSlug: string
 ) {
-  // Get the intel card for context
+  const supabase = await createClient();
   const { data: card } = await supabase
     .from("intel_cards")
     .select("*")
@@ -90,8 +90,6 @@ export async function generateContentBrief(
     return { success: false, error: "Intel card not found" };
   }
 
-  // Phase 2: Call OpenAI gpt-4o with brand voice context
-  // For now: generate a template brief based on the card data
   const brief = {
     tenant_id: tenantSlug,
     triggered_by: intelCardId,

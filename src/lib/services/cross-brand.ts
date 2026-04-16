@@ -1,5 +1,5 @@
 import type { IntelCard } from "@/lib/types/intelligence";
-import { supabaseAdmin } from "@/lib/supabase/client";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export interface CrossBrandPattern {
   id: string;
@@ -27,6 +27,7 @@ export interface AnomalyAlert {
 
 // Cross-brand pattern detection — uses service-role client to bypass RLS
 export async function detectCrossBrandPatterns(): Promise<CrossBrandPattern[]> {
+  const supabaseAdmin = createAdminClient();
   // Get all intel cards across ALL tenants (service-role bypasses RLS)
   const { data: allCards, error } = await supabaseAdmin
     .from("intel_cards")
@@ -88,6 +89,7 @@ export async function detectCrossBrandPatterns(): Promise<CrossBrandPattern[]> {
 
 // Anomaly detection — find intel cards with engagement 3x+ above competitor average
 export async function detectAnomalies(tenantSlug: string): Promise<AnomalyAlert[]> {
+  const supabaseAdmin = createAdminClient();
   const { data: cards, error } = await supabaseAdmin
     .from("intel_cards")
     .select("*")

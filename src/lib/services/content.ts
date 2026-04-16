@@ -1,9 +1,10 @@
 import type { ContentBrief } from "@/lib/types/intelligence";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/server";
 
 export async function getContentBriefs(
   tenantSlug: string
 ): Promise<ContentBrief[]> {
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("content_briefs")
     .select("*")
@@ -31,6 +32,7 @@ export async function getContentBrief(
   tenantSlug: string,
   briefId: string
 ): Promise<ContentBrief | null> {
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("content_briefs")
     .select("*")
