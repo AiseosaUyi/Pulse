@@ -1,21 +1,59 @@
 @import "tailwindcss";
 
+/* ──────────────────────────────────────────────────────────
+   Satoshi — variable font at four named weights.
+   Drop the .woff2 files into public/fonts/ to activate.
+   Falls back to system sans-serif until then.
+   ────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/Satoshi-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Satoshi-500";
+  src: url("/fonts/Satoshi-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Satoshi-700";
+  src: url("/fonts/Satoshi-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Satoshi-900";
+  src: url("/fonts/Satoshi-Black.woff2") format("woff2");
+  font-weight: 900;
+  font-display: swap;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Back-compat variables (the 44 existing files import these
+   names; repointing keeps them rendering Gruve-correct).
+   ────────────────────────────────────────────────────────── */
 :root {
-  --background: #0a0a0f;
-  --foreground: #ffffff;
-  --sidebar: #111118;
-  --card: #1a1a24;
-  --card-hover: #1f1f2b;
-  --border: #2a2a3a;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
-  --purple: #7c3aed;
-  --pink: #ec4899;
-  --green: #22c55e;
-  --yellow: #eab308;
-  --red: #ef4444;
-  --teal: #14b8a6;
-  --purple-light: #a855f7;
+  --background: #ffffff;
+  --foreground: #2d2b4a;       /* gray-1200 */
+  --sidebar: #ffffff;
+  --card: #ffffff;
+  --card-hover: #f6f7f7;       /* gray-50 */
+  --border: #e1e1e8;           /* white-200 */
+  --text-secondary: #4f5153;   /* gray-600 */
+  --text-muted: #666481;       /* gray-1000 */
+
+  /* Accents: repoint purple→maroon, pink→primary-1000 */
+  --purple: #ad112c;           /* primary-500 */
+  --pink: #ea445a;             /* primary-1000 */
+  --purple-light: #ad112c;
+
+  /* Status semantics */
+  --green: #27ae60;            /* success-500 */
+  --yellow: #ff8001;           /* warning-500 */
+  --red: #ff2e00;              /* error-500 */
+  --teal: #7494f3;             /* secondary-500 */
 }
 
 @theme inline {
@@ -34,53 +72,181 @@
   --color-status-red: var(--red);
   --color-status-teal: var(--teal);
   --color-status-purple: var(--purple-light);
-  --font-sans: var(--font-inter);
 }
 
+/* ──────────────────────────────────────────────────────────
+   Gruve design tokens (from GRUVE-DESIGN.md §3)
+   ────────────────────────────────────────────────────────── */
+@theme {
+  /* Fonts — Satoshi named families so h1/h2 rules can pin weight */
+  --font-sans:
+    "Satoshi",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Helvetica Neue",
+    system-ui,
+    sans-serif;
+
+  /* Primary — Maroon (brand) */
+  --color-primary-50:   #fee4e4;
+  --color-primary-100:  #fbc2c2;
+  --color-primary-200:  #f39b9b;
+  --color-primary-300:  #e07474;
+  --color-primary-400:  #c7434e;
+  --color-primary-500:  #ad112c;   /* brand */
+  --color-primary-600:  #960f26;   /* hover */
+  --color-primary-700:  #7f0d20;   /* active */
+  --color-primary-800:  #5e0716;
+  --color-primary-900:  #3f040e;
+  --color-primary-1000: #ea445a;   /* accent red */
+  --color-primary-1100: #f690a2;
+  --color-primary-1200: #e5b1bb;
+
+  /* Gray — text + borders */
+  --color-gray-50:   #f6f7f7;
+  --color-gray-100:  #e3e3e4;
+  --color-gray-200:  #c6c7c9;
+  --color-gray-300:  #aaacad;
+  --color-gray-400:  #8d9092;
+  --color-gray-500:  #717477;
+  --color-gray-600:  #4f5153;
+  --color-gray-700:  #393a3c;
+  --color-gray-800:  #222324;
+  --color-gray-900:  #0b0c0c;
+  --color-gray-1000: #666481;
+  --color-gray-1100: #111021;
+  --color-gray-1200: #2d2b4a;
+  --color-gray-1300: #c2c1cf;
+  --color-gray-1400: #848d97;
+  --color-gray-1500: #22213c;
+  --color-gray-1700: #717171;
+
+  /* White — backgrounds + input borders */
+  --color-white-50:  #fbfbfd;
+  --color-white-100: #f2f2f6;
+  --color-white-200: #e1e1e8;
+  --color-white-300: #e3e3e4;
+  --color-white-400: #fff6f8;
+  --color-white-500: #fff3f5;
+  --color-white-600: #f9f9fb;
+  --color-white-700: #fafafc;
+
+  /* Blue — focus rings */
+  --color-blue-50:   #e6edff;
+  --color-blue-100:  #ccdaff;
+  --color-blue-200:  #99b5ff;
+  --color-blue-300:  #6691ff;
+  --color-blue-400:  #336cff;
+  --color-blue-500:  #0047ff;
+  --color-blue-600:  #0039cc;
+  --color-blue-700:  #002b99;
+  --color-blue-800:  #001c66;
+  --color-blue-900:  #000e33;
+  --color-blue-1000: #2684ff;
+
+  /* Semantic */
+  --color-success-500:  #27ae60;
+  --color-success-1000: #edf9f0;
+  --color-warning-500:  #ff8001;
+  --color-warning-50:   #fff2e6;
+  --color-error-500:    #ff2e00;
+
+  /* Secondary — cool blue-violet, rare */
+  --color-secondary-100: #f0f4ff;
+  --color-secondary-500: #7494f3;
+  --color-secondary-700: #2053ec;
+
+  /* Shadows */
+  --shadow-custom-100: 0px 2px 2px 0px #0000001a;
+  --shadow-custom-200: 0px 1px 2px 0px #375dfb14;
+
+  /* Type scale */
+  --text-xxs:   0.625rem;
+  --text-xs:    0.75rem;
+  --text-sm:    0.875rem;
+  --text-base:  1rem;
+  --text-md:    1.125rem;
+  --text-lg:    1.25rem;
+  --text-xl:    1.5rem;
+  --text-2xl:   2rem;
+  --text-2_5xl: 2.5rem;
+  --text-3xl:   3rem;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Base typography — §4 spec.
+   h1/h2 use named Satoshi families so weight can't be
+   overridden by `font-black` etc.
+   ────────────────────────────────────────────────────────── */
+html,
 body {
   background: var(--background);
   color: var(--foreground);
 }
 
-/* Gradient utilities */
+body {
+  font-family: var(--font-sans);
+}
+
+h1 { font-family: "Satoshi-900", var(--font-sans); }
+h2 { font-family: "Satoshi-700", var(--font-sans); }
+h3,
+h4 { font-family: "Satoshi-500", var(--font-sans); }
+h5,
+h6,
+p { font-family: "Satoshi", var(--font-sans); }
+span { font-family: inherit !important; font-weight: inherit !important; }
+
+/* ──────────────────────────────────────────────────────────
+   Utilities used across the app
+   ────────────────────────────────────────────────────────── */
+
+/* Legacy utility — kept for back-compat. Maps to flat maroon
+   per §1 ("no gradients in-app"). Visual is flat even though
+   the class name still says gradient. */
 .gradient-purple-pink {
-  background: linear-gradient(135deg, var(--purple), var(--pink));
+  background: var(--purple);
 }
-
 .gradient-border-left {
-  border-left: 2px solid transparent;
-  border-image: linear-gradient(to bottom, var(--purple), var(--pink)) 1;
+  border-left: 2px solid var(--purple);
 }
 
-/* Skeleton pulse animation */
+/* Skeleton pulse — same motion, lighter opacity range */
 @keyframes skeleton-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.8; }
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.7; }
 }
-
 .animate-skeleton {
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
-/* Hide scrollbar for horizontal tab navs */
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+/* Warm-orange loader (branded) */
+@keyframes pulse-glow {
+  0%   { box-shadow: 0 0 0 0     #ffb367; opacity: 1; }
+  50%  { box-shadow: 0 0 0 0.75rem #ffb367; opacity: 0.6; }
+  100% { box-shadow: 0 0 0 1.25rem #fff2e6; opacity: 0.9; }
 }
+.loader-pulse {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 9999px;
+  background-color: #ff8001;
+  animation: pulse-glow 1.8s ease-in-out infinite;
+}
+
+/* Scrollbars — thin, inherits light theme */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-
-/* Scrollbar styling for dark theme */
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--background);
-}
-
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
+  background: var(--color-gray-100, #e3e3e4);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gray-200, #c6c7c9);
 }

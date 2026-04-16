@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type ActionResult = { success: boolean; message: string };
 
@@ -12,8 +14,6 @@ interface SettingsFormProps {
   className?: string;
 }
 
-// Wraps a form around a Server Action that returns { success, message } —
-// shows a transient status line after submit.
 export function SettingsForm({
   action,
   children,
@@ -38,16 +38,17 @@ export function SettingsForm({
   return (
     <form onSubmit={onSubmit} className={className}>
       {children}
-      <div className="flex items-center gap-3 mt-4">
-        <button
-          type="submit"
-          disabled={pending}
-          className="px-4 py-2 rounded-lg text-sm font-semibold text-white gradient-purple-pink hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-        >
+      <div className="flex items-center gap-3 mt-5">
+        <Button type="submit" size="sm" disabled={pending}>
           {pending ? "Saving…" : submitLabel}
-        </button>
+        </Button>
         {status && (
-          <span className={`text-xs ${status.success ? "text-emerald-400" : "text-red-400"}`}>
+          <span
+            className={cn(
+              "text-xs",
+              status.success ? "text-success-500" : "text-error-500"
+            )}
+          >
             {status.message}
           </span>
         )}

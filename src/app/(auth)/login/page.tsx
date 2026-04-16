@@ -1,5 +1,9 @@
 import Link from "next/link";
+import { Mail } from "lucide-react";
 import { PasswordInput } from "@/components/ui/PasswordInput";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { login } from "./actions";
 
 export default async function LoginPage({
@@ -10,53 +14,53 @@ export default async function LoginPage({
   const params = await searchParams;
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-8">
-      <h2 className="text-xl font-bold mb-1">Sign in</h2>
-      <p className="text-sm text-text-muted mb-6">Welcome back.</p>
+    <div className="bg-white border border-white-200 rounded-2xl p-8">
+      <h2
+        className="text-xl text-gray-1100 mb-1"
+        style={{ fontFamily: "'Satoshi-900', var(--font-sans)" }}
+      >
+        Welcome back
+      </h2>
+      <p className="text-sm text-gray-1000 mb-6">Sign in to your workspace.</p>
 
       {params.verify === "email" && (
-        <div className="mb-4 p-3 rounded-lg bg-accent-purple/10 border border-accent-purple/20 text-sm text-text-secondary">
-          Check your email to confirm your account before signing in.
+        <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-500/20 text-sm text-blue-600 flex items-start gap-2">
+          <Mail size={16} className="mt-0.5 flex-shrink-0" />
+          <span>Check your email to confirm your account before signing in.</span>
         </div>
       )}
       {params.error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-300">
+        <div className="mb-4 p-3 rounded-lg bg-primary-50 border border-primary-500/20 text-sm text-primary-500">
           {decodeURIComponent(params.error)}
         </div>
       )}
 
-      <form action={login} className="space-y-4">
+      <form action={login} className="space-y-5">
         <input type="hidden" name="next" value={params.next ?? "/dashboard"} />
         <div>
-          <label className="block text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">
-            Email
-          </label>
-          <input
+          <Label htmlFor="login-email">Email</Label>
+          <Input
+            id="login-email"
             type="email"
             name="email"
             required
             autoComplete="email"
-            className="w-full px-3 py-2.5 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent-purple"
+            placeholder="you@company.com"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">
-            Password
-          </label>
+          <Label htmlFor="login-password">Password</Label>
           <PasswordInput name="password" required autoComplete="current-password" />
         </div>
-        <button
-          type="submit"
-          className="w-full py-2.5 rounded-lg text-sm font-semibold text-white gradient-purple-pink hover:opacity-90 transition-opacity cursor-pointer"
-        >
+        <Button type="submit" size="xl" className="w-full">
           Sign in
-        </button>
+        </Button>
       </form>
 
-      <p className="mt-6 text-sm text-text-muted text-center">
+      <p className="mt-6 text-sm text-gray-1000 text-center">
         Don&apos;t have an account?{" "}
-        <Link href="/signup" className="text-accent-purple hover:underline">
-          Sign up
+        <Link href="/signup" className="text-primary-500 hover:text-primary-600 [font-family:'Satoshi-500',var(--font-sans)]">
+          Create one
         </Link>
       </p>
     </div>

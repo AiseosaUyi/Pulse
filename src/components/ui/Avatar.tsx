@@ -1,7 +1,10 @@
+import { cn } from "@/lib/utils";
+
 interface AvatarProps {
   url: string | null;
   name: string;
   size?: "sm" | "md" | "lg";
+  className?: string;
 }
 
 const sizes = {
@@ -10,7 +13,7 @@ const sizes = {
   lg: { wrapper: "w-14 h-14", text: "text-lg" },
 };
 
-export function Avatar({ url, name, size = "md" }: AvatarProps) {
+export function Avatar({ url, name, size = "md", className }: AvatarProps) {
   const { wrapper, text } = sizes[size];
   const initial = (name || "?").charAt(0).toUpperCase();
 
@@ -20,14 +23,24 @@ export function Avatar({ url, name, size = "md" }: AvatarProps) {
       <img
         src={url}
         alt={name}
-        className={`${wrapper} rounded-full object-cover flex-shrink-0 border border-border`}
+        className={cn(
+          wrapper,
+          "rounded-full object-cover flex-shrink-0 border border-white-200",
+          className
+        )}
       />
     );
   }
 
   return (
     <div
-      className={`${wrapper} rounded-full gradient-purple-pink flex items-center justify-center font-bold text-white flex-shrink-0 ${text}`}
+      className={cn(
+        wrapper,
+        text,
+        "rounded-full bg-primary-50 text-primary-500 flex items-center justify-center flex-shrink-0",
+        "[font-family:'Satoshi-700',var(--font-sans)]",
+        className
+      )}
     >
       {initial}
     </div>

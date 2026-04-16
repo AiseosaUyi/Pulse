@@ -1,11 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "PULSE — Marketing OS",
@@ -24,8 +18,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full`}>
-      <body className="h-full bg-background text-foreground font-sans antialiased">
+    <html lang="en" className="h-full">
+      <body className="h-full bg-white text-gray-1200 antialiased">
         {children}
       </body>
     </html>

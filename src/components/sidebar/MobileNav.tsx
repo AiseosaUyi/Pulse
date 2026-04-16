@@ -5,6 +5,7 @@ import { Menu, X } from "lucide-react";
 import { SidebarNav } from "./SidebarNav";
 import { TenantSwitcher } from "./TenantSwitcher";
 import type { TenantMembership } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 
 interface MobileNavProps {
   tenants: TenantMembership[];
@@ -16,59 +17,55 @@ export function MobileNav({ tenants, currentTenantSlug }: MobileNavProps) {
 
   return (
     <>
-      {/* Mobile header bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-sidebar border-b border-border h-14 flex items-center justify-between px-4">
-        <h1 className="text-lg font-extrabold tracking-tight">
-          <span className="bg-gradient-to-r from-accent-purple to-accent-pink bg-clip-text text-transparent italic">
-            PULSE
-          </span>
+      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-white-200 h-14 flex items-center justify-between px-4">
+        <h1
+          className="text-lg tracking-tight text-gray-1100"
+          style={{ fontFamily: "'Satoshi-900', var(--font-sans)" }}
+        >
+          PULSE
         </h1>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="p-2.5 rounded-lg hover:bg-card-hover transition-colors touch-manipulation"
+          className="p-2 rounded-full hover:bg-gray-50 transition-colors cursor-pointer"
           aria-label={isOpen ? "Close menu" : "Open menu"}
         >
-          {isOpen ? <X size={22} className="text-white" /> : <Menu size={22} className="text-white" />}
+          {isOpen ? <X size={20} className="text-gray-1200" /> : <Menu size={20} className="text-gray-1200" />}
         </button>
       </div>
 
-      {/* Overlay */}
       {isOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
+          className="md:hidden fixed inset-0 bg-[#000000B3] z-40 backdrop-blur-sm"
           onClick={() => setIsOpen(false)}
         />
       )}
 
-      {/* Slide-out sidebar */}
       <div
-        className={`md:hidden fixed top-0 left-0 bottom-0 w-[280px] bg-sidebar z-50 flex flex-col transition-transform duration-300 ease-in-out ${
+        className={cn(
+          "md:hidden fixed top-0 left-0 bottom-0 w-[280px] bg-white z-50 flex flex-col",
+          "transition-transform duration-300 ease-in-out border-r border-white-200",
           isOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        )}
       >
-        {/* Logo */}
-        <div className="px-6 pt-6 pb-2 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-extrabold tracking-tight">
-              <span className="bg-gradient-to-r from-accent-purple to-accent-pink bg-clip-text text-transparent italic">
-                PULSE
-              </span>
-            </h1>
-          </div>
+        <div className="px-6 pt-6 pb-4 flex items-center justify-between">
+          <h1
+            className="text-xl tracking-tight text-gray-1100"
+            style={{ fontFamily: "'Satoshi-900', var(--font-sans)" }}
+          >
+            PULSE
+          </h1>
           <button
             onClick={() => setIsOpen(false)}
-            className="p-2 rounded-lg hover:bg-card-hover transition-colors"
+            className="p-2 rounded-full hover:bg-gray-50 transition-colors cursor-pointer"
           >
-            <X size={18} className="text-text-muted" />
+            <X size={16} className="text-gray-500" />
           </button>
         </div>
 
-        {/* Nav — clicking any link closes the menu. min-h-0 constrains height so SidebarNav's overflow-y-auto scrolls */}
         <div className="flex-1 min-h-0 flex flex-col" onClick={() => setIsOpen(false)}>
           <SidebarNav />
         </div>
 
-        {/* Tenant switcher — pinned to bottom */}
         <div className="shrink-0">
           <TenantSwitcher tenants={tenants} currentSlug={currentTenantSlug} />
         </div>

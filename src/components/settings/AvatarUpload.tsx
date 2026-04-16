@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { Camera, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/button";
 import { saveAvatarUrl } from "@/app/(app)/settings/actions";
+import { cn } from "@/lib/utils";
 
 interface AvatarUploadProps {
   userId: string;
@@ -13,7 +15,7 @@ interface AvatarUploadProps {
   displayName: string;
 }
 
-const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_BYTES = 2 * 1024 * 1024;
 const ALLOWED = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
 
 export function AvatarUpload({ userId, currentUrl, displayName }: AvatarUploadProps) {
@@ -87,25 +89,28 @@ export function AvatarUpload({ userId, currentUrl, displayName }: AvatarUploadPr
 
       <div className="flex-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <button
+          <Button
             type="button"
+            variant="tertiary"
+            size="xs"
             onClick={() => inputRef.current?.click()}
             disabled={pending}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background border border-border text-xs font-medium hover:bg-card-hover transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Camera size={12} />
             {pending ? "Uploading…" : previewUrl ? "Change" : "Upload"}
-          </button>
+          </Button>
           {previewUrl && (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
               onClick={onRemove}
               disabled={pending}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-text-muted hover:text-red-400 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              className="text-gray-1000 hover:text-error-500"
             >
               <Trash2 size={12} />
               Remove
-            </button>
+            </Button>
           )}
           <input
             ref={inputRef}
@@ -115,9 +120,14 @@ export function AvatarUpload({ userId, currentUrl, displayName }: AvatarUploadPr
             className="hidden"
           />
         </div>
-        <p className="text-xs text-text-muted mt-1.5">JPG, PNG, WEBP, or GIF — max 2 MB.</p>
+        <p className="text-xs text-gray-500 mt-1.5">JPG, PNG, WEBP, or GIF — max 2 MB.</p>
         {status && (
-          <p className={`text-xs mt-1 ${status.success ? "text-emerald-400" : "text-red-400"}`}>
+          <p
+            className={cn(
+              "text-xs mt-1",
+              status.success ? "text-success-500" : "text-error-500"
+            )}
+          >
             {status.message}
           </p>
         )}

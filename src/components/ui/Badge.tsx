@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 type BadgeVariant =
   | "gradient"
@@ -20,42 +21,28 @@ type BadgeVariant =
 
 interface BadgeProps {
   variant: BadgeVariant;
-  children: ReactNode;
+  children?: ReactNode;
+  className?: string;
 }
 
+// All pills share the same shell; only fill/border/text-color vary.
 const variantStyles: Record<BadgeVariant, string> = {
-  gradient:
-    "bg-gradient-to-r from-accent-purple to-accent-pink text-white",
-  active:
-    "border border-status-green/30 text-status-green bg-status-green/10",
-  needs_posts:
-    "border border-status-yellow/30 text-status-yellow bg-status-yellow/10",
-  low_activity:
-    "border border-status-red/30 text-status-red bg-status-red/10",
-  high_impact:
-    "border border-status-purple/30 text-status-purple bg-status-purple/10",
-  urgent:
-    "border border-status-red/30 text-status-red bg-status-red/10",
-  overdue:
-    "border border-status-red/30 text-status-red bg-status-red/10",
-  opportunity:
-    "border border-status-teal/30 text-status-teal bg-status-teal/10",
-  published:
-    "border border-status-green/30 text-status-green bg-status-green/10",
-  draft_status:
-    "border border-status-yellow/30 text-status-yellow bg-status-yellow/10",
-  planned:
-    "border border-status-teal/30 text-status-teal bg-status-teal/10",
-  gap:
-    "border border-status-red/30 border-dashed text-status-red bg-status-red/5",
-  informational:
-    "border border-blue-400/30 text-blue-400 bg-blue-400/10",
-  transactional:
-    "border border-status-green/30 text-status-green bg-status-green/10",
-  navigational:
-    "border border-status-purple/30 text-status-purple bg-status-purple/10",
-  commercial:
-    "border border-status-yellow/30 text-status-yellow bg-status-yellow/10",
+  gradient:        "bg-primary-500 text-white",
+  active:          "bg-success-1000 text-success-500 border border-success-500/20",
+  needs_posts:     "bg-warning-50 text-warning-500 border border-warning-500/20",
+  low_activity:    "bg-primary-50 text-primary-500 border border-primary-500/20",
+  high_impact:     "bg-primary-50 text-primary-500 border border-primary-500/30",
+  urgent:          "bg-primary-50 text-primary-500 border border-primary-500/30",
+  overdue:         "bg-primary-50 text-primary-500 border border-primary-500/30",
+  opportunity:     "bg-secondary-100 text-secondary-700 border border-secondary-500/20",
+  published:       "bg-success-1000 text-success-500 border border-success-500/20",
+  draft_status:    "bg-warning-50 text-warning-500 border border-warning-500/20",
+  planned:         "bg-secondary-100 text-secondary-700 border border-secondary-500/20",
+  gap:             "bg-primary-50 text-primary-500 border border-dashed border-primary-500/40",
+  informational:   "bg-blue-50 text-blue-600 border border-blue-500/20",
+  transactional:   "bg-success-1000 text-success-500 border border-success-500/20",
+  navigational:    "bg-primary-50 text-primary-500 border border-primary-500/20",
+  commercial:      "bg-warning-50 text-warning-500 border border-warning-500/20",
 };
 
 const variantLabels: Partial<Record<BadgeVariant, string>> = {
@@ -64,10 +51,15 @@ const variantLabels: Partial<Record<BadgeVariant, string>> = {
   low_activity: "Low activity",
 };
 
-export function Badge({ variant, children }: BadgeProps) {
+export function Badge({ variant, children, className }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${variantStyles[variant]}`}
+      className={cn(
+        "inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap",
+        "[font-family:'Satoshi-500',var(--font-sans)]",
+        variantStyles[variant],
+        className
+      )}
     >
       {children ?? variantLabels[variant]}
     </span>

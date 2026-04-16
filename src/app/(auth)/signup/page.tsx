@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PasswordInput } from "@/components/ui/PasswordInput";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { signup, completeCompany } from "./actions";
 
 interface InviteContext {
@@ -40,153 +43,129 @@ export default async function SignupPage({
 
   if (isCompanyStep) {
     return (
-      <div className="bg-card border border-border rounded-2xl p-8">
-        <h2 className="text-xl font-bold mb-1">Create a company</h2>
-        <p className="text-sm text-text-muted mb-6">
-          Your account exists but isn&apos;t attached to a company yet.
+      <div className="bg-white border border-white-200 rounded-2xl p-8">
+        <h2
+          className="text-xl text-gray-1100 mb-1"
+          style={{ fontFamily: "'Satoshi-900', var(--font-sans)" }}
+        >
+          Create a company
+        </h2>
+        <p className="text-sm text-gray-1000 mb-6">
+          Your account isn&apos;t attached to a company yet.
         </p>
 
         {params.error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-300">
+          <div className="mb-4 p-3 rounded-lg bg-primary-50 border border-primary-500/20 text-sm text-primary-500">
             {decodeURIComponent(params.error)}
           </div>
         )}
 
-        <form action={completeCompany} className="space-y-4">
+        <form action={completeCompany} className="space-y-5">
           <div>
-            <label className="block text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">
-              Company name
-            </label>
-            <input
-              type="text"
-              name="companyName"
-              required
-              className="w-full px-3 py-2.5 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent-purple"
-            />
+            <Label htmlFor="sc-name">Company name</Label>
+            <Input id="sc-name" type="text" name="companyName" required />
           </div>
           <div>
-            <label className="block text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">
-              Company handle (used in URLs)
-            </label>
-            <input
+            <Label htmlFor="sc-slug">Company handle</Label>
+            <Input
+              id="sc-slug"
               type="text"
               name="companySlug"
               required
               pattern="[a-z0-9-]+"
               placeholder="acme-co"
-              className="w-full px-3 py-2.5 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent-purple"
             />
-            <p className="mt-1 text-xs text-text-muted">Lowercase letters, numbers, and hyphens only.</p>
+            <p className="mt-1 text-xs text-gray-500">Lowercase letters, numbers, and hyphens.</p>
           </div>
-          <button
-            type="submit"
-            className="w-full py-2.5 rounded-lg text-sm font-semibold text-white gradient-purple-pink hover:opacity-90 transition-opacity cursor-pointer"
-          >
+          <Button type="submit" size="xl" className="w-full">
             Create company
-          </button>
+          </Button>
         </form>
       </div>
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-8">
-      <h2 className="text-xl font-bold mb-1">
+    <div className="bg-white border border-white-200 rounded-2xl p-8">
+      <h2
+        className="text-xl text-gray-1100 mb-1"
+        style={{ fontFamily: "'Satoshi-900', var(--font-sans)" }}
+      >
         {invite ? `Join ${invite.tenantName}` : "Create account"}
       </h2>
-      <p className="text-sm text-text-muted mb-6">
+      <p className="text-sm text-gray-1000 mb-6">
         {invite
-          ? `You were invited as a ${invite.role}. Create your account to join.`
+          ? `You were invited as a ${invite.role}.`
           : "Start your marketing OS."}
       </p>
 
       {isInvalidInvite && (
-        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-300">
+        <div className="mb-4 p-3 rounded-lg bg-primary-50 border border-primary-500/20 text-sm text-primary-500">
           This invite link is invalid or expired.
         </div>
       )}
       {params.error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-300">
+        <div className="mb-4 p-3 rounded-lg bg-primary-50 border border-primary-500/20 text-sm text-primary-500">
           {decodeURIComponent(params.error)}
         </div>
       )}
 
-      <form action={signup} className="space-y-4">
+      <form action={signup} className="space-y-5">
         {params.invite && <input type="hidden" name="invite" value={params.invite} />}
         <div>
-          <label className="block text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">
-            Email
-          </label>
-          <input
+          <Label htmlFor="su-email">Email</Label>
+          <Input
+            id="su-email"
             type="email"
             name="email"
             required
             defaultValue={invite?.email ?? ""}
             readOnly={Boolean(invite)}
             autoComplete="email"
-            className="w-full px-3 py-2.5 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent-purple read-only:opacity-70"
+            placeholder="you@company.com"
+            className={invite ? "opacity-70 cursor-not-allowed" : ""}
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">
-            Password
-          </label>
+          <Label htmlFor="su-password">Password</Label>
           <PasswordInput name="password" required minLength={8} autoComplete="new-password" />
-          <p className="mt-1 text-xs text-text-muted">8 characters minimum.</p>
+          <p className="mt-1 text-xs text-gray-500">8 characters minimum.</p>
         </div>
         <div>
-          <label className="block text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">
-            Display name
-          </label>
-          <input
-            type="text"
-            name="displayName"
-            required
-            className="w-full px-3 py-2.5 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent-purple"
-          />
+          <Label htmlFor="su-display">Display name</Label>
+          <Input id="su-display" type="text" name="displayName" required />
         </div>
 
         {!invite && (
           <>
+            <div className="pt-2 border-t border-white-200" />
             <div>
-              <label className="block text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">
-                Company name
-              </label>
-              <input
-                type="text"
-                name="companyName"
-                required
-                className="w-full px-3 py-2.5 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent-purple"
-              />
+              <Label htmlFor="su-cname">Company name</Label>
+              <Input id="su-cname" type="text" name="companyName" required />
             </div>
             <div>
-              <label className="block text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">
-                Company handle
-              </label>
-              <input
+              <Label htmlFor="su-cslug">Company handle</Label>
+              <Input
+                id="su-cslug"
                 type="text"
                 name="companySlug"
                 required
                 pattern="[a-z0-9-]+"
                 placeholder="acme-co"
-                className="w-full px-3 py-2.5 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-accent-purple"
               />
-              <p className="mt-1 text-xs text-text-muted">Lowercase letters, numbers, and hyphens.</p>
+              <p className="mt-1 text-xs text-gray-500">Lowercase letters, numbers, and hyphens.</p>
             </div>
           </>
         )}
 
-        <button
-          type="submit"
-          className="w-full py-2.5 rounded-lg text-sm font-semibold text-white gradient-purple-pink hover:opacity-90 transition-opacity cursor-pointer"
-        >
+        <Button type="submit" size="xl" className="w-full">
           {invite ? "Join company" : "Create account"}
-        </button>
+        </Button>
       </form>
 
-      <p className="mt-6 text-sm text-text-muted text-center">
+      <p className="mt-6 text-sm text-gray-1000 text-center">
         Already have an account?{" "}
-        <Link href="/login" className="text-accent-purple hover:underline">
+        <Link href="/login" className="text-primary-500 hover:text-primary-600 [font-family:'Satoshi-500',var(--font-sans)]">
           Sign in
         </Link>
       </p>

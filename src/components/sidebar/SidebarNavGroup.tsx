@@ -7,8 +7,8 @@ interface SidebarNavGroupProps {
 
 export function SidebarNavGroup({ group }: SidebarNavGroupProps) {
   return (
-    <div className="mt-6">
-      <p className="px-3 text-[11px] font-medium uppercase tracking-widest text-text-muted mb-2">
+    <div className="mt-5 first:mt-0">
+      <p className="px-3 text-[10px] font-medium uppercase tracking-[0.14em] text-gray-400 mb-2">
         {group.label}
       </p>
       <div className="flex flex-col gap-0.5">
@@ -18,7 +18,7 @@ export function SidebarNavGroup({ group }: SidebarNavGroupProps) {
             label={item.label}
             href={item.href}
             iconName={item.iconName}
-            children={item.children}
+            childItems={item.children}
           />
         ))}
       </div>

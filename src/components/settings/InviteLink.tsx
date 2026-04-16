@@ -19,7 +19,7 @@ export function InviteLink({ token }: { token: string }) {
     <button
       type="button"
       onClick={copy}
-      className="inline-flex items-center gap-1.5 text-xs text-accent-purple hover:underline cursor-pointer"
+      className="inline-flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-600 cursor-pointer [font-family:'Satoshi-500',var(--font-sans)]"
     >
       {copied ? <Check size={12} /> : <Copy size={12} />}
       {copied ? "Copied" : "Copy invite link"}

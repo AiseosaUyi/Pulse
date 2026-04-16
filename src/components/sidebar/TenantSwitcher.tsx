@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut, Settings } from "lucide-react";
+import { ChevronDown, LogOut, Settings, Check } from "lucide-react";
 import type { TenantMembership } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
 interface TenantSwitcherProps {
   tenants: TenantMembership[];
@@ -45,52 +46,80 @@ export function TenantSwitcher({ tenants, currentSlug }: TenantSwitcherProps) {
   if (!current) return null;
 
   return (
-    <div ref={ref} className="relative px-3 py-4 border-t border-border">
+    <div ref={ref} className="relative px-3 py-3 border-t border-white-200">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-colors duration-150
-          hover:bg-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+        className={cn(
+          "flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition-colors duration-200 cursor-pointer",
+          "hover:bg-gray-50 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30",
+          isOpen && "bg-gray-50"
+        )}
       >
-        <span className="w-2.5 h-2.5 rounded-full gradient-purple-pink flex-shrink-0" />
-        <span className="text-text-secondary truncate flex-1 text-left">
-          {current.name}
+        <span className="w-8 h-8 rounded-full bg-primary-50 text-primary-500 flex items-center justify-center text-xs [font-family:'Satoshi-700',var(--font-sans)] flex-shrink-0">
+          {current.name.charAt(0).toUpperCase()}
+        </span>
+        <span className="flex-1 min-w-0 text-left">
+          <span className="block truncate text-gray-1200 [font-family:'Satoshi-500',var(--font-sans)]">
+            {current.name}
+          </span>
+          <span className="block truncate text-[11px] text-gray-1000 capitalize">{current.role}</span>
         </span>
         <ChevronDown
           size={14}
-          className={`text-text-muted transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
+          className={cn("text-gray-400 transition-transform duration-200", isOpen && "rotate-180")}
         />
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full left-3 right-3 mb-1 bg-card border border-border rounded-lg shadow-lg overflow-hidden">
+        <div className="absolute bottom-full left-3 right-3 mb-2 bg-white border border-white-200 rounded-xl shadow-custom-100 overflow-hidden py-1">
+          <p className="px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-gray-400">
+            Workspaces
+          </p>
           {tenants.map((tenant) => (
             <button
               key={tenant.slug}
               onClick={() => switchTenant(tenant.slug)}
-              className={`flex items-center gap-3 w-full px-3 py-2.5 text-sm transition-colors duration-150 hover:bg-card-hover cursor-pointer
-                ${tenant.slug === currentSlug ? "text-white" : "text-text-secondary"}
-              `}
+              className={cn(
+                "flex items-center gap-3 w-full px-3 py-2 text-sm transition-colors duration-150 cursor-pointer",
+                tenant.slug === currentSlug
+                  ? "text-primary-500 bg-primary-50"
+                  : "text-gray-1200 hover:bg-gray-50"
+              )}
             >
-              <span className="w-2 h-2 rounded-full gradient-purple-pink flex-shrink-0" />
+              <span
+                className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center text-[10px] flex-shrink-0",
+                  "[font-family:'Satoshi-700',var(--font-sans)]",
+                  tenant.slug === currentSlug
+                    ? "bg-primary-500 text-white"
+                    : "bg-gray-100 text-gray-1200"
+                )}
+              >
+                {tenant.name.charAt(0).toUpperCase()}
+              </span>
               <span className="truncate flex-1 text-left">{tenant.name}</span>
-              <span className="text-text-muted text-xs ml-auto capitalize">{tenant.role}</span>
+              <span className="text-gray-1000 text-[11px] ml-auto capitalize">{tenant.role}</span>
+              {tenant.slug === currentSlug && <Check size={12} className="text-primary-500" />}
             </button>
           ))}
-          <Link
-            href="/settings"
-            onClick={() => setIsOpen(false)}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-text-secondary hover:bg-card-hover border-t border-border transition-colors duration-150 cursor-pointer"
-          >
-            <Settings size={14} className="text-text-muted" />
-            <span>Settings</span>
-          </Link>
-          <button
-            onClick={signOut}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-text-secondary hover:bg-card-hover border-t border-border transition-colors duration-150 cursor-pointer"
-          >
-            <LogOut size={14} className="text-text-muted" />
-            <span>Sign out</span>
-          </button>
+
+          <div className="border-t border-white-200 mt-1 pt-1">
+            <Link
+              href="/settings"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-1200 hover:bg-gray-50 transition-colors duration-150 cursor-pointer"
+            >
+              <Settings size={14} className="text-gray-500" />
+              <span>Settings</span>
+            </Link>
+            <button
+              onClick={signOut}
+              className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-1200 hover:bg-gray-50 transition-colors duration-150 cursor-pointer"
+            >
+              <LogOut size={14} className="text-gray-500" />
+              <span>Sign out</span>
+            </button>
+          </div>
         </div>
       )}
     </div>
