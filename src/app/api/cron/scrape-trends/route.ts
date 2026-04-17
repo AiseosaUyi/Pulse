@@ -155,25 +155,13 @@ export async function POST(req: Request) {
         )
       );
 
-      // Persist sequentially (DB is fast)
+      // Persist sequentially (DB is fast). No URL-based dedup — we want
+      // each day's top-N to resurface even if the same post appeared
+      // yesterday. Manual dismiss handles cleanup per design.
       for (let i = 0; i < job.trends.length; i++) {
         const trend = job.trends[i];
         const analysis = analyses[i];
         try {
-          // Idempotency — skip if we've seen this external_url
-          if (trend.external_url) {
-            const { data: existing } = await admin
-              .from("trend_scouts")
-              .select("id")
-              .eq("tenant_slug", job.tenant.slug)
-              .eq("external_url", trend.external_url)
-              .limit(1);
-            if (existing && existing.length > 0) {
-              summary.skipped += 1;
-              continue;
-            }
-          }
-
           let ai_analysis = null;
           let applicability: TrendApplicability | null = null;
           if (analysis.status === "fulfilled") {
