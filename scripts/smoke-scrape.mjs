@@ -40,6 +40,7 @@ async function runTikTok() {
     console.log(`  items returned: ${items.length}`);
     for (const item of items.slice(0, 1)) {
       console.log("  sample keys:", Object.keys(item).slice(0, 15));
+      console.log("  full item:", JSON.stringify(item, null, 2).slice(0, 800));
     }
   } catch (err) {
     console.error("  FAILED:", err.message ?? err);
@@ -58,10 +59,9 @@ async function runInstagram() {
   try {
     const run = await client.actor(igActor).call(
       {
-        hashtags: ["lagosevents"],
+        directUrls: ["https://www.instagram.com/explore/tags/lagosevents/"],
         resultsType: "posts",
         resultsLimit: 3,
-        searchType: "hashtag",
       },
       { timeout: 180, memory: 1024 }
     );

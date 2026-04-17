@@ -39,13 +39,18 @@ export async function scrapeInstagramTopPosts(
       h.trim().replace(/^#/, "").toLowerCase()
     );
 
-    // apify/instagram-scraper input shape.
+    // apify/instagram-scraper input shape:
+    // - directUrls (array of explore/tags URLs) → one run covers all hashtags
+    // - resultsType: 'posts' | 'stories' | etc.
+    // - resultsLimit: total cap across all URLs
+    const directUrls = cleaned.map(
+      (h) => `https://www.instagram.com/explore/tags/${h}/`
+    );
     const run = await client.actor(actorId).call(
       {
-        hashtags: cleaned,
+        directUrls,
         resultsType: "posts",
         resultsLimit: limit * cleaned.length,
-        searchType: "hashtag",
       },
       { timeout: 180, memory: 1024 }
     );
