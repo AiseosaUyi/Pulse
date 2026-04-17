@@ -2,39 +2,40 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { updateScoutConfig } from "@/lib/actions/scout-config";
 
 interface Props {
   tenantSlug: string;
-  initialHashtags: string[];
-  initialRegion: string;
+  initialInstagramHashtags: string[];
+  initialTiktokHashtags: string[];
 }
 
 export function ScoutConfigEditor({
   tenantSlug,
-  initialHashtags,
-  initialRegion,
+  initialInstagramHashtags,
+  initialTiktokHashtags,
 }: Props) {
-  const [hashtags, setHashtags] = useState(initialHashtags.join("\n"));
-  const [region, setRegion] = useState(initialRegion);
+  const [igTags, setIgTags] = useState(initialInstagramHashtags.join("\n"));
+  const [ttTags, setTtTags] = useState(initialTiktokHashtags.join("\n"));
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const handleSave = () => {
-    setError(null);
-    setSaved(false);
-    const tags = hashtags
+  const parseList = (raw: string): string[] =>
+    raw
       .split(/[\n,]+/)
       .map((s) => s.trim())
       .filter(Boolean);
+
+  const handleSave = () => {
+    setError(null);
+    setSaved(false);
     startTransition(async () => {
       const res = await updateScoutConfig(tenantSlug, {
-        instagram_hashtags: tags,
-        tiktok_region: region,
+        instagram_hashtags: parseList(igTags),
+        tiktok_hashtags: parseList(ttTags),
       });
       if (!res.success) {
         setError(res.error);
@@ -46,38 +47,37 @@ export function ScoutConfigEditor({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
         <Label htmlFor="ig-tags">Instagram hashtags (one per line)</Label>
         <Textarea
           id="ig-tags"
-          value={hashtags}
-          onChange={(e) => setHashtags(e.target.value)}
+          value={igTags}
+          onChange={(e) => setIgTags(e.target.value)}
           placeholder={"lagosmemes\nlagosnightlife\nnaijahumor"}
-          rows={8}
+          rows={6}
           disabled={isPending}
           className="font-mono text-sm"
         />
         <p className="text-xs text-text-muted mt-1.5">
-          The scout pulls top 5 posts per hashtag every morning. Keep to 3–8
-          hashtags — more than that dilutes the signal.
+          Top 5 posts per hashtag every morning. 3–8 hashtags is the sweet spot.
         </p>
       </div>
 
       <div>
-        <Label htmlFor="tt-region">TikTok region (ISO country code)</Label>
-        <Input
-          id="tt-region"
-          value={region}
-          onChange={(e) => setRegion(e.target.value)}
-          placeholder="NG"
-          maxLength={3}
+        <Label htmlFor="tt-tags">TikTok hashtags (one per line)</Label>
+        <Textarea
+          id="tt-tags"
+          value={ttTags}
+          onChange={(e) => setTtTags(e.target.value)}
+          placeholder={"lagosnightlife\nnaijaparty\nafrobeats"}
+          rows={6}
           disabled={isPending}
-          className="max-w-[120px] font-mono"
+          className="font-mono text-sm"
         />
         <p className="text-xs text-text-muted mt-1.5">
-          TikTok Creative Center surfaces trending hashtags by country. NG =
-          Nigeria. Leave blank to skip TikTok for this tenant.
+          Top 5 videos per hashtag every morning, ranked by view count. Same
+          cadence as Instagram.
         </p>
       </div>
 

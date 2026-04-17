@@ -53,7 +53,7 @@ const TENANTS = [
       ],
       scout_config: {
         instagram_hashtags: ["lagosevents", "lagosnightlife", "naijaparty", "afrobeatsparty"],
-        tiktok_region: "NG",
+        tiktok_hashtags: ["lagosnightlife", "naijaparty", "afrobeats", "lagosafterdark"],
       },
     },
   },
@@ -76,7 +76,7 @@ const TENANTS = [
       ],
       scout_config: {
         instagram_hashtags: ["lagoseats", "lagosfoodie", "naijafood", "lagoscocktails"],
-        tiktok_region: "NG",
+        tiktok_hashtags: ["lagosnightlife", "naijaparty", "afrobeats", "lagosafterdark"],
       },
     },
   },

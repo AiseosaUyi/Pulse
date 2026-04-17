@@ -17,7 +17,7 @@ export default async function TrendScoutsPage() {
 
   const settings = (tenant?.settings as Record<string, unknown> | null) ?? {};
   const scout = (settings.scout_config as
-    | { instagram_hashtags?: string[]; tiktok_region?: string }
+    | { instagram_hashtags?: string[]; tiktok_hashtags?: string[] }
     | undefined) ?? {};
 
   return (
@@ -48,8 +48,8 @@ export default async function TrendScoutsPage() {
       <section className="bg-card border border-border rounded-2xl p-6">
         <ScoutConfigEditor
           tenantSlug={tenantSlug}
-          initialHashtags={scout.instagram_hashtags ?? []}
-          initialRegion={scout.tiktok_region ?? "NG"}
+          initialInstagramHashtags={scout.instagram_hashtags ?? []}
+          initialTiktokHashtags={scout.tiktok_hashtags ?? []}
         />
       </section>
     </div>

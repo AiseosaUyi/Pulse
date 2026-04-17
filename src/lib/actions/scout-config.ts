@@ -9,7 +9,7 @@ type ActionResult =
 
 export async function updateScoutConfig(
   tenantSlug: string,
-  patch: { instagram_hashtags?: string[]; tiktok_region?: string }
+  patch: { instagram_hashtags?: string[]; tiktok_hashtags?: string[] }
 ): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: tenant, error: readErr } = await supabase
@@ -27,8 +27,10 @@ export async function updateScoutConfig(
         .map((h) => h.trim().replace(/^#/, ""))
         .filter(Boolean),
     }),
-    ...(patch.tiktok_region !== undefined && {
-      tiktok_region: patch.tiktok_region.trim().toUpperCase(),
+    ...(patch.tiktok_hashtags !== undefined && {
+      tiktok_hashtags: patch.tiktok_hashtags
+        .map((h) => h.trim().replace(/^#/, ""))
+        .filter(Boolean),
     }),
   };
   const newSettings = { ...settings, scout_config: scoutConfig };

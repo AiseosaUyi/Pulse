@@ -1,17 +1,13 @@
-// TikTok Creative Center scraper, backed by an Apify actor.
+// TikTok hashtag scraper — top videos per hashtag.
 //
-// Setup (done once in Vercel env):
-//   APIFY_API_TOKEN          — from https://console.apify.com/account/integrations
-//   APIFY_TIKTOK_ACTOR_ID    — the actor slug, e.g. 'clockworks~tiktok-trending-hashtags'
-//                              (browse the marketplace at https://apify.com/store, search
-//                              "TikTok Creative Center" or "TikTok trending hashtags")
-//   APIFY_TIKTOK_REGION      — optional country code, default 'NG'. The actor's input
-//                              shape may differ per actor — see their README.
+// Originally targeted TikTok Creative Center but that requires cookies from
+// a logged-in CC session (same ban risk as LinkedIn automation). Pivoted to
+// hashtag-based scraping via Clockworks' actor, which parallels the
+// Instagram setup: tenant provides hashtags, we return top videos per tag.
 //
-// If either of the first two env vars is missing, the function returns an empty
-// array so the cron still runs cleanly; the UI just shows nothing new.
-//
-// Cost per run: ~$0.003–0.01 depending on actor and volume. Weekly cron = ~$0.01–0.04/mo.
+// Setup (in Vercel env):
+//   APIFY_TIKTOK_ACTOR_ID  — e.g. 'clockworks~tiktok-hashtag-scraper'
+//   (APIFY_API_TOKEN is shared with the Instagram scraper)
 
 import { ApifyClient } from "apify-client";
 
@@ -31,33 +27,31 @@ export interface ScrapedTrend {
   owner_handle?: string;
 }
 
-export interface ScrapeOptions {
-  region?: string;
-  limit?: number;
-}
-
 interface ActorItem {
-  hashtag?: string;
-  tag?: string;
-  name?: string;
-  title?: string;
-  publishCnt?: number;
-  videos?: number;
-  posts?: number;
-  views?: number;
-  viewCount?: number;
-  rank?: number;
-  trending_rank?: number;
+  id?: string;
+  webVideoUrl?: string;
+  videoUrl?: string;
   url?: string;
-  link?: string;
+  text?: string;
+  caption?: string;
+  description?: string;
+  hashtags?: Array<string | { name?: string }>;
+  authorMeta?: { name?: string; nickName?: string };
+  author?: { uniqueId?: string; nickname?: string };
+  username?: string;
+  playCount?: number;
+  videoPlayCount?: number;
+  views?: number;
+  diggCount?: number;
+  likesCount?: number;
+  commentCount?: number;
+  commentsCount?: number;
+  shareCount?: number;
   [k: string]: unknown;
 }
 
-function pickString(...vals: unknown[]): string | undefined {
-  for (const v of vals) {
-    if (typeof v === "string" && v.trim().length > 0) return v.trim();
-  }
-  return undefined;
+function truncate(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
 
 function pickNumber(...vals: unknown[]): number | undefined {
@@ -67,55 +61,46 @@ function pickNumber(...vals: unknown[]): number | undefined {
   return undefined;
 }
 
-function normalizeItem(item: ActorItem, idx: number, region: string): ScrapedTrend | null {
-  const hashtag = pickString(item.hashtag, item.tag, item.name, item.title);
-  if (!hashtag) return null;
-
-  const views = pickNumber(item.publishCnt, item.videos, item.posts, item.views, item.viewCount);
-  const rank = pickNumber(item.rank, item.trending_rank) ?? idx + 1;
-  const url = pickString(item.url, item.link);
-
-  const cleanTag = hashtag.startsWith("#") ? hashtag : `#${hashtag}`;
-  const summary = views
-    ? `Trending #${cleanTag.replace(/^#/, "")} in ${region} (${views.toLocaleString()} videos, rank ${rank}).`
-    : `Trending #${cleanTag.replace(/^#/, "")} in ${region} (rank ${rank}).`;
-
-  return {
-    platform: "tiktok",
-    source: "creative_center",
-    hashtag: cleanTag,
-    title: cleanTag,
-    summary,
-    external_url: url,
-    views,
-    trending_rank: rank,
-    region,
-  };
+function pickString(...vals: unknown[]): string | undefined {
+  for (const v of vals) {
+    if (typeof v === "string" && v.trim().length > 0) return v.trim();
+  }
+  return undefined;
 }
 
-export async function scrapeTikTokCreativeCenter(
-  opts: ScrapeOptions = {}
+export async function scrapeTikTokTopPosts(
+  hashtags: string[],
+  opts: { limitPerHashtag?: number } = {}
 ): Promise<ScrapedTrend[]> {
   const token = process.env.APIFY_API_TOKEN;
   const actorId = process.env.APIFY_TIKTOK_ACTOR_ID;
-  const region = opts.region ?? process.env.APIFY_TIKTOK_REGION ?? "NG";
-  const limit = opts.limit ?? 20;
+  const limit = opts.limitPerHashtag ?? 5;
 
   if (!token || !actorId) {
     console.log(
-      "[scrape/tiktok] APIFY_API_TOKEN or APIFY_TIKTOK_ACTOR_ID missing — returning no trends"
+      "[scrape/tiktok] APIFY_API_TOKEN or APIFY_TIKTOK_ACTOR_ID missing — returning no posts"
     );
     return [];
   }
+  if (hashtags.length === 0) return [];
 
   const client = new ApifyClient({ token });
 
   try {
-    // Most TikTok Creative Center actors accept {country, limit} or similar.
-    // If the chosen actor needs a different shape, override via actor docs.
+    const cleaned = hashtags.map((h) =>
+      h.trim().replace(/^#/, "").toLowerCase()
+    );
+
+    // clockworks/tiktok-hashtag-scraper shape. Adjust per actor README if using a
+    // different one.
     const run = await client.actor(actorId).call(
-      { country: region, region, limit, maxItems: limit },
-      { timeout: 120, memory: 1024 }
+      {
+        hashtags: cleaned,
+        resultsPerPage: limit,
+        shouldDownloadVideos: false,
+        shouldDownloadCovers: false,
+      },
+      { timeout: 180, memory: 1024 }
     );
 
     if (!run.defaultDatasetId) {
@@ -125,18 +110,70 @@ export async function scrapeTikTokCreativeCenter(
 
     const { items } = await client
       .dataset(run.defaultDatasetId)
-      .listItems({ limit });
+      .listItems({ limit: limit * cleaned.length * 3 });
 
-    return (items as ActorItem[])
-      .map((item, i) => normalizeItem(item, i, region))
-      .filter((t): t is ScrapedTrend => t !== null)
-      .slice(0, limit);
+    // Group by hashtag, top N by engagement.
+    const grouped = new Map<string, ActorItem[]>();
+    for (const rawItem of items as ActorItem[]) {
+      const tags =
+        rawItem.hashtags?.map((h) =>
+          typeof h === "string" ? h : h?.name ?? ""
+        ) ?? [];
+      const matchedTag =
+        cleaned.find((h) => tags.map((t) => t.toLowerCase()).includes(h)) ??
+        cleaned[0];
+      const bucket = grouped.get(matchedTag) ?? [];
+      bucket.push(rawItem);
+      grouped.set(matchedTag, bucket);
+    }
+
+    const out: ScrapedTrend[] = [];
+    for (const [tag, list] of grouped) {
+      const sorted = [...list].sort((a, b) => {
+        const va = pickNumber(a.playCount, a.videoPlayCount, a.views) ?? 0;
+        const vb = pickNumber(b.playCount, b.videoPlayCount, b.views) ?? 0;
+        return vb - va;
+      });
+      for (const item of sorted.slice(0, limit)) {
+        const views = pickNumber(item.playCount, item.videoPlayCount, item.views);
+        const likes = pickNumber(item.diggCount, item.likesCount);
+        const comments = pickNumber(item.commentCount, item.commentsCount);
+        const owner = pickString(
+          item.authorMeta?.name,
+          item.authorMeta?.nickName,
+          item.author?.uniqueId,
+          item.author?.nickname,
+          item.username
+        );
+        const url = pickString(item.webVideoUrl, item.videoUrl, item.url);
+        const caption = pickString(item.text, item.caption, item.description) ?? "";
+
+        out.push({
+          platform: "tiktok",
+          source: "hashtag_scout",
+          hashtag: `#${tag}`,
+          title: owner ? `@${owner} · #${tag}` : `#${tag}`,
+          summary: truncate(caption || `Top TikTok for #${tag}`, 280),
+          external_url: url,
+          views,
+          likes,
+          comments,
+          owner_handle: owner,
+        });
+      }
+    }
+
+    return out;
   } catch (err) {
     console.error("[scrape/tiktok] Apify call failed", {
       actorId,
-      region,
+      hashtagCount: hashtags.length,
       message: err instanceof Error ? err.message : String(err),
     });
     return [];
   }
 }
+
+// Kept for backward-compat with the previous file name; the two scrapers
+// have the same interface now.
+export const scrapeTikTokCreativeCenter = scrapeTikTokTopPosts;

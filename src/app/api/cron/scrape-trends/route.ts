@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
 import { analyzeTrend } from "@/lib/ai/analyze-trend";
 import {
-  scrapeTikTokCreativeCenter,
+  scrapeTikTokTopPosts,
   type ScrapedTrend,
 } from "@/lib/scrape/tiktok-creative-center";
 import { scrapeInstagramTopPosts } from "@/lib/scrape/instagram-hashtag";
@@ -14,7 +14,7 @@ export const maxDuration = 120;
 
 interface ScoutConfig {
   instagram_hashtags?: string[];
-  tiktok_region?: string;
+  tiktok_hashtags?: string[];
 }
 
 interface TenantRow {
@@ -58,16 +58,18 @@ export async function POST(req: Request) {
       const scoutConfig = tenant.settings?.scout_config ?? {};
       const voice = await getBrandVoice(tenant.slug);
 
-      // TikTok Creative Center — region-based
-      if (scoutConfig.tiktok_region) {
-        const tiktokTrends = await scrapeTikTokCreativeCenter({
-          region: scoutConfig.tiktok_region,
-          limit: 20,
-        });
+      // TikTok — hashtag-based, per tenant
+      if (
+        scoutConfig.tiktok_hashtags &&
+        scoutConfig.tiktok_hashtags.length > 0
+      ) {
+        const tiktokTrends = await scrapeTikTokTopPosts(
+          scoutConfig.tiktok_hashtags,
+          { limitPerHashtag: 5 }
+        );
         summary.scraped += tiktokTrends.length;
         await persistTrends(tenant, voice, tiktokTrends, summary, {
-          idempotencyMode: "hashtag_week",
-          weekAgoIso: weekAgo,
+          idempotencyMode: "url",
         });
       }
 
