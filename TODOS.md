@@ -71,12 +71,13 @@ These are routes that already exist in nav but still show fake data.
 
 ---
 
-## P5 — Insight Engine (unlocks weekly digest + suggestions)
+## P5 — Insight Engine (DONE)
 
-- [ ] **Design the engine**: rules-based vs LLM synthesis vs hybrid. Single design doc. (~2 hrs planning)
-- [ ] **`getWeeklyDigest` synthesis** — feed week's `intel_cards`, `leads`, `posts` metrics into structured digest output (topCompetitorMoves, winningFormats, recommendedActions, strategicBrief). (~3 hrs after design)
-- [ ] **`getSuggestions` rules** — dashboard suggestions list. Today returns `[]`. (~2 hrs after design)
-- [ ] **Hook to weekly cron** — digest generation Saturday, after brief generation. (~30 min)
+- [x] **Engine design** — hybrid: deterministic rules aggregate structured signals from 6 tables, GPT-4.1 writes the strategic narrative + prioritized actions. Stored in `weekly_digests` (migration 016).
+- [x] **Weekly digest synthesis** — reads intel_cards, trend_scouts, own_post_metrics, keyword_rankings, leads → strategic brief + 3-5 priority actions. Cost ~$0.01/tenant/week.
+- [x] **Dashboard suggestions** — getSuggestions reads latest digest's recommended_actions. Refreshes with each digest regeneration.
+- [x] **Sunday cron `/api/cron/weekly-digest`** — 07:00 UTC, iterates tenants, idempotent per (tenant, week_of).
+- [x] **`/weekly-report` rebuilt** — strategic brief, priority actions with target-module links, performance stat trio, top competitor moves, winning formats. "Regenerate" button for on-demand.
 
 ---
 
