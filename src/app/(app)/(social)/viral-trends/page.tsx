@@ -24,7 +24,7 @@ export default async function ViralTrendsPage() {
             {data.hashtags.map((tag) => (
               <div key={tag.tag} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
                 <div className="flex items-center gap-3">
-                  <span className="text-accent-purple font-semibold text-sm">{tag.tag}</span>
+                  <span className="text-primary-500 font-semibold text-sm">{tag.tag}</span>
                   <Badge variant={tag.relevance === "high" ? "high_impact" : "opportunity"}>
                     {tag.relevance}
                   </Badge>

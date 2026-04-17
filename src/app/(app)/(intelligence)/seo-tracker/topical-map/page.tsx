@@ -31,7 +31,7 @@ export default async function TopicalMapPage() {
           <span className="text-3xl font-bold text-foreground">{avgCoverage}%</span>
         </div>
         <div className="h-3 bg-border/50 rounded-full overflow-hidden">
-          <div className="h-full rounded-full gradient-purple-pink transition-all" style={{ width: `${avgCoverage}%` }} />
+          <div className="h-full rounded-full bg-primary-500 transition-all" style={{ width: `${avgCoverage}%` }} />
         </div>
         <div className="flex gap-6 mt-3 text-xs text-text-muted">
           <span>{clusters.length} topic clusters</span>
@@ -73,7 +73,7 @@ export default async function TopicalMapPage() {
                 </div>
                 {/* Coverage bar */}
                 <div className="h-1.5 bg-border/50 rounded-full overflow-hidden mt-3">
-                  <div className="h-full rounded-full gradient-purple-pink" style={{ width: `${cluster.coverageScore}%` }} />
+                  <div className="h-full rounded-full bg-primary-500" style={{ width: `${cluster.coverageScore}%` }} />
                 </div>
               </div>
 
@@ -103,7 +103,7 @@ export default async function TopicalMapPage() {
                         </span>
                       )}
                       {article.linkedToPillar && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-accent-purple/10 text-accent-purple">linked</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary-500/10 text-primary-500">linked</span>
                       )}
                       <Badge variant={statusVariant[article.status]}>{article.status}</Badge>
                     </div>
@@ -144,7 +144,7 @@ export default async function TopicalMapPage() {
               <tr key={link.id} className="border-b border-border/20 last:border-0 hover:bg-card-hover transition-colors">
                 <td className="px-5 py-2.5 text-sm text-foreground truncate max-w-[200px]">{link.sourceTitle}</td>
                 <td className="px-3 py-2.5 text-sm text-text-secondary truncate max-w-[200px]">{link.targetTitle}</td>
-                <td className="px-3 py-2.5 text-xs text-accent-purple">{link.anchorText}</td>
+                <td className="px-3 py-2.5 text-xs text-primary-500">{link.anchorText}</td>
                 <td className="px-3 py-2.5 text-center">
                   <Badge variant={link.status === "active" ? "published" : link.status === "suggested" ? "planned" : "gap"}>
                     {link.status}

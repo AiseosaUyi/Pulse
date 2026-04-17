@@ -27,8 +27,9 @@ item unblocks something earlier.
 
 ## P2 — Quick Wins (validates F2 investment)
 
-- [ ] **AI cost dashboard at `/settings/ai-usage`** — reads from `ai_call_log` (RLS already in place per migration 012). Shows per-tenant call volume, token counts, cache hit rate, monthly cost to date. Single Server Component, one aggregate query. Makes AI spend transparent. (~2 hrs)
-- [ ] **Purple→maroon cleanup on `/ai-content`, `/weekly-report`, `/viral-trends`, `/platform-score`, `/seo-tracker/topical-map`** — these five pages still use `accent-purple`/`gradient-purple-pink` which drifts from Gruve maroon per `DARK-THEME.md`. Same cleanup I did on `/content-briefs` during F2. (~30 min per page × 5 = 2.5 hrs, can batch)
+- [x] **AI cost dashboard at `/settings/ai-usage`** — per-tenant month-to-date AI spend, call count, token totals, cache hit rate, per-model breakdown, recent-calls table. Entry point added to `/settings` page.
+- [x] **Purple→maroon cleanup on 5 main pages** — `/ai-content`, `/weekly-report`, `/viral-trends`, `/platform-score`, `/seo-tracker/topical-map`.
+- [ ] **Purple→maroon cleanup on remaining surfaces (~15 files)** — component-level + deeper routes still use `accent-purple`/`accent-pink`/`gradient-purple-pink`: `MorningBriefing`, `CrossBrandInsights`, `WeeklyDigest`, `IntelCard`, `NotificationBell`, `PulseSuggestions`, `PlatformBreakdown`, `SEOTabNav`, `KeywordSeedInput`, `AddPostModal`, `content-vault/*`, `seo-tracker/{serp-analysis,programmatic,blog-writer,keywords}`, `intel-feed/client`, `error.tsx`, `not-found.tsx`, `Logo.tsx` (intentional dark-mode gradient — verify spec). Mechanical replace: `accent-purple` → `primary-500`, `accent-pink` → `primary-500`, `gradient-purple-pink` → `bg-primary-500`. (~1 hr batched)
 
 ---
 

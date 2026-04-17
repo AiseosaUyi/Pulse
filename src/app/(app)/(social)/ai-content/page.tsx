@@ -13,7 +13,7 @@ export default async function AIContentPage() {
   const statusColors: Record<string, string> = {
     scheduled: "bg-status-green",
     draft: "bg-status-yellow",
-    posted: "bg-accent-purple",
+    posted: "bg-primary-500",
   };
 
   return (
@@ -31,7 +31,7 @@ export default async function AIContentPage() {
             <Sparkles size={14} />
             Brand voice
           </Link>
-          <button className="px-4 py-2 gradient-purple-pink text-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity active:scale-[0.98]">
+          <button className="px-4 py-2 bg-primary-500 text-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity active:scale-[0.98]">
             Generate Ideas
           </button>
         </div>
@@ -65,7 +65,7 @@ export default async function AIContentPage() {
         <div className="flex items-center gap-4 mt-4 pt-3 border-t border-border/30">
           <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-status-green" /><span className="text-text-muted text-xs">Scheduled</span></div>
           <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-status-yellow" /><span className="text-text-muted text-xs">Draft</span></div>
-          <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-accent-purple" /><span className="text-text-muted text-xs">Posted</span></div>
+          <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-primary-500" /><span className="text-text-muted text-xs">Posted</span></div>
         </div>
       </div>
 
@@ -77,7 +77,7 @@ export default async function AIContentPage() {
             <div key={s.id} className="p-4 rounded-lg bg-background border border-border/30 hover:border-border transition-colors">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-accent-purple">{s.platform}</span>
+                  <span className="text-xs font-medium text-primary-500">{s.platform}</span>
                   <span className="text-text-muted text-xs">·</span>
                   <span className="text-text-muted text-xs capitalize">{s.type}</span>
                 </div>
@@ -92,7 +92,7 @@ export default async function AIContentPage() {
                   <span className="text-text-muted">Est. reach: <span className="text-status-green">{s.estimatedReach}</span></span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="px-3 py-1.5 text-xs bg-accent-purple/10 text-accent-purple rounded-md hover:bg-accent-purple/20 transition-colors font-medium">
+                  <button className="px-3 py-1.5 text-xs bg-primary-500/10 text-primary-500 rounded-md hover:bg-primary-500/20 transition-colors font-medium">
                     Edit Draft
                   </button>
                   <button className="px-3 py-1.5 text-xs bg-status-green/10 text-status-green rounded-md hover:bg-status-green/20 transition-colors font-medium">

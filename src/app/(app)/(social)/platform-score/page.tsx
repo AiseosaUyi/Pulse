@@ -67,7 +67,7 @@ export default async function PlatformScorePage() {
               </div>
             </div>
             <div className="h-2 bg-border/50 rounded-full overflow-hidden mb-4">
-              <div className="h-full rounded-full gradient-purple-pink" style={{ width: `${p.score}%` }} />
+              <div className="h-full rounded-full bg-primary-500" style={{ width: `${p.score}%` }} />
             </div>
             <div className="space-y-2.5">
               {p.breakdown.map((item) => (

@@ -30,7 +30,7 @@ export default async function WeeklyReportPage() {
         <div className="space-y-2.5">
           {report.highlights.map((h, i) => (
             <div key={i} className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full gradient-purple-pink flex items-center justify-center text-foreground text-xs font-bold flex-shrink-0 mt-0.5">
+              <span className="w-6 h-6 rounded-full bg-primary-500 flex items-center justify-center text-foreground text-xs font-bold flex-shrink-0 mt-0.5">
                 {i + 1}
               </span>
               <p className="text-text-secondary text-sm leading-relaxed">{h}</p>
@@ -59,8 +59,8 @@ export default async function WeeklyReportPage() {
       </div>
 
       {/* Top Post */}
-      <div className="bg-card rounded-xl p-6 border border-accent-purple/30 mb-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-accent-purple mb-3">Top Performing Post</h2>
+      <div className="bg-card rounded-xl p-6 border border-primary-500/30 mb-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-primary-500 mb-3">Top Performing Post</h2>
         <p className="text-foreground text-lg font-semibold">{report.topPost.title}</p>
         <div className="flex items-center gap-4 mt-2 text-sm text-text-secondary">
           <span>{report.topPost.platform}</span>
@@ -105,7 +105,7 @@ export default async function WeeklyReportPage() {
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50 text-center">
           <p className="text-text-secondary text-xs">Content Published</p>
-          <p className="text-xl font-bold text-accent-purple mt-1">{report.contentPublished}</p>
+          <p className="text-xl font-bold text-primary-500 mt-1">{report.contentPublished}</p>
         </div>
       </div>
 
@@ -115,7 +115,7 @@ export default async function WeeklyReportPage() {
         <div className="space-y-3">
           {report.recommendations.map((rec, i) => (
             <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-background">
-              <span className="text-accent-purple text-sm font-bold mt-0.5">{i + 1}.</span>
+              <span className="text-primary-500 text-sm font-bold mt-0.5">{i + 1}.</span>
               <p className="text-text-secondary text-sm leading-relaxed">{rec}</p>
             </div>
           ))}
