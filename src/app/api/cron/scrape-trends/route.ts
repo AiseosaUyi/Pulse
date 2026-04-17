@@ -8,9 +8,10 @@ import {
 } from "@/lib/scrape/tiktok-creative-center";
 import { scrapeInstagramTopPosts } from "@/lib/scrape/instagram-hashtag";
 import type { BrandVoice } from "@/lib/ai/brand-voice";
+import type { TrendApplicability } from "@/lib/types/trends";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 interface ScoutConfig {
   instagram_hashtags?: string[];
@@ -50,173 +51,172 @@ export async function POST(req: Request) {
     );
   }
 
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  // Phase 1: scrape all platforms all tenants in parallel.
+  interface ScrapeJob {
+    tenant: TenantRow;
+    platform: "tiktok" | "instagram";
+    trends: ScrapedTrend[];
+    error?: string;
+  }
 
+  const scrapeJobs: Promise<ScrapeJob>[] = [];
   for (const tenant of tenants as TenantRow[]) {
     summary.tenantsProcessed += 1;
+    const cfg = tenant.settings?.scout_config ?? {};
+    if (cfg.tiktok_hashtags && cfg.tiktok_hashtags.length > 0) {
+      scrapeJobs.push(
+        scrapeTikTokTopPosts(cfg.tiktok_hashtags, { limitPerHashtag: 5 })
+          .then((trends) => ({ tenant, platform: "tiktok" as const, trends }))
+          .catch((err) => ({
+            tenant,
+            platform: "tiktok" as const,
+            trends: [],
+            error: err instanceof Error ? err.message : String(err),
+          }))
+      );
+    }
+    if (cfg.instagram_hashtags && cfg.instagram_hashtags.length > 0) {
+      scrapeJobs.push(
+        scrapeInstagramTopPosts(cfg.instagram_hashtags, { limitPerHashtag: 5 })
+          .then((trends) => ({ tenant, platform: "instagram" as const, trends }))
+          .catch((err) => ({
+            tenant,
+            platform: "instagram" as const,
+            trends: [],
+            error: err instanceof Error ? err.message : String(err),
+          }))
+      );
+    }
+  }
+
+  const scrapeResults = await Promise.all(scrapeJobs);
+  for (const job of scrapeResults) {
+    if (job.error) {
+      summary.failed += 1;
+      summary.errors.push({
+        tenant: job.tenant.slug,
+        scope: `scrape:${job.platform}`,
+        message: job.error,
+      });
+      console.error(
+        `[cron/scrape-trends] scrape failed`,
+        { tenant: job.tenant.slug, platform: job.platform, message: job.error }
+      );
+    }
+    summary.scraped += job.trends.length;
+  }
+
+  // Phase 2: per job, analyze + persist. AI calls in parallel within a job.
+  for (const job of scrapeResults) {
+    if (job.trends.length === 0) continue;
     try {
-      const scoutConfig = tenant.settings?.scout_config ?? {};
-      const voice = await getBrandVoice(tenant.slug);
+      const voice = await getBrandVoice(job.tenant.slug);
 
-      // TikTok — hashtag-based, per tenant
-      if (
-        scoutConfig.tiktok_hashtags &&
-        scoutConfig.tiktok_hashtags.length > 0
-      ) {
-        const tiktokTrends = await scrapeTikTokTopPosts(
-          scoutConfig.tiktok_hashtags,
-          { limitPerHashtag: 5 }
-        );
-        summary.scraped += tiktokTrends.length;
-        await persistTrends(tenant, voice, tiktokTrends, summary, {
-          idempotencyMode: "url",
-        });
-      }
+      // Analyze all trends in parallel
+      const analyses = await Promise.allSettled(
+        job.trends.map((trend) =>
+          analyzeTrend({
+            tenantSlug: job.tenant.slug,
+            tenantName: job.tenant.name,
+            voice,
+            platform: trend.platform,
+            summary: trend.summary,
+            hashtag: trend.hashtag,
+            metrics: {
+              views: trend.views,
+              likes: trend.likes,
+              comments: trend.comments,
+              engagement_rate: trend.engagement_rate,
+              trending_rank: trend.trending_rank,
+              region: trend.region,
+            } as Record<string, unknown>,
+          })
+        )
+      );
 
-      // Instagram top posts — hashtag-based, per tenant
-      if (
-        scoutConfig.instagram_hashtags &&
-        scoutConfig.instagram_hashtags.length > 0
-      ) {
-        const igPosts = await scrapeInstagramTopPosts(
-          scoutConfig.instagram_hashtags,
-          { limitPerHashtag: 5 }
-        );
-        summary.scraped += igPosts.length;
-        await persistTrends(tenant, voice, igPosts, summary, {
-          idempotencyMode: "url",
-        });
+      // Persist sequentially (DB is fast)
+      for (let i = 0; i < job.trends.length; i++) {
+        const trend = job.trends[i];
+        const analysis = analyses[i];
+        try {
+          // Idempotency — skip if we've seen this external_url
+          if (trend.external_url) {
+            const { data: existing } = await admin
+              .from("trend_scouts")
+              .select("id")
+              .eq("tenant_slug", job.tenant.slug)
+              .eq("external_url", trend.external_url)
+              .limit(1);
+            if (existing && existing.length > 0) {
+              summary.skipped += 1;
+              continue;
+            }
+          }
+
+          let ai_analysis = null;
+          let applicability: TrendApplicability | null = null;
+          if (analysis.status === "fulfilled") {
+            ai_analysis = analysis.value;
+            applicability = analysis.value.applicability;
+          }
+
+          const { error: insertErr } = await admin
+            .from("trend_scouts")
+            .insert({
+              tenant_slug: job.tenant.slug,
+              platform: trend.platform,
+              source: trend.source,
+              hashtag: trend.hashtag ?? null,
+              external_url: trend.external_url ?? null,
+              title: trend.title,
+              summary: trend.summary,
+              metrics: {
+                views: trend.views,
+                likes: trend.likes,
+                comments: trend.comments,
+                engagement_rate: trend.engagement_rate,
+                trending_rank: trend.trending_rank,
+                region: trend.region,
+                owner_handle: trend.owner_handle,
+              },
+              ai_analysis,
+              applicability,
+            });
+          if (insertErr) throw insertErr;
+          summary.inserted += 1;
+        } catch (trendErr) {
+          summary.failed += 1;
+          const message =
+            trendErr instanceof Error ? trendErr.message : String(trendErr);
+          console.error("[cron/scrape-trends] trend insert failed", {
+            tenant: job.tenant.slug,
+            url: trend.external_url,
+            message,
+          });
+          summary.errors.push({
+            tenant: job.tenant.slug,
+            scope: `trend:${trend.hashtag ?? trend.external_url ?? "?"}`,
+            message,
+          });
+        }
       }
     } catch (tenantErr) {
       summary.failed += 1;
       const message =
         tenantErr instanceof Error ? tenantErr.message : String(tenantErr);
-      console.error("[cron/scrape-trends] tenant failure", {
-        tenant: tenant.slug,
+      console.error("[cron/scrape-trends] tenant job failed", {
+        tenant: job.tenant.slug,
+        platform: job.platform,
         message,
       });
-      summary.errors.push({ tenant: tenant.slug, scope: "tenant", message });
+      summary.errors.push({
+        tenant: job.tenant.slug,
+        scope: `persist:${job.platform}`,
+        message,
+      });
     }
   }
 
   console.log("[cron/scrape-trends] complete", summary);
   return NextResponse.json(summary);
-}
-
-type IdempotencyMode = "hashtag_week" | "url";
-
-async function persistTrends(
-  tenant: TenantRow,
-  voice: BrandVoice | null,
-  scraped: ScrapedTrend[],
-  summary: {
-    inserted: number;
-    skipped: number;
-    failed: number;
-    errors: { tenant: string; scope: string; message: string }[];
-  },
-  opts: { idempotencyMode: IdempotencyMode; weekAgoIso?: string }
-): Promise<void> {
-  const admin = createAdminClient();
-
-  for (const trend of scraped) {
-    try {
-      // Idempotency
-      let alreadyExists = false;
-      if (opts.idempotencyMode === "url" && trend.external_url) {
-        const { data } = await admin
-          .from("trend_scouts")
-          .select("id")
-          .eq("tenant_slug", tenant.slug)
-          .eq("external_url", trend.external_url)
-          .limit(1);
-        alreadyExists = !!(data && data.length > 0);
-      } else if (
-        opts.idempotencyMode === "hashtag_week" &&
-        trend.hashtag &&
-        opts.weekAgoIso
-      ) {
-        const { data } = await admin
-          .from("trend_scouts")
-          .select("id")
-          .eq("tenant_slug", tenant.slug)
-          .eq("source", trend.source)
-          .eq("hashtag", trend.hashtag)
-          .gte("captured_at", opts.weekAgoIso)
-          .limit(1);
-        alreadyExists = !!(data && data.length > 0);
-      }
-      if (alreadyExists) {
-        summary.skipped += 1;
-        continue;
-      }
-
-      let ai_analysis = null;
-      let applicability: "high" | "medium" | "low" | "n/a" | null = null;
-      try {
-        const analyzed = await analyzeTrend({
-          tenantSlug: tenant.slug,
-          tenantName: tenant.name,
-          voice,
-          platform: trend.platform,
-          summary: trend.summary,
-          hashtag: trend.hashtag,
-          metrics: {
-            views: trend.views,
-            likes: trend.likes,
-            comments: trend.comments,
-            engagement_rate: trend.engagement_rate,
-            trending_rank: trend.trending_rank,
-            region: trend.region,
-          } as Record<string, unknown>,
-        });
-        ai_analysis = analyzed;
-        applicability = analyzed.applicability;
-      } catch (aiErr) {
-        console.error("[cron/scrape-trends] analyze failed", {
-          tenant: tenant.slug,
-          hashtag: trend.hashtag,
-          message: aiErr instanceof Error ? aiErr.message : String(aiErr),
-        });
-      }
-
-      const { error: insertErr } = await admin.from("trend_scouts").insert({
-        tenant_slug: tenant.slug,
-        platform: trend.platform,
-        source: trend.source,
-        hashtag: trend.hashtag ?? null,
-        external_url: trend.external_url ?? null,
-        title: trend.title,
-        summary: trend.summary,
-        metrics: {
-          views: trend.views,
-          likes: trend.likes,
-          comments: trend.comments,
-          engagement_rate: trend.engagement_rate,
-          trending_rank: trend.trending_rank,
-          region: trend.region,
-          owner_handle: trend.owner_handle,
-        },
-        ai_analysis,
-        applicability,
-      });
-      if (insertErr) throw insertErr;
-      summary.inserted += 1;
-    } catch (trendErr) {
-      summary.failed += 1;
-      const message =
-        trendErr instanceof Error ? trendErr.message : String(trendErr);
-      console.error("[cron/scrape-trends] trend insert failed", {
-        tenant: tenant.slug,
-        hashtag: trend.hashtag,
-        url: trend.external_url,
-        message,
-      });
-      summary.errors.push({
-        tenant: tenant.slug,
-        scope: `trend:${trend.hashtag ?? trend.external_url ?? "?"}`,
-        message,
-      });
-    }
-  }
 }
