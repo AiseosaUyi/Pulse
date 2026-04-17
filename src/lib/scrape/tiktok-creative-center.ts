@@ -27,45 +27,42 @@ export interface ScrapedTrend {
   owner_handle?: string;
 }
 
-interface ActorItem {
-  id?: string;
-  webVideoUrl?: string;
-  videoUrl?: string;
-  url?: string;
-  text?: string;
-  caption?: string;
-  description?: string;
-  hashtags?: Array<string | { name?: string }>;
-  authorMeta?: { name?: string; nickName?: string };
-  author?: { uniqueId?: string; nickname?: string };
-  username?: string;
-  playCount?: number;
-  videoPlayCount?: number;
-  views?: number;
-  diggCount?: number;
-  likesCount?: number;
-  commentCount?: number;
-  commentsCount?: number;
-  shareCount?: number;
-  [k: string]: unknown;
+// Actors return EITHER nested objects (authorMeta: { name }) OR flat dot-notation
+// keys ("authorMeta.name": "..."). clockworks/tiktok-scraper uses the flat
+// variant, so we treat every item as a generic record and probe both shapes.
+type ActorItem = Record<string, unknown>;
+
+function nested<T>(item: ActorItem, path: string[]): T | undefined {
+  let cur: unknown = item;
+  for (const key of path) {
+    if (cur && typeof cur === "object" && key in (cur as Record<string, unknown>)) {
+      cur = (cur as Record<string, unknown>)[key];
+    } else {
+      return undefined;
+    }
+  }
+  return cur as T;
+}
+
+function flat<T>(item: ActorItem, key: string): T | undefined {
+  return item[key] as T | undefined;
+}
+
+function probe<T>(item: ActorItem, ...paths: (string | string[])[]): T | undefined {
+  for (const p of paths) {
+    const value = Array.isArray(p) ? nested<T>(item, p) : flat<T>(item, p);
+    if (value !== undefined && value !== null) return value;
+  }
+  return undefined;
+}
+
+function extractHashtagsFromText(text: string): string[] {
+  const matches = text.match(/#[\w_]+/g) ?? [];
+  return matches.map((h) => h.slice(1).toLowerCase());
 }
 
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
-}
-
-function pickNumber(...vals: unknown[]): number | undefined {
-  for (const v of vals) {
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-  }
-  return undefined;
-}
-
-function pickString(...vals: unknown[]): string | undefined {
-  for (const v of vals) {
-    if (typeof v === "string" && v.trim().length > 0) return v.trim();
-  }
-  return undefined;
 }
 
 export async function scrapeTikTokTopPosts(
@@ -112,16 +109,20 @@ export async function scrapeTikTokTopPosts(
       .dataset(run.defaultDatasetId)
       .listItems({ limit: limit * cleaned.length * 3 });
 
-    // Group by hashtag, top N by engagement.
+    // Group by hashtag. Probe explicit hashtags field first, then parse from caption.
     const grouped = new Map<string, ActorItem[]>();
     for (const rawItem of items as ActorItem[]) {
-      const tags =
-        rawItem.hashtags?.map((h) =>
-          typeof h === "string" ? h : h?.name ?? ""
-        ) ?? [];
+      const caption =
+        probe<string>(rawItem, "text", "caption", "description") ?? "";
+      const rawTags = probe<Array<string | { name?: string }>>(rawItem, "hashtags") ?? [];
+      const explicitTags = rawTags.map((h) =>
+        typeof h === "string" ? h.toLowerCase() : (h?.name ?? "").toLowerCase()
+      );
+      const parsedTags = extractHashtagsFromText(caption);
+      const postTags = [...explicitTags, ...parsedTags];
+
       const matchedTag =
-        cleaned.find((h) => tags.map((t) => t.toLowerCase()).includes(h)) ??
-        cleaned[0];
+        cleaned.find((h) => postTags.includes(h)) ?? cleaned[0];
       const bucket = grouped.get(matchedTag) ?? [];
       bucket.push(rawItem);
       grouped.set(matchedTag, bucket);
@@ -130,23 +131,26 @@ export async function scrapeTikTokTopPosts(
     const out: ScrapedTrend[] = [];
     for (const [tag, list] of grouped) {
       const sorted = [...list].sort((a, b) => {
-        const va = pickNumber(a.playCount, a.videoPlayCount, a.views) ?? 0;
-        const vb = pickNumber(b.playCount, b.videoPlayCount, b.views) ?? 0;
+        const va = probe<number>(a, "playCount", "videoPlayCount", "views") ?? 0;
+        const vb = probe<number>(b, "playCount", "videoPlayCount", "views") ?? 0;
         return vb - va;
       });
       for (const item of sorted.slice(0, limit)) {
-        const views = pickNumber(item.playCount, item.videoPlayCount, item.views);
-        const likes = pickNumber(item.diggCount, item.likesCount);
-        const comments = pickNumber(item.commentCount, item.commentsCount);
-        const owner = pickString(
-          item.authorMeta?.name,
-          item.authorMeta?.nickName,
-          item.author?.uniqueId,
-          item.author?.nickname,
-          item.username
+        const views = probe<number>(item, "playCount", "videoPlayCount", "views");
+        const likes = probe<number>(item, "diggCount", "likesCount");
+        const comments = probe<number>(item, "commentCount", "commentsCount");
+        const owner = probe<string>(
+          item,
+          "authorMeta.name",
+          ["authorMeta", "name"],
+          "authorMeta.nickName",
+          ["authorMeta", "nickName"],
+          ["author", "uniqueId"],
+          ["author", "nickname"],
+          "username"
         );
-        const url = pickString(item.webVideoUrl, item.videoUrl, item.url);
-        const caption = pickString(item.text, item.caption, item.description) ?? "";
+        const url = probe<string>(item, "webVideoUrl", "videoUrl", "url");
+        const caption = probe<string>(item, "text", "caption", "description") ?? "";
 
         out.push({
           platform: "tiktok",
