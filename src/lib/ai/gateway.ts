@@ -1,24 +1,34 @@
+// LLM wrapper + call logging.
+// Uses OpenAI direct (via @ai-sdk/openai). Swap to a different provider by
+// editing getModel() and the cost table.
+
+import { openai } from "@ai-sdk/openai";
+import type { LanguageModel } from "ai";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Purpose = "synthesis";
 
-export function getModelId(purpose: Purpose): string {
+export function getModel(purpose: Purpose): LanguageModel {
   switch (purpose) {
     case "synthesis":
-      return "anthropic/claude-sonnet-4.6";
+      return openai("gpt-5");
   }
 }
 
+export function getModelId(purpose: Purpose): string {
+  switch (purpose) {
+    case "synthesis":
+      return "openai/gpt-5";
+  }
+}
+
+// Published rates as of 2026. Update if OpenAI changes pricing.
+// Input cached tokens billed at 0.5x base input rate on GPT-5.
 const COST_PER_MTOK: Record<
   string,
-  { input: number; output: number; cache_read: number; cache_write: number }
+  { input: number; output: number; cache_read: number }
 > = {
-  "anthropic/claude-sonnet-4.6": {
-    input: 3,
-    output: 15,
-    cache_read: 0.3,
-    cache_write: 3.75,
-  },
+  "openai/gpt-5": { input: 1.25, output: 10, cache_read: 0.125 },
 };
 
 export function estimateCostUsd(
@@ -27,19 +37,17 @@ export function estimateCostUsd(
     inputTokens: number;
     outputTokens: number;
     cacheReadTokens?: number;
-    cacheWriteTokens?: number;
   }
 ): number {
   const rates = COST_PER_MTOK[model];
   if (!rates) return 0;
   const m = 1_000_000;
-  const uncachedInput =
-    usage.inputTokens - (usage.cacheReadTokens ?? 0) - (usage.cacheWriteTokens ?? 0);
+  const cacheRead = usage.cacheReadTokens ?? 0;
+  const uncachedInput = Math.max(0, usage.inputTokens - cacheRead);
   return (
     (uncachedInput * rates.input +
       usage.outputTokens * rates.output +
-      (usage.cacheReadTokens ?? 0) * rates.cache_read +
-      (usage.cacheWriteTokens ?? 0) * rates.cache_write) /
+      cacheRead * rates.cache_read) /
     m
   );
 }

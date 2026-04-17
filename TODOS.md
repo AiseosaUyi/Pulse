@@ -9,7 +9,8 @@ item unblocks something earlier.
 ## P0 — Operational / Security (do ASAP)
 
 - [ ] **Rotate Supabase DB password** — pasted in chat earlier. Supabase → Project Settings → Database → Reset password. (~2 min)
-- [ ] **Rotate AI Gateway API key** — `vck_7UDS...` pasted in chat. Vercel dashboard → AI Gateway → API Keys → revoke + create new → `vercel env add AI_GATEWAY_API_KEY production` for all 3 envs → `vercel env pull .env.local`. (~5 min)
+- [ ] **Revoke leaked AI Gateway API key** — `vck_7UDS...` was pasted in chat. Since we've migrated to OpenAI direct, the Gateway env var is already removed from Vercel. Just revoke the key at Vercel dashboard → AI Gateway → API Keys to be safe. (~1 min)
+- [ ] **Add `OPENAI_API_KEY` to Vercel env** — `vercel env add OPENAI_API_KEY production` (paste interactively, then repeat for preview + development, then `vercel env pull .env.local`). (~3 min)
 - [ ] **Restore SEED_* vars in `.env.local`** — got wiped by `vercel env pull`. Append `SEED_EMAIL`, `SEED_PASSWORD`, `SEED_USERNAME`, `SEED_DISPLAY_NAME`. (~1 min)
 
 ---

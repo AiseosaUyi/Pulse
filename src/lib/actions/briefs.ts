@@ -86,7 +86,7 @@ export async function generateBriefFromCard(
         draft_content: brief.draftContent,
         seo_keywords: brief.seoKeywords ?? [],
         status: "draft",
-        generator_model: "anthropic/claude-sonnet-4.6",
+        generator_model: "openai/gpt-5",
       })
       .select("id")
       .single();

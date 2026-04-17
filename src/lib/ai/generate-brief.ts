@@ -4,6 +4,7 @@ import type { BrandVoice } from "@/lib/ai/brand-voice";
 import type { PatternCluster } from "@/lib/ai/group-patterns";
 import {
   estimateCostUsd,
+  getModel,
   getModelId,
   logAiCall,
 } from "@/lib/ai/gateway";
@@ -34,47 +35,41 @@ interface GenerateBriefInput {
 export async function generateBrief(
   input: GenerateBriefInput
 ): Promise<GeneratedBrief> {
-  const model = getModelId("synthesis");
+  const model = getModel("synthesis");
+  const modelId = getModelId("synthesis");
   const started = Date.now();
 
   const system = buildSystemPrompt(input);
   const user = buildUserPrompt(input);
 
   try {
+    // OpenAI prompt caching is automatic on stable system prompts ≥1024 tokens.
+    // No providerOptions needed; cache tokens come back in providerMetadata.openai.
     const result = await generateText({
       model,
       output: Output.object({ schema: briefSchema }),
       system,
       prompt: user,
-      providerOptions: {
-        anthropic: {
-          cacheControl: { type: "ephemeral" },
-        },
-      },
     });
 
     const usage = result.usage ?? { inputTokens: 0, outputTokens: 0 };
-    const meta = (result.providerMetadata?.anthropic ?? {}) as {
-      cacheReadInputTokens?: number;
-      cacheCreationInputTokens?: number;
+    const meta = (result.providerMetadata?.openai ?? {}) as {
+      cachedPromptTokens?: number;
     };
-    const cacheRead = meta.cacheReadInputTokens ?? 0;
-    const cacheWrite = meta.cacheCreationInputTokens ?? 0;
-    const cost = estimateCostUsd(model, {
+    const cacheRead = meta.cachedPromptTokens ?? 0;
+    const cost = estimateCostUsd(modelId, {
       inputTokens: usage.inputTokens ?? 0,
       outputTokens: usage.outputTokens ?? 0,
       cacheReadTokens: cacheRead,
-      cacheWriteTokens: cacheWrite,
     });
 
     await logAiCall({
       tenantSlug: input.tenantSlug,
       purpose: "synthesis",
-      model,
+      model: modelId,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       cacheReadTokens: cacheRead,
-      cacheWriteTokens: cacheWrite,
       costUsd: cost,
       durationMs: Date.now() - started,
       success: true,
@@ -85,7 +80,7 @@ export async function generateBrief(
     await logAiCall({
       tenantSlug: input.tenantSlug,
       purpose: "synthesis",
-      model,
+      model: modelId,
       durationMs: Date.now() - started,
       success: false,
       errorMessage: err instanceof Error ? err.message : String(err),

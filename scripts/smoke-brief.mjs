@@ -7,6 +7,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { generateText, Output } from "ai";
+import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
 const admin = createClient(
@@ -71,7 +72,7 @@ async function main() {
 
   const started = Date.now();
   const result = await generateText({
-    model: "anthropic/claude-sonnet-4.6",
+    model: openai("gpt-5"),
     output: Output.object({ schema: briefSchema }),
     system: [
       `You generate content briefs for Gruve.`,
@@ -104,10 +105,9 @@ async function main() {
   console.log(result.output.draftContent);
   console.log(`--- usage ---`);
   console.log(result.usage);
-  if (result.providerMetadata?.anthropic) {
+  if (result.providerMetadata?.openai) {
     console.log(`cache:`, {
-      read: result.providerMetadata.anthropic.cacheReadInputTokens,
-      write: result.providerMetadata.anthropic.cacheCreationInputTokens,
+      cachedPromptTokens: result.providerMetadata.openai.cachedPromptTokens,
     });
   }
 }
