@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { getIntelFeed, getMorningBrief, getWeeklyDigest, getCompetitors } from "@/lib/services/intelligence";
-import { getContentBriefs } from "@/lib/services/content";
+import { listBriefs } from "@/lib/services/briefs";
 import { detectCrossBrandPatterns, detectAnomalies } from "@/lib/services/cross-brand";
 import { MorningBriefing } from "@/components/intelligence/MorningBriefing";
 import { IntelCard } from "@/components/intelligence/IntelCard";
@@ -19,7 +19,7 @@ export default async function IntelFeedPage() {
       getIntelFeed(tenantSlug),
       getMorningBrief(tenantSlug),
       getWeeklyDigest(tenantSlug),
-      getContentBriefs(tenantSlug),
+      listBriefs(tenantSlug),
       getCompetitors(tenantSlug),
       detectCrossBrandPatterns(),
       detectAnomalies(tenantSlug),

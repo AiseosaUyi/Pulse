@@ -55,18 +55,27 @@ export interface IntelCard {
 
 // ─── Content Briefs ──────────────────────────────────────────
 
+export type ContentBriefStatus = "draft" | "approved" | "published" | "dismissed";
+
 export interface ContentBrief {
   id: string;
   tenantId: string;
-  triggeredBy: string;
+  triggeredBy: string | null;
+  triggeredByType: "intel_card" | "manual";
   platform: string;
   contentType: string;
   title: string;
   outline: string[];
   draftContent: string;
   seoKeywords?: string[];
-  status: "draft" | "published";
+  status: ContentBriefStatus;
+  dismissedAt: string | null;
+  dismissedReason: string | null;
+  generatorModel: string | null;
   generatedAt: string;
+  // Optional join: filled when list query embeds !triggered_by
+  competitorName?: string;
+  competitorPlatform?: string;
 }
 
 // ─── Morning Briefing ────────────────────────────────────────

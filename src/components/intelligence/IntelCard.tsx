@@ -3,7 +3,7 @@
 import { type IntelCard as IntelCardType } from "@/lib/types/intelligence";
 import { Badge } from "@/components/ui/Badge";
 import { useState, useTransition } from "react";
-import { generateContentBrief } from "@/lib/actions/intelligence";
+import { generateBriefFromCard } from "@/lib/actions/briefs";
 
 interface IntelCardProps {
   card: IntelCardType;
@@ -52,9 +52,11 @@ export function IntelCard({ card, tenantSlug }: IntelCardProps) {
 
   const handleStealThis = () => {
     startTransition(async () => {
-      const result = await generateContentBrief(card.id, tenantSlug);
+      const result = await generateBriefFromCard(card.id, tenantSlug);
       if (result.success) {
         setBriefGenerated(true);
+      } else {
+        alert(result.error);
       }
     });
   };

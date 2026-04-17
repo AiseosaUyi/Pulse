@@ -75,50 +75,5 @@ export async function submitCompetitorPost(formData: FormData) {
   return { success: true, cardId: data.id };
 }
 
-export async function generateContentBrief(
-  intelCardId: string,
-  tenantSlug: string
-) {
-  const supabase = await createClient();
-  const { data: card } = await supabase
-    .from("intel_cards")
-    .select("*")
-    .eq("id", intelCardId)
-    .single();
-
-  if (!card) {
-    return { success: false, error: "Intel card not found" };
-  }
-
-  const brief = {
-    tenant_id: tenantSlug,
-    triggered_by: intelCardId,
-    platform: card.platform,
-    content_type: card.content_type,
-    title: `Response to ${card.competitor_name}: ${card.content_type} strategy`,
-    outline: [
-      `Study ${card.competitor_name}'s approach: ${card.summary.slice(0, 80)}...`,
-      `Adapt the format for your brand voice and audience`,
-      `Key differentiator: what makes your version uniquely yours`,
-      `Optimal posting time based on your audience data`,
-      `Hashtags and caption strategy`,
-    ],
-    draft_content: `Inspired by ${card.competitor_name}'s ${card.content_type} on ${card.platform}. Their approach: ${card.summary.slice(0, 120)}... Adapt this for your brand with your unique angle.`,
-    seo_keywords: [],
-    status: "draft",
-  };
-
-  const { data, error } = await supabase
-    .from("content_briefs")
-    .insert(brief)
-    .select("id")
-    .single();
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
-
-  revalidatePath("/intel-feed");
-  revalidatePath("/content-briefs");
-  return { success: true, briefId: data.id };
-}
+// generateContentBrief moved to src/lib/actions/briefs.ts as
+// generateBriefFromCard — now uses real AI via Vercel AI Gateway.
