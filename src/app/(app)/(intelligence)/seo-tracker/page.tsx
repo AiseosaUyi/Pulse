@@ -1,21 +1,19 @@
 import Link from "next/link";
 import { Search, FileText, BarChart3 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
-import { ContentScoreRing } from "@/components/seo/ContentScoreRing";
 import { getCurrentTenant } from "@/lib/auth";
-import {
-  deriveSEOMetrics,
-  getBlogPosts,
-  getKeywordRankings,
-} from "@/lib/services/seo";
+import { deriveSEOMetrics, getKeywordRankings } from "@/lib/services/seo";
+import { listBlogPosts } from "@/lib/services/blog-posts";
 import { KEYWORD_DIFFICULTY_LABELS } from "@/lib/types/seo";
+import type { BlogPostStatus } from "@/lib/types/blog-posts";
 import { AddKeywordButton } from "./client";
 
-const statusVariant: Record<string, "published" | "draft_status" | "planned" | "gap"> = {
-  published: "published",
+const statusVariant: Record<BlogPostStatus, "published" | "draft_status" | "planned" | "dismissed"> = {
+  draft: "draft_status",
   editing: "draft_status",
   review: "planned",
-  generated: "planned",
+  published: "published",
+  archived: "dismissed",
 };
 
 export default async function SEODashboardPage() {
@@ -23,7 +21,7 @@ export default async function SEODashboardPage() {
   const slug = tenant?.slug ?? "";
   const [keywords, blogPosts] = await Promise.all([
     slug ? getKeywordRankings(slug) : Promise.resolve([]),
-    slug ? getBlogPosts(slug) : Promise.resolve([]),
+    slug ? listBlogPosts(slug) : Promise.resolve([]),
   ]);
 
   const metrics = deriveSEOMetrics(keywords);
@@ -173,25 +171,33 @@ export default async function SEODashboardPage() {
               View all
             </Link>
           </div>
-          <div className="divide-y divide-border/30">
-            {recentPosts.map((post) => (
-              <div key={post.id} className="p-4 hover:bg-card-hover transition-colors">
-                <div className="flex items-start gap-3">
-                  <ContentScoreRing score={post.contentScore} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-foreground text-sm font-medium truncate">{post.title}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant={statusVariant[post.status] ?? "planned"}>{post.status}</Badge>
-                      <span className="text-text-muted text-xs">{post.wordCount.toLocaleString()} words</span>
-                      <span className="text-text-muted text-xs">·</span>
-                      <span className="text-text-muted text-xs">{post.createdAt}</span>
-                    </div>
-                    <p className="text-text-muted text-xs mt-1 truncate">Target: {post.targetKeyword}</p>
+          {recentPosts.length === 0 ? (
+            <div className="p-10 text-center">
+              <p className="text-sm text-foreground font-medium">No blog posts yet</p>
+              <p className="text-text-secondary text-xs mt-1">
+                Head to <Link href="/seo-tracker/blog-writer" className="text-primary-500 hover:underline">Blog Writer</Link> to generate your first draft.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/30">
+              {recentPosts.map((post) => (
+                <div key={post.id} className="p-4 hover:bg-card-hover transition-colors">
+                  <p className="text-foreground text-sm font-medium truncate">{post.title}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant={statusVariant[post.status]}>{post.status}</Badge>
+                    <span className="text-text-muted text-xs">{post.wordCount.toLocaleString()} words</span>
+                    <span className="text-text-muted text-xs">·</span>
+                    <span className="text-text-muted text-xs">
+                      {new Date(post.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
                   </div>
+                  {post.targetKeyword && (
+                    <p className="text-text-muted text-xs mt-1 truncate">Target: {post.targetKeyword}</p>
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

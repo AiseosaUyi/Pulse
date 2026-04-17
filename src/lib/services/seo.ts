@@ -1,11 +1,15 @@
 import type {
-  SEOMetric, KeywordRanking, KeywordDifficulty, KeywordGroup, TopicalCluster,
-  BlogPost, ContentScoreBreakdown, ProgrammaticTemplate, SERPAnalysis,
+  SEOMetric,
+  KeywordRanking,
+  KeywordDifficulty,
+  KeywordGroup,
+  TopicalCluster,
+  ContentScoreBreakdown,
 } from "@/lib/types/seo";
 import {
   mockKeywordGroups,
-  mockTopicalClusters, mockBlogPosts, mockContentScores,
-  mockProgrammaticTemplates, mockSERPAnalyses,
+  mockTopicalClusters,
+  mockContentScores,
 } from "@/lib/data/mock-seo";
 import { createClient } from "@/lib/supabase/server";
 
@@ -110,6 +114,12 @@ export async function getSEOMetrics(tenantSlug: string): Promise<SEOMetric[]> {
   return deriveSEOMetrics(keywords);
 }
 
+// ─── Still-mock helpers ───────────────────────────────────────
+// Keyword clustering UI + content score breakdown aren't backed by
+// real tables yet. Kept as mock fallbacks to avoid breaking the
+// dashboard pages that consume them. Migrate when their consuming
+// features get real data.
+
 export async function getKeywordGroups(tenantSlug: string): Promise<KeywordGroup[]> {
   return mockKeywordGroups[tenantSlug] ?? mockKeywordGroups.gruve;
 }
@@ -118,18 +128,6 @@ export async function getTopicalClusters(tenantSlug: string): Promise<TopicalClu
   return mockTopicalClusters[tenantSlug] ?? mockTopicalClusters.gruve;
 }
 
-export async function getBlogPosts(tenantSlug: string): Promise<BlogPost[]> {
-  return mockBlogPosts[tenantSlug] ?? mockBlogPosts.gruve;
-}
-
 export async function getContentScore(postId: string): Promise<ContentScoreBreakdown | null> {
   return mockContentScores[postId] ?? null;
-}
-
-export async function getProgrammaticTemplates(tenantSlug: string): Promise<ProgrammaticTemplate[]> {
-  return mockProgrammaticTemplates[tenantSlug] ?? mockProgrammaticTemplates.gruve;
-}
-
-export async function getSERPAnalyses(tenantSlug: string): Promise<SERPAnalysis[]> {
-  return mockSERPAnalyses[tenantSlug] ?? mockSERPAnalyses.gruve;
 }

@@ -6,6 +6,7 @@ import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { PlatformBreakdown } from "@/components/dashboard/PlatformBreakdown";
 import { PulseSuggestions } from "@/components/dashboard/PulseSuggestions";
 import { getDashboardStats, getPlatforms, getSuggestions } from "@/lib/services/dashboard";
+import { getNotifications } from "@/lib/services/notifications";
 import { getTenant } from "@/lib/services/tenants";
 import { formatCurrency } from "@/lib/utils/format";
 
@@ -13,11 +14,12 @@ export default async function DashboardPage() {
   const cookieStore = await cookies();
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
 
-  const [tenant, stats, platforms, suggestions] = await Promise.all([
+  const [tenant, stats, platforms, suggestions, notifications] = await Promise.all([
     getTenant(tenantSlug),
     getDashboardStats(tenantSlug),
     getPlatforms(tenantSlug),
     getSuggestions(tenantSlug),
+    getNotifications(tenantSlug),
   ]);
 
   if (!tenant || !stats) {
@@ -54,7 +56,7 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
-          <NotificationBell tenantSlug={tenantSlug} />
+          <NotificationBell notifications={notifications} />
           <Link href="/weekly-report" className="flex items-center gap-2 px-3 md:px-4 py-2 border border-border rounded-lg text-xs md:text-sm text-foreground hover:bg-card-hover transition-colors duration-150 active:scale-[0.98] touch-manipulation">
             Weekly report
             <ArrowUpRight size={14} />
