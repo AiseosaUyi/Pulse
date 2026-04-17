@@ -1,6 +1,5 @@
 import type { Competitor, IntelCard, MorningBriefItem, WeeklyDigest } from "@/lib/types/intelligence";
 import { createClient } from "@/lib/supabase/server";
-import { mockMorningBrief, mockWeeklyDigest } from "@/lib/data/mock-intelligence";
 
 export async function getCompetitors(
   tenantSlug: string
@@ -60,11 +59,46 @@ export async function getIntelFeed(
 export async function getMorningBrief(
   tenantSlug: string
 ): Promise<MorningBriefItem[]> {
-  return mockMorningBrief[tenantSlug] ?? [];
+  const supabase = await createClient();
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from("intel_cards")
+    .select("id, competitor_name, summary, ai_recommendation, detected_at")
+    .eq("tenant_id", tenantSlug)
+    .gte("detected_at", sevenDaysAgo)
+    .order("detected_at", { ascending: false });
+
+  if (error || !data) return [];
+
+  const scored = data
+    .map((row) => {
+      const rec = row.ai_recommendation as
+        | { impact?: "high" | "medium" | "low"; analysis?: string }
+        | null;
+      const impact = rec?.impact ?? "low";
+      const blurb = rec?.analysis?.trim() || row.summary;
+      return {
+        summary: `${row.competitor_name}: ${blurb}`,
+        intelCardId: row.id as string,
+        impact,
+      };
+    })
+    .sort((a, b) => {
+      const rank = { high: 3, medium: 2, low: 1 } as const;
+      return rank[b.impact] - rank[a.impact];
+    })
+    .slice(0, 3);
+
+  return scored;
 }
 
 export async function getWeeklyDigest(
-  tenantSlug: string
+  _tenantSlug: string
 ): Promise<WeeklyDigest | null> {
-  return mockWeeklyDigest[tenantSlug] ?? null;
+  // Weekly digest requires an insight/rules engine to synthesize
+  // strategic recommendations from intel_cards. Returning null until
+  // that engine is designed — the WeeklyDigest component handles this
+  // with a "Not enough data" empty state.
+  return null;
 }

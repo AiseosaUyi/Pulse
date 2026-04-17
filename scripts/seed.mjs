@@ -434,6 +434,76 @@ async function ensureEngagement(user) {
   }
 }
 
+const SEED_INTEL_CARDS = {
+  gruve: [
+    { competitor_name: "Sofar Sounds", competitor_type: "aspirational", platform: "tiktok", content_type: "reel", summary: "\"What if secret concerts were a thing?\" teaser format. 15-second clip, faces blurred, location hidden. Comment section is 90% \"WHERE IS THIS\" — deliberate mystery marketing.", metrics: { views: 340000, likes: 41200, engagement: 41200, engagementRate: 12.1, shares: 1800, comments: 4200, vsAverage: 3.2 }, ai_recommendation: { impact: "high", urgency: "opportunity", analysis: "Mystery/teaser format is dominating event TikTok right now. Sofar Sounds isn't in Nigeria but the format translates perfectly to Lagos event culture.", action: "For your next Gruve event: shoot a 15-sec teaser, hide the venue, let the comments drive FOMO.", contentBriefReady: true }, detected_at: "2026-04-13T10:30:00Z", source: "manual" },
+    { competitor_name: "Tix Africa", competitor_type: "direct", platform: "blog", content_type: "blog", summary: "Published a 2,400-word guide: \"Best Outdoor Events in Lagos 2026\" targeting [lagos events, outdoor parties lagos, things to do in lagos]. Already ranking position 14.", metrics: { views: 1200, engagement: 89, engagementRate: 7.4, comments: 12, vsAverage: null }, ai_recommendation: { impact: "high", urgency: "urgent", analysis: "Tix Africa is claiming the \"lagos events\" keyword cluster. Gruve has stronger event data but hasn't published SEO content yet.", action: "Publish a competing guide within 7 days before their page ages into the top 10.", contentBriefReady: true }, detected_at: "2026-04-14T08:00:00Z", source: "manual" },
+    { competitor_name: "Nairabox", competitor_type: "direct", platform: "instagram", content_type: "reel", summary: "BTS reel from a Lagos rooftop party. Shot on iPhone, lo-fi edit with afrobeats soundtrack. Caption: \"When the sunset hits different at 2,000ft...\" No hard sell, pure vibes.", metrics: { views: 23400, likes: 1920, engagement: 1920, engagementRate: 8.2, shares: 412, comments: 89, vsAverage: 3.2 }, ai_recommendation: { impact: "high", urgency: "opportunity", analysis: "BTS reels with lo-fi edit + location flex are outperforming polished content 3.2x for Lagos event brands this week.", action: "Shoot a similar BTS reel at your next venue walkthrough.", contentBriefReady: true }, detected_at: "2026-04-15T06:00:00Z", source: "manual" },
+    { competitor_name: "Nairabox", competitor_type: "direct", platform: "twitter", content_type: "thread", summary: "Thread on \"How we sold out 500 tickets in 48 hours\" — breakdown of their marketing funnel. Got 200+ retweets.", metrics: { views: 45000, engagement: 2800, engagementRate: 6.2, shares: 210, comments: 95, vsAverage: 2.1 }, ai_recommendation: { impact: "medium", urgency: "fyi", analysis: "Nairabox is sharing playbook content publicly. Good engagement but it's also giving away their strategy.", action: "Consider creating your own \"how we did it\" thread for Gruve.", contentBriefReady: false }, detected_at: "2026-04-12T14:00:00Z", source: "manual" },
+    { competitor_name: "Tix Africa", competitor_type: "direct", platform: "linkedin", content_type: "post", summary: "Announced partnership with a major Nigerian bank for event payment processing. Professional post with corporate language.", metrics: { views: 3200, engagement: 180, engagementRate: 5.6, comments: 24, vsAverage: 1.5 }, ai_recommendation: { impact: "medium", urgency: "fyi", analysis: "Tix Africa is building institutional partnerships. This won't affect social marketing directly but strengthens their enterprise positioning.", action: "No immediate action needed. Monitor for follow-up announcements.", contentBriefReady: false }, detected_at: "2026-04-11T09:00:00Z", source: "manual" },
+  ],
+  sippy: [
+    { competitor_name: "Sky Lounge", competitor_type: "direct", platform: "tiktok", content_type: "reel", summary: "\"POV: You just found Lagos's best-kept secret\" — 30-second venue tour with trending audio. Dramatic reveal of rooftop view. 90% of comments asking for location.", metrics: { views: 128000, likes: 15600, engagement: 15600, engagementRate: 12.2, shares: 3400, comments: 890, vsAverage: 4.1 }, ai_recommendation: { impact: "high", urgency: "urgent", analysis: "Sky Lounge is dominating Lagos nightlife TikTok with venue reveal content. Their engagement rate is 4x their average.", action: "Shoot a \"best-kept secret\" venue reveal for Sippy within 3 days.", contentBriefReady: true }, detected_at: "2026-04-14T20:00:00Z", source: "manual" },
+    { competitor_name: "Drinks.ng", competitor_type: "aspirational", platform: "instagram", content_type: "reel", summary: "\"Making the perfect Lagos sunset cocktail\" recipe reel. Clean overhead shot, ASMR-style sound design, ingredient callouts.", metrics: { views: 67000, likes: 5800, engagement: 5800, engagementRate: 8.7, shares: 1200, comments: 340, vsAverage: 2.8 }, ai_recommendation: { impact: "high", urgency: "opportunity", analysis: "Recipe/cocktail-making reels consistently outperform static drink photos for Lagos food & drink brands.", action: "Start a weekly \"Sippy Signature\" recipe reel series.", contentBriefReady: true }, detected_at: "2026-04-15T08:00:00Z", source: "manual" },
+    { competitor_name: "Sky Lounge", competitor_type: "direct", platform: "instagram", content_type: "story", summary: "Instagram Story poll: \"Friday or Saturday for our next DJ set?\" — 8,400 votes, 62/38 split. Used result to announce the event the next day.", metrics: { views: 12000, engagement: 8400, engagementRate: 70.0, vsAverage: 5.2 }, ai_recommendation: { impact: "medium", urgency: "opportunity", analysis: "Interactive stories (polls, questions, countdowns) get 5x the engagement of passive stories for nightlife brands.", action: "Run a poll on Sippy's IG stories this week.", contentBriefReady: false }, detected_at: "2026-04-13T16:00:00Z", source: "manual" },
+    { competitor_name: "Hard Rock Lagos", competitor_type: "adjacent", platform: "instagram", content_type: "post", summary: "Photo carousel of their new cocktail menu with lifestyle shots. Professional photography but feels corporate.", metrics: { views: 4500, likes: 320, engagement: 320, engagementRate: 2.7, comments: 18, vsAverage: 0.8 }, ai_recommendation: { impact: "low", urgency: "fyi", analysis: "Hard Rock's polished corporate content is underperforming. Their audience wants authenticity.", action: "No action needed. This confirms your lo-fi strategy is right for Lagos.", contentBriefReady: false }, detected_at: "2026-04-12T11:00:00Z", source: "manual" },
+  ],
+};
+
+async function ensureIntelCards() {
+  for (const t of TENANTS) {
+    const { data: existing, error: readErr } = await admin
+      .from("intel_cards")
+      .select("id")
+      .eq("tenant_id", t.slug)
+      .limit(1);
+    if (readErr) throw readErr;
+    if (existing && existing.length > 0) {
+      console.log(`intel: ${t.slug} (exists)`);
+      continue;
+    }
+
+    const { data: comps, error: cErr } = await admin
+      .from("competitors")
+      .select("id, name")
+      .eq("tenant_id", t.slug);
+    if (cErr) throw cErr;
+    const byName = new Map(comps?.map((c) => [c.name, c.id]) ?? []);
+
+    const skipped = [];
+    const rows = SEED_INTEL_CARDS[t.slug]
+      .map((card) => {
+        const cid = byName.get(card.competitor_name);
+        if (!cid) {
+          skipped.push(card.competitor_name);
+          return null;
+        }
+        return {
+          tenant_id: t.slug,
+          competitor_id: cid,
+          competitor_name: card.competitor_name,
+          competitor_type: card.competitor_type,
+          platform: card.platform,
+          content_type: card.content_type,
+          summary: card.summary,
+          metrics: card.metrics,
+          ai_recommendation: card.ai_recommendation,
+          detected_at: card.detected_at,
+          source: card.source,
+        };
+      })
+      .filter(Boolean);
+    if (skipped.length) console.log(`intel: ${t.slug} skipped (no competitor): ${skipped.join(", ")}`);
+    if (rows.length === 0) {
+      console.log(`intel: ${t.slug} (no mappable rows)`);
+      continue;
+    }
+    const { error } = await admin.from("intel_cards").insert(rows);
+    if (error) throw error;
+    console.log(`intel: ${t.slug} (${rows.length} seeded)`);
+  }
+}
+
 async function main() {
   const user = await findOrCreateUser();
   await ensureProfile(user);
@@ -444,6 +514,7 @@ async function main() {
   await ensureCompetitors();
   await ensureKeywords(user);
   await ensureEngagement(user);
+  await ensureIntelCards();
   console.log("\ndone. login with SEED_EMAIL + SEED_PASSWORD.");
 }
 
