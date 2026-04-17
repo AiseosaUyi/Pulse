@@ -43,7 +43,7 @@ export function PulseSuggestions({ suggestions }: PulseSuggestionsProps) {
             className="flex items-start justify-between gap-3 group hover:bg-card-hover p-2 -mx-2 rounded-lg transition-colors duration-150"
           >
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-foreground text-sm group-hover:text-accent-purple transition-colors">
+              <p className="font-semibold text-foreground text-sm group-hover:text-primary-500 transition-colors">
                 {suggestion.title}
               </p>
               <p className="text-text-secondary text-xs mt-0.5 line-clamp-2">

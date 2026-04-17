@@ -13,7 +13,7 @@ const typeStyles: Record<string, { bg: string; icon: string }> = {
   warning: { bg: "bg-status-red/10", icon: "⚠" },
   opportunity: { bg: "bg-status-green/10", icon: "★" },
   action: { bg: "bg-status-yellow/10", icon: "!" },
-  info: { bg: "bg-accent-purple/10", icon: "i" },
+  info: { bg: "bg-primary-500/10", icon: "i" },
 };
 
 export function NotificationBell({ tenantSlug }: NotificationBellProps) {
@@ -29,7 +29,7 @@ export function NotificationBell({ tenantSlug }: NotificationBellProps) {
       >
         <Bell size={18} className="text-text-secondary" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full gradient-purple-pink flex items-center justify-center text-[9px] font-bold text-foreground">
+          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary-500 flex items-center justify-center text-[9px] font-bold text-white">
             {unreadCount}
           </span>
         )}
@@ -49,7 +49,7 @@ export function NotificationBell({ tenantSlug }: NotificationBellProps) {
                   key={n.id}
                   href={n.actionUrl}
                   onClick={() => setIsOpen(false)}
-                  className={`block p-4 hover:bg-card-hover transition-colors ${!n.read ? "bg-accent-purple/[0.02]" : ""}`}
+                  className={`block p-4 hover:bg-card-hover transition-colors ${!n.read ? "bg-primary-500/[0.04]" : ""}`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`w-7 h-7 rounded-full ${typeStyles[n.type].bg} flex items-center justify-center text-xs flex-shrink-0`}>
@@ -58,12 +58,12 @@ export function NotificationBell({ tenantSlug }: NotificationBellProps) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className={`text-sm font-medium ${!n.read ? "text-foreground" : "text-text-secondary"}`}>{n.title}</p>
-                        {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-accent-purple flex-shrink-0" />}
+                        {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary-500 flex-shrink-0" />}
                       </div>
                       <p className="text-text-muted text-xs mt-0.5 line-clamp-2">{n.description}</p>
                       <div className="flex items-center justify-between mt-1.5">
                         <span className="text-text-muted text-[10px]">{n.timestamp}</span>
-                        <span className="text-accent-purple text-[10px] font-medium">{n.actionLabel} →</span>
+                        <span className="text-primary-500 text-[10px] font-medium">{n.actionLabel} →</span>
                       </div>
                     </div>
                   </div>

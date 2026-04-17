@@ -149,10 +149,10 @@ export function IntelCard({ card, tenantSlug }: IntelCardProps) {
 
       {/* AI Recommendation */}
       {card.aiRecommendation && (
-        <div className="rounded-lg border border-accent-purple/20 bg-gradient-to-r from-accent-purple/[0.08] to-accent-pink/[0.05] p-3.5">
+        <div className="rounded-lg border border-primary-500/20 bg-primary-500/[0.07] p-3.5">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-accent-purple text-sm">✦</span>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-accent-purple">
+            <span className="text-primary-500 text-sm">✦</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-primary-500">
               Pulse Intelligence
             </span>
             <Badge variant={urgencyBadge[card.aiRecommendation.urgency]}>
@@ -173,7 +173,7 @@ export function IntelCard({ card, tenantSlug }: IntelCardProps) {
               <button
                 onClick={handleStealThis}
                 disabled={isPending || briefGenerated}
-                className="px-3.5 py-1.5 rounded-md text-xs font-medium border border-accent-purple/30 bg-accent-purple/[0.15] text-purple-300 hover:bg-accent-purple/25 transition-colors disabled:opacity-50"
+                className="px-3.5 py-1.5 rounded-md text-xs font-medium border border-primary-500/30 bg-primary-500/15 text-primary-500 hover:bg-primary-500/25 transition-colors disabled:opacity-50"
               >
                 {isPending
                   ? "Generating..."

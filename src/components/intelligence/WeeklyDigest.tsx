@@ -42,7 +42,7 @@ export function WeeklyDigest({ digest, tenantName, briefCount }: WeeklyDigestPro
                 <div className="flex items-center gap-1.5 mt-1">
                   <div className="flex-1 h-1 bg-border rounded-full">
                     <div
-                      className="h-1 rounded-full bg-gradient-to-r from-accent-purple to-accent-pink"
+                      className="h-1 rounded-full bg-primary-500"
                       style={{ width: `${Math.min(fmt.multiplier * 20, 100)}%` }}
                     />
                   </div>
@@ -64,7 +64,7 @@ export function WeeklyDigest({ digest, tenantName, briefCount }: WeeklyDigestPro
         <ol className="space-y-1.5">
           {digest.recommendedActions.map((action) => (
             <li key={action.priority} className="flex gap-2">
-              <span className="text-xs font-bold text-accent-purple shrink-0">
+              <span className="text-xs font-bold text-primary-500 shrink-0">
                 {action.priority}.
               </span>
               <span className="text-xs text-foreground/80">
@@ -97,12 +97,12 @@ export function WeeklyDigest({ digest, tenantName, briefCount }: WeeklyDigestPro
             Content Pipeline
           </h2>
           <div className="bg-card rounded-lg border border-border/50 p-3.5">
-            <h3 className="text-[13px] font-semibold text-accent-purple">
+            <h3 className="text-[13px] font-semibold text-primary-500">
               {briefCount} Brief{briefCount !== 1 ? "s" : ""} Ready
             </h3>
             <a
               href="/content-briefs"
-              className="mt-2 inline-block px-3 py-1.5 rounded-md text-xs font-medium border border-accent-purple/30 bg-accent-purple/[0.15] text-purple-300 hover:bg-accent-purple/25 transition-colors"
+              className="mt-2 inline-block px-3 py-1.5 rounded-md text-xs font-medium border border-primary-500/30 bg-primary-500/15 text-primary-500 hover:bg-primary-500/25 transition-colors"
             >
               View All Briefs →
             </a>

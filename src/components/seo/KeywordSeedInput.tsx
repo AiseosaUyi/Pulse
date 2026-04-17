@@ -17,7 +17,7 @@ export function KeywordSeedInput() {
   return (
     <div className="bg-card rounded-xl p-5 border border-border/50 mb-6">
       <div className="flex items-center gap-2 mb-3">
-        <Sparkles size={16} className="text-accent-purple" />
+        <Sparkles size={16} className="text-primary-500" />
         <h3 className="text-sm font-semibold text-foreground">AI Keyword Discovery</h3>
         <span className="text-text-muted text-xs ml-2">Enter a seed keyword to discover opportunities</span>
       </div>
@@ -30,13 +30,13 @@ export function KeywordSeedInput() {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             placeholder="e.g., event ticketing, live music Lagos..."
-            className="w-full bg-background border border-border/50 rounded-lg pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent-purple focus:border-transparent"
+            className="w-full bg-background border border-border/50 rounded-lg pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
         <button
           onClick={handleSearch}
           disabled={!query.trim() || isSearching}
-          className="px-5 py-2.5 gradient-purple-pink text-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"
+          className="px-5 py-2.5 bg-primary-500 text-white text-sm font-medium rounded-lg hover:bg-primary-600 transition-colors active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"
         >
           {isSearching ? <><Loader2 size={14} className="animate-spin" />Discovering...</> : "Discover Keywords"}
         </button>

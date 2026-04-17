@@ -89,7 +89,7 @@ export function PlatformBreakdown({ platforms }: PlatformBreakdownProps) {
               {/* Progress bar */}
               <div className="mt-2 h-1 bg-border/50 rounded-full overflow-hidden">
                 <div
-                  className="h-full rounded-full gradient-purple-pink transition-all duration-500"
+                  className="h-full rounded-full bg-primary-500 transition-all duration-500"
                   style={{
                     width: `${Math.min(platform.engagementRate * 10, 100)}%`,
                   }}

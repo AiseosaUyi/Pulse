@@ -32,7 +32,7 @@ export function SEOTabNav() {
           >
             {tab.label}
             {isActive && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 gradient-purple-pink rounded-full" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500 rounded-full" />
             )}
           </Link>
         );

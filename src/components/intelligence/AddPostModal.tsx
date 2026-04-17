@@ -74,7 +74,7 @@ export function AddPostModal({ isOpen, onClose, competitors, tenantSlug }: AddPo
               <select
                 name="competitorId"
                 required
-                className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent-purple"
+                className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">Select a competitor</option>
                 {competitors.map((c) => (
@@ -92,7 +92,7 @@ export function AddPostModal({ isOpen, onClose, competitors, tenantSlug }: AddPo
                 <select
                   name="platform"
                   required
-                  className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent-purple"
+                  className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="instagram">Instagram</option>
                   <option value="tiktok">TikTok</option>
@@ -108,7 +108,7 @@ export function AddPostModal({ isOpen, onClose, competitors, tenantSlug }: AddPo
                 <select
                   name="contentType"
                   required
-                  className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent-purple"
+                  className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="reel">Reel</option>
                   <option value="post">Post</option>
@@ -129,7 +129,7 @@ export function AddPostModal({ isOpen, onClose, competitors, tenantSlug }: AddPo
                 type="url"
                 name="postUrl"
                 placeholder="https://instagram.com/p/..."
-                className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent-purple"
+                className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -143,7 +143,7 @@ export function AddPostModal({ isOpen, onClose, competitors, tenantSlug }: AddPo
                 required
                 rows={3}
                 placeholder="Describe what the competitor posted and why it caught your attention..."
-                className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent-purple resize-none"
+                className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
               />
             </div>
 
@@ -155,19 +155,19 @@ export function AddPostModal({ isOpen, onClose, competitors, tenantSlug }: AddPo
               <div className="grid grid-cols-4 gap-2">
                 <div>
                   <input type="number" name="views" min="0" placeholder="Views"
-                    className="w-full bg-card border border-border rounded-lg px-2.5 py-2 text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent-purple" />
+                    className="w-full bg-card border border-border rounded-lg px-2.5 py-2 text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary-500" />
                 </div>
                 <div>
                   <input type="number" name="likes" min="0" placeholder="Likes"
-                    className="w-full bg-card border border-border rounded-lg px-2.5 py-2 text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent-purple" />
+                    className="w-full bg-card border border-border rounded-lg px-2.5 py-2 text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary-500" />
                 </div>
                 <div>
                   <input type="number" name="comments" min="0" placeholder="Comments"
-                    className="w-full bg-card border border-border rounded-lg px-2.5 py-2 text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent-purple" />
+                    className="w-full bg-card border border-border rounded-lg px-2.5 py-2 text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary-500" />
                 </div>
                 <div>
                   <input type="number" name="shares" min="0" placeholder="Shares"
-                    className="w-full bg-card border border-border rounded-lg px-2.5 py-2 text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent-purple" />
+                    className="w-full bg-card border border-border rounded-lg px-2.5 py-2 text-sm text-foreground placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary-500" />
                 </div>
               </div>
             </div>
@@ -184,7 +184,7 @@ export function AddPostModal({ isOpen, onClose, competitors, tenantSlug }: AddPo
             <button
               type="submit"
               disabled={isPending}
-              className="w-full py-2.5 rounded-lg text-sm font-semibold text-foreground bg-gradient-to-r from-accent-purple to-accent-pink hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="w-full py-2.5 rounded-lg text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 transition-colors disabled:opacity-50"
             >
               {isPending ? "Adding..." : "Add Competitor Post"}
             </button>

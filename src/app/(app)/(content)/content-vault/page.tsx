@@ -10,8 +10,8 @@ export default async function ContentVaultPage() {
   const trending = mockTrendingContent[tenantSlug] ?? mockTrendingContent.gruve;
 
   const platformColors: Record<string, string> = {
-    tiktok: "text-accent-pink",
-    instagram: "text-accent-purple",
+    tiktok: "text-primary-500",
+    instagram: "text-primary-500",
     twitter: "text-status-teal",
     youtube: "text-status-red",
     manual: "text-text-muted",
@@ -46,7 +46,7 @@ export default async function ContentVaultPage() {
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Used</p>
-          <p className="text-2xl font-bold text-accent-purple mt-1">{usedCount}</p>
+          <p className="text-2xl font-bold text-primary-500 mt-1">{usedCount}</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Scheduled</p>
@@ -153,7 +153,7 @@ export default async function ContentVaultPage() {
                       {item.thumbnailEmoji}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-foreground text-sm font-medium leading-tight group-hover:text-accent-purple transition-colors">
+                      <p className="text-foreground text-sm font-medium leading-tight group-hover:text-primary-500 transition-colors">
                         {item.title}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
@@ -164,7 +164,7 @@ export default async function ContentVaultPage() {
                       <div className="flex items-center gap-2 mt-1.5">
                         <div className="flex-1 h-1 bg-border/50 rounded-full overflow-hidden">
                           <div
-                            className="h-full rounded-full gradient-purple-pink"
+                            className="h-full rounded-full bg-primary-500"
                             style={{ width: `${item.viralScore}%` }}
                           />
                         </div>
@@ -175,7 +175,7 @@ export default async function ContentVaultPage() {
                       </div>
                     </div>
                   </div>
-                  <button className="mt-2 ml-[52px] px-3 py-1 text-xs bg-accent-purple/10 text-accent-purple rounded-md hover:bg-accent-purple/20 transition-colors opacity-0 group-hover:opacity-100">
+                  <button className="mt-2 ml-[52px] px-3 py-1 text-xs bg-primary-500/10 text-primary-500 rounded-md hover:bg-primary-500/20 transition-colors opacity-0 group-hover:opacity-100">
                     Save to Vault
                   </button>
                 </div>

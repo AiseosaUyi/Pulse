@@ -8,10 +8,10 @@ export function CrossBrandInsights({ patterns }: CrossBrandInsightsProps) {
   if (patterns.length === 0) return null;
 
   return (
-    <div className="mb-6 rounded-xl border border-accent-pink/20 bg-gradient-to-r from-accent-pink/[0.06] to-accent-purple/[0.04] p-5">
+    <div className="mb-6 rounded-xl border border-primary-500/20 bg-primary-500/[0.05] p-5">
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-accent-pink text-sm">◆</span>
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-accent-pink">
+        <span className="text-primary-500 text-sm">◆</span>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-primary-500">
           Cross-Brand Insights
         </h2>
         <span className="text-[11px] text-text-muted">
@@ -39,7 +39,7 @@ export function CrossBrandInsights({ patterns }: CrossBrandInsightsProps) {
               {pattern.tenants.map((t) => (
                 <span
                   key={t}
-                  className="px-2 py-0.5 rounded-full bg-accent-purple/10 border border-accent-purple/20 text-[11px] text-purple-300 capitalize"
+                  className="px-2 py-0.5 rounded-full bg-primary-500/10 border border-primary-500/20 text-[11px] text-primary-500 capitalize"
                 >
                   {t}
                 </span>

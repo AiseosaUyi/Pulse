@@ -30,7 +30,7 @@ item unblocks something earlier.
 
 - [x] **AI cost dashboard at `/settings/ai-usage`** — per-tenant month-to-date AI spend, call count, token totals, cache hit rate, per-model breakdown, recent-calls table. Entry point added to `/settings` page.
 - [x] **Purple→maroon cleanup on 5 main pages** — `/ai-content`, `/weekly-report`, `/viral-trends`, `/platform-score`, `/seo-tracker/topical-map`.
-- [ ] **Purple→maroon cleanup on remaining surfaces (~15 files)** — component-level + deeper routes still use `accent-purple`/`accent-pink`/`gradient-purple-pink`: `MorningBriefing`, `CrossBrandInsights`, `WeeklyDigest`, `IntelCard`, `NotificationBell`, `PulseSuggestions`, `PlatformBreakdown`, `SEOTabNav`, `KeywordSeedInput`, `AddPostModal`, `content-vault/*`, `seo-tracker/{serp-analysis,programmatic,blog-writer,keywords}`, `intel-feed/client`, `error.tsx`, `not-found.tsx`, `Logo.tsx` (intentional dark-mode gradient — verify spec). Mechanical replace: `accent-purple` → `primary-500`, `accent-pink` → `primary-500`, `gradient-purple-pink` → `bg-primary-500`. (~1 hr batched)
+- [x] **Purple→maroon cleanup on remaining surfaces (15 files, 52 occurrences)** — `accent-purple`/`accent-pink`/`gradient-purple-pink`/`text-purple-300` swept from `MorningBriefing`, `CrossBrandInsights`, `WeeklyDigest`, `IntelCard`, `NotificationBell`, `PulseSuggestions`, `PlatformBreakdown`, `SEOTabNav`, `KeywordSeedInput`, `AddPostModal`, `content-vault/{page,content-extractor}`, `intel-feed/client`, `error.tsx`, `not-found.tsx`. Gradients collapsed to flat `bg-primary-500`. `Logo.tsx` dark gradient kept per DARK-THEME.md spec. `globals.css` alias tokens retained as back-compat safety net.
 
 ---
 
