@@ -16,14 +16,19 @@
 import { ApifyClient } from "apify-client";
 
 export interface ScrapedTrend {
-  platform: "tiktok";
-  hashtag: string;
+  platform: "tiktok" | "instagram" | "twitter";
+  source: "creative_center" | "hashtag_scout";
+  hashtag?: string;
   title: string;
   summary: string;
   external_url?: string;
   views?: number;
+  likes?: number;
+  comments?: number;
+  engagement_rate?: number;
   trending_rank?: number;
   region?: string;
+  owner_handle?: string;
 }
 
 export interface ScrapeOptions {
@@ -77,6 +82,7 @@ function normalizeItem(item: ActorItem, idx: number, region: string): ScrapedTre
 
   return {
     platform: "tiktok",
+    source: "creative_center",
     hashtag: cleanTag,
     title: cleanTag,
     summary,

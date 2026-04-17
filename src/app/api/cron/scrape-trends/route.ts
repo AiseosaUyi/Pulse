@@ -2,10 +2,26 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
 import { analyzeTrend } from "@/lib/ai/analyze-trend";
-import { scrapeTikTokCreativeCenter } from "@/lib/scrape/tiktok-creative-center";
+import {
+  scrapeTikTokCreativeCenter,
+  type ScrapedTrend,
+} from "@/lib/scrape/tiktok-creative-center";
+import { scrapeInstagramTopPosts } from "@/lib/scrape/instagram-hashtag";
+import type { BrandVoice } from "@/lib/ai/brand-voice";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
+
+interface ScoutConfig {
+  instagram_hashtags?: string[];
+  tiktok_region?: string;
+}
+
+interface TenantRow {
+  slug: string;
+  name: string;
+  settings: { scout_config?: ScoutConfig } | null;
+}
 
 export async function POST(req: Request) {
   const auth = req.headers.get("authorization");
@@ -26,7 +42,7 @@ export async function POST(req: Request) {
 
   const { data: tenants, error: tenantsErr } = await admin
     .from("tenants")
-    .select("slug, name");
+    .select("slug, name, settings");
   if (tenantsErr || !tenants) {
     return NextResponse.json(
       { error: tenantsErr?.message ?? "Failed to list tenants" },
@@ -36,94 +52,38 @@ export async function POST(req: Request) {
 
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  for (const tenant of tenants) {
+  for (const tenant of tenants as TenantRow[]) {
     summary.tenantsProcessed += 1;
     try {
-      const scraped = await scrapeTikTokCreativeCenter({
-        region: "NG",
-        limit: 20,
-      });
-      summary.scraped += scraped.length;
-
-      if (scraped.length === 0) continue;
-
+      const scoutConfig = tenant.settings?.scout_config ?? {};
       const voice = await getBrandVoice(tenant.slug);
 
-      for (const trend of scraped) {
-        try {
-          // Idempotency: skip if same hashtag was captured this week
-          const { data: existing } = await admin
-            .from("trend_scouts")
-            .select("id")
-            .eq("tenant_slug", tenant.slug)
-            .eq("source", "creative_center")
-            .eq("hashtag", trend.hashtag)
-            .gte("captured_at", weekAgo)
-            .limit(1);
-          if (existing && existing.length > 0) {
-            summary.skipped += 1;
-            continue;
-          }
+      // TikTok Creative Center — region-based
+      if (scoutConfig.tiktok_region) {
+        const tiktokTrends = await scrapeTikTokCreativeCenter({
+          region: scoutConfig.tiktok_region,
+          limit: 20,
+        });
+        summary.scraped += tiktokTrends.length;
+        await persistTrends(tenant, voice, tiktokTrends, summary, {
+          idempotencyMode: "hashtag_week",
+          weekAgoIso: weekAgo,
+        });
+      }
 
-          let ai_analysis = null;
-          let applicability: "high" | "medium" | "low" | "n/a" | null = null;
-          try {
-            const analyzed = await analyzeTrend({
-              tenantSlug: tenant.slug,
-              tenantName: tenant.name,
-              voice,
-              platform: trend.platform,
-              summary: trend.summary,
-              hashtag: trend.hashtag,
-              metrics: {
-                views: trend.views,
-                trending_rank: trend.trending_rank,
-                region: trend.region,
-              } as Record<string, unknown>,
-            });
-            ai_analysis = analyzed;
-            applicability = analyzed.applicability;
-          } catch (aiErr) {
-            console.error("[cron/scrape-trends] analyze failed", {
-              tenant: tenant.slug,
-              hashtag: trend.hashtag,
-              message: aiErr instanceof Error ? aiErr.message : String(aiErr),
-            });
-          }
-
-          const { error: insertErr } = await admin.from("trend_scouts").insert({
-            tenant_slug: tenant.slug,
-            platform: trend.platform,
-            source: "creative_center",
-            hashtag: trend.hashtag,
-            external_url: trend.external_url ?? null,
-            title: trend.title,
-            summary: trend.summary,
-            metrics: {
-              views: trend.views,
-              trending_rank: trend.trending_rank,
-              region: trend.region,
-            },
-            ai_analysis,
-            applicability,
-          });
-          if (insertErr) throw insertErr;
-          summary.inserted += 1;
-        } catch (trendErr) {
-          summary.failed += 1;
-          const message =
-            trendErr instanceof Error ? trendErr.message : String(trendErr);
-          console.error("[cron/scrape-trends] trend insert failed", {
-            tenant: tenant.slug,
-            hashtag: trend.hashtag,
-            message,
-          });
-          summary.errors.push({
-            tenant: tenant.slug,
-            scope: `trend:${trend.hashtag}`,
-            message,
-          });
-        }
+      // Instagram top posts — hashtag-based, per tenant
+      if (
+        scoutConfig.instagram_hashtags &&
+        scoutConfig.instagram_hashtags.length > 0
+      ) {
+        const igPosts = await scrapeInstagramTopPosts(
+          scoutConfig.instagram_hashtags,
+          { limitPerHashtag: 5 }
+        );
+        summary.scraped += igPosts.length;
+        await persistTrends(tenant, voice, igPosts, summary, {
+          idempotencyMode: "url",
+        });
       }
     } catch (tenantErr) {
       summary.failed += 1;
@@ -139,4 +99,122 @@ export async function POST(req: Request) {
 
   console.log("[cron/scrape-trends] complete", summary);
   return NextResponse.json(summary);
+}
+
+type IdempotencyMode = "hashtag_week" | "url";
+
+async function persistTrends(
+  tenant: TenantRow,
+  voice: BrandVoice | null,
+  scraped: ScrapedTrend[],
+  summary: {
+    inserted: number;
+    skipped: number;
+    failed: number;
+    errors: { tenant: string; scope: string; message: string }[];
+  },
+  opts: { idempotencyMode: IdempotencyMode; weekAgoIso?: string }
+): Promise<void> {
+  const admin = createAdminClient();
+
+  for (const trend of scraped) {
+    try {
+      // Idempotency
+      let alreadyExists = false;
+      if (opts.idempotencyMode === "url" && trend.external_url) {
+        const { data } = await admin
+          .from("trend_scouts")
+          .select("id")
+          .eq("tenant_slug", tenant.slug)
+          .eq("external_url", trend.external_url)
+          .limit(1);
+        alreadyExists = !!(data && data.length > 0);
+      } else if (
+        opts.idempotencyMode === "hashtag_week" &&
+        trend.hashtag &&
+        opts.weekAgoIso
+      ) {
+        const { data } = await admin
+          .from("trend_scouts")
+          .select("id")
+          .eq("tenant_slug", tenant.slug)
+          .eq("source", trend.source)
+          .eq("hashtag", trend.hashtag)
+          .gte("captured_at", opts.weekAgoIso)
+          .limit(1);
+        alreadyExists = !!(data && data.length > 0);
+      }
+      if (alreadyExists) {
+        summary.skipped += 1;
+        continue;
+      }
+
+      let ai_analysis = null;
+      let applicability: "high" | "medium" | "low" | "n/a" | null = null;
+      try {
+        const analyzed = await analyzeTrend({
+          tenantSlug: tenant.slug,
+          tenantName: tenant.name,
+          voice,
+          platform: trend.platform,
+          summary: trend.summary,
+          hashtag: trend.hashtag,
+          metrics: {
+            views: trend.views,
+            likes: trend.likes,
+            comments: trend.comments,
+            engagement_rate: trend.engagement_rate,
+            trending_rank: trend.trending_rank,
+            region: trend.region,
+          } as Record<string, unknown>,
+        });
+        ai_analysis = analyzed;
+        applicability = analyzed.applicability;
+      } catch (aiErr) {
+        console.error("[cron/scrape-trends] analyze failed", {
+          tenant: tenant.slug,
+          hashtag: trend.hashtag,
+          message: aiErr instanceof Error ? aiErr.message : String(aiErr),
+        });
+      }
+
+      const { error: insertErr } = await admin.from("trend_scouts").insert({
+        tenant_slug: tenant.slug,
+        platform: trend.platform,
+        source: trend.source,
+        hashtag: trend.hashtag ?? null,
+        external_url: trend.external_url ?? null,
+        title: trend.title,
+        summary: trend.summary,
+        metrics: {
+          views: trend.views,
+          likes: trend.likes,
+          comments: trend.comments,
+          engagement_rate: trend.engagement_rate,
+          trending_rank: trend.trending_rank,
+          region: trend.region,
+          owner_handle: trend.owner_handle,
+        },
+        ai_analysis,
+        applicability,
+      });
+      if (insertErr) throw insertErr;
+      summary.inserted += 1;
+    } catch (trendErr) {
+      summary.failed += 1;
+      const message =
+        trendErr instanceof Error ? trendErr.message : String(trendErr);
+      console.error("[cron/scrape-trends] trend insert failed", {
+        tenant: tenant.slug,
+        hashtag: trend.hashtag,
+        url: trend.external_url,
+        message,
+      });
+      summary.errors.push({
+        tenant: tenant.slug,
+        scope: `trend:${trend.hashtag ?? trend.external_url ?? "?"}`,
+        message,
+      });
+    }
+  }
 }

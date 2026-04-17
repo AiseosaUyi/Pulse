@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { UserCircle, Users, Lock, Bell, Mail, Trash2, Palette, Sparkles, ArrowRight, Zap } from "lucide-react";
+import { UserCircle, Users, Lock, Bell, Mail, Trash2, Palette, Sparkles, ArrowRight, Zap, TrendingUp } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, getCurrentTenant } from "@/lib/auth";
 import { PasswordInput } from "@/components/ui/PasswordInput";
@@ -317,6 +317,32 @@ export default async function SettingsPage() {
             className="inline-flex items-center gap-1.5 text-sm text-primary-500 hover:text-primary-600 whitespace-nowrap shrink-0"
           >
             Edit
+            <ArrowRight size={14} />
+          </Link>
+        </div>
+      </section>
+
+      {/* Trend scouts */}
+      <section className="bg-card border border-border rounded-2xl p-6">
+        <SectionHeading icon={TrendingUp} title="Trend scouts" />
+        <div className="flex items-start justify-between gap-6">
+          <div className="min-w-0">
+            <p
+              className="text-sm text-gray-1200 dark:text-foreground"
+              style={{ fontFamily: "'Satoshi-500', var(--font-sans)" }}
+            >
+              Hashtags + region the daily scraper tracks for {tenant.name}
+            </p>
+            <p className="text-xs text-gray-1000 dark:text-text-muted mt-1">
+              Instagram top-posts + TikTok Creative Center trending. Shows up
+              on Viral trends.
+            </p>
+          </div>
+          <Link
+            href="/settings/trend-scouts"
+            className="inline-flex items-center gap-1.5 text-sm text-primary-500 hover:text-primary-600 whitespace-nowrap shrink-0"
+          >
+            Configure
             <ArrowRight size={14} />
           </Link>
         </div>

@@ -51,6 +51,10 @@ const TENANTS = [
         { platform: "twitter", connected: true, handle: "@gruve_events", followers: 890, engagementRate: 1.1, status: "low_activity" },
         { platform: "linkedin", connected: true, handle: "Gruve Events", followers: 430, engagementRate: 2.4, status: "active" },
       ],
+      scout_config: {
+        instagram_hashtags: ["lagosevents", "lagosnightlife", "naijaparty", "afrobeatsparty"],
+        tiktok_region: "NG",
+      },
     },
   },
   {
@@ -70,6 +74,10 @@ const TENANTS = [
         { platform: "twitter", connected: false, handle: "", followers: 0, engagementRate: 0, status: "inactive" },
         { platform: "linkedin", connected: false, handle: "", followers: 0, engagementRate: 0, status: "inactive" },
       ],
+      scout_config: {
+        instagram_hashtags: ["lagoseats", "lagosfoodie", "naijafood", "lagoscocktails"],
+        tiktok_region: "NG",
+      },
     },
   },
 ];
