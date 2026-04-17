@@ -12,12 +12,3 @@
 
 **Depends on / blocked by:** Designing the cookie/session stub pattern for `createClient()` from `src/lib/supabase/server.ts` under test.
 
-## Tighten RLS on `competitors` table
-
-**What:** Migration `001_intelligence_feed.sql` ships `competitors`, `intel_cards`, `content_briefs` with `for all using (true)` — no tenant gate. Newer modules use `is_tenant_member(tenant_slug)`.
-
-**Why:** Cross-tenant read/write is possible on these three tables. Low impact today (admin client only, no user-facing write surface yet), but a footgun for future features.
-
-**How:** Migration `009` to rename `tenant_id` → `tenant_slug` (or keep `tenant_id` text and re-FK it to `tenants(slug)`), add `is_tenant_member()` policy, drop `using (true)` policy. Update `intel-feed` service if the column name changes.
-
-**Context:** Caught while writing the migration smoke tests (2026-04-17).
