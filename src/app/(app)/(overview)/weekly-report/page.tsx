@@ -1,126 +1,294 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { mockWeeklyReport } from "@/lib/data/mock-engagement";
-import { formatCurrency } from "@/lib/utils/format";
-import { getTenant } from "@/lib/services/tenants";
+import { ArrowLeft, ArrowRight, Sparkles, TrendingUp, Target, Search, Users, Zap } from "lucide-react";
+import { getLatestDigest } from "@/lib/services/insights";
+import { GenerateDigestButton } from "./client";
+import type {
+  RecommendedAction,
+  WeeklyDigestRecord,
+} from "@/lib/types/insights";
+
+function formatNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+const MODULE_ICON: Record<NonNullable<RecommendedAction["target_module"]>, typeof ArrowRight> = {
+  "/intel-feed": Search,
+  "/viral-trends": TrendingUp,
+  "/content-briefs": Sparkles,
+  "/own-analytics": Zap,
+  "/seo-tracker": Search,
+  "/leads": Users,
+  "/ai-content": Sparkles,
+};
+
+const MODULE_LABEL: Record<NonNullable<RecommendedAction["target_module"]>, string> = {
+  "/intel-feed": "Intel feed",
+  "/viral-trends": "Viral trends",
+  "/content-briefs": "Content briefs",
+  "/own-analytics": "Own analytics",
+  "/seo-tracker": "SEO tracker",
+  "/leads": "Leads",
+  "/ai-content": "AI content",
+};
 
 export default async function WeeklyReportPage() {
   const cookieStore = await cookies();
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
-  const report = mockWeeklyReport[tenantSlug] ?? mockWeeklyReport.gruve;
-  const tenant = await getTenant(tenantSlug);
-  const currency = tenant?.currency ?? "NGN";
+
+  const digest = await getLatestDigest(tenantSlug);
 
   return (
-    <div className="p-4 md:p-8 max-w-[900px]">
-      <div className="flex items-center gap-3 mb-6 md:mb-8">
-        <Link href="/dashboard" className="text-text-muted hover:text-foreground transition-colors">
-          <ArrowLeft size={20} />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Weekly Report</h1>
-          <p className="text-text-secondary text-sm mt-0.5">{report.weekLabel}</p>
+    <div className="p-4 md:p-8 max-w-[1000px]">
+      <div className="flex items-center justify-between mb-6 md:mb-8 flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard"
+            className="text-text-muted hover:text-foreground transition-colors"
+          >
+            <ArrowLeft size={20} />
+          </Link>
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold text-foreground">
+              Weekly report
+            </h1>
+            <p className="text-text-secondary text-sm mt-0.5">
+              {digest
+                ? `Week of ${new Date(digest.weekOf).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`
+                : "No digest yet — synthesize one now"}
+            </p>
+          </div>
         </div>
+        <GenerateDigestButton tenantSlug={tenantSlug} hasDigest={digest !== null} />
       </div>
 
-      {/* Highlights */}
-      <div className="bg-card rounded-xl p-6 border border-border/50 mb-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-4">This Week's Highlights</h2>
-        <div className="space-y-2.5">
-          {report.highlights.map((h, i) => (
-            <div key={i} className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-primary-500 flex items-center justify-center text-foreground text-xs font-bold flex-shrink-0 mt-0.5">
-                {i + 1}
-              </span>
-              <p className="text-text-secondary text-sm leading-relaxed">{h}</p>
+      {!digest ? (
+        <EmptyDigest />
+      ) : (
+        <DigestView digest={digest} />
+      )}
+    </div>
+  );
+}
+
+function EmptyDigest() {
+  return (
+    <div className="rounded-2xl border-2 border-dashed border-border p-12 text-center">
+      <Sparkles size={24} className="mx-auto text-text-muted mb-3" />
+      <h3 className="text-foreground font-semibold mb-1">No weekly digest yet</h3>
+      <p className="text-text-muted text-sm max-w-md mx-auto">
+        Click &quot;Generate digest&quot; to synthesize this week&apos;s intel,
+        trends, own-post metrics, SEO, and leads into a strategic brief with
+        3–5 priority actions.
+      </p>
+    </div>
+  );
+}
+
+function DigestView({ digest }: { digest: WeeklyDigestRecord }) {
+  const own = digest.ownPerformance;
+  const seo = digest.seoSummary;
+  const leads = digest.leadsSummary;
+
+  return (
+    <div className="space-y-6">
+      {/* Strategic brief */}
+      <section className="bg-card rounded-2xl border border-border p-6">
+        <h2 className="text-xs uppercase tracking-[0.14em] text-text-muted mb-3 font-semibold">
+          Strategic brief
+        </h2>
+        <p className="text-foreground leading-relaxed whitespace-pre-wrap">
+          {digest.strategicBrief ?? "(no narrative generated)"}
+        </p>
+      </section>
+
+      {/* Recommended actions */}
+      {digest.recommendedActions.length > 0 && (
+        <section>
+          <h2 className="text-xs uppercase tracking-[0.14em] text-text-muted mb-3 font-semibold">
+            Recommended actions
+          </h2>
+          <div className="space-y-3">
+            {digest.recommendedActions
+              .slice()
+              .sort((a, b) => a.priority - b.priority)
+              .map((a, i) => {
+                const Icon = a.target_module ? MODULE_ICON[a.target_module] : Target;
+                return (
+                  <div
+                    key={i}
+                    className="bg-card rounded-xl border border-border p-5 flex items-start gap-4"
+                  >
+                    <div
+                      className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold ${
+                        a.priority === 1
+                          ? "bg-primary-500 text-white"
+                          : a.priority === 2
+                          ? "bg-warning-50 text-warning-500 border border-warning-500/20"
+                          : "bg-sidebar text-text-muted border border-border"
+                      }`}
+                    >
+                      P{a.priority}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-foreground font-medium">{a.action}</p>
+                      <p className="text-sm text-text-secondary mt-1">
+                        {a.rationale}
+                      </p>
+                      {a.target_module && (
+                        <Link
+                          href={a.target_module}
+                          className="inline-flex items-center gap-1 text-xs text-primary-500 hover:underline mt-2"
+                        >
+                          <Icon size={12} />
+                          Open {MODULE_LABEL[a.target_module]}
+                          <ArrowRight size={12} />
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </section>
+      )}
+
+      {/* Performance metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {own && (
+          <section className="bg-card rounded-2xl border border-border p-5">
+            <h3 className="text-xs uppercase tracking-wide text-text-muted font-semibold mb-3">
+              Own performance
+            </h3>
+            <p className="text-2xl font-bold text-foreground">
+              {formatNumber(own.reach_this_week)}
+            </p>
+            <p className="text-xs text-text-muted mt-0.5">
+              reach this week ({own.posts_this_week} posts)
+            </p>
+            {own.pct_change !== null && (
+              <p
+                className={`text-sm font-medium mt-2 ${
+                  own.pct_change > 0
+                    ? "text-status-green"
+                    : own.pct_change < 0
+                    ? "text-status-red"
+                    : "text-text-muted"
+                }`}
+              >
+                {own.pct_change > 0 ? "+" : ""}
+                {own.pct_change}% vs prior week
+              </p>
+            )}
+            {own.top_post && (
+              <p className="text-xs text-text-muted mt-3 truncate">
+                Top: {own.top_post.title ?? "(untitled)"} · {formatNumber(own.top_post.reach)}
+              </p>
+            )}
+          </section>
+        )}
+        {seo && (
+          <section className="bg-card rounded-2xl border border-border p-5">
+            <h3 className="text-xs uppercase tracking-wide text-text-muted font-semibold mb-3">
+              SEO
+            </h3>
+            <p className="text-2xl font-bold text-foreground">
+              {seo.top10}
+              <span className="text-sm text-text-muted font-medium"> / {seo.tracked_total}</span>
+            </p>
+            <p className="text-xs text-text-muted mt-0.5">top 10 / tracked</p>
+            <div className="flex items-center gap-3 mt-2 text-sm">
+              <span className="text-status-green">↑ {seo.rising}</span>
+              <span className="text-status-red">↓ {seo.declining}</span>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
-        <div className="bg-card rounded-xl p-5 border border-border/50">
-          <p className="text-text-secondary text-xs">Social Reach</p>
-          <p className="text-3xl font-bold text-foreground mt-1">{(report.socialReach.value / 1000).toFixed(1)}K</p>
-          <p className="text-status-green text-xs font-medium mt-1">+{report.socialReach.change}% vs last week</p>
-        </div>
-        <div className="bg-card rounded-xl p-5 border border-border/50">
-          <p className="text-text-secondary text-xs">Engagements</p>
-          <p className="text-3xl font-bold text-foreground mt-1">{report.engagement.value.toLocaleString()}</p>
-          <p className="text-status-green text-xs font-medium mt-1">+{report.engagement.change}% vs last week</p>
-        </div>
-        <div className="bg-card rounded-xl p-5 border border-border/50">
-          <p className="text-text-secondary text-xs">New Followers</p>
-          <p className="text-3xl font-bold text-foreground mt-1">{report.newFollowers.value}</p>
-          <p className="text-status-green text-xs font-medium mt-1">+{report.newFollowers.change}% vs last week</p>
-        </div>
-      </div>
-
-      {/* Top Post */}
-      <div className="bg-card rounded-xl p-6 border border-primary-500/30 mb-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-primary-500 mb-3">Top Performing Post</h2>
-        <p className="text-foreground text-lg font-semibold">{report.topPost.title}</p>
-        <div className="flex items-center gap-4 mt-2 text-sm text-text-secondary">
-          <span>{report.topPost.platform}</span>
-          <span>·</span>
-          <span>{report.topPost.reach.toLocaleString()} reach</span>
-          <span>·</span>
-          <span className="text-status-green">{report.topPost.engagement} engagement</span>
-        </div>
-      </div>
-
-      {/* Platform Performance */}
-      <div className="bg-card rounded-xl p-6 border border-border/50 mb-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-4">Platform Performance</h2>
-        <div className="space-y-3">
-          {report.platformPerformance.map((p) => (
-            <div key={p.platform} className="flex items-center justify-between py-2 border-b border-border/20 last:border-0">
-              <span className="text-foreground text-sm font-medium w-24">{p.platform}</span>
-              <span className="text-text-secondary text-sm">{p.posts} posts</span>
-              <span className="text-text-secondary text-sm">{p.reach > 0 ? `${(p.reach / 1000).toFixed(1)}K reach` : "No reach"}</span>
-              <span className={`text-sm font-medium ${p.engagement !== "0%" ? "text-status-green" : "text-text-muted"}`}>{p.engagement} eng.</span>
-              <span className={`text-xs ${p.trend === "up" ? "text-status-green" : p.trend === "down" ? "text-status-red" : "text-text-muted"}`}>
-                {p.trend === "up" ? "↑ Trending up" : p.trend === "down" ? "↓ Declining" : "→ Stable"}
-              </span>
+            {seo.avg_position !== null && (
+              <p className="text-xs text-text-muted mt-2">
+                Avg pos {seo.avg_position}
+                {seo.avg_position_change !== null &&
+                  ` (${seo.avg_position_change > 0 ? "+" : ""}${seo.avg_position_change})`}
+              </p>
+            )}
+          </section>
+        )}
+        {leads && (
+          <section className="bg-card rounded-2xl border border-border p-5">
+            <h3 className="text-xs uppercase tracking-wide text-text-muted font-semibold mb-3">
+              Leads
+            </h3>
+            <p className="text-2xl font-bold text-foreground">
+              {leads.total_active}
+            </p>
+            <p className="text-xs text-text-muted mt-0.5">active in pipeline</p>
+            <div className="text-sm text-text-muted mt-2 space-y-0.5">
+              <p>{leads.new_warm} new warm</p>
+              {leads.needs_followup > 0 && (
+                <p className="text-status-yellow">{leads.needs_followup} need follow-up</p>
+              )}
+              {leads.converted_this_week > 0 && (
+                <p className="text-status-green">+{leads.converted_this_week} converted</p>
+              )}
             </div>
-          ))}
-        </div>
+          </section>
+        )}
       </div>
 
-      {/* Activity Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-        <div className="bg-card rounded-xl p-4 border border-border/50 text-center">
-          <p className="text-text-secondary text-xs">Leads Generated</p>
-          <p className="text-xl font-bold text-foreground mt-1">{report.leadsGenerated}</p>
-        </div>
-        <div className="bg-card rounded-xl p-4 border border-border/50 text-center">
-          <p className="text-text-secondary text-xs">Ad Spend</p>
-          <p className="text-xl font-bold text-foreground mt-1">{report.adSpend > 0 ? formatCurrency(report.adSpend, currency) : "Paused"}</p>
-        </div>
-        <div className="bg-card rounded-xl p-4 border border-border/50 text-center">
-          <p className="text-text-secondary text-xs">SEO Keywords Up</p>
-          <p className="text-xl font-bold text-status-green mt-1">{report.seoKeywordsImproved}</p>
-        </div>
-        <div className="bg-card rounded-xl p-4 border border-border/50 text-center">
-          <p className="text-text-secondary text-xs">Content Published</p>
-          <p className="text-xl font-bold text-primary-500 mt-1">{report.contentPublished}</p>
-        </div>
-      </div>
+      {/* Top competitor moves */}
+      {digest.topCompetitorMoves.length > 0 && (
+        <section className="bg-card rounded-2xl border border-border p-5">
+          <h2 className="text-xs uppercase tracking-[0.14em] text-text-muted mb-3 font-semibold">
+            Top competitor moves
+          </h2>
+          <ul className="space-y-3">
+            {digest.topCompetitorMoves.map((m) => (
+              <li key={m.intel_card_id} className="text-sm">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="text-foreground font-semibold">
+                    {m.competitor_name}
+                  </span>
+                  <span className="text-text-muted text-xs">·</span>
+                  <span className="text-text-muted text-xs">
+                    {m.platform} {m.content_type}
+                  </span>
+                  {m.multiplier !== null && (
+                    <span className="text-xs font-mono text-primary-500">
+                      {m.multiplier.toFixed(1)}x
+                    </span>
+                  )}
+                </div>
+                <p className="text-text-secondary">{m.why_notable}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
-      {/* Recommendations */}
-      <div className="bg-card rounded-xl p-6 border border-border/50">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-4">PULSE Recommendations for Next Week</h2>
-        <div className="space-y-3">
-          {report.recommendations.map((rec, i) => (
-            <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-background">
-              <span className="text-primary-500 text-sm font-bold mt-0.5">{i + 1}.</span>
-              <p className="text-text-secondary text-sm leading-relaxed">{rec}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Winning formats */}
+      {digest.winningFormats.length > 0 && (
+        <section className="bg-card rounded-2xl border border-border p-5">
+          <h2 className="text-xs uppercase tracking-[0.14em] text-text-muted mb-3 font-semibold">
+            Formats winning across brands
+          </h2>
+          <ul className="space-y-3">
+            {digest.winningFormats.map((f, i) => (
+              <li key={i} className="text-sm flex items-start gap-3">
+                <span className="text-sm font-mono text-primary-500 shrink-0 font-semibold">
+                  {f.multiplier}x
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-foreground font-medium">{f.format}</p>
+                  <p className="text-text-muted text-xs mt-0.5">{f.evidence}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <p className="text-xs text-text-muted text-right">
+        Generated {new Date(digest.generatedAt).toLocaleString()} · {digest.generatorModel}
+      </p>
     </div>
   );
 }

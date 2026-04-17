@@ -137,8 +137,36 @@ export async function getPlatforms(
 }
 
 export async function getSuggestions(
-  _tenantSlug: string
+  tenantSlug: string
 ): Promise<Suggestion[]> {
-  // Suggestions will be rule-based once the insight engine is designed.
-  return [];
+  // Reads from the most recent weekly_digest's recommended_actions.
+  // Regenerating the digest via /weekly-report refreshes this.
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("weekly_digests")
+    .select("recommended_actions")
+    .eq("tenant_slug", tenantSlug)
+    .order("week_of", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const actions = ((data?.recommended_actions ?? []) as Array<{
+    priority: number;
+    action: string;
+    target_module: string | null;
+    rationale: string;
+  }>).sort((a, b) => a.priority - b.priority);
+
+  return actions.slice(0, 4).map((a, i) => ({
+    id: `digest-${i}`,
+    title: a.action,
+    description: a.rationale,
+    impact:
+      a.priority === 1
+        ? "urgent"
+        : a.priority === 2
+        ? "high_impact"
+        : "opportunity",
+    targetModule: a.target_module ?? "/weekly-report",
+  }));
 }

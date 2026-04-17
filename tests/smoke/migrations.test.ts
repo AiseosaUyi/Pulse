@@ -93,4 +93,12 @@ describe("migrations + seed smoke", () => {
       .limit(1);
     expect(error).toBeNull();
   });
+
+  it("weekly_digests table exists with expected columns", async () => {
+    const { error } = await admin
+      .from("weekly_digests")
+      .select("id, tenant_slug, week_of, strategic_brief, top_competitor_moves, winning_formats, recommended_actions, own_performance, seo_summary, leads_summary, generator_model, generated_at")
+      .limit(1);
+    expect(error).toBeNull();
+  });
 });
