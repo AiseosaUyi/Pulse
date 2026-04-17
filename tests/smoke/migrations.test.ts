@@ -85,4 +85,12 @@ describe("migrations + seed smoke", () => {
       .limit(1);
     expect(error).toBeNull();
   });
+
+  it("blog_posts table exists with expected columns", async () => {
+    const { error } = await admin
+      .from("blog_posts")
+      .select("id, tenant_slug, title, target_keyword, secondary_keywords, meta_description, outline, content, word_count, status, generator_model")
+      .limit(1);
+    expect(error).toBeNull();
+  });
 });
