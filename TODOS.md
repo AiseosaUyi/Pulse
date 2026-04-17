@@ -1,94 +1,128 @@
-# TODOS
+# PULSE — Build Roadmap
 
-## Feature 1: Own-content analytics (CSV + screenshot intake)
+Organized by phase. Each item has a scope estimate in CC+gstack time and dependencies.
+Check items off as they ship. Phases are **not rigid** — pull forward if a later
+item unblocks something earlier.
 
-**What:** Import own-post metrics for Gruve/Sippy across IG, TikTok, Twitter, LinkedIn via CSV export (Meta/TikTok/LinkedIn Business Suites) and screenshot + Claude vision (Twitter — no export since 2023). New `own_post_metrics` table, new `/own-analytics` page, uploads into `intel-screenshots` Supabase Storage bucket.
+---
 
-**Why:** PULSE currently infers "social reach" from `posts.reach`, which is seeded once. Live ingestion of weekly metrics per post gives Abas a true current-state dashboard for Gruve/Sippy's own performance — not just competitors'.
+## P0 — Operational / Security (do ASAP)
 
-**How:** See the draft architecture deferred from the 2026-04-17 intelligence-expansion plan. Parent file: `docs/plan-intelligence-expansion.md` (original v1, now reduced to F2 only). Estimated 14 files, 1 migration, 1 Storage bucket.
+- [ ] **Rotate Supabase DB password** — pasted in chat earlier. Supabase → Project Settings → Database → Reset password. (~2 min)
+- [ ] **Rotate AI Gateway API key** — `vck_7UDS...` pasted in chat. Vercel dashboard → AI Gateway → API Keys → revoke + create new → `vercel env add AI_GATEWAY_API_KEY production` for all 3 envs → `vercel env pull .env.local`. (~5 min)
+- [ ] **Restore SEED_* vars in `.env.local`** — got wiped by `vercel env pull`. Append `SEED_EMAIL`, `SEED_PASSWORD`, `SEED_USERNAME`, `SEED_DISPLAY_NAME`. (~1 min)
 
-**Context:** Deferred from the April 17 plan-eng-review when scope was split to ship F2 (brief generator) first. F1 is the next plan in sequence.
+---
 
-**Depends on / blocked by:** F2 landing. Reuses the AI Gateway wrapper from F2.
+## P1 — F2 Polish (close the loop on what just shipped)
 
-## Feature 3: Viral spotting (cross-brand + TikTok Creative Center + hashtag scout)
+- [ ] **Overwrite placeholder brand voice** — I wrote a placeholder for Gruve during smoke testing. Visit `/settings/brand-voice` → overwrite with the real Gruve voice, then do Sippy too. Run an on-demand "Steal This" to verify output quality with the real voice. (~30 min manual per tenant)
+- [ ] **Add `Badge` variants `approved` + `dismissed`** — currently using `active` (green) and `gap` (dashed) as visual substitutes. Proper named variants make the semantics clearer. `src/components/ui/Badge.tsx`. (~10 min)
+- [ ] **Dismiss undo toast** — design spec called for 5s undo after dismissal. Currently dismiss is hard (soft-delete, but no undo UI). Add toast + undo action that flips `dismissed_at` back to null. (~45 min)
+- [ ] **Status filter on `/content-briefs`** — design spec had filter dropdown as secondary hierarchy. Lets Priye focus on drafts when approving, or see only approved when shooting. (~30 min)
+- [ ] **"Show dismissed" toggle on `/content-briefs`** — dismissed briefs are currently hidden forever in the UI (but preserved in DB for prompt tuning). Add a toggle so the user can review what got dismissed. (~15 min)
+- [ ] **Add `/settings/brand-voice` as a nav item under SOCIAL or INTELLIGENCE in the sidebar** — entry points exist but no direct nav item. Per user feedback: "there is no way for me to click and access it myself". Could sit alongside Content Briefs. (~10 min)
 
-**What:** Surface `cross_brand` patterns (already exists but not in UI), scrape TikTok Creative Center trending page weekly, and accept manual hashtag-scout screenshots. New `trend_scouts` table, rebuild `/viral-trends` page off real data, one new Vercel Cron.
+---
 
-**Why:** Once F2 turns competitor cards into briefs, the next ceiling is "what's going viral in our niche that our tracked competitors haven't touched yet." Viral spotting feeds the brief generator with broader signal.
+## P2 — Quick Wins (validates F2 investment)
 
-**How:** See the draft architecture deferred from the 2026-04-17 intelligence-expansion plan. Scrape TikTok Creative Center public page (ToS grey, Apify fallback ~$1/mo). Estimated 12 files, 1 migration, 1 cron.
+- [ ] **AI cost dashboard at `/settings/ai-usage`** — reads from `ai_call_log` (RLS already in place per migration 012). Shows per-tenant call volume, token counts, cache hit rate, monthly cost to date. Single Server Component, one aggregate query. Makes AI spend transparent. (~2 hrs)
+- [ ] **Purple→maroon cleanup on `/ai-content`, `/weekly-report`, `/viral-trends`, `/platform-score`, `/seo-tracker/topical-map`** — these five pages still use `accent-purple`/`gradient-purple-pink` which drifts from Gruve maroon per `DARK-THEME.md`. Same cleanup I did on `/content-briefs` during F2. (~30 min per page × 5 = 2.5 hrs, can batch)
 
-**Context:** Deferred from April 17 plan-eng-review. Must land AFTER F2 validates the brief generator — otherwise viral ideas have nowhere useful to go.
+---
 
-**Depends on / blocked by:** F2 landing AND F2 brief-generator quality validated (Priye ratings ≥ 3/5 over 10 briefs). Reuses the AI Gateway wrapper from F2.
+## P3 — Features (priority order: F3 → F1)
 
-## Per-tenant AI cost dashboard
+### F3 — Viral spotting
 
-**What:** A simple `/settings/ai-costs` page showing the tenant's AI call volume, token counts, cache hit rate, and cost-to-date. Reads from `ai_call_log` (RLS already enabled for tenant reads per migration 012).
+- [ ] **Migration 013: `trend_scouts` table** — tenant-scoped, RLS-gated, fields per plan spec. (~15 min)
+- [ ] **Cross-brand pattern UI on `/viral-trends`** — rebuild page to show patterns detected by existing `src/lib/services/cross-brand.ts` (already wired, just unsurfaced). (~2 hrs)
+- [ ] **TikTok Creative Center scraper** — public URL, HTML parse, weekly cron to seed `trend_scouts`. Fallback to Apify if TikTok blocks. (~3 hrs + manual testing)
+- [ ] **Manual hashtag scout form** — screenshot + AI vision extraction, same pipeline as F2 manual intake. (~2 hrs)
+- [ ] **Trend analysis AI call** — Claude Haiku analyzes each trend_scout row: why viral, applicability, adaptation suggestion. (~1 hr)
+- [ ] **Cron job `scrape-trends`** — Saturday 22:00 UTC, runs before brief generation. (~1 hr)
+- [ ] **Extend smoke + RLS tests for trend_scouts** — same pattern as F2. (~1 hr)
 
-**Why:** Transparency into AI spend as usage grows. Also exposes prompt-cache hit rate, which is the primary lever for cost control.
+### F1 — Own-content analytics
 
-**How:** Single Server Component page, one aggregated query. No new schema, no new auth wiring — RLS is already in place.
+- [ ] **Migration 014: `own_post_metrics` table + `intel-screenshots` Storage bucket** — per plan spec. (~30 min)
+- [ ] **CSV parser** — per-platform header maps (Instagram/TikTok/LinkedIn Business Suite exports). Tolerant of header drift. (~2 hrs)
+- [ ] **Screenshot vision extractor** — same Claude Haiku pipeline as F2 but for own-post metrics. (~1 hr)
+- [ ] **`/own-analytics` page** — per-platform summary + upload flows + recent metrics table. (~3 hrs)
+- [ ] **Extend `/dashboard` socialReach to aggregate real data** — today pulls from seed posts; swap to `own_post_metrics` once populated. (~1 hr)
+- [ ] **Extend smoke + RLS tests for own_post_metrics**. (~1 hr)
 
-**Context:** `ai_call_log` was created with tenant-read RLS specifically to enable this later without a second migration. Low lift. Waiting on justified demand (i.e., the team actually wonders about cost).
+---
 
-**Depends on / blocked by:** F2 landing so there's data to show.
+## P4 — Hydrate remaining mock pages
 
-## Brand voice inference from existing posts
+These are routes that already exist in nav but still show fake data.
 
-**What:** One-shot LLM feature that reads the tenant's last 20 published posts (from `posts` table) and auto-populates the `brand_voice` editor with tone, audience, do/don't list, and example posts. User reviews + approves before saving.
+- [ ] **`/ai-content` — switch off mocks** — currently uses `mockContentSuggestions` and `mockCalendar`. Suggestions should read from real `content_briefs` (approved status). Calendar needs a `scheduled_posts` table (tracks which briefs are scheduled to post on which day). (~3 hrs, needs new migration)
+- [ ] **`/content-vault` — switch off mocks** — saved/trending content. Needs `saved_content` table + UI to save intel_cards/briefs. (~3 hrs, needs new migration)
+- [ ] **`/platform-score` — derive from real data** — currently mock scores. Compute from `tenants.settings.platforms` (connected ratio, engagement rates) + `posts` (post cadence). (~2 hrs)
+- [ ] **`/weekly-report` — wait for insight engine (P5)** — blocked until insight engine ships. Placeholder until then. (dep: P5)
+- [ ] **`NotificationBell` — switch off mocks** — needs `notifications` table with read/unread state. Or: derive from recent `engagement_items` + `intel_cards`. (~2 hrs)
+- [ ] **`src/lib/services/seo.ts` — finish SERP preview migration** — partial mock still. (~1 hr)
 
-**Why:** Writing a brand voice doc from scratch takes ~30 minutes per tenant. AI inference from real published content grounds the voice in what the brand actually does, not what the founder thinks it does.
+---
 
-**How:** New action `inferBrandVoice(tenantSlug)` → gpt-4o or Claude Sonnet reads 20 posts → returns zod-validated `BrandVoice` shape → editor loads it pre-filled. Cost: ~$0.03 one-time per tenant.
+## P5 — Insight Engine (unlocks weekly digest + suggestions)
 
-**Context:** Flagged during 2026-04-17 plan-eng-review. Ambitious quality-of-life feature. Not a v1 blocker — manual brand voice is the baseline.
+- [ ] **Design the engine**: rules-based vs LLM synthesis vs hybrid. Single design doc. (~2 hrs planning)
+- [ ] **`getWeeklyDigest` synthesis** — feed week's `intel_cards`, `leads`, `posts` metrics into structured digest output (topCompetitorMoves, winningFormats, recommendedActions, strategicBrief). (~3 hrs after design)
+- [ ] **`getSuggestions` rules** — dashboard suggestions list. Today returns `[]`. (~2 hrs after design)
+- [ ] **Hook to weekly cron** — digest generation Saturday, after brief generation. (~30 min)
 
-**Depends on / blocked by:** F2 landing with manual brand voice editor. Tenant needs ≥10 real posts in `posts` table for inference quality.
+---
 
-## Weekly email digest of briefs (Resend)
+## P6 — Testing + Infra Hardening
 
-**What:** Sunday 08:00 UTC email to each tenant member summarizing the week's generated briefs with links into `/content-briefs`. Resend free tier (3K emails/mo) covers this forever at current scale.
+- [ ] **Playwright E2E setup** — committed to in eng review. `playwright.config.ts`, `tests/e2e/`, CI wiring. First test: login → `/content-briefs` → see brief. (~1 day)
+- [ ] **Cron integration test** — mocked AI Gateway, assert route handler auth + idempotency + empty-state behavior. (~2 hrs)
+- [ ] **Per-service integration tests** — cookie-stubbed `next/headers` mock to call service functions under test. Covers `getLeads`, `createLead`, etc. (~4 hrs — non-trivial mock pattern)
+- [ ] **Eval suite for brief generator** — 5-10 seed briefs + quality rubric. Baseline for prompt-change regression detection. (~3 hrs, depends on first week of real-use data)
+- [ ] **Harden Vercel Cron auth** — replace `CRON_SECRET` shared secret with Vercel's signed-request verification via `x-vercel-signature`. (~1 hr)
 
-**Why:** Abas doesn't live in PULSE. A Sunday-morning email is a push notification into his existing inbox workflow — zero friction to see "here's what the team should post this week."
+---
 
-**How:** Extend `/api/cron/generate-briefs` to also send emails after insert (or new cron `/api/cron/weekly-digest` at 08:00 Sunday). Resend SDK already implied by existing `docs/API-PRICING-GUIDE.md` — free tier, simple to add.
+## P7 — Platform / Ops
 
-**Context:** Flagged during 2026-04-17 plan-eng-review. Distribution channel, not a feature. Ship F2 in-app UX first, validate briefs are useful, then add email.
+- [ ] **Custom domain `pulse.gruve.events`** — DNS + Vercel domain config. (~30 min config + DNS propagation)
+- [ ] **`@vercel/analytics` + `@vercel/speed-insights`** — install + wire into root layout. Zero-config Core Web Vitals. (~15 min)
+- [ ] **Error monitoring** — Sentry or Vercel's built-in. Captures server-action failures, AI Gateway timeouts. (~1 hr)
+- [ ] **Resend wiring for email digests** — Sunday morning email summarizing week's briefs. (~2 hrs, depends on P5)
+- [ ] **Brand voice inference from existing posts** — Claude reads last 20 published posts, auto-fills `brand_voice` shape. One-click onboarding. (~2 hrs, optional polish)
 
-**Depends on / blocked by:** F2 landing + brief-generator quality validated.
+---
 
-## Harden Vercel Cron auth beyond CRON_SECRET
+## Total effort estimate
 
-**What:** Replace the shared-secret `Authorization: Bearer ${CRON_SECRET}` check in `/api/cron/*` routes with Vercel's signed-request verification via `x-vercel-signature` header and public-key check.
+| Phase | CC+gstack time | Human team equivalent |
+|---|---|---|
+| P0 — Ops/security | ~10 min | N/A (user action) |
+| P1 — F2 polish | ~2-3 hrs | ~1 week |
+| P2 — Quick wins | ~4-5 hrs | ~1.5 weeks |
+| P3 — F3 viral spotting | ~10 hrs | ~2 weeks |
+| P3 — F1 own analytics | ~10 hrs | ~2 weeks |
+| P4 — Mock hydration | ~12 hrs | ~2.5 weeks |
+| P5 — Insight engine | ~8 hrs | ~1.5 weeks |
+| P6 — Testing/infra | ~15 hrs | ~2 weeks |
+| P7 — Platform/ops | ~5 hrs | ~1 week |
+| **Total** | **~70 hrs** | **~14 weeks human** |
 
-**Why:** Long-lived shared secret is a weak link if the env var ever leaks (e.g., accidental commit, bad CI). Signed requests eliminate the replay/leak risk.
+All figures assume CC+gstack pace. Real calendar time for the founder is gated by decision-making speed, not code speed.
 
-**How:** Vercel Cron signs requests; verification is a short ES256 public-key check in the route handler.
+---
 
-**Context:** Flagged during 2026-04-17 plan-eng-review. Post-MVP hardening, not a v1 blocker. One cron job currently, so impact is bounded.
+## Suggested build order
 
-**Depends on / blocked by:** Nothing.
-
-## Design the insight/rules engine powering weekly digest + suggestions
-
-**What:** `getWeeklyDigest()` returns `null` and `getSuggestions()` returns `[]`. The UI already handles the empty states gracefully. These two functions need a rules engine (or LLM call) that synthesizes structured strategic recommendations from the underlying data.
-
-**Why:** Without this, the Intelligence Feed sidebar shows "Not enough data for a digest yet" and the dashboard suggestions list is blank — correct but unhelpful.
-
-**How:** Decide between (a) deterministic rules over `intel_cards` + `leads` + `posts` metrics, (b) LLM summarization via AI Gateway, or (c) hybrid. Rules engine output needs to fit `WeeklyDigest` (topCompetitorMoves, winningFormats, recommendedActions, strategicBrief) and `Suggestion[]` types.
-
-**Context:** All source data is now in Supabase after the 2026-04-17 migration batch, so the engine has a coherent input to read from.
-
-## Extend integration tests to service functions
-
-**What:** `tests/integration/rls.test.ts` covers RLS cross-tenant isolation for leads via a directly-authed supabase-js client (sign-in → ghost tenant → read/write assertions). Still missing: tests that call the actual service functions in `src/lib/services/*.ts` — those go through `createClient()` from `src/lib/supabase/server.ts` which depends on `next/headers` cookies.
-
-**Why:** The RLS test proves the DB is safe. Service-function tests would additionally catch validation-layer regressions (enum drift, type errors, tenant-arg mishandling in the service code itself).
-
-**How:** `vi.mock("next/headers")` with a cookie store pre-loaded with the @supabase/ssr auth cookie (base64 JSON of the session), or refactor `server.ts` to accept an optional cookie-store arg so tests can inject directly.
-
-**Context:** Current RLS test validates the contract end-to-end for one module (leads). Pattern can be extended table-by-table if service-level coverage is desired.
-
+1. **Today/tomorrow:** finish P0 (security hygiene) + P1 polish (close F2 loop cleanly)
+2. **This week:** P2 quick wins (AI cost dashboard + color cleanup). Demonstrates F2 ROI, tidies up visual drift.
+3. **Next week:** P3 F3 (viral spotting) — biggest net-new capability, the "knows what's trending" leap.
+4. **Parallel to P3:** P6 Playwright E2E and cron test (testing debt from F2).
+5. **After F3 validates:** P3 F1 (own analytics) — large feature but lower urgency.
+6. **Alongside F1:** P4 mock hydration (picks off routes one by one).
+7. **After F1:** P5 insight engine — enables weekly digest + dashboard suggestions.
+8. **Ongoing:** P7 platform/ops items. Custom domain, analytics, Resend — pull in when ready.
