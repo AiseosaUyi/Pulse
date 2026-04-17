@@ -6,86 +6,104 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 pnpm dev        # Start dev server (localhost:3000)
-pnpm build      # Production build (also runs TypeScript check)
+pnpm build      # Production build (also runs the TypeScript check)
 pnpm lint       # ESLint
+pnpm db:seed    # One-time founder + Gruve/Sippy seed (reads SEED_* + SUPABASE_* from .env.local)
 ```
 
-No test runner is configured yet. Vitest + React Testing Library planned.
+DB migrations live in `supabase/migrations/`, named `NNN_*.sql`. Apply via Supabase SQL Editor (paste + run) or `supabase db push` after `supabase login --token <pat>` and `supabase link --project-ref <ref>`. No test runner configured yet.
 
-## Architecture
+## Tech stack
 
-### Multi-Tenancy (Cookie-Based)
+- Next.js 16 App Router, Turbopack, React 19, TypeScript
+- Tailwind v4 — palette + scale defined in `globals.css` `@theme` block, no `tailwind.config`
+- Supabase: `@supabase/ssr` for SSR auth + cookies, `@supabase/supabase-js` for service-role
+- shadcn-style primitives at `src/components/ui/` (Button uses CVA + radix Slot, Input/Textarea/Label/Card)
+- Lucide React for icons
+- Deployed to Vercel (push to `main` triggers deploy)
 
-Tenant switching uses a browser cookie (`tenant=gruve`). Server Components read `cookies()` to get the current tenant slug. The `TenantSwitcher` client component sets the cookie via `document.cookie` and calls `router.refresh()`.
+Required env vars (and Vercel project settings): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Local-only: `SEED_*` for the seed script.
 
-No React Context for tenancy. This preserves Server Components for async data fetching. Every page that reads tenant-specific data follows this pattern:
+## Authentication & multi-tenancy
 
-```typescript
-const cookieStore = await cookies();
-const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+The app is gated by Supabase Auth; tenancy is real (not just a UI cookie).
+
+**Three Supabase clients** at `src/lib/supabase/`:
+- `server.ts createClient()` — SSR client for Server Components / Actions / Route Handlers, reads + writes auth cookies via `next/headers`
+- `client.ts createClient()` — browser client for Client Components
+- `admin.ts createAdminClient()` — service-role, bypasses RLS, server-only (cross-tenant queries, scripts)
+
+Every client is a **factory function** — never instantiated at module load (a top-level `createClient()` call breaks Vercel page-data collection if env vars aren't injected at that phase).
+
+**`src/proxy.ts`** is the Next 16 routing middleware (NOT `middleware.ts`). It calls `updateSession()` from `src/lib/supabase/middleware.ts` on every request: refreshes the auth cookie, redirects unauthed users to `/login?next=<pathname>`, and bounces authed users away from `/login` and `/signup` to `/dashboard`. Static assets and `/fonts/` are excluded from the matcher.
+
+**Tenant model.** `tenants` table keyed by slug; `memberships(user_id, tenant_slug, role)` links users to tenants with `owner | admin | member`. `invitations` carry an email + role + token; the `accept_invitation(token)` RPC validates and creates the membership. RLS uses the `is_tenant_member(slug)` and `tenant_role(slug)` helper functions defined in `002_foundation.sql` — every tenant-scoped table FKs to `tenants(slug)` and gates with these helpers.
+
+**Tenant switching** still uses the `tenant=<slug>` cookie. Server Components call `getCurrentTenant()` from `src/lib/auth.ts`, which validates the cookie against the user's actual memberships and falls back to the first one. After login the action sets the cookie to the user's first membership.
+
+**Auth helpers** in `src/lib/auth.ts`: `getCurrentUser()`, `requireUser()` (redirects), `getUserTenants()`, `getCurrentTenant()`. Use these instead of reading `auth.getUser()` directly.
+
+## Route groups
+
+```
+src/app/
+├── layout.tsx            ← minimal root: html/body, ThemeScript, fonts
+├── page.tsx              ← redirects to /dashboard
+├── proxy.ts              ← auth gate (lives at src/proxy.ts not repo root)
+├── (auth)/               ← login, signup — own minimal layout, no sidebar
+│   ├── login/
+│   └── signup/
+└── (app)/                ← all protected pages — sidebar + auth check
+    ├── layout.tsx        ← runs requireUser(), getUserTenants(), renders sidebar
+    ├── settings/
+    ├── (overview)/       (dashboard, weekly-report)
+    ├── (content)/        (content-vault)
+    ├── (social)/         (engagement, platform-score, viral-trends, ai-content, post-history)
+    ├── (growth)/         (leads, ads-tracker)
+    └── (intelligence)/   (intel-feed, content-briefs, seo-tracker/*, competition)
 ```
 
-### Data Layer Pattern
+Route groups don't appear in URLs. The `(app)` group exists so the auth pages don't inherit the sidebar.
+
+## Data layer pattern
 
 ```
 lib/types/[module].ts      → TypeScript interfaces
-lib/data/mock-[module].ts  → Mock data (Record<string, T> keyed by tenant slug)
+lib/data/mock-[module].ts  → Mock data, Record<string, T> keyed by tenant slug
 lib/services/[module].ts   → Async functions returning Promise<T>
 lib/actions/[module].ts    → Server Actions ("use server" at top)
 ```
 
-Components call service functions, never import mock data directly. When Supabase connects, swap the service implementation. Components and types stay the same.
+Components call services, never mock data directly. Services that talk to Supabase use the **server client inside the function** (so RLS applies to the logged-in user). Cross-tenant aggregations (e.g. `cross-brand.ts`) use the admin client.
 
-Mock data uses `Record<string, T>` keyed by `"gruve" | "sippy"`. Service functions accept `tenantSlug: string` and default to empty arrays/null for unknown slugs.
+Most modules still use mock data. The `intel-feed` module is the first to be Supabase-backed (`competitors`, `intel_cards`, `content_briefs` tables, migration `001_intelligence_feed.sql`). Convert the rest by adding a migration + rewriting the service to query Supabase, keeping types and components unchanged.
 
-### Route Groups
+## Theming
 
-- `(overview)` — Dashboard, Weekly report
-- `(content)` — Content vault
-- `(social)` — Engagement inbox, Platform score, Viral trends, AI content engine, Post history
-- `(growth)` — Leads & outreach, Ads tracker
-- `(intelligence)` — Intel feed, Content briefs, SEO tracker (+ sub-routes), Competition (legacy, being absorbed into intel feed)
+Light is the default (`ThemeScript` in root layout sets `class="dark"` only when `localStorage["pulse-theme"] === "dark"`, before first paint). Users opt into dark via Settings → Appearance.
 
-Route groups are organizational only (parenthesized folders don't appear in URLs). `/` redirects to `/dashboard`.
+The Gruve light palette and full token scale are defined in `globals.css` `@theme`. The `html.dark` block overrides every relevant token to dark equivalents — so utilities like `bg-card`, `text-gray-1100`, `bg-primary-50`, `border-white-200` are all theme-aware automatically.
 
-### Intelligence Feed Module (newest)
+**Dark mode keeps Gruve red as the brand color** (not purple). See `DARK-THEME.md` for the full dark palette spec and the rules for picking theme-aware classes.
 
-The intelligence feed is the competitive intelligence layer. Key files:
-- `lib/types/intelligence.ts` — Competitor, IntelCard, ContentBrief, MorningBriefItem, WeeklyDigest
-- `lib/data/mock-intelligence.ts` — Mock competitor data for Gruve (Tix Africa, Nairabox, Sofar Sounds) and Sippy (Sky Lounge, Hard Rock, Drinks.ng)
-- `lib/services/intelligence.ts` — getIntelFeed, getMorningBrief, getWeeklyDigest, getCompetitors
-- `lib/actions/intelligence.ts` — Server Actions for form submission and content brief generation
-- `components/intelligence/` — IntelCard (client component with "Steal This" button), MorningBriefing, WeeklyDigest
+**Two recurring footguns:**
+1. `text-white` is *not* theme-aware (Tailwind built-in = literal `#ffffff`). Use `text-foreground` for body text on cards. `text-white` is correct only when the background is colored (maroon button, gradient pill, etc.).
+2. `bg-white` is also literal. Use `bg-card` for theme-tracking surfaces.
 
-The intel feed page uses a 3-panel layout: sidebar (existing) + center feed + right weekly digest (hidden below lg breakpoint).
+## Sidebar navigation
 
-### Sidebar Navigation
+Items in `lib/nav-config.ts` (typed). Icon names map to Lucide imports in `components/sidebar/SidebarNavItem.tsx` via `iconMap`. To add a nav item: edit nav-config and add the Lucide icon to the import + the iconMap.
 
-Navigation items are defined in `lib/nav-config.ts` as typed data. Icons are mapped in `components/sidebar/SidebarNavItem.tsx` via an `iconMap` record. When adding a new nav item, add both the entry in nav-config.ts AND the Lucide icon import + map entry in SidebarNavItem.tsx.
+## Design system
 
-## Tech Stack
-
-- Next.js 16 (App Router, Server Components, Turbopack)
-- Tailwind CSS v4 (CSS `@theme` in globals.css, no tailwind.config file)
-- Inter font via next/font
-- Lucide React for icons
-- Supabase JS client installed but not connected (mock data layer for v1)
-- Deployed to Vercel (push to main triggers deployment)
-
-## Design System
-
-- **Theme:** Dark mode only. Background `#0a0a0f`, cards `#1a1a24`, sidebar `#111118`
-- **Accents:** Purple-to-pink gradient (`#7c3aed` → `#ec4899`)
-- **Typography:** Inter — 36px/800 display, 24px/700 h1, 14px/600 h2 uppercase, 14px/400 body, 11px/500 caption
-- **Spacing:** 4px base grid (4, 8, 12, 16, 24, 32px)
-- **Colors:** All defined as CSS custom properties in globals.css `:root`, mapped to Tailwind via `@theme inline`
-- **Badge:** Single `Badge` component with variant prop. Add new variants to the `variantStyles` record in `components/ui/Badge.tsx`
-- **Interactions:** 150ms ease hover transitions, 2px purple focus ring, 1.5s skeleton pulse
+- **Light** — `GRUVE-DESIGN.md` is the canonical spec (maroon `#ad112c`, Satoshi @font-face, pill buttons, rounded-lg inputs, rounded-2xl cards, blue focus rings, no in-app gradients).
+- **Dark** — `DARK-THEME.md` documents the dark palette, surface hierarchy, and conversion rules.
+- **Logo** — `components/ui/Logo.tsx`. Bold italic; flat maroon in light, `bg-clip-text` red gradient in dark.
+- **Fonts** — `@font-face` references `/public/fonts/Satoshi-{Regular,Medium,Bold,Black}.woff2`. Files aren't in the repo; falls back to system sans-serif until they're dropped in.
 
 ## Skill routing
 
-When the user's request matches an available skill, ALWAYS invoke it using the Skill
-tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
+When the user's request matches an available skill, ALWAYS invoke it using the Skill tool as your FIRST action. Do NOT answer directly or use other tools first.
 
 Key routing rules:
 - Product ideas, "is this worth building", brainstorming → invoke office-hours
