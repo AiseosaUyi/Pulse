@@ -1,14 +1,12 @@
 # TODOS
 
-## Backfill per-service integration tests with RLS
+## Extend integration tests to service functions
 
-**What:** Vitest is set up (`pnpm test`). `tests/smoke/migrations.test.ts` covers DB-level migration + seed presence for all 6 modules. Still missing: per-service integration tests that exercise the actual service functions (`getLeads`, `createLead`, etc.) under RLS as an authed tenant member.
+**What:** `tests/integration/rls.test.ts` covers RLS cross-tenant isolation for leads via a directly-authed supabase-js client (sign-in → ghost tenant → read/write assertions). Still missing: tests that call the actual service functions in `src/lib/services/*.ts` — those go through `createClient()` from `src/lib/supabase/server.ts` which depends on `next/headers` cookies.
 
-**Why:** The current smoke test uses the service-role admin client — it confirms the tables exist and are seeded, but doesn't catch RLS leaks, cookie-scoped tenant validation bugs, or service function logic regressions.
+**Why:** The RLS test proves the DB is safe. Service-function tests would additionally catch validation-layer regressions (enum drift, type errors, tenant-arg mishandling in the service code itself).
 
-**How:** Sign in as the seed user in a test setup, pass the session into the SSR client builder (may need to stub `next/headers` cookies), then call services directly. One integration test per service, happy-path only.
+**How:** `vi.mock("next/headers")` with a cookie store pre-loaded with the @supabase/ssr auth cookie (base64 JSON of the session), or refactor `server.ts` to accept an optional cookie-store arg so tests can inject directly.
 
-**Context:** Flagged during `/plan-eng-review` of the leads → Supabase migration (2026-04-17). Vitest 4.1.4 landed 2026-04-17.
-
-**Depends on / blocked by:** Designing the cookie/session stub pattern for `createClient()` from `src/lib/supabase/server.ts` under test.
+**Context:** Current RLS test validates the contract end-to-end for one module (leads). Pattern can be extended table-by-table if service-level coverage is desired.
 

@@ -4,6 +4,7 @@ import path from "node:path";
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
+    exclude: ["node_modules/**", ".next/**"],
     env: loadEnvLocal(),
     testTimeout: 15_000,
   },
