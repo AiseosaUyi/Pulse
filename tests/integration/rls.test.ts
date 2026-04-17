@@ -60,4 +60,22 @@ describe("RLS: cross-tenant isolation", () => {
     expect(error).toBeNull();
     expect((data ?? []).length).toBe(1);
   });
+
+  it("authed user reads own ai_call_log only (never cross-tenant)", async () => {
+    // Seed one log row into ghost tenant
+    const { error: insErr } = await admin.from("ai_call_log").insert({
+      tenant_slug: GHOST,
+      purpose: "synthesis",
+      model: "anthropic/claude-sonnet-4.6",
+      success: true,
+    });
+    expect(insErr).toBeNull();
+
+    const { data, error } = await user
+      .from("ai_call_log")
+      .select("id")
+      .eq("tenant_slug", GHOST);
+    expect(error).toBeNull();
+    expect(data ?? []).toEqual([]);
+  });
 });

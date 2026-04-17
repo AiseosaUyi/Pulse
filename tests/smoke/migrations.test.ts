@@ -43,4 +43,30 @@ describe("migrations + seed smoke", () => {
       });
     }
   }
+
+  // Migration 012 additions: presence + schema, not row counts (expected empty).
+  it("content_briefs has generator metadata columns", async () => {
+    const { error } = await admin
+      .from("content_briefs")
+      .select("id, triggered_by_type, pattern_hash, generator_model, generator_cost_usd, dismissed_at, dismissed_reason")
+      .limit(1);
+    expect(error).toBeNull();
+  });
+
+  it("ai_call_log table exists with expected columns", async () => {
+    const { error } = await admin
+      .from("ai_call_log")
+      .select("id, tenant_slug, purpose, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, duration_ms, success, error_message")
+      .limit(1);
+    expect(error).toBeNull();
+  });
+
+  it("tenants.settings is jsonb and readable", async () => {
+    const { data, error } = await admin
+      .from("tenants")
+      .select("slug, settings")
+      .limit(2);
+    expect(error).toBeNull();
+    expect(data).toBeDefined();
+  });
 });
