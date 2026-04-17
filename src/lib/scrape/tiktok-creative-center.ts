@@ -9,7 +9,7 @@
 //   APIFY_TIKTOK_ACTOR_ID  — e.g. 'clockworks~tiktok-hashtag-scraper'
 //   (APIFY_API_TOKEN is shared with the Instagram scraper)
 
-import { ApifyClient } from "apify-client";
+import { runActorSync } from "@/lib/scrape/apify-rest";
 import {
   type ActorItem,
   probe,
@@ -52,37 +52,28 @@ export async function scrapeTikTokTopPosts(
   }
   if (hashtags.length === 0) return [];
 
-  const client = new ApifyClient({ token });
-
   try {
     const cleaned = hashtags.map((h) =>
       h.trim().replace(/^#/, "").toLowerCase()
     );
 
-    // clockworks/tiktok-hashtag-scraper shape. Adjust per actor README if using a
-    // different one.
-    const run = await client.actor(actorId).call(
-      {
+    // clockworks/tiktok-scraper input shape.
+    const items = await runActorSync<ActorItem>({
+      token,
+      actorId,
+      input: {
         hashtags: cleaned,
         resultsPerPage: limit,
         shouldDownloadVideos: false,
         shouldDownloadCovers: false,
       },
-      { timeout: 180, memory: 1024 }
-    );
-
-    if (!run.defaultDatasetId) {
-      console.warn("[scrape/tiktok] actor run had no dataset");
-      return [];
-    }
-
-    const { items } = await client
-      .dataset(run.defaultDatasetId)
-      .listItems({ limit: limit * cleaned.length * 3 });
+      timeout: 180,
+      memory: 1024,
+    });
 
     // Group by hashtag. Probe explicit hashtags field first, then parse from caption.
     const grouped = new Map<string, ActorItem[]>();
-    for (const rawItem of items as ActorItem[]) {
+    for (const rawItem of items) {
       const caption =
         probe<string>(rawItem, "text", "caption", "description") ?? "";
       const rawTags = probe<Array<string | { name?: string }>>(rawItem, "hashtags") ?? [];

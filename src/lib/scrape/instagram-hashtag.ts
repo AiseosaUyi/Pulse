@@ -7,7 +7,7 @@
 // Returns the top N posts/reels per hashtag by engagement. The cron passes
 // per-tenant hashtag lists from tenants.settings.scout_config.instagram_hashtags.
 
-import { ApifyClient } from "apify-client";
+import { runActorSync } from "@/lib/scrape/apify-rest";
 import {
   type ActorItem,
   probe,
@@ -32,8 +32,6 @@ export async function scrapeInstagramTopPosts(
   }
   if (hashtags.length === 0) return [];
 
-  const client = new ApifyClient({ token });
-
   try {
     const cleaned = hashtags.map((h) =>
       h.trim().replace(/^#/, "").toLowerCase()
@@ -46,28 +44,22 @@ export async function scrapeInstagramTopPosts(
     const directUrls = cleaned.map(
       (h) => `https://www.instagram.com/explore/tags/${h}/`
     );
-    const run = await client.actor(actorId).call(
-      {
+    const items = await runActorSync<ActorItem>({
+      token,
+      actorId,
+      input: {
         directUrls,
         resultsType: "posts",
         resultsLimit: limit * cleaned.length,
       },
-      { timeout: 180, memory: 1024 }
-    );
-
-    if (!run.defaultDatasetId) {
-      console.warn("[scrape/instagram] actor run had no dataset");
-      return [];
-    }
-
-    const { items } = await client
-      .dataset(run.defaultDatasetId)
-      .listItems({ limit: limit * cleaned.length * 2 });
+      timeout: 180,
+      memory: 1024,
+    });
 
     // Group by hashtag. IG doesn't always return a hashtags array; parse from
     // caption (captions reliably include the hashtags).
     const grouped = new Map<string, ActorItem[]>();
-    for (const rawItem of items as ActorItem[]) {
+    for (const rawItem of items) {
       const caption =
         probe<string>(rawItem, "caption", "text", "description") ?? "";
       const rawTags =
