@@ -39,6 +39,13 @@ export async function POST(req: Request) {
     skipped: 0,
     failed: 0,
     errors: [] as { tenant: string; scope: string; message: string }[],
+    debug: {
+      hasApifyToken: !!process.env.APIFY_API_TOKEN,
+      tiktokActorId: process.env.APIFY_TIKTOK_ACTOR_ID ?? null,
+      instagramActorId: process.env.APIFY_INSTAGRAM_ACTOR_ID ?? null,
+      commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "unknown",
+      scrapeJobsQueued: 0,
+    },
   };
 
   const { data: tenants, error: tenantsErr } = await admin
@@ -89,6 +96,7 @@ export async function POST(req: Request) {
     }
   }
 
+  summary.debug.scrapeJobsQueued = scrapeJobs.length;
   const scrapeResults = await Promise.all(scrapeJobs);
   for (const job of scrapeResults) {
     if (job.error) {
