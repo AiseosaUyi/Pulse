@@ -58,16 +58,14 @@ item unblocks something earlier.
 
 ---
 
-## P4 — Hydrate remaining mock pages
+## P4 — Hydrate remaining mock pages (DONE)
 
-These are routes that already exist in nav but still show fake data.
-
-- [ ] **`/ai-content` — switch off mocks** — currently uses `mockContentSuggestions` and `mockCalendar`. Suggestions should read from real `content_briefs` (approved status). Calendar needs a `scheduled_posts` table (tracks which briefs are scheduled to post on which day). (~3 hrs, needs new migration)
-- [ ] **`/content-vault` — switch off mocks** — saved/trending content. Needs `saved_content` table + UI to save intel_cards/briefs. (~3 hrs, needs new migration)
-- [ ] **`/platform-score` — derive from real data** — currently mock scores. Compute from `tenants.settings.platforms` (connected ratio, engagement rates) + `posts` (post cadence). (~2 hrs)
-- [ ] **`/weekly-report` — wait for insight engine (P5)** — blocked until insight engine ships. Placeholder until then. (dep: P5)
-- [ ] **`NotificationBell` — switch off mocks** — needs `notifications` table with read/unread state. Or: derive from recent `engagement_items` + `intel_cards`. (~2 hrs)
-- [ ] **`src/lib/services/seo.ts` — finish SERP preview migration** — partial mock still. (~1 hr)
+- [x] **`/ai-content` — switched off mocks** — Calendar reads from new `scheduled_posts` table (migration 019). Suggestions come from real `content_briefs` (approved + draft). Added `ScheduleModal` with date/time picker + caption override, server actions for scheduling/status/delete. Empty state routes user back to `/intel-feed`.
+- [x] **`/content-vault` — switched off mocks** — New `saved_content` table (migration 020) tracks saved links, intel cards, trend scouts. Content extractor now actually saves via `saveContentFromUrl` (detects platform from URL, picks emoji). Trends panel reads from real `trend_scouts`. One-click "Save" converts a trend into a vault item. Filter tabs (All/New/Scheduled/Used), status-cycling badges, per-row delete.
+- [x] **`/platform-score` — derived from real data** — Composite score from tenant platform config (connection + followers) + posts (30-day frequency, engagement rate). Trend from prior window. Shows "no data" state with nav to Settings/Own analytics when empty.
+- [x] **`/weekly-report` — shipped via P5 insight engine** — reads `weekly_digests` regenerate on demand.
+- [x] **`NotificationBell` — switched off mocks** — derives from engagement_items (unread), intel_cards (high-impact last 3 days), content_briefs (approved), leads (cold 14+ days), keyword_rankings (new top-10). No table, computed per request.
+- [x] **`src/lib/services/seo.ts` — cleaned up** — dropped dead `getProgrammaticTemplates`/`getSERPAnalyses` (real services exist). `/seo-tracker` dashboard now reads real `blog_posts` via `listBlogPosts`.
 
 ---
 
