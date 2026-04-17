@@ -34,8 +34,44 @@ const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 });
 
 const TENANTS = [
-  { slug: "gruve", name: "Gruve" },
-  { slug: "sippy", name: "Sippy" },
+  {
+    slug: "gruve",
+    name: "Gruve",
+    settings: {
+      domain: "gruve.events",
+      currency: "NGN",
+      audienceConfig: {
+        primaryRegions: ["Nigeria"],
+        expandedRegions: ["International"],
+        targetDemographics: ["18-35", "Event enthusiasts", "Music lovers"],
+      },
+      platforms: [
+        { platform: "instagram", connected: true, handle: "@gruve.events", followers: 4200, engagementRate: 3.2, status: "active" },
+        { platform: "tiktok", connected: true, handle: "@gruveevents", followers: 1100, engagementRate: 5.8, status: "needs_posts" },
+        { platform: "twitter", connected: true, handle: "@gruve_events", followers: 890, engagementRate: 1.1, status: "low_activity" },
+        { platform: "linkedin", connected: true, handle: "Gruve Events", followers: 430, engagementRate: 2.4, status: "active" },
+      ],
+    },
+  },
+  {
+    slug: "sippy",
+    name: "Sippy",
+    settings: {
+      domain: "sippy.ng",
+      currency: "NGN",
+      audienceConfig: {
+        primaryRegions: ["Lagos", "Abuja", "Calabar"],
+        expandedRegions: [],
+        targetDemographics: ["21-30", "Nightlife", "Food & Drink"],
+      },
+      platforms: [
+        { platform: "instagram", connected: true, handle: "@sippy.ng", followers: 2800, engagementRate: 4.1, status: "active" },
+        { platform: "tiktok", connected: true, handle: "@sippyng", followers: 750, engagementRate: 6.2, status: "active" },
+        { platform: "twitter", connected: false, handle: "", followers: 0, engagementRate: 0, status: "inactive" },
+        { platform: "linkedin", connected: false, handle: "", followers: 0, engagementRate: 0, status: "inactive" },
+      ],
+    },
+  },
 ];
 
 const SEED_LEADS = {
@@ -239,6 +275,7 @@ async function ensureTenantsAndMemberships(user) {
     const { error: tErr } = await admin.from("tenants").upsert({
       slug: t.slug,
       name: t.name,
+      settings: t.settings,
       created_by: user.id,
     });
     if (tErr) throw tErr;
