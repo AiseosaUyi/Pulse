@@ -2,17 +2,25 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenant } from "@/lib/services/tenants";
 import type { DashboardStats, Suggestion } from "@/lib/types/dashboard";
 import type { PlatformConnection } from "@/lib/types/tenant";
+import type { OwnMetricsPayload } from "@/lib/types/own-metrics";
 
 const ACTIVE_LEAD_STATUSES = ["new", "contacted", "warm"] as const;
 
 function formatReach(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }
 
 function pct(a: number, b: number): string {
   if (b === 0) return a > 0 ? "new" : "0%";
   return `${Math.round(((a - b) / b) * 100)}%`;
+}
+
+// Reach per row: prefer explicit reach, fall back to views, then impressions.
+function reachFromMetrics(m: OwnMetricsPayload | null | undefined): number {
+  if (!m) return 0;
+  return m.reach ?? m.views ?? m.impressions ?? 0;
 }
 
 export async function getDashboardStats(
@@ -24,20 +32,20 @@ export async function getDashboardStats(
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-  const [reachThisWeek, reachPriorWeek, activeLeadsRes, adSpendRes, tenant] =
+  const [ownThisWeek, ownPriorWeek, activeLeadsRes, adSpendRes, tenant] =
     await Promise.all([
       supabase
-        .from("posts")
-        .select("reach")
+        .from("own_post_metrics")
+        .select("metrics")
         .eq("tenant_slug", tenantSlug)
-        .gte("posted_at", weekAgo.toISOString())
-        .lte("posted_at", now.toISOString()),
+        .gte("captured_at", weekAgo.toISOString())
+        .lte("captured_at", now.toISOString()),
       supabase
-        .from("posts")
-        .select("reach")
+        .from("own_post_metrics")
+        .select("metrics")
         .eq("tenant_slug", tenantSlug)
-        .gte("posted_at", twoWeeksAgo.toISOString())
-        .lt("posted_at", weekAgo.toISOString()),
+        .gte("captured_at", twoWeeksAgo.toISOString())
+        .lt("captured_at", weekAgo.toISOString()),
       supabase
         .from("leads")
         .select("id, status", { count: "exact", head: false })
@@ -54,9 +62,16 @@ export async function getDashboardStats(
   if (!tenant) return null;
 
   const thisWeekReach =
-    reachThisWeek.data?.reduce((sum, r) => sum + (r.reach ?? 0), 0) ?? 0;
+    (ownThisWeek.data ?? []).reduce(
+      (sum, r) => sum + reachFromMetrics(r.metrics as OwnMetricsPayload),
+      0
+    );
   const priorWeekReach =
-    reachPriorWeek.data?.reduce((sum, r) => sum + (r.reach ?? 0), 0) ?? 0;
+    (ownPriorWeek.data ?? []).reduce(
+      (sum, r) => sum + reachFromMetrics(r.metrics as OwnMetricsPayload),
+      0
+    );
+  const postsThisWeek = ownThisWeek.data?.length ?? 0;
 
   const activeLeadsCount = activeLeadsRes.count ?? 0;
   const needsFollowup =
@@ -73,7 +88,10 @@ export async function getDashboardStats(
     socialReach: {
       label: "Social reach",
       value: formatReach(thisWeekReach),
-      subtitle: "Last 7 days",
+      subtitle:
+        postsThisWeek > 0
+          ? `${postsThisWeek} post${postsThisWeek === 1 ? "" : "s"}, last 7 days`
+          : "Import metrics on /own-analytics",
       change:
         priorWeekReach > 0
           ? {

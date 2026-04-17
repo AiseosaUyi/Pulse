@@ -54,7 +54,7 @@ item unblocks something earlier.
 - [x] **`/own-analytics` page** — stat cards + per-platform breakdown + upload panel (CSV + screenshot) + recent imports table.
 - [x] **Sidebar nav** — "Own analytics" under OVERVIEW group.
 - [x] **Extend smoke + RLS tests** — cross-tenant RLS denial test + table schema presence test.
-- [ ] **Extend `/dashboard` socialReach to aggregate real data** — today pulls from seed posts; swap to `own_post_metrics` once tenants have imports. (~30 min)
+- [x] **Extend `/dashboard` socialReach to aggregate real data** — swapped from seeded `posts.reach` to live `own_post_metrics`. Shows "Import metrics on /own-analytics" when empty. Falls back through reach → views → impressions.
 
 ---
 
