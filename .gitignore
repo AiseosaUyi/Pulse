@@ -42,3 +42,4 @@ next-env.d.ts
 .gstack/
 .mcp.json
 supabase/.temp/
+.env*.local

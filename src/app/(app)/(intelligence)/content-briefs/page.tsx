@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { Sparkles } from "lucide-react";
 import { listBriefs } from "@/lib/services/briefs";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
 import { BriefCard } from "@/components/briefs/BriefCard";
@@ -26,8 +27,17 @@ export default async function ContentBriefsPage() {
             AI-generated content strategies, grounded in your brand voice
           </p>
         </div>
-        <div className="text-sm text-text-muted">
-          {briefs.length} brief{briefs.length !== 1 ? "s" : ""}
+        <div className="flex items-center gap-3">
+          <Link
+            href="/settings/brand-voice"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs text-foreground hover:bg-card-hover transition-colors"
+          >
+            <Sparkles size={12} />
+            Brand voice
+          </Link>
+          <span className="text-sm text-text-muted">
+            {briefs.length} brief{briefs.length !== 1 ? "s" : ""}
+          </span>
         </div>
       </div>
 

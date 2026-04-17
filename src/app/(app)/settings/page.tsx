@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { UserCircle, Users, Lock, Bell, Mail, Trash2, Palette } from "lucide-react";
+import Link from "next/link";
+import { UserCircle, Users, Lock, Bell, Mail, Trash2, Palette, Sparkles, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, getCurrentTenant } from "@/lib/auth";
 import { PasswordInput } from "@/components/ui/PasswordInput";
@@ -293,6 +294,32 @@ export default async function SettingsPage() {
         ) : (
           <p className="text-xs text-gray-1000 italic">Only owners and admins can invite teammates.</p>
         )}
+      </section>
+
+      {/* Brand voice */}
+      <section className="bg-card border border-border rounded-2xl p-6">
+        <SectionHeading icon={Sparkles} title="Brand voice" />
+        <div className="flex items-start justify-between gap-6">
+          <div className="min-w-0">
+            <p
+              className="text-sm text-gray-1200 dark:text-foreground"
+              style={{ fontFamily: "'Satoshi-500', var(--font-sans)" }}
+            >
+              How the AI sounds when it writes for {tenant.name}
+            </p>
+            <p className="text-xs text-gray-1000 dark:text-text-muted mt-1">
+              Tone, audience, do&apos;s and don&apos;ts, and example posts.
+              Grounds every generated content brief.
+            </p>
+          </div>
+          <Link
+            href="/settings/brand-voice"
+            className="inline-flex items-center gap-1.5 text-sm text-primary-500 hover:text-primary-600 whitespace-nowrap shrink-0"
+          >
+            Edit
+            <ArrowRight size={14} />
+          </Link>
+        </div>
       </section>
 
       {/* Appearance */}

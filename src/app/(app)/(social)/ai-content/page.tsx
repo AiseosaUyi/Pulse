@@ -1,4 +1,6 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
+import { Sparkles } from "lucide-react";
 import { mockContentSuggestions, mockCalendar } from "@/lib/data/mock-modules";
 import { Badge } from "@/components/ui/Badge";
 
@@ -16,14 +18,23 @@ export default async function AIContentPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-[1200px]">
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex items-start justify-between mb-8 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">AI Content Engine</h1>
           <p className="text-text-secondary text-sm mt-0.5">AI-generated post suggestions and content calendar</p>
         </div>
-        <button className="px-4 py-2 gradient-purple-pink text-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity active:scale-[0.98]">
-          Generate Ideas
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/settings/brand-voice"
+            className="inline-flex items-center gap-1.5 px-3 md:px-4 py-2 border border-border rounded-lg text-xs md:text-sm text-foreground hover:bg-card-hover transition-colors duration-150"
+          >
+            <Sparkles size={14} />
+            Brand voice
+          </Link>
+          <button className="px-4 py-2 gradient-purple-pink text-foreground text-sm font-medium rounded-lg hover:opacity-90 transition-opacity active:scale-[0.98]">
+            Generate Ideas
+          </button>
+        </div>
       </div>
 
       {/* Content Calendar */}
