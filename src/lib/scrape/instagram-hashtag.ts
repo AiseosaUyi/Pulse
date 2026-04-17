@@ -8,31 +8,13 @@
 // per-tenant hashtag lists from tenants.settings.scout_config.instagram_hashtags.
 
 import { ApifyClient } from "apify-client";
+import {
+  type ActorItem,
+  probe,
+  extractHashtagsFromText,
+  truncate,
+} from "@/lib/scrape/helpers";
 import type { ScrapedTrend } from "@/lib/scrape/tiktok-creative-center";
-
-interface ActorItem {
-  id?: string;
-  url?: string;
-  type?: string;
-  caption?: string;
-  hashtags?: string[];
-  ownerUsername?: string;
-  likesCount?: number;
-  commentsCount?: number;
-  videoViewCount?: number;
-  videoPlayCount?: number;
-  timestamp?: string;
-  [k: string]: unknown;
-}
-
-function first<T>(v: T | T[] | undefined): T | undefined {
-  if (Array.isArray(v)) return v[0];
-  return v;
-}
-
-function truncate(s: string, n: number): string {
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
-}
 
 export async function scrapeInstagramTopPosts(
   hashtags: string[],
@@ -57,8 +39,7 @@ export async function scrapeInstagramTopPosts(
       h.trim().replace(/^#/, "").toLowerCase()
     );
 
-    // apify/instagram-scraper input shape. Adjust per actor README if using a
-    // different one.
+    // apify/instagram-scraper input shape.
     const run = await client.actor(actorId).call(
       {
         hashtags: cleaned,
@@ -78,11 +59,22 @@ export async function scrapeInstagramTopPosts(
       .dataset(run.defaultDatasetId)
       .listItems({ limit: limit * cleaned.length * 2 });
 
-    // Group by hashtag, take top N by engagement (likes + comments), format.
+    // Group by hashtag. IG doesn't always return a hashtags array; parse from
+    // caption (captions reliably include the hashtags).
     const grouped = new Map<string, ActorItem[]>();
     for (const rawItem of items as ActorItem[]) {
-      const tags = rawItem.hashtags ?? [];
-      const matchedTag = first(cleaned.find((h) => tags.includes(h))) ?? cleaned[0];
+      const caption =
+        probe<string>(rawItem, "caption", "text", "description") ?? "";
+      const rawTags =
+        probe<Array<string | { name?: string }>>(rawItem, "hashtags") ?? [];
+      const explicitTags = rawTags.map((h) =>
+        typeof h === "string" ? h.toLowerCase() : (h?.name ?? "").toLowerCase()
+      );
+      const parsedTags = extractHashtagsFromText(caption);
+      const postTags = [...explicitTags, ...parsedTags];
+
+      const matchedTag =
+        cleaned.find((h) => postTags.includes(h)) ?? cleaned[0];
       const bucket = grouped.get(matchedTag) ?? [];
       bucket.push(rawItem);
       grouped.set(matchedTag, bucket);
@@ -91,28 +83,38 @@ export async function scrapeInstagramTopPosts(
     const out: ScrapedTrend[] = [];
     for (const [tag, list] of grouped) {
       const sorted = [...list].sort((a, b) => {
-        const ea = (a.likesCount ?? 0) + (a.commentsCount ?? 0);
-        const eb = (b.likesCount ?? 0) + (b.commentsCount ?? 0);
+        const ea =
+          (probe<number>(a, "likesCount", "likeCount") ?? 0) +
+          (probe<number>(a, "commentsCount", "commentCount") ?? 0);
+        const eb =
+          (probe<number>(b, "likesCount", "likeCount") ?? 0) +
+          (probe<number>(b, "commentsCount", "commentCount") ?? 0);
         return eb - ea;
       });
       for (const item of sorted.slice(0, limit)) {
-        const likes = item.likesCount ?? 0;
-        const comments = item.commentsCount ?? 0;
-        const views = item.videoPlayCount ?? item.videoViewCount;
-        const caption = item.caption ?? "";
+        const likes = probe<number>(item, "likesCount", "likeCount") ?? 0;
+        const comments = probe<number>(item, "commentsCount", "commentCount") ?? 0;
+        const views = probe<number>(
+          item,
+          "videoPlayCount",
+          "videoViewCount",
+          "playCount"
+        );
+        const owner = probe<string>(item, "ownerUsername", "username", "owner.username");
+        const url = probe<string>(item, "url", "shortcode_url", "permalink");
+        const caption = probe<string>(item, "caption", "text", "description") ?? "";
+
         out.push({
           platform: "instagram",
           source: "hashtag_scout",
           hashtag: `#${tag}`,
-          title: item.ownerUsername
-            ? `@${item.ownerUsername} · #${tag}`
-            : `#${tag}`,
+          title: owner ? `@${owner} · #${tag}` : `#${tag}`,
           summary: truncate(caption.trim() || `Top post for #${tag}`, 280),
-          external_url: item.url,
+          external_url: url,
           views,
           likes,
           comments,
-          owner_handle: item.ownerUsername,
+          owner_handle: owner,
         });
       }
     }

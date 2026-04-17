@@ -10,6 +10,12 @@
 //   (APIFY_API_TOKEN is shared with the Instagram scraper)
 
 import { ApifyClient } from "apify-client";
+import {
+  type ActorItem,
+  probe,
+  extractHashtagsFromText,
+  truncate,
+} from "@/lib/scrape/helpers";
 
 export interface ScrapedTrend {
   platform: "tiktok" | "instagram" | "twitter";
@@ -27,43 +33,8 @@ export interface ScrapedTrend {
   owner_handle?: string;
 }
 
-// Actors return EITHER nested objects (authorMeta: { name }) OR flat dot-notation
-// keys ("authorMeta.name": "..."). clockworks/tiktok-scraper uses the flat
-// variant, so we treat every item as a generic record and probe both shapes.
-type ActorItem = Record<string, unknown>;
-
-function nested<T>(item: ActorItem, path: string[]): T | undefined {
-  let cur: unknown = item;
-  for (const key of path) {
-    if (cur && typeof cur === "object" && key in (cur as Record<string, unknown>)) {
-      cur = (cur as Record<string, unknown>)[key];
-    } else {
-      return undefined;
-    }
-  }
-  return cur as T;
-}
-
-function flat<T>(item: ActorItem, key: string): T | undefined {
-  return item[key] as T | undefined;
-}
-
-function probe<T>(item: ActorItem, ...paths: (string | string[])[]): T | undefined {
-  for (const p of paths) {
-    const value = Array.isArray(p) ? nested<T>(item, p) : flat<T>(item, p);
-    if (value !== undefined && value !== null) return value;
-  }
-  return undefined;
-}
-
-function extractHashtagsFromText(text: string): string[] {
-  const matches = text.match(/#[\w_]+/g) ?? [];
-  return matches.map((h) => h.slice(1).toLowerCase());
-}
-
-function truncate(s: string, n: number): string {
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
-}
+// Shared parser logic lives in ./helpers. This file just knows clockworks'
+// input/output conventions for the TikTok actor.
 
 export async function scrapeTikTokTopPosts(
   hashtags: string[],
