@@ -11,23 +11,23 @@ type Purpose = "synthesis";
 export function getModel(purpose: Purpose): LanguageModel {
   switch (purpose) {
     case "synthesis":
-      return openai("gpt-5");
+      return openai("gpt-4.1");
   }
 }
 
 export function getModelId(purpose: Purpose): string {
   switch (purpose) {
     case "synthesis":
-      return "openai/gpt-5";
+      return "openai/gpt-4.1";
   }
 }
 
 // Published rates as of 2026. Update if OpenAI changes pricing.
-// Input cached tokens billed at 0.5x base input rate on GPT-5.
 const COST_PER_MTOK: Record<
   string,
   { input: number; output: number; cache_read: number }
 > = {
+  "openai/gpt-4.1": { input: 2, output: 8, cache_read: 0.5 },
   "openai/gpt-5": { input: 1.25, output: 10, cache_read: 0.125 },
 };
 
