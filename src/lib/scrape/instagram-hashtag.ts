@@ -126,11 +126,12 @@ export async function scrapeInstagramTopPosts(
 
     return out;
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error("[scrape/instagram] Apify call failed", {
       actorId,
       hashtagCount: hashtags.length,
-      message: err instanceof Error ? err.message : String(err),
+      message,
     });
-    return [];
+    throw new Error(`Instagram scrape failed: ${message}`);
   }
 }

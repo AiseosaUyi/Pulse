@@ -140,12 +140,13 @@ export async function scrapeTikTokTopPosts(
 
     return out;
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error("[scrape/tiktok] Apify call failed", {
       actorId,
       hashtagCount: hashtags.length,
-      message: err instanceof Error ? err.message : String(err),
+      message,
     });
-    return [];
+    throw new Error(`TikTok scrape failed: ${message}`);
   }
 }
 

@@ -98,7 +98,19 @@ export async function POST(req: Request) {
 
   summary.debug.scrapeJobsQueued = scrapeJobs.length;
   const scrapeResults = await Promise.all(scrapeJobs);
+  const jobSummaries: Array<{
+    tenant: string;
+    platform: string;
+    trendsReturned: number;
+    error?: string;
+  }> = [];
   for (const job of scrapeResults) {
+    jobSummaries.push({
+      tenant: job.tenant.slug,
+      platform: job.platform,
+      trendsReturned: job.trends.length,
+      error: job.error,
+    });
     if (job.error) {
       summary.failed += 1;
       summary.errors.push({
@@ -113,6 +125,7 @@ export async function POST(req: Request) {
     }
     summary.scraped += job.trends.length;
   }
+  (summary.debug as Record<string, unknown>).jobs = jobSummaries;
 
   // Phase 2: per job, analyze + persist. AI calls in parallel within a job.
   for (const job of scrapeResults) {
