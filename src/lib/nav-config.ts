@@ -15,6 +15,7 @@ export const navGroups: NavGroup[] = [
     label: "OVERVIEW",
     items: [
       { label: "Dashboard", href: "/dashboard", iconName: "LayoutDashboard" },
+      { label: "Own analytics", href: "/own-analytics", iconName: "BarChart3" },
     ],
   },
   {

@@ -28,6 +28,7 @@ const COST_PER_MTOK: Record<
   { input: number; output: number; cache_read: number }
 > = {
   "openai/gpt-4.1": { input: 2, output: 8, cache_read: 0.5 },
+  "openai/gpt-4o": { input: 2.5, output: 10, cache_read: 1.25 },
   "openai/gpt-5": { input: 1.25, output: 10, cache_read: 0.125 },
 };
 
