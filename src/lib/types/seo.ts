@@ -7,14 +7,27 @@ export interface SEOMetric {
   direction: "up" | "down" | "stable";
 }
 
+export type KeywordDifficulty = "easy" | "medium" | "hard";
+
 export interface KeywordRanking {
+  id: string;
+  tenantSlug: string;
   keyword: string;
-  position: number;
-  previousPosition: number;
+  url: string | null;
+  position: number | null;
+  previousPosition: number | null;
   volume: number;
-  difficulty: "easy" | "medium" | "hard";
-  url: string;
+  difficulty: KeywordDifficulty;
+  lastChecked: string | null;
+  notes: string | null;
+  createdAt: string;
 }
+
+export const KEYWORD_DIFFICULTY_LABELS: Record<KeywordDifficulty, string> = {
+  easy: "Easy",
+  medium: "Medium",
+  hard: "Hard",
+};
 
 // ─── Keyword Research ─────────────────────────────────────────
 

@@ -1,52 +1,10 @@
 import type {
-  SEOMetric, KeywordRanking, KeywordGroup, TopicalCluster,
+  KeywordGroup, TopicalCluster,
   InternalLink, BlogPost, ContentScoreBreakdown, ProgrammaticTemplate,
   SERPAnalysis,
 } from "@/lib/types/seo";
 
-// ─── SEO Metrics ──────────────────────────────────────────────
-
-export const mockSEOMetrics: Record<string, SEOMetric[]> = {
-  gruve: [
-    { label: "Domain Authority", value: "28", change: "+3", direction: "up" },
-    { label: "Indexed Pages", value: "142", change: "+12", direction: "up" },
-    { label: "Backlinks", value: "89", change: "+7", direction: "up" },
-    { label: "Avg. Position", value: "15.1", change: "-2.4", direction: "up" },
-    { label: "Organic Traffic", value: "2.1K", change: "+18%", direction: "up" },
-    { label: "Content Score Avg", value: "68", change: "+5", direction: "up" },
-    { label: "Coverage Gaps", value: "12", change: "-3", direction: "up" },
-    { label: "Top 3 Keywords", value: "3", change: "+1", direction: "up" },
-  ],
-  sippy: [
-    { label: "Domain Authority", value: "18", change: "+5", direction: "up" },
-    { label: "Indexed Pages", value: "34", change: "+8", direction: "up" },
-    { label: "Backlinks", value: "23", change: "+11", direction: "up" },
-    { label: "Avg. Position", value: "9.8", change: "-3.2", direction: "up" },
-    { label: "Organic Traffic", value: "680", change: "+32%", direction: "up" },
-    { label: "Content Score Avg", value: "74", change: "+8", direction: "up" },
-    { label: "Coverage Gaps", value: "8", change: "-2", direction: "up" },
-    { label: "Top 3 Keywords", value: "2", change: "+1", direction: "up" },
-  ],
-};
-
-// ─── Keyword Rankings ─────────────────────────────────────────
-
-export const mockKeywordRankings: Record<string, KeywordRanking[]> = {
-  gruve: [
-    { keyword: "event ticketing Nigeria", position: 11, previousPosition: 15, volume: 2400, difficulty: "medium", url: "/events" },
-    { keyword: "buy event tickets Lagos", position: 8, previousPosition: 9, volume: 1800, difficulty: "medium", url: "/events/lagos" },
-    { keyword: "Gruve events", position: 1, previousPosition: 1, volume: 890, difficulty: "easy", url: "/" },
-    { keyword: "live music events Lagos", position: 18, previousPosition: 22, volume: 3200, difficulty: "hard", url: "/events/music" },
-    { keyword: "event ticketing platform Africa", position: 14, previousPosition: 19, volume: 1200, difficulty: "hard", url: "/" },
-  ],
-  sippy: [
-    { keyword: "best bars Lagos", position: 15, previousPosition: 22, volume: 5400, difficulty: "hard", url: "/" },
-    { keyword: "cocktail bar Lagos", position: 9, previousPosition: 12, volume: 2200, difficulty: "medium", url: "/" },
-    { keyword: "Sippy Lagos", position: 1, previousPosition: 1, volume: 320, difficulty: "easy", url: "/" },
-    { keyword: "nightlife Lagos Island", position: 19, previousPosition: 25, volume: 3800, difficulty: "hard", url: "/events" },
-    { keyword: "best cocktails Calabar", position: 5, previousPosition: 8, volume: 480, difficulty: "easy", url: "/calabar" },
-  ],
-};
+// SEO metrics + keyword rankings are now Supabase-backed (see lib/services/seo.ts).
 
 // ─── Keyword Research ─────────────────────────────────────────
 
