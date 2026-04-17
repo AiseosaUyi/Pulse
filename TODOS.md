@@ -48,12 +48,13 @@ item unblocks something earlier.
 
 ### F1 — Own-content analytics
 
-- [ ] **Migration 014: `own_post_metrics` table + `intel-screenshots` Storage bucket** — per plan spec. (~30 min)
-- [ ] **CSV parser** — per-platform header maps (Instagram/TikTok/LinkedIn Business Suite exports). Tolerant of header drift. (~2 hrs)
-- [ ] **Screenshot vision extractor** — same Claude Haiku pipeline as F2 but for own-post metrics. (~1 hr)
-- [ ] **`/own-analytics` page** — per-platform summary + upload flows + recent metrics table. (~3 hrs)
-- [ ] **Extend `/dashboard` socialReach to aggregate real data** — today pulls from seed posts; swap to `own_post_metrics` once populated. (~1 hr)
-- [ ] **Extend smoke + RLS tests for own_post_metrics**. (~1 hr)
+- [x] **Migration 014: `own_post_metrics` table** — tenant-scoped + RLS-gated.
+- [x] **CSV parser** — per-platform header maps for Meta/TikTok/LinkedIn Business Suite exports; tolerates unknown headers.
+- [x] **Screenshot vision extractor** — GPT-4o extracts metrics from any platform's analytics screenshot. ~$0.01/upload.
+- [x] **`/own-analytics` page** — stat cards + per-platform breakdown + upload panel (CSV + screenshot) + recent imports table.
+- [x] **Sidebar nav** — "Own analytics" under OVERVIEW group.
+- [x] **Extend smoke + RLS tests** — cross-tenant RLS denial test + table schema presence test.
+- [ ] **Extend `/dashboard` socialReach to aggregate real data** — today pulls from seed posts; swap to `own_post_metrics` once tenants have imports. (~30 min)
 
 ---
 

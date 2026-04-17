@@ -61,6 +61,23 @@ describe("RLS: cross-tenant isolation", () => {
     expect((data ?? []).length).toBe(1);
   });
 
+  it("authed user cannot read cross-tenant own_post_metrics", async () => {
+    const { error: insErr } = await admin.from("own_post_metrics").insert({
+      tenant_slug: GHOST,
+      platform: "instagram",
+      source: "manual",
+      metrics: { likes: 100 },
+    });
+    expect(insErr).toBeNull();
+
+    const { data, error } = await user
+      .from("own_post_metrics")
+      .select("id")
+      .eq("tenant_slug", GHOST);
+    expect(error).toBeNull();
+    expect(data ?? []).toEqual([]);
+  });
+
   it("authed user cannot read cross-tenant trend_scouts", async () => {
     const { error: insErr } = await admin.from("trend_scouts").insert({
       tenant_slug: GHOST,
