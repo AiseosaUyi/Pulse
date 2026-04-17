@@ -44,14 +44,7 @@ item unblocks something earlier.
 - [x] **Trend analysis AI call** — `src/lib/ai/analyze-trend.ts` via GPT-5, logs to `ai_call_log`.
 - [x] **Cron job `scrape-trends`** — Sat 22:00 UTC in `vercel.json`, wired to GPT-5 analysis pipeline.
 - [x] **Extend smoke + RLS tests for trend_scouts** — cross-tenant RLS denial test + schema presence test.
-- [ ] **Finish Apify TikTok setup (user action)** — scraper is wired to Apify, just needs:
-  1. Sign up at apify.com (free tier has $5 credits)
-  2. Get API token: https://console.apify.com/account/integrations
-  3. Pick an actor (browse https://apify.com/store, search "TikTok Creative Center" or "TikTok trending hashtags"). Copy the actor ID, e.g. `clockworks~tiktok-trending-hashtags`.
-  4. Add to Vercel env: `APIFY_API_TOKEN`, `APIFY_TIKTOK_ACTOR_ID`, optional `APIFY_TIKTOK_REGION` (default NG).
-  5. Run `vercel env pull .env.local` to sync locally.
-  6. Trigger cron manually to validate: `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://pulse-ashy-kappa.vercel.app/api/cron/scrape-trends`
-  If the chosen actor needs a different input shape than `{country, region, limit, maxItems}`, read its README and either adjust the input in `tiktok-creative-center.ts` or pick a different actor. (~10 min)
+- [x] **Apify wiring for TikTok + Instagram** — Clockworks TikTok + apify/instagram-scraper actors, called via minimal REST wrapper in `src/lib/scrape/apify-rest.ts` (SDK had pnpm isolation issues on Vercel; plain fetch sidesteps them).
 
 ### F1 — Own-content analytics
 
