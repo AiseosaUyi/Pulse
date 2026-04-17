@@ -52,6 +52,7 @@ export const navGroups: NavGroup[] = [
         children: [
           { label: "Feed", href: "/intel-feed", iconName: "Eye" },
           { label: "Content briefs", href: "/content-briefs", iconName: "FileText" },
+          { label: "Brand voice", href: "/settings/brand-voice", iconName: "Sparkles" },
         ],
       },
       { label: "SEO command center", href: "/seo-tracker", iconName: "Search" },

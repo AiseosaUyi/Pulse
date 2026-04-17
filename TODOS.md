@@ -17,11 +17,11 @@ item unblocks something earlier.
 ## P1 — F2 Polish (close the loop on what just shipped)
 
 - [ ] **Overwrite placeholder brand voice** — I wrote a placeholder for Gruve during smoke testing. Visit `/settings/brand-voice` → overwrite with the real Gruve voice, then do Sippy too. Run an on-demand "Steal This" to verify output quality with the real voice. (~30 min manual per tenant)
-- [ ] **Add `Badge` variants `approved` + `dismissed`** — currently using `active` (green) and `gap` (dashed) as visual substitutes. Proper named variants make the semantics clearer. `src/components/ui/Badge.tsx`. (~10 min)
-- [ ] **Dismiss undo toast** — design spec called for 5s undo after dismissal. Currently dismiss is hard (soft-delete, but no undo UI). Add toast + undo action that flips `dismissed_at` back to null. (~45 min)
-- [ ] **Status filter on `/content-briefs`** — design spec had filter dropdown as secondary hierarchy. Lets Priye focus on drafts when approving, or see only approved when shooting. (~30 min)
-- [ ] **"Show dismissed" toggle on `/content-briefs`** — dismissed briefs are currently hidden forever in the UI (but preserved in DB for prompt tuning). Add a toggle so the user can review what got dismissed. (~15 min)
-- [ ] **Add `/settings/brand-voice` as a nav item under SOCIAL or INTELLIGENCE in the sidebar** — entry points exist but no direct nav item. Per user feedback: "there is no way for me to click and access it myself". Could sit alongside Content Briefs. (~10 min)
+- [x] **Add `Badge` variants `approved` + `dismissed`** — proper named variants.
+- [x] **Dismiss undo** — 5s optimistic-delay pattern in BriefCard. No toast library needed; dismiss is scheduled 5s out and only commits if user doesn't undo.
+- [x] **Status filter on `/content-briefs`** — pill filter bar (All / Drafts / Approved / Published).
+- [x] **"Show dismissed" toggle on `/content-briefs`** — checkbox surfaces when any dismissed briefs exist for the tenant.
+- [x] **`/settings/brand-voice` sidebar nav item** — added under Intel feed group.
 
 ---
 
