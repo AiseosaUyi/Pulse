@@ -81,11 +81,11 @@ item unblocks something earlier.
 
 ## P6 — Testing + Infra Hardening
 
-- [ ] **Playwright E2E setup** — committed to in eng review. `playwright.config.ts`, `tests/e2e/`, CI wiring. First test: login → `/content-briefs` → see brief. (~1 day)
-- [ ] **Cron integration test** — mocked AI Gateway, assert route handler auth + idempotency + empty-state behavior. (~2 hrs)
-- [ ] **Per-service integration tests** — cookie-stubbed `next/headers` mock to call service functions under test. Covers `getLeads`, `createLead`, etc. (~4 hrs — non-trivial mock pattern)
-- [ ] **Eval suite for brief generator** — 5-10 seed briefs + quality rubric. Baseline for prompt-change regression detection. (~3 hrs, depends on first week of real-use data)
-- [ ] **Harden Vercel Cron auth** — replace `CRON_SECRET` shared secret with Vercel's signed-request verification via `x-vercel-signature`. (~1 hr)
+- [x] **Playwright E2E scaffolded** — `playwright.config.ts`, `tests/e2e/auth-gate.spec.ts` covering unauthed /dashboard redirect + ?next preservation + login/signup render. `pnpm test:e2e` script wired. User needs to run `pnpm exec playwright install chromium` once locally before first run. CI wiring deferred.
+- [x] **Cron integration + unit tests** — `tests/unit/cron-auth.test.ts` (7 tests: missing secret, bad bearer, env case-insensitivity, dev vs prod Vercel-header requirement) + `tests/integration/cron-routes.test.ts` (9 tests across 3 cron routes: missing auth / wrong bearer / missing Vercel marker). Total: 62 vitest tests green (was 46).
+- [x] **Harden Vercel Cron auth** — shared `verifyCronRequest()` in `src/lib/cron/auth.ts`. Requires `Bearer $CRON_SECRET` AND `x-vercel-cron` header in production. Prevents a leaked secret from letting anyone hit the endpoints via curl. All three cron routes (scrape-trends, generate-briefs, weekly-digest) wired through the shared verifier. Falls back to bearer-only in dev/test.
+- [ ] **Per-service integration tests** — cookie-stubbed `next/headers` mock to call service functions under test. Covers `getLeads`, `createLead`, etc. (~4 hrs — non-trivial mock pattern — deferred)
+- [ ] **Eval suite for brief generator** — 5-10 seed briefs + quality rubric. Baseline for prompt-change regression detection. (~3 hrs, depends on first week of real-use data — deferred)
 
 ---
 

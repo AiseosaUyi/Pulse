@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { verifyFromRequest } from "@/lib/cron/auth";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
 import { groupPatterns, type PatternCluster } from "@/lib/ai/group-patterns";
 import { generateBrief, BriefGenerationError } from "@/lib/ai/generate-brief";
@@ -10,10 +11,9 @@ import { createHash } from "node:crypto";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const auth = req.headers.get("authorization");
-  const secret = process.env.CRON_SECRET;
-  if (!secret || auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const gate = verifyFromRequest(req);
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
 
   const admin = createAdminClient();

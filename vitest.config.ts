@@ -4,7 +4,7 @@ import path from "node:path";
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
-    exclude: ["node_modules/**", ".next/**"],
+    exclude: ["node_modules/**", ".next/**", "tests/e2e/**"],
     env: loadEnvLocal(),
     testTimeout: 15_000,
   },
