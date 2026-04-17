@@ -69,4 +69,12 @@ describe("migrations + seed smoke", () => {
     expect(error).toBeNull();
     expect(data).toBeDefined();
   });
+
+  it("trend_scouts table exists with expected columns", async () => {
+    const { error } = await admin
+      .from("trend_scouts")
+      .select("id, tenant_slug, platform, source, hashtag, summary, metrics, ai_analysis, applicability, dismissed_at, captured_at")
+      .limit(1);
+    expect(error).toBeNull();
+  });
 });

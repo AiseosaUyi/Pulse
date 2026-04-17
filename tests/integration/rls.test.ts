@@ -61,6 +61,23 @@ describe("RLS: cross-tenant isolation", () => {
     expect((data ?? []).length).toBe(1);
   });
 
+  it("authed user cannot read cross-tenant trend_scouts", async () => {
+    const { error: insErr } = await admin.from("trend_scouts").insert({
+      tenant_slug: GHOST,
+      platform: "tiktok",
+      source: "manual",
+      summary: "Ghost trend from RLS test",
+    });
+    expect(insErr).toBeNull();
+
+    const { data, error } = await user
+      .from("trend_scouts")
+      .select("id")
+      .eq("tenant_slug", GHOST);
+    expect(error).toBeNull();
+    expect(data ?? []).toEqual([]);
+  });
+
   it("authed user reads own ai_call_log only (never cross-tenant)", async () => {
     // Seed one log row into ghost tenant
     const { error: insErr } = await admin.from("ai_call_log").insert({

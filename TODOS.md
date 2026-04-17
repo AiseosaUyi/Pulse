@@ -38,13 +38,13 @@ item unblocks something earlier.
 
 ### F3 — Viral spotting
 
-- [ ] **Migration 013: `trend_scouts` table** — tenant-scoped, RLS-gated, fields per plan spec. (~15 min)
-- [ ] **Cross-brand pattern UI on `/viral-trends`** — rebuild page to show patterns detected by existing `src/lib/services/cross-brand.ts` (already wired, just unsurfaced). (~2 hrs)
-- [ ] **TikTok Creative Center scraper** — public URL, HTML parse, weekly cron to seed `trend_scouts`. Fallback to Apify if TikTok blocks. (~3 hrs + manual testing)
-- [ ] **Manual hashtag scout form** — screenshot + AI vision extraction, same pipeline as F2 manual intake. (~2 hrs)
-- [ ] **Trend analysis AI call** — Claude Haiku analyzes each trend_scout row: why viral, applicability, adaptation suggestion. (~1 hr)
-- [ ] **Cron job `scrape-trends`** — Saturday 22:00 UTC, runs before brief generation. (~1 hr)
-- [ ] **Extend smoke + RLS tests for trend_scouts** — same pattern as F2. (~1 hr)
+- [x] **Migration 013: `trend_scouts` table** — tenant-scoped, RLS-gated.
+- [x] **Cross-brand pattern UI on `/viral-trends`** — patterns from `cross-brand.ts` now surfaced at top of viral-trends page.
+- [x] **Manual trend intake form** — AddTrendModal: platform + hashtag + URL + summary + metrics. AI analyzes on submit.
+- [x] **Trend analysis AI call** — `src/lib/ai/analyze-trend.ts` via GPT-5, logs to `ai_call_log`.
+- [x] **Cron job `scrape-trends`** — Sat 22:00 UTC in `vercel.json`, wired to GPT-5 analysis pipeline.
+- [x] **Extend smoke + RLS tests for trend_scouts** — cross-tenant RLS denial test + schema presence test.
+- [ ] **Wire a real TikTok scraper** — `src/lib/scrape/tiktok-creative-center.ts` is currently a stub returning `[]`. Real data needs Apify actor (~$0.003/scrape = ~$0.01/month), a reverse-engineered internal API call, or Firecrawl. Full cron pipeline works end-to-end once populated. (~1 hr)
 
 ### F1 — Own-content analytics
 
