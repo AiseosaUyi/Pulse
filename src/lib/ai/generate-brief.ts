@@ -13,7 +13,7 @@ export const briefSchema = z.object({
   title: z.string().min(1),
   outline: z.array(z.string()).min(1),
   draftContent: z.string().min(10),
-  seoKeywords: z.array(z.string()).optional().default([]),
+  seoKeywords: z.array(z.string()),
 });
 
 export type GeneratedBrief = z.infer<typeof briefSchema>;
@@ -102,6 +102,8 @@ function buildSystemPrompt(input: GenerateBriefInput): string {
     "",
     "Examples of our voice:",
     ...voice.example_posts.map((p, i) => `  ${i + 1}. ${p}`),
+    "",
+    "If a brief has no SEO keywords (e.g. social-only content), return seoKeywords as an empty array.",
   ].join("\n");
 }
 

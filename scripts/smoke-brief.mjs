@@ -67,7 +67,7 @@ async function main() {
     title: z.string(),
     outline: z.array(z.string()),
     draftContent: z.string(),
-    seoKeywords: z.array(z.string()).optional().default([]),
+    seoKeywords: z.array(z.string()),
   });
 
   const started = Date.now();
