@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Trash2, ExternalLink, Bookmark, Download, Play } from "lucide-react";
+import { Trash2, ExternalLink, Bookmark, Download } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import {
   updateSavedContentStatus,
@@ -133,7 +133,6 @@ function SavedRow({
   content: SavedContent;
 }) {
   const [isPending, startTransition] = useTransition();
-  const [expanded, setExpanded] = useState(false);
 
   const cycleStatus = () => {
     const order: SavedContentStatus[] = ["new", "scheduled", "used", "archived"];
@@ -153,23 +152,22 @@ function SavedRow({
     });
   };
 
-  const hasVideo =
-    content.extractionStatus === "extracted" &&
-    content.publicUrl &&
-    (content.storedMime?.startsWith("video/") ?? false);
-  const hasImage =
-    content.extractionStatus === "extracted" &&
-    content.publicUrl &&
-    (content.storedMime?.startsWith("image/") ?? false);
+  // The video isn't stored in our bucket anymore — the download proxy
+  // re-resolves the source URL on demand. "Downloadable" means the row
+  // has an extracted status + a source URL we can re-resolve from.
+  const canRedownload =
+    content.extractionStatus === "extracted" && !!content.sourceUrl;
+  const downloadUrl = `/api/vault/download/${content.id}`;
 
   return (
     <div className="p-4 hover:bg-card-hover transition-colors group">
       <div className="flex items-start gap-3">
-        <button
-          type="button"
-          onClick={() => hasVideo && setExpanded((v) => !v)}
-          disabled={!hasVideo}
-          className="w-16 h-16 rounded-lg bg-background overflow-hidden flex-shrink-0 relative flex items-center justify-center text-2xl disabled:cursor-default"
+        <a
+          href={canRedownload ? downloadUrl : (content.sourceUrl ?? "#")}
+          target={canRedownload ? undefined : "_blank"}
+          rel={canRedownload ? undefined : "noreferrer"}
+          className="w-16 h-16 rounded-lg bg-background overflow-hidden flex-shrink-0 relative flex items-center justify-center text-2xl"
+          aria-label={canRedownload ? "Download again" : "Open source"}
         >
           {content.thumbnailUrl ? (
             <>
@@ -179,16 +177,16 @@ function SavedRow({
                 alt=""
                 className="w-full h-full object-cover"
               />
-              {hasVideo && (
-                <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-white">
-                  <Play size={16} fill="currentColor" />
+              {canRedownload && (
+                <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Download size={16} />
                 </span>
               )}
             </>
           ) : (
             <span>{content.thumbnailEmoji ?? "🔖"}</span>
           )}
-        </button>
+        </a>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <div className="min-w-0">
@@ -293,45 +291,26 @@ function SavedRow({
             </div>
           )}
 
-          {(hasVideo || hasImage) && content.publicUrl && (
+          {canRedownload && (
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               <a
-                href={`/api/vault/download/${content.id}`}
+                href={downloadUrl}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-primary-500/10 text-primary-500 rounded-md hover:bg-primary-500/20 transition-colors font-medium"
               >
                 <Download size={12} />
-                Download {hasVideo ? "MP4" : "image"}
+                Download again
               </a>
-              {hasVideo && (
-                <button
-                  type="button"
-                  onClick={() => setExpanded((v) => !v)}
+              {content.sourceUrl && (
+                <a
+                  href={content.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-background text-text-secondary rounded-md hover:text-foreground border border-border/50"
                 >
-                  <Play size={12} />
-                  {expanded ? "Hide preview" : "Play inline"}
-                </button>
+                  <ExternalLink size={12} />
+                  Open source
+                </a>
               )}
-            </div>
-          )}
-
-          {expanded && hasVideo && content.publicUrl && (
-            <div className="mt-3 rounded-lg overflow-hidden bg-black max-w-[360px]">
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-              <video
-                src={content.publicUrl}
-                controls
-                playsInline
-                className="w-full h-auto"
-                preload="metadata"
-              />
-            </div>
-          )}
-
-          {hasImage && content.publicUrl && (
-            <div className="mt-3 rounded-lg overflow-hidden bg-black max-w-[240px]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={content.publicUrl} alt={content.title} className="w-full h-auto" />
             </div>
           )}
         </div>

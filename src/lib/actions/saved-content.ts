@@ -89,16 +89,28 @@ export async function saveContent(
 export interface ExtractResult {
   id: string;
   extractionStatus: ExtractionStatus;
-  publicUrl: string | null;
+  /** Pre-flight proxy URL the client hits to trigger the browser download. */
+  downloadProxyUrl: string | null;
+  /** Cobalt/tikwm-suggested filename, slugified client-side for the `download` attr. */
+  downloadFilename: string | null;
+  /** Public URL of the thumbnail stored in Supabase (if we have one). */
   thumbnailUrl: string | null;
   message: string;
 }
 
 /**
- * URL intake: classify platform, resolve the media URL, pull the bytes,
- * upload to storage, insert (or dedup) the saved_content row. For
- * unsupported platforms or resolve failures, saves link-only so the
- * user never loses the URL.
+ * URL intake — "lean storage" flow:
+ *   1. Classify the URL (tikwm for TikTok, cobalt for IG/YT/X/FB).
+ *   2. Resolve it to a fresh media URL + metadata.
+ *   3. Upload ONLY the thumbnail (~50 KB) to Supabase Storage. The video
+ *      itself never touches our bucket — the client auto-downloads it
+ *      straight to the user's device via the /api/vault/download/[id]
+ *      proxy, which re-resolves the source on demand (cobalt URLs
+ *      expire in a few hours, so re-resolution happens on every hit).
+ *   4. Save a row carrying source_url + thumbnail_path + metadata so
+ *      "Download again" works forever.
+ *
+ * Storage stays tiny regardless of how many videos the user grabs.
  */
 export async function saveContentFromUrl(
   tenantSlug: string,
@@ -110,23 +122,26 @@ export async function saveContentFromUrl(
   const detection = detectPlatform(url);
   const thumbnailEmoji = THUMBNAIL_EMOJI[detection.platform] ?? "🔖";
 
-  // Fast dedup by (tenant, source_url) — most common case.
+  // Fast dedup by (tenant, source_url) — same link twice = same row.
   const admin = createAdminClient();
   const { data: existing } = await admin
     .from("saved_content")
-    .select("id, extraction_status, stored_path, thumbnail_path")
+    .select("id, extraction_status, thumbnail_path, title")
     .eq("tenant_slug", tenantSlug)
     .eq("source_url", url)
     .maybeSingle();
 
   if (existing) {
+    const extractionStatus = existing.extraction_status as ExtractionStatus;
     return {
       success: true,
       id: existing.id,
-      extractionStatus: existing.extraction_status as ExtractionStatus,
-      publicUrl: publicUrlFor(existing.stored_path),
+      extractionStatus,
+      downloadProxyUrl:
+        extractionStatus === "extracted" ? downloadProxyFor(existing.id) : null,
+      downloadFilename: slugFilename(existing.title ?? "video", "mp4"),
       thumbnailUrl: publicUrlFor(existing.thumbnail_path),
-      message: "Already saved — reopened existing entry.",
+      message: "Already in vault — re-triggering download.",
     };
   }
 
@@ -181,7 +196,8 @@ async function extractTikTokAndSave(
 ): Promise<ActionResult<ExtractResult>> {
   const admin = createAdminClient();
 
-  // 1. Resolve via tikwm.
+  // 1. Resolve via tikwm — gets us the video URL, thumbnail URL,
+  // title, author, duration. Video bytes are NOT fetched here.
   let resolved;
   try {
     resolved = await resolveTikTok(url);
@@ -204,66 +220,8 @@ async function extractTikTokAndSave(
     return row;
   }
 
-  // 2. Fetch bytes (with SSRF guard + 50MB cap).
-  let asset;
-  try {
-    asset = await fetchBytes(resolved.videoUrl);
-  } catch (err) {
-    const message = err instanceof SaveAssetError ? err.message : String(err);
-    const row = await insertLinkOnly(admin, tenantSlug, {
-      title: resolved.title ?? fallbackTitleFromUrl(url),
-      sourceUrl: url,
-      sourcePlatform: "tiktok",
-      thumbnailEmoji,
-      authorHandle: resolved.authorHandle,
-      durationSec: resolved.durationSec,
-      extractionError: `fetch failed: ${message}`,
-      reason: `Couldn't download the video. Saved as a link — ${message}`,
-    });
-    revalidatePath("/content-vault");
-    return row;
-  }
-
-  // 3. Content-hash dedup — same video under different URLs.
-  const { data: hashMatch } = await admin
-    .from("saved_content")
-    .select("id, stored_path, thumbnail_path")
-    .eq("tenant_slug", tenantSlug)
-    .eq("content_hash", asset.sha256)
-    .maybeSingle();
-
-  if (hashMatch?.stored_path) {
-    return {
-      success: true,
-      id: hashMatch.id,
-      extractionStatus: "extracted",
-      publicUrl: publicUrlFor(hashMatch.stored_path),
-      thumbnailUrl: publicUrlFor(hashMatch.thumbnail_path),
-      message: "Same video already in vault — reopened existing entry.",
-    };
-  }
-
-  // 4. Upload asset.
-  let uploaded;
-  try {
-    uploaded = await uploadAsset(tenantSlug, asset);
-  } catch (err) {
-    const message = err instanceof SaveAssetError ? err.message : String(err);
-    const row = await insertLinkOnly(admin, tenantSlug, {
-      title: resolved.title ?? fallbackTitleFromUrl(url),
-      sourceUrl: url,
-      sourcePlatform: "tiktok",
-      thumbnailEmoji,
-      authorHandle: resolved.authorHandle,
-      durationSec: resolved.durationSec,
-      extractionError: `upload failed: ${message}`,
-      reason: `Couldn't save the video to storage. Saved as a link — ${message}`,
-    });
-    revalidatePath("/content-vault");
-    return row;
-  }
-
-  // 5. Thumbnail upload (best-effort, doesn't block success).
+  // 2. Thumbnail upload — best-effort, ~50 KB. If this fails the row
+  // still saves as "extracted" so the user can still re-download.
   let thumbnailPath: string | null = null;
   if (resolved.thumbnailUrl) {
     try {
@@ -273,12 +231,12 @@ async function extractTikTokAndSave(
       });
       thumbnailPath = thumbUpload.storagePath;
     } catch {
-      // Non-fatal — the main video saved fine.
+      // Non-fatal.
     }
   }
 
-  // 6. Insert the row. If this fails, clean up the uploaded file to
-  // avoid orphans.
+  // 3. Insert the row. Note: stored_path stays null — video is not in
+  // our bucket, the client will download it directly via the proxy.
   const title = resolved.title ?? fallbackTitleFromUrl(url);
   const tags = resolved.hashtags.slice(0, 10);
 
@@ -294,20 +252,14 @@ async function extractTikTokAndSave(
       best_for: [],
       status: "new" as SavedContentStatus,
       extraction_status: "extracted" as ExtractionStatus,
-      stored_path: uploaded.storagePath,
-      stored_mime: uploaded.mime,
-      file_size_bytes: uploaded.sizeBytes,
-      content_hash: uploaded.sha256,
       thumbnail_path: thumbnailPath,
       author_handle: resolved.authorHandle,
       duration_sec: resolved.durationSec,
     })
-    .select("id, stored_path, thumbnail_path")
+    .select("id, thumbnail_path, title")
     .single();
 
   if (rowError || !row) {
-    // Orphan cleanup — best effort.
-    await deleteAsset(uploaded.storagePath).catch(() => {});
     if (thumbnailPath) await deleteAsset(thumbnailPath).catch(() => {});
     return { success: false, error: rowError?.message ?? "Insert failed" };
   }
@@ -317,9 +269,10 @@ async function extractTikTokAndSave(
     success: true,
     id: row.id,
     extractionStatus: "extracted",
-    publicUrl: publicUrlFor(row.stored_path),
+    downloadProxyUrl: downloadProxyFor(row.id),
+    downloadFilename: slugFilename(row.title ?? title, "mp4"),
     thumbnailUrl: publicUrlFor(row.thumbnail_path),
-    message: "Saved to vault — video downloaded without watermark.",
+    message: "Extracted — your device is downloading the MP4 now.",
   };
 }
 
@@ -331,7 +284,8 @@ async function extractViaCobaltAndSave(
 ): Promise<ActionResult<ExtractResult>> {
   const admin = createAdminClient();
 
-  // 1. Ask cobalt to resolve the URL → a direct media URL.
+  // Resolve via cobalt — validates the URL + gets us the filename hint.
+  // Video bytes are NOT fetched here; the client downloads directly.
   let resolved;
   try {
     resolved = await resolveViaCobalt(url);
@@ -354,65 +308,9 @@ async function extractViaCobaltAndSave(
     return row;
   }
 
-  // 2. Fetch bytes through our SSRF-guarded helper. The cobalt instance
-  // host was added to the allowlist at startup; CDN redirects land on
-  // scontent.* / *.cdninstagram.com which are also allowlisted.
-  let asset;
-  try {
-    asset = await fetchBytes(resolved.mediaUrl);
-  } catch (err) {
-    const message = err instanceof SaveAssetError ? err.message : String(err);
-    const row = await insertLinkOnly(admin, tenantSlug, {
-      title: resolved.filename ?? fallbackTitleFromUrl(url),
-      sourceUrl: url,
-      sourcePlatform: platform,
-      thumbnailEmoji,
-      extractionError: `fetch failed: ${message}`,
-      reason: `Couldn't download. Saved as a link — ${message}`,
-    });
-    revalidatePath("/content-vault");
-    return row;
-  }
-
-  // 3. Content-hash dedup.
-  const { data: hashMatch } = await admin
-    .from("saved_content")
-    .select("id, stored_path, thumbnail_path")
-    .eq("tenant_slug", tenantSlug)
-    .eq("content_hash", asset.sha256)
-    .maybeSingle();
-
-  if (hashMatch?.stored_path) {
-    return {
-      success: true,
-      id: hashMatch.id,
-      extractionStatus: "extracted",
-      publicUrl: publicUrlFor(hashMatch.stored_path),
-      thumbnailUrl: publicUrlFor(hashMatch.thumbnail_path),
-      message: "Same media already in vault — reopened existing entry.",
-    };
-  }
-
-  // 4. Upload to Supabase Storage.
-  let uploaded;
-  try {
-    uploaded = await uploadAsset(tenantSlug, asset);
-  } catch (err) {
-    const message = err instanceof SaveAssetError ? err.message : String(err);
-    const row = await insertLinkOnly(admin, tenantSlug, {
-      title: resolved.filename ?? fallbackTitleFromUrl(url),
-      sourceUrl: url,
-      sourcePlatform: platform,
-      thumbnailEmoji,
-      extractionError: `upload failed: ${message}`,
-      reason: `Couldn't save to storage. Saved as a link — ${message}`,
-    });
-    revalidatePath("/content-vault");
-    return row;
-  }
-
-  // 5. Insert the row. Cobalt doesn't give us a separate thumbnail, so
-  // the emoji placeholder stays in place for now.
+  // Cobalt doesn't hand back a thumbnail separately, so for IG/YT/X/FB
+  // we keep the emoji placeholder. A future enhancement: fetch the
+  // source page's OpenGraph image to fill this in.
   const title = resolved.filename ?? fallbackTitleFromUrl(url);
 
   const { data: row, error: rowError } = await admin
@@ -427,16 +325,12 @@ async function extractViaCobaltAndSave(
       best_for: [],
       status: "new" as SavedContentStatus,
       extraction_status: "extracted" as ExtractionStatus,
-      stored_path: uploaded.storagePath,
-      stored_mime: uploaded.mime,
-      file_size_bytes: uploaded.sizeBytes,
-      content_hash: uploaded.sha256,
+      // No stored_path, no content_hash — the video isn't in our bucket.
     })
-    .select("id, stored_path, thumbnail_path")
+    .select("id, title, thumbnail_path")
     .single();
 
   if (rowError || !row) {
-    await deleteAsset(uploaded.storagePath).catch(() => {});
     return { success: false, error: rowError?.message ?? "Insert failed" };
   }
 
@@ -445,9 +339,10 @@ async function extractViaCobaltAndSave(
     success: true,
     id: row.id,
     extractionStatus: "extracted",
-    publicUrl: publicUrlFor(row.stored_path),
+    downloadProxyUrl: downloadProxyFor(row.id),
+    downloadFilename: slugFilename(row.title ?? title, "mp4"),
     thumbnailUrl: publicUrlFor(row.thumbnail_path),
-    message: `Saved to vault — ${platform} media downloaded.`,
+    message: `Extracted — your device is downloading the ${platform} video now.`,
   };
 }
 
@@ -491,7 +386,8 @@ async function insertLinkOnly(
     success: true,
     id: data.id,
     extractionStatus: fields.extractionError ? "extraction_failed" : "link_only",
-    publicUrl: null,
+    downloadProxyUrl: null,
+    downloadFilename: null,
     thumbnailUrl: null,
     message: fields.reason,
   };
@@ -506,6 +402,19 @@ function fallbackTitleFromUrl(url: string): string {
   } catch {
     return "Saved link";
   }
+}
+
+function slugFilename(title: string, ext: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return (slug || "video") + "." + ext;
+}
+
+function downloadProxyFor(id: string): string {
+  return `/api/vault/download/${id}`;
 }
 
 export async function updateSavedContentStatus(

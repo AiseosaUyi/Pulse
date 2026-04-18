@@ -55,6 +55,13 @@ export function ContentExtractor({ tenantSlug }: { tenantSlug: string }) {
           thumbnailUrl: res.thumbnailUrl,
           extractionStatus: res.extractionStatus,
         });
+        // Kick off the browser download immediately. We use a hidden
+        // anchor click rather than window.location so the current page
+        // doesn't navigate away — the response's Content-Disposition
+        // makes every browser pop the save-as dialog.
+        if (res.downloadProxyUrl) {
+          triggerBrowserDownload(res.downloadProxyUrl, res.downloadFilename);
+        }
       } else {
         setFb({
           kind: "partial",
@@ -64,6 +71,18 @@ export function ContentExtractor({ tenantSlug }: { tenantSlug: string }) {
       }
       setUrl("");
     });
+  };
+
+  const triggerBrowserDownload = (href: string, filename: string | null) => {
+    if (typeof document === "undefined") return;
+    const a = document.createElement("a");
+    a.href = href;
+    if (filename) a.setAttribute("download", filename);
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => a.remove(), 250);
   };
 
   return (
@@ -137,15 +156,22 @@ export function ContentExtractor({ tenantSlug }: { tenantSlug: string }) {
             <p className="text-foreground text-sm font-medium">
               {fb.message ?? "Saved to vault."}
             </p>
-            {fb.savedId && (
-              <a
-                href={`/api/vault/download/${fb.savedId}`}
-                className="text-primary-500 text-xs hover:underline inline-flex items-center gap-1 mt-1"
-              >
-                <Download size={10} />
-                Download MP4 to device
-              </a>
-            )}
+            <p className="text-text-muted text-xs mt-1">
+              Check your Downloads folder. The vault keeps a thumbnail + the
+              source link so you can re-download whenever.
+              {fb.savedId && (
+                <>
+                  {" · "}
+                  <a
+                    href={`/api/vault/download/${fb.savedId}`}
+                    className="text-primary-500 hover:underline inline-flex items-center gap-0.5"
+                  >
+                    <Download size={10} />
+                    Download again
+                  </a>
+                </>
+              )}
+            </p>
           </div>
         </div>
       )}
@@ -165,7 +191,9 @@ export function ContentExtractor({ tenantSlug }: { tenantSlug: string }) {
       )}
 
       <p className="text-text-muted text-[11px] mt-3">
-        Powered by a self-hosted cobalt instance (for IG/YT/X/FB) + tikwm (for TikTok). LinkedIn saves as a link only.
+        Videos download straight to your device — we only keep a thumbnail
+        in the vault so storage stays tiny. Re-download anytime from the
+        vault; the source URL gets re-resolved on demand.
       </p>
     </div>
   );

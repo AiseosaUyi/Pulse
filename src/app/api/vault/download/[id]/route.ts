@@ -2,21 +2,35 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { STORAGE_BUCKET } from "@/lib/storage/save-asset";
+import {
+  STORAGE_BUCKET,
+  fetchBytes,
+  SaveAssetError,
+} from "@/lib/storage/save-asset";
+import {
+  resolveTikTok,
+  TikTokResolveError,
+} from "@/lib/scrape/tiktok-downloader";
+import {
+  resolveViaCobalt,
+  CobaltResolveError,
+} from "@/lib/scrape/cobalt-downloader";
 
 export const dynamic = "force-dynamic";
+// Cold cobalt + re-resolve + fetch 50 MB needs ~30-45s worst case.
 export const maxDuration = 60;
 
-// Same-origin streaming proxy. The Supabase Storage public URL is
-// cross-origin (project-ref.supabase.co), so browsers ignore the
-// <a download> hint and play the MP4 inline. This route streams the
-// same bytes through our domain with Content-Disposition: attachment,
-// which forces every browser to save-as.
+// Same-origin streaming proxy. Two code paths:
 //
-// Security: we read the saved_content row through the user's own
-// Supabase client so RLS enforces tenancy. Service-role is only used
-// for the eventual Storage read (which is fine because the bucket is
-// public anyway — we just need a stream handle).
+//   A. Legacy — row.stored_path present: stream the bucket file.
+//      Used for rows saved before we flipped to lean storage.
+//
+//   B. Current — no stored file: re-resolve the source URL now via
+//      tikwm (TikTok) or cobalt (IG/YT/X/FB), fetch fresh CDN bytes,
+//      stream them back. This is how most downloads work now.
+//
+// Both paths ship Content-Disposition: attachment so the browser
+// always saves the file (never inline-play).
 
 function slugify(input: string): string {
   return (
@@ -46,8 +60,17 @@ function extFromMime(mime: string | null | undefined): string {
     case "image/gif":
       return "gif";
     default:
-      return "bin";
+      return "mp4";
   }
+}
+
+interface VaultRow {
+  title: string;
+  stored_path: string | null;
+  stored_mime: string | null;
+  source_url: string | null;
+  source_platform: string | null;
+  extraction_status: string;
 }
 
 export async function GET(
@@ -64,14 +87,14 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // RLS-scoped read — only returns the row if the caller has tenant
-  // membership for it. Never expose other tenants' files.
   const supabase = await createClient();
   const { data: row, error } = await supabase
     .from("saved_content")
-    .select("title, stored_path, stored_mime, source_url")
+    .select(
+      "title, stored_path, stored_mime, source_url, source_platform, extraction_status"
+    )
     .eq("id", id)
-    .maybeSingle();
+    .maybeSingle<VaultRow>();
 
   if (error || !row) {
     if (error) {
@@ -87,42 +110,122 @@ export async function GET(
     );
   }
 
-  if (!row.stored_path) {
+  // Path A: legacy stored file.
+  if (row.stored_path) {
+    const admin = createAdminClient();
+    const { data: blob, error: dlError } = await admin.storage
+      .from(STORAGE_BUCKET)
+      .download(row.stored_path);
+
+    if (dlError || !blob) {
+      console.error("[vault/download] storage read failed", {
+        id,
+        userId: user.id,
+        path: row.stored_path,
+        message: dlError?.message ?? "no data",
+      });
+      return NextResponse.json(
+        { error: `Storage read failed: ${dlError?.message ?? "no data"}` },
+        { status: 502 }
+      );
+    }
+
+    const mime = row.stored_mime || blob.type || "video/mp4";
+    const ext = extFromMime(mime);
+    const filename = `${slugify(row.title)}.${ext}`;
+
+    return new Response(blob.stream(), {
+      status: 200,
+      headers: {
+        "Content-Type": mime,
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Length": String(blob.size),
+        "Cache-Control": "private, no-store",
+      },
+    });
+  }
+
+  // Path B: re-resolve on demand.
+  if (
+    row.extraction_status !== "extracted" ||
+    !row.source_url ||
+    !row.source_platform
+  ) {
     return NextResponse.json(
-      { error: "No stored file for this item" },
+      { error: "No downloadable media (this item was saved as a link only)" },
       { status: 404 }
     );
   }
 
-  const admin = createAdminClient();
-  const { data: blob, error: dlError } = await admin.storage
-    .from(STORAGE_BUCKET)
-    .download(row.stored_path);
-
-  if (dlError || !blob) {
-    console.error("[vault/download] storage read failed", {
+  let freshMediaUrl: string;
+  try {
+    if (row.source_platform === "tiktok") {
+      const r = await resolveTikTok(row.source_url);
+      freshMediaUrl = r.videoUrl;
+    } else {
+      const r = await resolveViaCobalt(row.source_url);
+      freshMediaUrl = r.mediaUrl;
+    }
+  } catch (err) {
+    const reason =
+      err instanceof TikTokResolveError || err instanceof CobaltResolveError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : String(err);
+    console.error("[vault/download] re-resolve failed", {
       id,
       userId: user.id,
-      path: row.stored_path,
-      message: dlError?.message ?? "no data",
+      platform: row.source_platform,
+      message: reason,
     });
     return NextResponse.json(
-      { error: `Storage read failed: ${dlError?.message ?? "no data"}` },
+      {
+        error: `Couldn't refresh the download link (${row.source_platform}): ${reason}. The original post may have been deleted.`,
+      },
       { status: 502 }
     );
   }
 
-  const mime = row.stored_mime || blob.type || "application/octet-stream";
+  let asset;
+  try {
+    asset = await fetchBytes(freshMediaUrl);
+  } catch (err) {
+    const reason =
+      err instanceof SaveAssetError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : String(err);
+    console.error("[vault/download] fetch failed", {
+      id,
+      userId: user.id,
+      platform: row.source_platform,
+      url: freshMediaUrl.slice(0, 120),
+      message: reason,
+    });
+    return NextResponse.json(
+      { error: `Download failed: ${reason}` },
+      { status: 502 }
+    );
+  }
+
+  const mime = asset.mime || "video/mp4";
   const ext = extFromMime(mime);
   const filename = `${slugify(row.title)}.${ext}`;
 
-  // Stream Blob → Response.
-  return new Response(blob.stream(), {
+  // Node 22+ types Buffer as Buffer<ArrayBufferLike>, which BlobPart
+  // doesn't accept. Uint8Array.from produces a clean Uint8Array<ArrayBuffer>
+  // that both Blob and Response are happy with. Memcpy cost at 50 MB
+  // is ~10 ms, negligible next to the network latency.
+  const body = new Blob([Uint8Array.from(asset.bytes)], { type: mime });
+
+  return new Response(body, {
     status: 200,
     headers: {
       "Content-Type": mime,
       "Content-Disposition": `attachment; filename="${filename}"`,
-      "Content-Length": String(blob.size),
+      "Content-Length": String(asset.bytes.length),
       "Cache-Control": "private, no-store",
     },
   });
