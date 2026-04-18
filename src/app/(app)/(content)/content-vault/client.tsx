@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Trash2, ExternalLink, Bookmark } from "lucide-react";
+import { Trash2, ExternalLink, Bookmark, Download, Play } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import {
   updateSavedContentStatus,
@@ -133,6 +133,7 @@ function SavedRow({
   content: SavedContent;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [expanded, setExpanded] = useState(false);
 
   const cycleStatus = () => {
     const order: SavedContentStatus[] = ["new", "scheduled", "used", "archived"];
@@ -152,12 +153,42 @@ function SavedRow({
     });
   };
 
+  const hasVideo =
+    content.extractionStatus === "extracted" &&
+    content.publicUrl &&
+    (content.storedMime?.startsWith("video/") ?? false);
+  const hasImage =
+    content.extractionStatus === "extracted" &&
+    content.publicUrl &&
+    (content.storedMime?.startsWith("image/") ?? false);
+
   return (
     <div className="p-4 hover:bg-card-hover transition-colors group">
       <div className="flex items-start gap-3">
-        <div className="w-12 h-12 rounded-lg bg-background flex items-center justify-center text-2xl flex-shrink-0">
-          {content.thumbnailEmoji ?? "🔖"}
-        </div>
+        <button
+          type="button"
+          onClick={() => hasVideo && setExpanded((v) => !v)}
+          disabled={!hasVideo}
+          className="w-16 h-16 rounded-lg bg-background overflow-hidden flex-shrink-0 relative flex items-center justify-center text-2xl disabled:cursor-default"
+        >
+          {content.thumbnailUrl ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={content.thumbnailUrl}
+                alt=""
+                className="w-full h-full object-cover"
+              />
+              {hasVideo && (
+                <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-white">
+                  <Play size={16} fill="currentColor" />
+                </span>
+              )}
+            </>
+          ) : (
+            <span>{content.thumbnailEmoji ?? "🔖"}</span>
+          )}
+        </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <div className="min-w-0">
@@ -184,12 +215,37 @@ function SavedRow({
                     {content.sourcePlatform === "manual" ? "Uploaded" : content.sourcePlatform}
                   </span>
                 )}
+                {content.authorHandle && (
+                  <span className="text-text-muted text-xs">
+                    @{content.authorHandle}
+                  </span>
+                )}
+                {content.durationSec != null && content.durationSec > 0 && (
+                  <span className="text-text-muted text-xs">
+                    {content.durationSec}s
+                  </span>
+                )}
+                {content.fileSizeBytes != null && content.fileSizeBytes > 0 && (
+                  <span className="text-text-muted text-xs">
+                    {Math.round(content.fileSizeBytes / 1024 / 1024 * 10) / 10}MB
+                  </span>
+                )}
                 <span className="text-text-muted text-xs">
                   {new Date(content.updatedAt).toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
                   })}
                 </span>
+                {content.extractionStatus === "link_only" && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-sidebar border border-border text-text-muted">
+                    link only
+                  </span>
+                )}
+                {content.extractionStatus === "extraction_failed" && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-red/10 border border-status-red/30 text-status-red">
+                    extract failed
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -231,9 +287,52 @@ function SavedRow({
                   key={tag}
                   className="px-1.5 py-0.5 rounded bg-background text-text-muted text-[10px]"
                 >
-                  {tag}
+                  #{tag}
                 </span>
               ))}
+            </div>
+          )}
+
+          {(hasVideo || hasImage) && content.publicUrl && (
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <a
+                href={content.publicUrl}
+                download
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-primary-500/10 text-primary-500 rounded-md hover:bg-primary-500/20 transition-colors font-medium"
+              >
+                <Download size={12} />
+                Download {hasVideo ? "MP4" : "image"}
+              </a>
+              {hasVideo && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((v) => !v)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-background text-text-secondary rounded-md hover:text-foreground border border-border/50"
+                >
+                  <Play size={12} />
+                  {expanded ? "Hide preview" : "Play inline"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {expanded && hasVideo && content.publicUrl && (
+            <div className="mt-3 rounded-lg overflow-hidden bg-black max-w-[360px]">
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video
+                src={content.publicUrl}
+                controls
+                playsInline
+                className="w-full h-auto"
+                preload="metadata"
+              />
+            </div>
+          )}
+
+          {hasImage && content.publicUrl && (
+            <div className="mt-3 rounded-lg overflow-hidden bg-black max-w-[240px]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={content.publicUrl} alt={content.title} className="w-full h-auto" />
             </div>
           )}
         </div>

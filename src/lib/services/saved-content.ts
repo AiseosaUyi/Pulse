@@ -1,5 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import type { SavedContent, SavedContentStatus } from "@/lib/types/saved-content";
+import { publicUrlFor } from "@/lib/storage/save-asset";
+import type {
+  SavedContent,
+  SavedContentStatus,
+  ExtractionStatus,
+} from "@/lib/types/saved-content";
 
 interface Row {
   id: string;
@@ -14,15 +19,32 @@ interface Row {
   tags: string[] | null;
   best_for: string[] | null;
   status: string;
+  extraction_status: string;
+  extraction_error: string | null;
+  stored_path: string | null;
+  stored_mime: string | null;
+  file_size_bytes: number | null;
+  duration_sec: number | null;
+  author_handle: string | null;
+  thumbnail_path: string | null;
+  content_hash: string | null;
   created_at: string;
   updated_at: string;
 }
 
+function toStatus(v: string): SavedContentStatus {
+  return v === "scheduled" || v === "used" || v === "archived" ? v : "new";
+}
+
+function toExtractionStatus(v: string): ExtractionStatus {
+  return v === "extracted" ||
+    v === "extraction_failed" ||
+    v === "pending"
+    ? v
+    : "link_only";
+}
+
 function rowTo(row: Row): SavedContent {
-  const status: SavedContentStatus =
-    row.status === "scheduled" || row.status === "used" || row.status === "archived"
-      ? row.status
-      : "new";
   return {
     id: row.id,
     tenantSlug: row.tenant_slug,
@@ -35,7 +57,18 @@ function rowTo(row: Row): SavedContent {
     notes: row.notes,
     tags: row.tags ?? [],
     bestFor: row.best_for ?? [],
-    status,
+    status: toStatus(row.status),
+    extractionStatus: toExtractionStatus(row.extraction_status),
+    extractionError: row.extraction_error,
+    storedPath: row.stored_path,
+    storedMime: row.stored_mime,
+    fileSizeBytes: row.file_size_bytes,
+    durationSec: row.duration_sec,
+    authorHandle: row.author_handle,
+    thumbnailPath: row.thumbnail_path,
+    contentHash: row.content_hash,
+    publicUrl: publicUrlFor(row.stored_path),
+    thumbnailUrl: publicUrlFor(row.thumbnail_path),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
