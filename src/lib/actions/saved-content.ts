@@ -12,6 +12,7 @@ import {
   resolveViaCobalt,
   CobaltResolveError,
 } from "@/lib/scrape/cobalt-downloader";
+import { resolveInstagramThumbnail } from "@/lib/scrape/instagram-thumbnail";
 import {
   fetchBytes,
   uploadAsset,
@@ -308,9 +309,24 @@ async function extractViaCobaltAndSave(
     return row;
   }
 
-  // Cobalt doesn't hand back a thumbnail separately, so for IG/YT/X/FB
-  // we keep the emoji placeholder. A future enhancement: fetch the
-  // source page's OpenGraph image to fill this in.
+  // Cobalt doesn't hand back a thumbnail separately. For Instagram we
+  // scrape the post's /embed page (cover frame lives in a public CDN
+  // URL there). Best-effort — if IG's bot-wall kicks in or the post is
+  // private, we fall through to the emoji placeholder.
+  let thumbnailPath: string | null = null;
+  if (platform === "instagram") {
+    const thumbUrl = await resolveInstagramThumbnail(url);
+    if (thumbUrl) {
+      try {
+        const thumb = await fetchBytes(thumbUrl);
+        const upload = await uploadAsset(tenantSlug, thumb, { suffix: "thumb" });
+        thumbnailPath = upload.storagePath;
+      } catch {
+        // Non-fatal — emoji placeholder is the fallback.
+      }
+    }
+  }
+
   const title = resolved.filename ?? fallbackTitleFromUrl(url);
 
   const { data: row, error: rowError } = await admin
@@ -321,6 +337,7 @@ async function extractViaCobaltAndSave(
       source_platform: platform,
       source_url: url,
       thumbnail_emoji: thumbnailEmoji,
+      thumbnail_path: thumbnailPath,
       tags: [],
       best_for: [],
       status: "new" as SavedContentStatus,
@@ -331,6 +348,7 @@ async function extractViaCobaltAndSave(
     .single();
 
   if (rowError || !row) {
+    if (thumbnailPath) await deleteAsset(thumbnailPath).catch(() => {});
     return { success: false, error: rowError?.message ?? "Insert failed" };
   }
 
