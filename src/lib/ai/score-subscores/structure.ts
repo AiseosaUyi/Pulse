@@ -15,6 +15,26 @@ function headingIndices(content: string): Array<{ level: number; index: number; 
     const m = line.match(/^(#{1,6})\s+(.+)$/);
     if (m) out.push({ level: m[1].length, index: idx, text: m[2].trim() });
   });
+
+  // Heal markdown that uses `#` for every heading. TipTap's WYSIWYG
+  // has H1 disabled (`levels: [2, 3, 4]`) and renders every `#` as an
+  // H2, so what the user sees matches that intent. If we spot >3 H1s
+  // and no H2s, treat the first H1 as the title and demote the rest
+  // to H2 for scoring. Without this the structure rubric would punish
+  // content that already looks fine to a reader.
+  const h1Count = out.filter((h) => h.level === 1).length;
+  const h2Count = out.filter((h) => h.level === 2).length;
+  if (h1Count > 3 && h2Count === 0) {
+    let seenFirst = false;
+    return out.map((h) => {
+      if (h.level !== 1) return h;
+      if (!seenFirst) {
+        seenFirst = true;
+        return h;
+      }
+      return { ...h, level: 2 };
+    });
+  }
   return out;
 }
 

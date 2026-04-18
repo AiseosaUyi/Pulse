@@ -160,6 +160,41 @@ Wrap up.`;
     const r = scoreStructure({ content });
     expect(r.issues.some((i) => i.message.includes("conclusion"))).toBe(true);
   });
+
+  // Regression: ISSUE-001 — found by /qa on 2026-04-19
+  // AI sometimes emits single-`#` for every heading. TipTap renders them
+  // as H2s (H1 disabled in editor). The scorer used to count them as H1s
+  // and deduct structure points. Demoting after the first `#` matches
+  // what the user sees and keeps the score honest.
+  it("promotes `#` → H2 when every heading is `#` (AI output drift)", () => {
+    const content = `# Title
+
+Intro.
+
+# First section
+
+Body.
+
+# Second section
+
+Body.
+
+# Third section
+
+Body.
+
+# Conclusion
+
+Wrap up.`;
+    const r = scoreStructure({ content });
+    expect(
+      r.issues.some((i) => i.message.includes("Multiple H1"))
+    ).toBe(false);
+    expect(
+      r.issues.some((i) => i.message.includes("Only 0 H2 sections"))
+    ).toBe(false);
+    expect(r.score).toBeGreaterThanOrEqual(7);
+  });
 });
 
 describe("extractFaqFromMarkdown", () => {
