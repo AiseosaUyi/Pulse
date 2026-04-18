@@ -5,15 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenant } from "@/lib/services/tenants";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
 import { generateBlogPost, BlogGenerationError } from "@/lib/ai/generate-blog-post";
+import { countWords } from "@/lib/blog/word-count";
 import type { BlogPostStatus } from "@/lib/types/blog-posts";
 
 type ActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
   | { success: false; error: string };
-
-function wordCountOf(text: string): number {
-  return text.trim().split(/\s+/).filter(Boolean).length;
-}
 
 export async function generateBlogPostDraft(
   tenantSlug: string,
@@ -22,7 +19,14 @@ export async function generateBlogPostDraft(
     extraContext?: string;
     targetWordCount?: number;
   }
-): Promise<ActionResult<{ postId: string }>> {
+): Promise<
+  ActionResult<{
+    postId: string;
+    wordCount: number;
+    targetWordCount: number;
+    wordCountWarning: boolean;
+  }>
+> {
   if (!input.targetKeyword.trim()) {
     return { success: false, error: "Target keyword is required" };
   }
@@ -32,7 +36,7 @@ export async function generateBlogPostDraft(
   const voice = await getBrandVoice(tenantSlug);
 
   try {
-    const draft = await generateBlogPost({
+    const { post: draft, meta } = await generateBlogPost({
       tenantSlug,
       tenantName: tenant.name,
       voice,
@@ -40,6 +44,9 @@ export async function generateBlogPostDraft(
       extraContext: input.extraContext?.trim(),
       targetWordCount: input.targetWordCount,
     });
+
+    const finalWordCount = countWords(draft.content);
+    const wordCountWarning = meta.stopped_reason === "max_passes_reached";
 
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -52,9 +59,10 @@ export async function generateBlogPostDraft(
         meta_description: draft.meta_description,
         outline: draft.outline,
         content: draft.content,
-        word_count: wordCountOf(draft.content),
+        word_count: finalWordCount,
         status: "draft",
         generator_model: "openai/gpt-4.1",
+        generation_meta: meta,
       })
       .select("id")
       .single();
@@ -63,7 +71,13 @@ export async function generateBlogPostDraft(
 
     revalidatePath("/seo-tracker/blog-writer");
     revalidatePath("/seo-tracker");
-    return { success: true, postId: data.id };
+    return {
+      success: true,
+      postId: data.id,
+      wordCount: finalWordCount,
+      targetWordCount: meta.target_word_count,
+      wordCountWarning,
+    };
   } catch (err) {
     const msg =
       err instanceof BlogGenerationError
@@ -92,7 +106,7 @@ export async function updateBlogPost(
   if (patch.metaDescription !== undefined) update.meta_description = patch.metaDescription;
   if (patch.content !== undefined) {
     update.content = patch.content;
-    update.word_count = wordCountOf(patch.content);
+    update.word_count = countWords(patch.content);
   }
   if (patch.secondaryKeywords !== undefined) update.secondary_keywords = patch.secondaryKeywords;
   if (patch.status !== undefined) update.status = patch.status;

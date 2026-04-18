@@ -21,6 +21,7 @@ export function NewBlogPostModal({
   const [wordCount, setWordCount] = useState("1200");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [wcWarning, setWcWarning] = useState<string | null>(null);
 
   const handleGenerate = () => {
     if (!keyword.trim()) {
@@ -28,6 +29,7 @@ export function NewBlogPostModal({
       return;
     }
     setError(null);
+    setWcWarning(null);
     startTransition(async () => {
       const res = await generateBlogPostDraft(tenantSlug, {
         targetKeyword: keyword.trim(),
@@ -36,6 +38,15 @@ export function NewBlogPostModal({
       });
       if (!res.success) {
         setError(res.error);
+        return;
+      }
+      if (res.wordCountWarning) {
+        // Draft still landed short of target after 2 expansion passes —
+        // keep the modal open so the user sees the warning before we
+        // close; they can still click Close to proceed to the list.
+        setWcWarning(
+          `Draft came in at ${res.wordCount} words vs target ${res.targetWordCount}. Saved as draft — you can expand sections manually.`
+        );
         return;
       }
       onClose();
@@ -134,11 +145,17 @@ export function NewBlogPostModal({
               {error}
             </p>
           )}
+
+          {wcWarning && (
+            <div className="rounded-lg border border-status-yellow/40 bg-status-yellow/10 p-3 text-sm text-foreground">
+              {wcWarning}
+            </div>
+          )}
         </div>
 
         <div className="p-5 border-t border-border/30 flex items-center justify-end gap-2">
           <Button variant="ghost" onClick={onClose} disabled={isPending}>
-            Cancel
+            {wcWarning ? "Close" : "Cancel"}
           </Button>
           <Button onClick={handleGenerate} disabled={isPending}>
             {isPending ? "Generating..." : "Generate draft"}

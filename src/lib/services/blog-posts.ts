@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type {
+  BlogGenerationMeta,
   BlogPostRecord,
   BlogPostStatus,
   BlogPostOutlineItem,
@@ -17,6 +18,7 @@ interface Row {
   word_count: number;
   status: BlogPostStatus;
   generator_model: string | null;
+  generation_meta: BlogGenerationMeta | null;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +36,7 @@ function rowTo(row: Row): BlogPostRecord {
     wordCount: row.word_count,
     status: row.status,
     generatorModel: row.generator_model,
+    generationMeta: row.generation_meta ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

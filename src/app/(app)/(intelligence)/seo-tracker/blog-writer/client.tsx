@@ -1,12 +1,53 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/Badge";
 import { BlogPostEditor } from "@/components/seo/BlogPostEditor";
 import { NewBlogPostModal } from "@/components/seo/NewBlogPostModal";
+import { withinTolerance } from "@/lib/blog/word-count";
 import type { BlogPostRecord, BlogPostStatus } from "@/lib/types/blog-posts";
+
+function WordCountBadge({
+  actual,
+  target,
+  stoppedReason,
+}: {
+  actual: number;
+  target?: number;
+  stoppedReason?: string;
+}) {
+  // No target means the row predates migration 022 — render plain count.
+  if (target == null) {
+    return <span>{actual.toLocaleString()} words</span>;
+  }
+  const ok = withinTolerance(actual, target);
+  const wasExpanded = stoppedReason === "expanded_to_tolerance";
+  const missed = stoppedReason === "max_passes_reached";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 ${
+        missed
+          ? "text-status-red"
+          : wasExpanded
+            ? "text-status-yellow"
+            : "text-text-muted"
+      }`}
+      title={
+        missed
+          ? `Target was ${target}. Landed at ${actual} after 2 expansion passes.`
+          : wasExpanded
+            ? `Target ${target}. Hit after expansion pass.`
+            : `Target ${target}.`
+      }
+    >
+      {missed && <AlertTriangle size={10} />}
+      {actual.toLocaleString()} / {target.toLocaleString()} words
+      {!ok && missed ? " (short)" : ""}
+    </span>
+  );
+}
 
 function statusBadge(status: BlogPostStatus) {
   switch (status) {
@@ -84,7 +125,11 @@ export function BlogWriterClient({
                     <span className="text-foreground">{p.targetKeyword}</span>
                   </span>
                 )}
-                <span>{p.wordCount.toLocaleString()} words</span>
+                <WordCountBadge
+                  actual={p.wordCount}
+                  target={p.generationMeta?.target_word_count}
+                  stoppedReason={p.generationMeta?.stopped_reason}
+                />
                 <span>·</span>
                 <span>
                   Updated{" "}
