@@ -6,6 +6,12 @@ import { StorageMeter } from "@/components/vault/StorageMeter";
 import { ContentExtractor } from "./content-extractor";
 import { VaultClient } from "./client";
 
+// Extraction server action may take up to ~40s on first hit when the
+// self-hosted cobalt instance is cold (Render free tier spins down
+// after 15 min idle, then needs ~15-30s to boot). Give the function
+// 60s ceiling so the first extraction of the session completes.
+export const maxDuration = 60;
+
 export default async function ContentVaultPage() {
   const cookieStore = await cookies();
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";

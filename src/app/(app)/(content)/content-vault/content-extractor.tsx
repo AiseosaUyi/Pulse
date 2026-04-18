@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { Link2, Check, Loader2, Download, AlertTriangle } from "lucide-react";
 import { saveContentFromUrl } from "@/lib/actions/saved-content";
 
@@ -18,6 +18,25 @@ export function ContentExtractor({ tenantSlug }: { tenantSlug: string }) {
   const [url, setUrl] = useState("");
   const [isPending, startTransition] = useTransition();
   const [fb, setFb] = useState<Feedback>({ kind: "idle" });
+  const [elapsed, setElapsed] = useState(0);
+  const startedAt = useRef<number | null>(null);
+
+  // Tick the elapsed counter while extracting — surfaces the "still
+  // working" state so the user doesn't bail during a cold-start wait.
+  useEffect(() => {
+    if (!isPending) {
+      startedAt.current = null;
+      setElapsed(0);
+      return;
+    }
+    if (startedAt.current == null) startedAt.current = Date.now();
+    const tick = setInterval(() => {
+      if (startedAt.current != null) {
+        setElapsed(Math.floor((Date.now() - startedAt.current) / 1000));
+      }
+    }, 500);
+    return () => clearInterval(tick);
+  }, [isPending]);
 
   const handleSave = () => {
     if (!url.trim()) return;
@@ -88,7 +107,7 @@ export function ContentExtractor({ tenantSlug }: { tenantSlug: string }) {
           {isPending ? (
             <>
               <Loader2 size={14} className="animate-spin" />
-              Extracting...
+              {elapsed > 0 ? `Extracting... ${elapsed}s` : "Extracting..."}
             </>
           ) : fb.kind === "success" ? (
             <>
@@ -103,6 +122,13 @@ export function ContentExtractor({ tenantSlug }: { tenantSlug: string }) {
           )}
         </button>
       </div>
+
+      {fb.kind === "extracting" && elapsed >= 10 && (
+        <p className="mt-3 text-text-muted text-xs">
+          First extraction of the day is slow — the downloader instance wakes
+          up on demand (cold start ~15-30s). Later extractions are fast.
+        </p>
+      )}
 
       {fb.kind === "success" && (
         <div className="mt-4 flex items-start gap-3 p-3 rounded-lg bg-status-green/10 border border-status-green/30">

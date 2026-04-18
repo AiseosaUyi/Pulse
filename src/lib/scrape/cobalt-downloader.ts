@@ -10,7 +10,11 @@
 // the caller must route the URL to another resolver — isCobaltConfigured()
 // lets platform-adapter code branch cleanly.
 
-const REQUEST_TIMEOUT_MS = 20_000;
+// 55s ceiling — enough headroom for Render's free-tier cold start
+// (~15-30s to spin the container back up) plus cobalt's own resolve
+// (~5s warm). Sits just under Vercel's 60s hobby function limit so
+// the whole server action still completes in time.
+const REQUEST_TIMEOUT_MS = 55_000;
 
 export class CobaltResolveError extends Error {
   constructor(
