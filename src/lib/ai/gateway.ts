@@ -24,11 +24,12 @@ export function getModel(purpose: Purpose): LanguageModel {
     case "synthesis":
       return openai("gpt-4.1");
     case "scoring":
-      // Scoring doesn't need the creativity of synthesis; a smaller
-      // model delivers the same rating quality at a fraction of the
-      // cost. Kept on 4.1 for v1 so we don't couple rubric tuning to
-      // a model swap. Revisit once the rubric is stable.
-      return openai("gpt-4.1");
+      // Scoring is a rating task with structured output — the deterministic
+      // half of the rubric anchors the final number, so the AI half just
+      // needs to grade 0-5 per criterion. gpt-4o-mini is ~13x cheaper
+      // than 4.1 and more than capable here. Revisit if rubric tuning
+      // exposes rating drift.
+      return openai("gpt-4o-mini");
     case "vision":
       return openai("gpt-4o");
     case "embedding":
@@ -44,10 +45,11 @@ export function getModel(purpose: Purpose): LanguageModel {
 export function getModelId(purpose: Purpose): string {
   switch (purpose) {
     case "synthesis":
-    case "scoring":
     case "embedding":
     case "transcription":
       return "openai/gpt-4.1";
+    case "scoring":
+      return "openai/gpt-4o-mini";
     case "vision":
       return "openai/gpt-4o";
   }
@@ -60,6 +62,7 @@ const COST_PER_MTOK: Record<
 > = {
   "openai/gpt-4.1": { input: 2, output: 8, cache_read: 0.5 },
   "openai/gpt-4o": { input: 2.5, output: 10, cache_read: 1.25 },
+  "openai/gpt-4o-mini": { input: 0.15, output: 0.6, cache_read: 0.075 },
   "openai/gpt-5": { input: 1.25, output: 10, cache_read: 0.125 },
 };
 

@@ -22,7 +22,11 @@ const MAX_EXPANSION_PASSES = 2;
 // Score loop (Phase B).
 const SCORE_TARGET = 80;
 const MAX_REFINE_PASSES = 3;
-const COST_CAP_USD = 0.25;
+// Total per-post cost ceiling. Scoring is now ~3-4x cheaper since the
+// combined-ai refactor (gpt-4o-mini, one call instead of three), so
+// the cap drops from 0.25 → 0.10. Typical successful blog: ~$0.02.
+// Worst case with full refine budget: ~$0.06.
+const COST_CAP_USD = 0.1;
 
 export const blogPostSchema = z.object({
   title: z.string().min(1),
@@ -496,6 +500,7 @@ export async function generateBlogPost(
     positioning: input.positioning,
     voice: input.voice,
   });
+  totalCost += score.aiCostUsd;
 
   if (score.total >= SCORE_TARGET) {
     return buildResult({
@@ -551,13 +556,14 @@ export async function generateBlogPost(
       positioning: input.positioning,
       voice: input.voice,
     });
+    totalCost += score.aiCostUsd;
 
     passes.push({
       pass: passes.length + 1,
       kind: "refine",
       word_count: currentWordCount,
       score: score.total,
-      cost_usd: r.cost,
+      cost_usd: r.cost + score.aiCostUsd,
       duration_ms: r.durationMs,
     });
 
