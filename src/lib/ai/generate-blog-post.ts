@@ -136,7 +136,7 @@ export function buildVoiceBlock(voice: BrandVoice | null): string {
  * the rules list, in the user prompt header, and as a final reminder —
  * to fight the bug where GPT-4.1 delivered ~60% of requested length.
  */
-async function initialGenerate(
+export async function initialGenerate(
   input: GenerateBlogInput,
   targetWordCount: number,
   voiceBlock: string,
@@ -236,7 +236,7 @@ async function initialGenerate(
  * prompts/blog/expand.md template so the expansion rules live in one
  * place editors can tune.
  */
-async function expandContent(args: {
+export async function expandContent(args: {
   input: GenerateBlogInput;
   current: GeneratedBlogPost;
   currentWordCount: number;
@@ -322,7 +322,7 @@ async function expandContent(args: {
  * Refine pass — targeted fixes based on the prior pass's score issues.
  * Same content-only schema as expand; preserves title/meta/outline.
  */
-async function refineContent(args: {
+export async function refineContent(args: {
   input: GenerateBlogInput;
   current: GeneratedBlogPost;
   currentScore: number;

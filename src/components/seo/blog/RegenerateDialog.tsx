@@ -1,18 +1,21 @@
 "use client";
 
-// Confirmation modal for the regenerate flow. Centralizes the two
-// things the user asked for:
+// Confirmation modal for the regenerate flow.
 //
-//   1. An explicit way to include AI score issues as feedback (not
-//      just whatever the user typed / spoke). Checkbox defaults ON
-//      when current score < 90 because that's when AI suggestions
-//      have the most signal.
-//   2. Graceful handling of the below-90 quality gate — instead of
-//      silently persisting a worse result, the server rejects and
-//      the dialog flips into a rejection state with three paths:
+// Two UX commitments:
+//   1. AI score suggestions go into the prompt via a clear checkbox
+//      (defaults ON when current score < 90).
+//   2. Below-90 outputs are rejected rather than silently persisted.
+//      The dialog flips into a rejection panel with three paths:
 //      retry-with-suggestions, apply-anyway (force), or tweak.
+//
+// Under the hood: the iterate-to-90 loop is chunked via
+// `startRegeneration` + `advanceRegeneration`. Each advance call is
+// one AI step (~20-30s) to stay under Vercel Hobby's 60s function
+// cap. The client loops awaiting each advance and renders live
+// progress so the ~100s total isn't a blank spinner.
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import {
   AlertTriangle,
   Loader2,
@@ -22,8 +25,16 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { regenerateBlogPost } from "@/lib/actions/blog-posts";
-import type { BlogPostRecord, BlogScoreIssue } from "@/lib/types/blog-posts";
+import {
+  startRegeneration,
+  advanceRegeneration,
+  cancelRegeneration,
+} from "@/lib/actions/blog-regeneration";
+import type {
+  BlogPostRecord,
+  BlogScoreIssue,
+  RegenerationState,
+} from "@/lib/types/blog-posts";
 
 function buildAiSuggestionsBlock(issues: BlogScoreIssue[]): string {
   if (issues.length === 0) return "";
@@ -40,6 +51,16 @@ function buildAiSuggestionsBlock(issues: BlogScoreIssue[]): string {
   ].join("\n\n");
 }
 
+/** Human labels for the state-machine phases shown during runs. */
+const PHASE_LABEL: Record<RegenerationState["phase"], string> = {
+  starting: "Starting…",
+  scored: "Scored · deciding next pass",
+  refine_done: "Refined · scoring",
+  ok: "Done",
+  below_threshold: "Rejected · below 90",
+  failed: "Failed",
+};
+
 interface Props {
   post: BlogPostRecord;
   /** Feedback carried over from the dock (typed + transcribed). */
@@ -48,15 +69,16 @@ interface Props {
   onSuccess: (note: string) => void;
 }
 
-type Phase =
+type ViewPhase =
   | { kind: "compose" }
-  | { kind: "running" }
+  | { kind: "running"; live: RegenerationState | null }
   | {
       kind: "rejected";
       score: number;
       issues: BlogScoreIssue[];
-      feedbackUsed: string;
     };
+
+const MAX_TOTAL_STEPS = 8; // initial-score + 3×(refine-score) pairs.
 
 export function RegenerateDialog({
   post,
@@ -74,9 +96,13 @@ export function RegenerateDialog({
 
   const [feedback, setFeedback] = useState(initialFeedback.trim());
   const [useAiSuggestions, setUseAiSuggestions] = useState(defaultUseAi);
-  const [phase, setPhase] = useState<Phase>({ kind: "compose" });
+  const [view, setView] = useState<ViewPhase>({ kind: "compose" });
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+
+  // Abort flag — set when user clicks Cancel during a run so the
+  // poll loop knows to stop even if an AI call is still in flight.
+  const abortRef = useRef(false);
 
   const composedContext = useMemo(() => {
     const pieces: string[] = [];
@@ -88,42 +114,83 @@ export function RegenerateDialog({
     return pieces.join("\n\n---\n\n");
   }, [feedback, useAiSuggestions, post.scoreIssues]);
 
-  const submit = (opts: { force?: boolean } = {}) => {
+  const runLoop = async (opts: { force?: boolean } = {}) => {
     setError(null);
-    setPhase({ kind: "running" });
-    startTransition(async () => {
-      try {
-        const res = await regenerateBlogPost(post.id, post.tenantSlug, {
-          extraFeedback: composedContext || undefined,
-          force: opts.force,
-        });
-        if (!res.success) throw new Error(res.error);
+    abortRef.current = false;
+    setView({ kind: "running", live: null });
 
-        if (res.scoreBelowThreshold && !opts.force) {
-          setPhase({
-            kind: "rejected",
-            score: res.rejectedScore ?? 0,
-            issues: (res.rejectedIssues ?? []) as BlogScoreIssue[],
-            feedbackUsed: composedContext,
-          });
-          return;
-        }
+    const start = await startRegeneration(post.id, post.tenantSlug, {
+      extraFeedback: composedContext || undefined,
+      force: opts.force,
+    });
+    if (!start.success) {
+      setError(start.error);
+      setView({ kind: "compose" });
+      return;
+    }
 
+    let current: RegenerationState = start.state;
+    setView({ kind: "running", live: current });
+
+    // Poll by awaiting each step. Safety cap: MAX_TOTAL_STEPS to
+    // avoid runaway loops if the state machine ever cycles without
+    // making progress.
+    for (let step = 0; step < MAX_TOTAL_STEPS; step++) {
+      if (abortRef.current) {
+        await cancelRegeneration(post.id, post.tenantSlug);
+        setView({ kind: "compose" });
+        return;
+      }
+
+      const res = await advanceRegeneration(post.id, post.tenantSlug);
+      if (!res.success) {
+        setError(res.error);
+        setView({ kind: "compose" });
+        return;
+      }
+      current = res.state;
+      setView({ kind: "running", live: current });
+
+      if (current.phase === "ok") {
         onSuccess(
-          res.contentScore != null
-            ? `Regenerated · score ${res.contentScore}`
+          current.score
+            ? `Regenerated · score ${current.score.total}`
             : "Regenerated"
         );
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Regenerate failed");
-        setPhase({ kind: "compose" });
+        return;
       }
-    });
+      if (current.phase === "below_threshold") {
+        setView({
+          kind: "rejected",
+          score: current.rejected_score ?? current.score?.total ?? 0,
+          issues: (current.rejected_issues ?? current.score?.issues ?? []) as BlogScoreIssue[],
+        });
+        return;
+      }
+      if (current.phase === "failed") {
+        setError(current.error ?? "Regeneration failed");
+        setView({ kind: "compose" });
+        return;
+      }
+    }
+
+    setError(
+      "Reached step cap without a terminal state. State may be corrupt — cancel and retry."
+    );
+    setView({ kind: "compose" });
   };
 
+  const submit = (opts: { force?: boolean } = {}) =>
+    startTransition(async () => {
+      try {
+        await runLoop(opts);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Regenerate failed");
+        setView({ kind: "compose" });
+      }
+    });
+
   const handleRetryWithSuggestions = () => {
-    // Flip the checkbox on if it wasn't already and retry. If AI
-    // suggestions were already on, this is a plain retry.
     setUseAiSuggestions(true);
     submit();
   };
@@ -138,8 +205,16 @@ export function RegenerateDialog({
     submit({ force: true });
   };
 
-  const isRunning = phase.kind === "running";
-  const isRejected = phase.kind === "rejected";
+  const handleCancel = () => {
+    if (view.kind === "running") {
+      abortRef.current = true;
+    } else {
+      onClose();
+    }
+  };
+
+  const isRunning = view.kind === "running";
+  const isRejected = view.kind === "rejected";
 
   return (
     <div
@@ -148,7 +223,7 @@ export function RegenerateDialog({
         if (e.target === e.currentTarget && !isRunning) onClose();
       }}
     >
-      <div className="bg-card w-full max-w-[600px] rounded-2xl border border-border shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="bg-card w-full max-w-[640px] rounded-2xl border border-border shadow-2xl flex flex-col max-h-[90vh]">
         <div className="p-5 border-b border-border/30 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Sparkles size={16} className="text-primary-500" />
@@ -165,7 +240,7 @@ export function RegenerateDialog({
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto flex-1">
-          {/* Current score context */}
+          {/* Current score */}
           <div className="flex items-center justify-between rounded-lg border border-border bg-sidebar/40 p-3">
             <div>
               <p className="text-[10px] uppercase tracking-wide text-text-muted font-semibold">
@@ -186,11 +261,14 @@ export function RegenerateDialog({
 
           {isRejected ? (
             <RejectedPanel
-              phase={phase as Extract<Phase, { kind: "rejected" }>}
+              score={(view as { kind: "rejected"; score: number }).score}
+              issues={(view as { kind: "rejected"; issues: BlogScoreIssue[] }).issues}
               onRetryWithSuggestions={handleRetryWithSuggestions}
               onApplyAnyway={handleApplyAnyway}
-              onTweak={() => setPhase({ kind: "compose" })}
+              onTweak={() => setView({ kind: "compose" })}
             />
+          ) : isRunning ? (
+            <RunningPanel live={(view as { kind: "running"; live: RegenerationState | null }).live} />
           ) : (
             <>
               {/* AI suggestions checkbox */}
@@ -199,7 +277,7 @@ export function RegenerateDialog({
                   type="checkbox"
                   checked={useAiSuggestions}
                   onChange={(e) => setUseAiSuggestions(e.target.checked)}
-                  disabled={isRunning || actionableIssueCount === 0}
+                  disabled={actionableIssueCount === 0}
                   className="mt-0.5 h-4 w-4 accent-primary-500"
                 />
                 <div className="flex-1">
@@ -234,7 +312,6 @@ export function RegenerateDialog({
                   id="regen-feedback"
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
-                  disabled={isRunning}
                   rows={4}
                   placeholder="e.g. Make the intro punchier. Drop the &quot;10 steps&quot; framing. Add a section on pricing."
                 />
@@ -249,38 +326,20 @@ export function RegenerateDialog({
                   {error}
                 </p>
               )}
-
-              {isRunning && (
-                <div className="rounded-lg border border-border bg-sidebar/40 p-4 flex items-center gap-3">
-                  <Loader2
-                    size={18}
-                    className="animate-spin text-primary-500"
-                  />
-                  <div>
-                    <p className="text-sm text-foreground">
-                      Regenerating with iterate-to-90…
-                    </p>
-                    <p className="text-xs text-text-muted mt-0.5">
-                      Up to ~60s. Writing, scoring, and refining until it hits
-                      90+ (or we stop because the budget's gone).
-                    </p>
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>
 
         {!isRejected && (
           <div className="p-5 border-t border-border/30 flex items-center justify-end gap-2">
-            <Button variant="ghost" onClick={onClose} disabled={isRunning}>
-              Cancel
+            <Button variant="ghost" onClick={handleCancel}>
+              {isRunning ? "Abort" : "Cancel"}
             </Button>
             <Button onClick={() => submit()} disabled={isRunning}>
               {isRunning ? (
                 <>
                   <Loader2 size={14} className="animate-spin" />
-                  Regenerating…
+                  Running…
                 </>
               ) : (
                 <>
@@ -296,13 +355,106 @@ export function RegenerateDialog({
   );
 }
 
+function RunningPanel({ live }: { live: RegenerationState | null }) {
+  const phase = live?.phase ?? "starting";
+  const passCount = live?.passes?.length ?? 0;
+  const refineCount = live?.refine_count ?? 0;
+  const currentScore = live?.score?.total ?? null;
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-border bg-sidebar/40 p-4 flex items-start gap-3">
+        <Loader2 size={18} className="animate-spin text-primary-500 mt-0.5" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-foreground font-medium">
+            {PHASE_LABEL[phase]}
+          </p>
+          <p className="text-xs text-text-muted mt-0.5">
+            Each step is one AI call (~20-30s). The full loop runs in chunks so
+            it fits under the serverless function cap.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <Stat label="Passes" value={passCount} />
+        <Stat
+          label="Refines"
+          value={`${refineCount}/3`}
+          tone={refineCount >= 3 ? "warn" : undefined}
+        />
+        <Stat
+          label="Score"
+          value={currentScore != null ? `${currentScore}/100` : "—"}
+          tone={
+            currentScore == null
+              ? undefined
+              : currentScore >= 90
+                ? "good"
+                : currentScore >= 80
+                  ? "warn"
+                  : "bad"
+          }
+        />
+      </div>
+
+      {live?.passes && live.passes.length > 0 && (
+        <ul className="space-y-1">
+          {live.passes.map((p, i) => (
+            <li
+              key={i}
+              className="text-[11px] text-text-muted flex items-center justify-between px-2 py-1 rounded bg-sidebar/30"
+            >
+              <span>
+                #{i + 1} · {p.kind} · {p.word_count}w
+              </span>
+              <span>
+                {Math.round(p.duration_ms / 1000)}s · ${p.cost_usd.toFixed(3)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  tone?: "good" | "warn" | "bad";
+}) {
+  const color =
+    tone === "good"
+      ? "text-status-green"
+      : tone === "warn"
+        ? "text-status-yellow"
+        : tone === "bad"
+          ? "text-status-red"
+          : "text-foreground";
+  return (
+    <div className="rounded-lg border border-border p-2">
+      <p className="text-[10px] uppercase tracking-wide text-text-muted font-semibold">
+        {label}
+      </p>
+      <p className={`text-sm font-semibold mt-0.5 ${color}`}>{value}</p>
+    </div>
+  );
+}
+
 function RejectedPanel({
-  phase,
+  score,
+  issues,
   onRetryWithSuggestions,
   onApplyAnyway,
   onTweak,
 }: {
-  phase: Extract<Phase, { kind: "rejected" }>;
+  score: number;
+  issues: BlogScoreIssue[];
   onRetryWithSuggestions: () => void;
   onApplyAnyway: () => void;
   onTweak: () => void;
@@ -314,7 +466,7 @@ function RejectedPanel({
           <Shield size={18} className="text-status-yellow mt-0.5" />
           <div className="min-w-0 flex-1">
             <p className="text-sm text-foreground font-medium">
-              Regeneration rejected — best score was {phase.score}/100.
+              Regeneration rejected — best score was {score}/100.
             </p>
             <p className="text-xs text-text-muted mt-1">
               Your current draft is untouched. Below-90 outputs aren&apos;t
@@ -325,13 +477,13 @@ function RejectedPanel({
         </div>
       </div>
 
-      {phase.issues.length > 0 && (
+      {issues.length > 0 && (
         <div>
           <p className="text-[11px] uppercase tracking-wide text-text-muted font-semibold mb-2">
             What held it back
           </p>
           <ul className="space-y-1.5">
-            {phase.issues.slice(0, 4).map((iss, i) => (
+            {issues.slice(0, 4).map((iss, i) => (
               <li
                 key={i}
                 className="rounded-md border border-border p-2.5 text-xs text-foreground"

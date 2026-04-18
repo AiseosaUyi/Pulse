@@ -66,6 +66,47 @@ export interface BlogGooglePreview {
   meta_display: string;
 }
 
+/** State persisted in blog_posts.regeneration_state during an
+ *  in-progress chunked regenerate. Null when idle. */
+export interface RegenerationState {
+  phase:
+    | "starting"
+    | "scored"
+    | "refine_done"
+    | "ok"
+    | "below_threshold"
+    | "failed";
+  /** The current best draft (updated after each refine). */
+  draft: {
+    title: string;
+    meta_description: string;
+    outline: BlogPostOutlineItem[];
+    content: string;
+    secondary_keywords: string[];
+  };
+  /** Latest score if we have one; null between refine and score. */
+  score: {
+    total: number;
+    subScores: BlogSubScores;
+    issues: BlogScoreIssue[];
+    aiCostUsd: number;
+    computedAt: string;
+  } | null;
+  /** Pass-by-pass trail, same shape as `BlogGenerationMeta.passes`. */
+  passes: BlogGenerationMeta["passes"];
+  total_cost_usd: number;
+  refine_count: number;
+  feedback: string;
+  force: boolean;
+  target_word_count: number;
+  started_at: string;
+  updated_at: string;
+  error: string | null;
+  /** When phase === below_threshold, surfaces the rejected-score UX. */
+  rejected_score?: number | null;
+  rejected_issues?: BlogScoreIssue[];
+}
+
 export interface BlogPostRecord {
   id: string;
   tenantSlug: string;
