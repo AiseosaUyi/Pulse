@@ -66,6 +66,7 @@ export async function generateBrief(
     await logAiCall({
       tenantSlug: input.tenantSlug,
       purpose: "synthesis",
+      feature: "brief_generate",
       model: modelId,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
@@ -80,6 +81,7 @@ export async function generateBrief(
     await logAiCall({
       tenantSlug: input.tenantSlug,
       purpose: "synthesis",
+      feature: "brief_generate",
       model: modelId,
       durationMs: Date.now() - started,
       success: false,

@@ -34,6 +34,32 @@ export interface BlogGenerationMeta {
   total_cost_usd: number;
 }
 
+/** Mirrors `SubScores` in `src/lib/ai/score-blog.ts`. */
+export interface BlogSubScores {
+  alignment: { score: number; max: number };
+  seo: { score: number; max: number };
+  readability: { score: number; max: number };
+  depth: { score: number; max: number };
+  structure: { score: number; max: number };
+  faq: { score: number; max: number };
+  eeat: { score: number; max: number };
+}
+
+export interface BlogScoreIssue {
+  subScore:
+    | "alignment"
+    | "seo"
+    | "readability"
+    | "depth"
+    | "structure"
+    | "faq"
+    | "eeat";
+  severity: "high" | "med" | "low";
+  message: string;
+  suggestedFix: string;
+  affectedSection?: string;
+}
+
 export interface BlogPostRecord {
   id: string;
   tenantSlug: string;
@@ -47,6 +73,11 @@ export interface BlogPostRecord {
   status: BlogPostStatus;
   generatorModel: string | null;
   generationMeta: BlogGenerationMeta | null;
+  /** 0-100 total; null for rows that predate scoring (Phase B). */
+  contentScore: number | null;
+  subScores: BlogSubScores | null;
+  scoreIssues: BlogScoreIssue[];
+  scoreWarning: boolean;
   createdAt: string;
   updatedAt: string;
 }

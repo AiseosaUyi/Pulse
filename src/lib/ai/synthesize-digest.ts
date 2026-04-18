@@ -139,6 +139,7 @@ export async function synthesizeDigest(
     await logAiCall({
       tenantSlug: data.tenantSlug,
       purpose: "synthesis",
+      feature: "digest_synthesize",
       model: MODEL_ID,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
@@ -166,6 +167,7 @@ export async function synthesizeDigest(
     await logAiCall({
       tenantSlug: data.tenantSlug,
       purpose: "synthesis",
+      feature: "digest_synthesize",
       model: MODEL_ID,
       durationMs: Date.now() - started,
       success: false,

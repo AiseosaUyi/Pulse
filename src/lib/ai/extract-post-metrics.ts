@@ -78,7 +78,8 @@ export async function extractMetricsFromScreenshot(
 
     await logAiCall({
       tenantSlug: input.tenantSlug,
-      purpose: "synthesis",
+      purpose: "vision",
+      feature: "metrics_extract",
       model: MODEL_ID,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
@@ -107,7 +108,8 @@ export async function extractMetricsFromScreenshot(
   } catch (err) {
     await logAiCall({
       tenantSlug: input.tenantSlug,
-      purpose: "synthesis",
+      purpose: "vision",
+      feature: "metrics_extract",
       model: MODEL_ID,
       durationMs: Date.now() - started,
       success: false,

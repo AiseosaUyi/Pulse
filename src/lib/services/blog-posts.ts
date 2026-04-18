@@ -4,6 +4,8 @@ import type {
   BlogPostRecord,
   BlogPostStatus,
   BlogPostOutlineItem,
+  BlogScoreIssue,
+  BlogSubScores,
 } from "@/lib/types/blog-posts";
 
 interface Row {
@@ -19,6 +21,10 @@ interface Row {
   status: BlogPostStatus;
   generator_model: string | null;
   generation_meta: BlogGenerationMeta | null;
+  content_score: number | null;
+  sub_scores: BlogSubScores | null;
+  score_issues: BlogScoreIssue[] | null;
+  score_warning: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +43,10 @@ function rowTo(row: Row): BlogPostRecord {
     status: row.status,
     generatorModel: row.generator_model,
     generationMeta: row.generation_meta ?? null,
+    contentScore: row.content_score ?? null,
+    subScores: row.sub_scores ?? null,
+    scoreIssues: row.score_issues ?? [],
+    scoreWarning: row.score_warning ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

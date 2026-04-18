@@ -60,6 +60,7 @@ export async function clusterKeywords(input: {
     await logAiCall({
       tenantSlug: input.tenantSlug,
       purpose: "synthesis",
+      feature: "keyword_cluster",
       model: MODEL_ID,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
@@ -72,6 +73,7 @@ export async function clusterKeywords(input: {
     await logAiCall({
       tenantSlug: input.tenantSlug,
       purpose: "synthesis",
+      feature: "keyword_cluster",
       model: MODEL_ID,
       durationMs: Date.now() - started,
       success: false,

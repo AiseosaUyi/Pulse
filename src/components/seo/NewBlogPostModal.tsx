@@ -40,13 +40,22 @@ export function NewBlogPostModal({
         setError(res.error);
         return;
       }
-      if (res.wordCountWarning) {
-        // Draft still landed short of target after 2 expansion passes —
-        // keep the modal open so the user sees the warning before we
-        // close; they can still click Close to proceed to the list.
-        setWcWarning(
-          `Draft came in at ${res.wordCount} words vs target ${res.targetWordCount}. Saved as draft — you can expand sections manually.`
-        );
+      if (res.wordCountWarning || res.scoreWarning) {
+        // Draft either landed short OR missed the 80 score after 3
+        // refine passes. Keep the modal open so the user sees why
+        // before we close — they can still click Close to proceed.
+        const parts: string[] = [];
+        if (res.wordCountWarning) {
+          parts.push(
+            `Word count ${res.wordCount} vs target ${res.targetWordCount}.`
+          );
+        }
+        if (res.scoreWarning) {
+          parts.push(
+            `Content score ${res.contentScore ?? "?"}/100 — under the 80 publish bar after 3 refine passes. Open the side panel to see which sub-scores need work.`
+          );
+        }
+        setWcWarning(parts.join(" "));
         return;
       }
       onClose();

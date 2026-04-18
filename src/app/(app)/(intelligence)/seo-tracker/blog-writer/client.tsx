@@ -9,6 +9,46 @@ import { NewBlogPostModal } from "@/components/seo/NewBlogPostModal";
 import { withinTolerance } from "@/lib/blog/word-count";
 import type { BlogPostRecord, BlogPostStatus } from "@/lib/types/blog-posts";
 
+function ContentScoreBadge({
+  score,
+  warning,
+}: {
+  score: number | null;
+  warning: boolean;
+}) {
+  if (score == null) {
+    return (
+      <span
+        className="text-[10px] px-1.5 py-0.5 rounded-full bg-sidebar border border-border text-text-muted"
+        title="Not scored yet — rescore from the editor."
+      >
+        unscored
+      </span>
+    );
+  }
+  // 90+ blue, 80-89 green, 70-79 amber, <70 red (rubric v1).
+  const tone =
+    score >= 90
+      ? "text-status-teal border-status-teal/30 bg-status-teal/10"
+      : score >= 80
+        ? "text-status-green border-status-green/30 bg-status-green/10"
+        : score >= 70
+          ? "text-status-yellow border-status-yellow/30 bg-status-yellow/10"
+          : "text-status-red border-status-red/30 bg-status-red/10";
+  return (
+    <span
+      className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${tone}`}
+      title={
+        warning
+          ? `Score ${score}/100. Iteration budget exhausted without hitting 80 — surface issues before publishing.`
+          : `Content score ${score}/100`
+      }
+    >
+      {score}
+    </span>
+  );
+}
+
 function WordCountBadge({
   actual,
   target,
@@ -111,7 +151,10 @@ export function BlogWriterClient({
             >
               <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
                 <h3 className="text-foreground font-semibold">{p.title}</h3>
-                <Badge variant={statusBadge(p.status)}>{p.status}</Badge>
+                <div className="flex items-center gap-2">
+                  <ContentScoreBadge score={p.contentScore} warning={p.scoreWarning} />
+                  <Badge variant={statusBadge(p.status)}>{p.status}</Badge>
+                </div>
               </div>
               {p.metaDescription && (
                 <p className="text-sm text-text-secondary line-clamp-2 mb-2">

@@ -83,6 +83,7 @@ export async function analyzeTrend(
     await logAiCall({
       tenantSlug: input.tenantSlug,
       purpose: "synthesis",
+      feature: "trend_analyze",
       model: modelId,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
@@ -97,6 +98,7 @@ export async function analyzeTrend(
     await logAiCall({
       tenantSlug: input.tenantSlug,
       purpose: "synthesis",
+      feature: "trend_analyze",
       model: modelId,
       durationMs: Date.now() - started,
       success: false,

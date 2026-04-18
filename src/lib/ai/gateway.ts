@@ -1,16 +1,42 @@
 // LLM wrapper + call logging.
 // Uses OpenAI direct (via @ai-sdk/openai). Swap to a different provider by
 // editing getModel() and the cost table.
+//
+// `Purpose` is the model-selection axis — different capability classes
+// may pick different models/settings. `feature` on the log entry is
+// the analytics axis — what the call was FOR (blog_generate vs
+// blog_score_alignment vs serp_analyze) so /settings/ai-usage can
+// slice cost by capability, not just model.
 
 import { openai } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-type Purpose = "synthesis";
+export type Purpose =
+  | "synthesis" // blog/brief/serp/trend/digest text generation
+  | "scoring" // content-score sub-score rating
+  | "embedding" // vector embeddings for dedup (Phase E)
+  | "transcription" // Whisper voice-feedback (Phase D)
+  | "vision"; // screenshot OCR / post-metrics extraction
 
 export function getModel(purpose: Purpose): LanguageModel {
   switch (purpose) {
     case "synthesis":
+      return openai("gpt-4.1");
+    case "scoring":
+      // Scoring doesn't need the creativity of synthesis; a smaller
+      // model delivers the same rating quality at a fraction of the
+      // cost. Kept on 4.1 for v1 so we don't couple rubric tuning to
+      // a model swap. Revisit once the rubric is stable.
+      return openai("gpt-4.1");
+    case "vision":
+      return openai("gpt-4o");
+    case "embedding":
+    case "transcription":
+      // These purposes don't use LanguageModel — they have their own
+      // call paths (embedText / Whisper). getModel is a no-op sentinel
+      // for them. Callers that need actual clients should use their
+      // purpose-specific helpers.
       return openai("gpt-4.1");
   }
 }
@@ -18,7 +44,12 @@ export function getModel(purpose: Purpose): LanguageModel {
 export function getModelId(purpose: Purpose): string {
   switch (purpose) {
     case "synthesis":
+    case "scoring":
+    case "embedding":
+    case "transcription":
       return "openai/gpt-4.1";
+    case "vision":
+      return "openai/gpt-4o";
   }
 }
 
@@ -56,6 +87,8 @@ export function estimateCostUsd(
 export interface AiCallLogEntry {
   tenantSlug: string;
   purpose: Purpose;
+  /** Capability slug for analytics — e.g. "blog_generate", "blog_score_alignment". */
+  feature?: string;
   model: string;
   inputTokens?: number;
   outputTokens?: number;
@@ -72,6 +105,7 @@ export async function logAiCall(entry: AiCallLogEntry): Promise<void> {
   await admin.from("ai_call_log").insert({
     tenant_slug: entry.tenantSlug,
     purpose: entry.purpose,
+    feature: entry.feature ?? null,
     model: entry.model,
     input_tokens: entry.inputTokens,
     output_tokens: entry.outputTokens,
