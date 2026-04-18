@@ -262,6 +262,7 @@ export function RegenerateDialog({
           {isRejected ? (
             <RejectedPanel
               score={(view as { kind: "rejected"; score: number }).score}
+              currentScore={post.contentScore}
               issues={(view as { kind: "rejected"; issues: BlogScoreIssue[] }).issues}
               onRetryWithSuggestions={handleRetryWithSuggestions}
               onApplyAnyway={handleApplyAnyway}
@@ -448,17 +449,27 @@ function Stat({
 
 function RejectedPanel({
   score,
+  currentScore,
   issues,
   onRetryWithSuggestions,
   onApplyAnyway,
   onTweak,
 }: {
   score: number;
+  currentScore: number | null;
   issues: BlogScoreIssue[];
   onRetryWithSuggestions: () => void;
   onApplyAnyway: () => void;
   onTweak: () => void;
 }) {
+  // Promote "Apply anyway" when the rejected draft is materially
+  // better than the current one. Retry stays primary (quality gate
+  // exists for a reason), but we shouldn't bury a +10 improvement.
+  const delta = currentScore != null ? score - currentScore : null;
+  const applyIsOutline = delta != null && delta >= 10;
+  const deltaLabel =
+    delta != null && delta > 0 ? ` (+${delta} vs current)` : "";
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-status-yellow/30 bg-status-yellow/10 p-4">
@@ -510,8 +521,11 @@ function RejectedPanel({
         <Button variant="ghost" onClick={onTweak}>
           Tweak feedback
         </Button>
-        <Button variant="ghost" onClick={onApplyAnyway}>
-          Apply anyway
+        <Button
+          variant={applyIsOutline ? "outline" : "ghost"}
+          onClick={onApplyAnyway}
+        >
+          Apply anyway{deltaLabel}
         </Button>
         <Button onClick={onRetryWithSuggestions}>
           <Sparkles size={14} />
