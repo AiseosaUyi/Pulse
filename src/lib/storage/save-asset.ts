@@ -22,7 +22,9 @@ const ALLOWED_HOST_PATTERNS: RegExp[] = [
   /\.fbcdn\.net$/i,
   /(^|\.)scontent(-[a-z0-9-]+)?\.[a-z0-9-]+\.(cdninstagram|fbcdn)\.(com|net)$/i,
   /\.ttwstatic\.com$/i, // TikTok cover fallback
-  /\.twimg\.com$/i, // Twitter/X media CDN (reached via cobalt redirect)
+  /\.twimg\.com$/i, // Twitter/X media CDN (videos + tweet photos)
+  /^img\.youtube\.com$/i, // YouTube thumbnail CDN
+  /\.ytimg\.com$/i, // YouTube alternate thumbnail CDN
 ];
 
 /**

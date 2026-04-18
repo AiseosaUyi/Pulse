@@ -12,7 +12,7 @@ import {
   resolveViaCobalt,
   CobaltResolveError,
 } from "@/lib/scrape/cobalt-downloader";
-import { resolveInstagramThumbnail } from "@/lib/scrape/instagram-thumbnail";
+import { resolveThumbnail } from "@/lib/scrape/thumbnail-resolver";
 import {
   fetchBytes,
   uploadAsset,
@@ -309,21 +309,20 @@ async function extractViaCobaltAndSave(
     return row;
   }
 
-  // Cobalt doesn't hand back a thumbnail separately. For Instagram we
-  // scrape the post's /embed page (cover frame lives in a public CDN
-  // URL there). Best-effort — if IG's bot-wall kicks in or the post is
-  // private, we fall through to the emoji placeholder.
+  // Cobalt doesn't hand back a thumbnail, so we resolve one via the
+  // unified per-platform resolver. YouTube = deterministic URL,
+  // Twitter = fxtwitter API, Instagram = /embed cover scrape,
+  // Facebook = skipped (no reliable free source today). Best-effort —
+  // any failure falls through to the emoji placeholder.
   let thumbnailPath: string | null = null;
-  if (platform === "instagram") {
-    const thumbUrl = await resolveInstagramThumbnail(url);
-    if (thumbUrl) {
-      try {
-        const thumb = await fetchBytes(thumbUrl);
-        const upload = await uploadAsset(tenantSlug, thumb, { suffix: "thumb" });
-        thumbnailPath = upload.storagePath;
-      } catch {
-        // Non-fatal — emoji placeholder is the fallback.
-      }
+  const thumbUrl = await resolveThumbnail(platform, url);
+  if (thumbUrl) {
+    try {
+      const thumb = await fetchBytes(thumbUrl);
+      const upload = await uploadAsset(tenantSlug, thumb, { suffix: "thumb" });
+      thumbnailPath = upload.storagePath;
+    } catch {
+      // Non-fatal — emoji placeholder is the fallback.
     }
   }
 
