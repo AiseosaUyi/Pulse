@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { UserCircle, Users, Lock, Bell, Mail, Trash2, Palette, Sparkles, ArrowRight, Zap, TrendingUp } from "lucide-react";
+import { UserCircle, Users, Lock, Bell, Mail, Trash2, Palette, Sparkles, ArrowRight, Zap, TrendingUp, HardDrive } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, getCurrentTenant } from "@/lib/auth";
 import { PasswordInput } from "@/components/ui/PasswordInput";
@@ -369,6 +369,32 @@ export default async function SettingsPage() {
             className="inline-flex items-center gap-1.5 text-sm text-primary-500 hover:text-primary-600 whitespace-nowrap shrink-0"
           >
             View
+            <ArrowRight size={14} />
+          </Link>
+        </div>
+      </section>
+
+      {/* Storage */}
+      <section className="bg-card border border-border rounded-2xl p-6">
+        <SectionHeading icon={HardDrive} title="Storage" />
+        <div className="flex items-start justify-between gap-6">
+          <div className="min-w-0">
+            <p
+              className="text-sm text-gray-1200 dark:text-foreground"
+              style={{ fontFamily: "'Satoshi-500', var(--font-sans)" }}
+            >
+              Extracted videos + thumbnails
+            </p>
+            <p className="text-xs text-gray-1000 dark:text-text-muted mt-1">
+              See how much of your Supabase Storage quota is used and prune
+              old files to stay under the free-tier limit.
+            </p>
+          </div>
+          <Link
+            href="/settings/storage"
+            className="inline-flex items-center gap-1.5 text-sm text-primary-500 hover:text-primary-600 whitespace-nowrap shrink-0"
+          >
+            Manage
             <ArrowRight size={14} />
           </Link>
         </div>

@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { listSavedContent } from "@/lib/services/saved-content";
 import { listTrendScouts } from "@/lib/services/trends";
+import { getStorageUsage } from "@/lib/services/storage-usage";
+import { StorageMeter } from "@/components/vault/StorageMeter";
 import { ContentExtractor } from "./content-extractor";
 import { VaultClient } from "./client";
 
@@ -8,9 +10,10 @@ export default async function ContentVaultPage() {
   const cookieStore = await cookies();
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
 
-  const [saved, trends] = await Promise.all([
+  const [saved, trends, storage] = await Promise.all([
     listSavedContent(tenantSlug),
     listTrendScouts(tenantSlug, { limit: 10 }),
+    getStorageUsage(),
   ]);
 
   const usedCount = saved.filter((c) => c.status === "used").length;
@@ -26,6 +29,10 @@ export default async function ContentVaultPage() {
             Save reference content, convert trends into drafts.
           </p>
         </div>
+      </div>
+
+      <div className="mb-6">
+        <StorageMeter usage={storage} />
       </div>
 
       <ContentExtractor tenantSlug={tenantSlug} />

@@ -9,7 +9,7 @@ type FeedbackKind = "idle" | "extracting" | "success" | "partial" | "error";
 interface Feedback {
   kind: FeedbackKind;
   message?: string;
-  publicUrl?: string | null;
+  savedId?: string;
   thumbnailUrl?: string | null;
   extractionStatus?: string;
 }
@@ -32,7 +32,7 @@ export function ContentExtractor({ tenantSlug }: { tenantSlug: string }) {
         setFb({
           kind: "success",
           message: res.message,
-          publicUrl: res.publicUrl,
+          savedId: res.id,
           thumbnailUrl: res.thumbnailUrl,
           extractionStatus: res.extractionStatus,
         });
@@ -110,16 +110,13 @@ export function ContentExtractor({ tenantSlug }: { tenantSlug: string }) {
             <p className="text-foreground text-sm font-medium">
               {fb.message ?? "Saved to vault."}
             </p>
-            {fb.publicUrl && (
+            {fb.savedId && (
               <a
-                href={fb.publicUrl}
-                target="_blank"
-                rel="noreferrer"
+                href={`/api/vault/download/${fb.savedId}`}
                 className="text-primary-500 text-xs hover:underline inline-flex items-center gap-1 mt-1"
-                download
               >
                 <Download size={10} />
-                Open / download MP4
+                Download MP4 to device
               </a>
             )}
           </div>

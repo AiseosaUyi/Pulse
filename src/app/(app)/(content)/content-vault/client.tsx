@@ -296,8 +296,7 @@ function SavedRow({
           {(hasVideo || hasImage) && content.publicUrl && (
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               <a
-                href={content.publicUrl}
-                download
+                href={`/api/vault/download/${content.id}`}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-primary-500/10 text-primary-500 rounded-md hover:bg-primary-500/20 transition-colors font-medium"
               >
                 <Download size={12} />
