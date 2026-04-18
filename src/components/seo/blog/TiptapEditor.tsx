@@ -85,6 +85,7 @@ export function TiptapEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [2, 3, 4] },
+        link: false,
       }),
       Link.configure({
         openOnClick: false,
