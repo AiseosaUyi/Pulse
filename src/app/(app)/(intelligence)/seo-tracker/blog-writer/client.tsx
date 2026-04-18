@@ -3,16 +3,20 @@
 import { useState } from "react";
 import { Plus, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BlogPostEditor } from "@/components/seo/BlogPostEditor";
+import { BlogEditor } from "@/components/seo/blog/BlogEditor";
 import { NewBlogPostModal } from "@/components/seo/NewBlogPostModal";
 import { BlogCard } from "@/components/seo/blog/BlogCard";
 import { BlogSidePanel } from "@/components/seo/blog/BlogSidePanel";
-import type { BlogPostRecord } from "@/lib/types/blog-posts";
+import type {
+  BlogPostFeedbackRecord,
+  BlogPostRecord,
+  BlogPostVersionRecord,
+} from "@/lib/types/blog-posts";
 
 /**
- * Phase C flow:
+ * Phase C/D flow:
  *   card click     → opens side panel (read-only)
- *   panel "Edit"   → opens full editor (the old "row click" destination)
+ *   panel "Edit"   → opens WYSIWYG editor with feedback + history tabs
  *
  * Keeps browsing distinct from editing.
  */
@@ -21,11 +25,15 @@ export function BlogWriterClient({
   tenantSlug,
   tenantDomain,
   trackedKeywords,
+  versionsByPost,
+  feedbackByPost,
 }: {
   posts: BlogPostRecord[];
   tenantSlug: string;
   tenantDomain: string;
   trackedKeywords: string[];
+  versionsByPost: Record<string, BlogPostVersionRecord[]>;
+  feedbackByPost: Record<string, BlogPostFeedbackRecord[]>;
 }) {
   const [showNew, setShowNew] = useState(false);
   // Null = nothing open. Both states refer to a post BY ID so the UI
@@ -96,9 +104,11 @@ export function BlogWriterClient({
       )}
 
       {editingPost && (
-        <BlogPostEditor
+        <BlogEditor
           post={editingPost}
           tenantSlug={tenantSlug}
+          versions={versionsByPost[editingPost.id] ?? []}
+          feedback={feedbackByPost[editingPost.id] ?? []}
           onClose={() => setEditingId(null)}
         />
       )}

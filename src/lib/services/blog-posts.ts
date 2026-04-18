@@ -19,6 +19,7 @@ interface Row {
   meta_description: string | null;
   outline: BlogPostOutlineItem[] | null;
   content: string | null;
+  content_json: unknown | null;
   word_count: number;
   status: BlogPostStatus;
   generator_model: string | null;
@@ -44,6 +45,7 @@ function rowTo(row: Row): BlogPostRecord {
     metaDescription: row.meta_description,
     outline: row.outline ?? [],
     content: row.content ?? "",
+    contentJson: row.content_json ?? null,
     wordCount: row.word_count,
     status: row.status,
     generatorModel: row.generator_model,

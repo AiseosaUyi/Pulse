@@ -76,6 +76,9 @@ export interface BlogPostRecord {
   metaDescription: string | null;
   outline: BlogPostOutlineItem[];
   content: string;
+  /** TipTap JSON doc. Null on pre-Phase-D rows — editor lazy-migrates
+   *  by parsing `content` markdown into TipTap state on first open. */
+  contentJson: unknown | null;
   wordCount: number;
   status: BlogPostStatus;
   generatorModel: string | null;
@@ -91,4 +94,35 @@ export interface BlogPostRecord {
   googlePreview: BlogGooglePreview | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BlogPostVersionRecord {
+  id: string;
+  blogPostId: string;
+  tenantSlug: string;
+  versionNumber: number;
+  contentJson: unknown | null;
+  contentMarkdown: string;
+  wordCount: number;
+  contentScore: number | null;
+  diffSummary: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export type BlogPostFeedbackStatus = "pending" | "applied" | "rejected";
+
+export interface BlogPostFeedbackRecord {
+  id: string;
+  blogPostId: string;
+  tenantSlug: string;
+  feedbackText: string | null;
+  feedbackAudioPath: string | null;
+  transcription: string | null;
+  sourceVersionId: string | null;
+  resultingVersionId: string | null;
+  status: BlogPostFeedbackStatus;
+  createdBy: string | null;
+  createdAt: string;
+  appliedAt: string | null;
 }

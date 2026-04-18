@@ -113,7 +113,7 @@ export interface GenerateBlogInput {
   runScoring?: boolean;
 }
 
-function buildVoiceBlock(voice: BrandVoice | null): string {
+export function buildVoiceBlock(voice: BrandVoice | null): string {
   if (!voice) {
     return "No brand voice configured — keep it plainspoken and specific. Avoid generic SEO filler.";
   }
