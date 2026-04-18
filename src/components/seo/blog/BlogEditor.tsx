@@ -77,6 +77,18 @@ export function BlogEditor({
   );
   const [editorState, setEditorState] = useState<TiptapChange | null>(null);
 
+  // Baseline = last-saved snapshot. Dirty is compared against this,
+  // not against `post` props — router.refresh() is async and tiptap-
+  // markdown's initial parse can fire an onUpdate that leaves
+  // editorState non-null even when content hasn't actually changed.
+  // Comparing by value keeps Save correctly disabled.
+  const [baseline, setBaseline] = useState(() => ({
+    title: post.title,
+    metaDescription: post.metaDescription ?? "",
+    status: post.status,
+    contentMarkdown: post.content,
+  }));
+
   const [tab, setTab] = useState<Tab>("editor");
   const [isSaving, startSave] = useTransition();
   const [isDeleting, startDelete] = useTransition();
@@ -89,10 +101,11 @@ export function BlogEditor({
     wordCount: editorState?.wordCount ?? post.wordCount,
   };
 
-  const titleDirty = title !== post.title;
-  const metaDirty = metaDescription !== (post.metaDescription ?? "");
-  const statusDirty = status !== post.status;
-  const editorDirty = editorState !== null;
+  const titleDirty = title !== baseline.title;
+  const metaDirty = metaDescription !== baseline.metaDescription;
+  const statusDirty = status !== baseline.status;
+  const editorDirty =
+    editorState !== null && editorState.markdown !== baseline.contentMarkdown;
   const dirty = titleDirty || metaDirty || statusDirty || editorDirty;
 
   const handleClose = () => {
@@ -137,6 +150,14 @@ export function BlogEditor({
         setSaveNotice("Saved");
       }
 
+      // Snapshot what we just persisted so the dirty flags reset
+      // cleanly — see comment on `baseline` state.
+      setBaseline({
+        title,
+        metaDescription,
+        status,
+        contentMarkdown: current.markdown,
+      });
       setEditorState(null);
       router.refresh();
       // Leave the modal open so the user can see the updated score +
