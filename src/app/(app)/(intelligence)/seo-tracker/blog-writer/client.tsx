@@ -3,46 +3,36 @@
 import { useState } from "react";
 import { Plus, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BlogEditor } from "@/components/seo/blog/BlogEditor";
 import { NewBlogPostModal } from "@/components/seo/NewBlogPostModal";
 import { BlogCard } from "@/components/seo/blog/BlogCard";
 import { BlogSidePanel } from "@/components/seo/blog/BlogSidePanel";
-import type {
-  BlogPostFeedbackRecord,
-  BlogPostRecord,
-  BlogPostVersionRecord,
-} from "@/lib/types/blog-posts";
+import type { BlogPostRecord } from "@/lib/types/blog-posts";
 
 /**
- * Phase C/D flow:
- *   card click     → opens side panel (read-only)
- *   panel "Edit"   → opens WYSIWYG editor with feedback + history tabs
+ * Phase D.1 flow:
+ *   card click        → side panel opens (read-only preview)
+ *   panel "Open editor" → routes to `/seo-tracker/blog-writer/[id]`
+ *                        full-page editor with sticky feedback dock.
  *
- * Keeps browsing distinct from editing.
+ * The list stays the browsing surface; editing is its own page so
+ * the user can scan the post while leaving feedback in a pinned
+ * sidebar instead of switching modal tabs.
  */
 export function BlogWriterClient({
   posts,
   tenantSlug,
   tenantDomain,
   trackedKeywords,
-  versionsByPost,
-  feedbackByPost,
 }: {
   posts: BlogPostRecord[];
   tenantSlug: string;
   tenantDomain: string;
   trackedKeywords: string[];
-  versionsByPost: Record<string, BlogPostVersionRecord[]>;
-  feedbackByPost: Record<string, BlogPostFeedbackRecord[]>;
 }) {
   const [showNew, setShowNew] = useState(false);
-  // Null = nothing open. Both states refer to a post BY ID so the UI
-  // stays stable across list re-renders.
   const [panelId, setPanelId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
 
   const panelPost = panelId ? posts.find((p) => p.id === panelId) ?? null : null;
-  const editingPost = editingId ? posts.find((p) => p.id === editingId) ?? null : null;
 
   return (
     <>
@@ -94,22 +84,6 @@ export function BlogWriterClient({
           post={panelPost}
           tenantDomain={tenantDomain}
           onClose={() => setPanelId(null)}
-          onEdit={() => {
-            // Open the editor on top of the side panel. Closing the
-            // editor returns the user to the panel so they can keep
-            // comparing score vs. preview.
-            setEditingId(panelPost.id);
-          }}
-        />
-      )}
-
-      {editingPost && (
-        <BlogEditor
-          post={editingPost}
-          tenantSlug={tenantSlug}
-          versions={versionsByPost[editingPost.id] ?? []}
-          feedback={feedbackByPost[editingPost.id] ?? []}
-          onClose={() => setEditingId(null)}
         />
       )}
     </>

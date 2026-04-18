@@ -211,6 +211,164 @@ export async function createManualBlogPost(
   }
 }
 
+/**
+ * Rerun the iterate-to-90 loop against an existing post, with an
+ * optional one-shot feedback string the generator treats as extra
+ * context. Two modes:
+ *
+ *   plain retry           → same inputs, hope for a better pass
+ *   retry with feedback   → user's text is layered on top of
+ *                           brand voice + positioning, nudging the
+ *                           regeneration in a specific direction
+ *
+ * Before overwriting, archives the current content as a version so
+ * the old draft survives in history and can be reverted to.
+ */
+export async function regenerateBlogPost(
+  postId: string,
+  tenantSlug: string,
+  input: {
+    extraFeedback?: string;
+    targetWordCount?: number;
+  } = {}
+): Promise<ActionResult<CreateBlogResult>> {
+  const supabase = await createClient();
+  const { getCurrentUser } = await import("@/lib/auth");
+  const user = await getCurrentUser();
+
+  const { data: existing, error: fetchErr } = await supabase
+    .from("blog_posts")
+    .select(
+      "id, title, target_keyword, content, content_json, word_count, content_score, generation_meta, secondary_keywords"
+    )
+    .eq("id", postId)
+    .eq("tenant_slug", tenantSlug)
+    .maybeSingle();
+
+  if (fetchErr || !existing) {
+    return { success: false, error: "Blog post not found" };
+  }
+
+  const tenant = await getTenant(tenantSlug);
+  if (!tenant) return { success: false, error: "Tenant not found" };
+
+  const { voice, positioning } = await getBrandContext(tenantSlug);
+
+  // Archive current content so we don't lose the old draft.
+  const { data: lastVersion } = await supabase
+    .from("blog_post_versions")
+    .select("version_number")
+    .eq("blog_post_id", postId)
+    .order("version_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextVersion =
+    ((lastVersion?.version_number as number | undefined) ?? 0) + 1;
+
+  await supabase.from("blog_post_versions").insert({
+    blog_post_id: postId,
+    tenant_slug: tenantSlug,
+    version_number: nextVersion,
+    content_json: existing.content_json ?? null,
+    content_markdown: (existing.content ?? "") as string,
+    word_count: (existing.word_count ?? 0) as number,
+    content_score: (existing.content_score ?? null) as number | null,
+    diff_summary: input.extraFeedback
+      ? "Pre-regenerate snapshot (with feedback)"
+      : "Pre-regenerate snapshot",
+    created_by: user?.id ?? null,
+  });
+
+  const keyword =
+    ((existing.target_keyword ?? "") as string).trim() ||
+    ((existing.title ?? "") as string).trim() ||
+    "blog";
+
+  const targetWordCount =
+    input.targetWordCount ??
+    (existing.generation_meta as { target_word_count?: number } | null)
+      ?.target_word_count ??
+    1200;
+
+  try {
+    const generation = await generateBlogPost({
+      tenantSlug,
+      tenantName: tenant.name,
+      voice,
+      positioning,
+      targetKeyword: keyword,
+      titleOverride: (existing.title ?? undefined) as string | undefined,
+      improveTitle: true,
+      extraContext: input.extraFeedback?.trim() || undefined,
+      targetWordCount,
+    });
+
+    const { post: draft, meta, score } = generation;
+    const finalWordCount = countWords(draft.content);
+    const scoreWarning = meta.score_warning === true;
+
+    const { buildGooglePreview } = await import("@/lib/blog/google-preview");
+    const googlePreview = buildGooglePreview({
+      title: draft.title,
+      metaDescription: draft.meta_description,
+      slug: null,
+      tenantDomain: tenant.domain,
+    });
+
+    const { error: updateErr } = await supabase
+      .from("blog_posts")
+      .update({
+        title: draft.title,
+        secondary_keywords: draft.secondary_keywords,
+        meta_description: draft.meta_description,
+        outline: draft.outline,
+        content: draft.content,
+        content_json: null,
+        word_count: finalWordCount,
+        generation_meta: meta,
+        google_preview: googlePreview,
+        content_score: score?.total ?? null,
+        sub_scores: score?.subScores ?? null,
+        score_issues: score?.issues ?? [],
+        score_warning: scoreWarning,
+      })
+      .eq("id", postId)
+      .eq("tenant_slug", tenantSlug);
+
+    if (updateErr) return { success: false, error: updateErr.message };
+
+    // Record the regenerated version too so history shows what was just
+    // produced (pre-snapshot above + post-snapshot here).
+    await supabase.from("blog_post_versions").insert({
+      blog_post_id: postId,
+      tenant_slug: tenantSlug,
+      version_number: nextVersion + 1,
+      content_json: null,
+      content_markdown: draft.content,
+      word_count: finalWordCount,
+      content_score: score?.total ?? null,
+      diff_summary: input.extraFeedback
+        ? `Regenerated with feedback: "${input.extraFeedback.slice(0, 80)}${input.extraFeedback.length > 80 ? "…" : ""}"`
+        : "Regenerated (no feedback)",
+      created_by: user?.id ?? null,
+    });
+
+    revalidatePath("/seo-tracker/blog-writer");
+    revalidatePath("/seo-tracker");
+    return {
+      success: true,
+      postId,
+      wordCount: finalWordCount,
+      targetWordCount: meta.target_word_count,
+      wordCountWarning: meta.stopped_reason === "max_passes_reached",
+      contentScore: score?.total ?? null,
+      scoreWarning,
+    };
+  } catch (err) {
+    return { success: false, error: humanizeGenerationError(err) };
+  }
+}
+
 export async function updateBlogPost(
   id: string,
   tenantSlug: string,

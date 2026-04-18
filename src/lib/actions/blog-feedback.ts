@@ -265,6 +265,42 @@ export async function applyFeedback(
   };
 }
 
+/**
+ * Fire-and-forget Whisper transcription for an audio file that's
+ * already in the `blog-feedback-audio` bucket. Used by the regenerate
+ * flow so the user's voice notes can seed generateBlogPost's
+ * extraContext without first creating a feedback row.
+ */
+export async function transcribeFeedbackAudioPath(
+  audioPath: string,
+  tenantSlug: string
+): Promise<ActionResult<{ text: string }>> {
+  const supabase = await createClient();
+  const { data: file, error: dlErr } = await supabase.storage
+    .from(AUDIO_BUCKET)
+    .download(audioPath);
+  if (dlErr || !file) {
+    return {
+      success: false,
+      error: `Could not read audio: ${dlErr?.message ?? "not found"}`,
+    };
+  }
+  try {
+    const t = await transcribeAudio({
+      audio: file,
+      filename: audioPath.split("/").pop() ?? "audio.webm",
+      tenantSlug,
+      feature: "blog_regenerate_transcribe",
+    });
+    return { success: true, text: t.text };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Transcription failed",
+    };
+  }
+}
+
 export async function rejectFeedback(
   feedbackId: string,
   tenantSlug: string

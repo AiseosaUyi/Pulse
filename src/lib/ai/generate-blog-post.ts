@@ -19,13 +19,15 @@ const MODEL_ID = `openai/${MODEL}`;
 const WORD_COUNT_TOLERANCE = 0.1; // ±10% of target
 const MAX_EXPANSION_PASSES = 2;
 
-// Score loop (Phase B).
-const SCORE_TARGET = 80;
+// Score loop (Phase B). Target bumped 80 → 90 after user feedback:
+// anything below 90 feels like a draft, not a ship. The regenerate
+// CTA on the side panel is the escape hatch when iterate exhausts.
+const SCORE_TARGET = 90;
 const MAX_REFINE_PASSES = 3;
-// Total per-post cost ceiling. Scoring is now ~3-4x cheaper since the
-// combined-ai refactor (gpt-4o-mini, one call instead of three), so
-// the cap drops from 0.25 → 0.10. Typical successful blog: ~$0.02.
-// Worst case with full refine budget: ~$0.06.
+// Total per-post cost ceiling. Scoring is cheap since the combined-ai
+// refactor (gpt-4o-mini, one call instead of three), so the cap stays
+// at $0.10. Typical successful blog at target 90: ~$0.03–0.06.
+// Worst case with full refine budget: ~$0.08.
 const COST_CAP_USD = 0.1;
 
 export const blogPostSchema = z.object({

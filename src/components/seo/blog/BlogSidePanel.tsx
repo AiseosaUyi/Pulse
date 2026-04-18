@@ -7,6 +7,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { X, Pencil, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/Badge";
@@ -21,12 +22,10 @@ export function BlogSidePanel({
   post,
   tenantDomain,
   onClose,
-  onEdit,
 }: {
   post: BlogPostRecord;
   tenantDomain: string;
   onClose: () => void;
-  onEdit: () => void;
 }) {
   // Close on Escape — common drawer UX.
   useEffect(() => {
@@ -202,9 +201,11 @@ export function BlogSidePanel({
           <Button variant="ghost" onClick={onClose}>
             Close
           </Button>
-          <Button onClick={onEdit}>
-            <Pencil size={14} />
-            Open editor
+          <Button asChild>
+            <Link href={`/seo-tracker/blog-writer/${post.id}`}>
+              <Pencil size={14} />
+              Open editor
+            </Link>
           </Button>
         </div>
       </aside>
