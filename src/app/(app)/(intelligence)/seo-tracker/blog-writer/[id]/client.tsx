@@ -325,7 +325,7 @@ export function BlogEditorPageClient({
               </p>
             </div>
             <InlineFeedbackDock
-              postId={post.id}
+              post={post}
               tenantSlug={tenantSlug}
               onAfterAction={() => router.refresh()}
             />

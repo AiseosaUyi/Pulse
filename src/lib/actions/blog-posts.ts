@@ -212,26 +212,46 @@ export async function createManualBlogPost(
 }
 
 /**
- * Rerun the iterate-to-90 loop against an existing post, with an
- * optional one-shot feedback string the generator treats as extra
- * context. Two modes:
+ * Regenerate an existing post via the iterate-to-90 loop.
  *
- *   plain retry           → same inputs, hope for a better pass
- *   retry with feedback   → user's text is layered on top of
- *                           brand voice + positioning, nudging the
- *                           regeneration in a specific direction
+ * Quality gate: if the best regeneration lands below 90, we DON'T
+ * persist — the current draft is kept and the action returns with
+ * `scoreBelowThreshold: true` + the rejected score + issues so the
+ * UI can show the user what went wrong (and optionally re-run with
+ * AI suggestions injected, or force-apply anyway).
  *
- * Before overwriting, archives the current content as a version so
- * the old draft survives in history and can be reverted to.
+ * Snapshots only happen on accept, so history doesn't accumulate
+ * "we tried something worse" rows.
  */
+export interface RegenerateBlogResult extends CreateBlogResult {
+  /** True when the regeneration was rejected for being below 90 AND
+   *  `force` wasn't set. Persist skipped; current draft untouched. */
+  scoreBelowThreshold?: boolean;
+  /** Score the regenerated draft would have had. Populated when
+   *  scoreBelowThreshold is true so the UI can render it. */
+  rejectedScore?: number | null;
+  /** Top issues from the rejected score. */
+  rejectedIssues?: Array<{
+    subScore: string;
+    severity: "high" | "med" | "low";
+    message: string;
+    suggestedFix: string;
+  }>;
+}
+
+const REGEN_MIN_SCORE = 90;
+
 export async function regenerateBlogPost(
   postId: string,
   tenantSlug: string,
   input: {
     extraFeedback?: string;
     targetWordCount?: number;
+    /** Persist even if the new score is below the 90 threshold.
+     *  The UI offers this as an "Apply anyway" escape hatch. */
+    force?: boolean;
   } = {}
-): Promise<ActionResult<CreateBlogResult>> {
+): Promise<ActionResult<RegenerateBlogResult>> {
   const supabase = await createClient();
   const { getCurrentUser } = await import("@/lib/auth");
   const user = await getCurrentUser();
@@ -253,31 +273,6 @@ export async function regenerateBlogPost(
   if (!tenant) return { success: false, error: "Tenant not found" };
 
   const { voice, positioning } = await getBrandContext(tenantSlug);
-
-  // Archive current content so we don't lose the old draft.
-  const { data: lastVersion } = await supabase
-    .from("blog_post_versions")
-    .select("version_number")
-    .eq("blog_post_id", postId)
-    .order("version_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const nextVersion =
-    ((lastVersion?.version_number as number | undefined) ?? 0) + 1;
-
-  await supabase.from("blog_post_versions").insert({
-    blog_post_id: postId,
-    tenant_slug: tenantSlug,
-    version_number: nextVersion,
-    content_json: existing.content_json ?? null,
-    content_markdown: (existing.content ?? "") as string,
-    word_count: (existing.word_count ?? 0) as number,
-    content_score: (existing.content_score ?? null) as number | null,
-    diff_summary: input.extraFeedback
-      ? "Pre-regenerate snapshot (with feedback)"
-      : "Pre-regenerate snapshot",
-    created_by: user?.id ?? null,
-  });
 
   const keyword =
     ((existing.target_keyword ?? "") as string).trim() ||
@@ -306,6 +301,28 @@ export async function regenerateBlogPost(
     const { post: draft, meta, score } = generation;
     const finalWordCount = countWords(draft.content);
     const scoreWarning = meta.score_warning === true;
+    const finalScore = score?.total ?? null;
+
+    // Quality gate. User-documented requirement: never persist a
+    // regeneration below 90. Force flag overrides.
+    if (
+      !input.force &&
+      finalScore != null &&
+      finalScore < REGEN_MIN_SCORE
+    ) {
+      return {
+        success: true,
+        postId,
+        wordCount: finalWordCount,
+        targetWordCount: meta.target_word_count,
+        wordCountWarning: false,
+        contentScore: finalScore,
+        scoreWarning,
+        scoreBelowThreshold: true,
+        rejectedScore: finalScore,
+        rejectedIssues: (score?.issues ?? []).slice(0, 5),
+      };
+    }
 
     const { buildGooglePreview } = await import("@/lib/blog/google-preview");
     const googlePreview = buildGooglePreview({
@@ -313,6 +330,33 @@ export async function regenerateBlogPost(
       metaDescription: draft.meta_description,
       slug: null,
       tenantDomain: tenant.domain,
+    });
+
+    // Now that we're committing, archive the old content + write the
+    // new one + record the regenerated version. Done AFTER the gate
+    // so rejected attempts don't pollute history.
+    const { data: lastVersion } = await supabase
+      .from("blog_post_versions")
+      .select("version_number")
+      .eq("blog_post_id", postId)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextVersion =
+      ((lastVersion?.version_number as number | undefined) ?? 0) + 1;
+
+    await supabase.from("blog_post_versions").insert({
+      blog_post_id: postId,
+      tenant_slug: tenantSlug,
+      version_number: nextVersion,
+      content_json: existing.content_json ?? null,
+      content_markdown: (existing.content ?? "") as string,
+      word_count: (existing.word_count ?? 0) as number,
+      content_score: (existing.content_score ?? null) as number | null,
+      diff_summary: input.extraFeedback
+        ? "Pre-regenerate snapshot (with feedback)"
+        : "Pre-regenerate snapshot",
+      created_by: user?.id ?? null,
     });
 
     const { error: updateErr } = await supabase
@@ -327,7 +371,7 @@ export async function regenerateBlogPost(
         word_count: finalWordCount,
         generation_meta: meta,
         google_preview: googlePreview,
-        content_score: score?.total ?? null,
+        content_score: finalScore,
         sub_scores: score?.subScores ?? null,
         score_issues: score?.issues ?? [],
         score_warning: scoreWarning,
@@ -337,8 +381,6 @@ export async function regenerateBlogPost(
 
     if (updateErr) return { success: false, error: updateErr.message };
 
-    // Record the regenerated version too so history shows what was just
-    // produced (pre-snapshot above + post-snapshot here).
     await supabase.from("blog_post_versions").insert({
       blog_post_id: postId,
       tenant_slug: tenantSlug,
@@ -346,7 +388,7 @@ export async function regenerateBlogPost(
       content_json: null,
       content_markdown: draft.content,
       word_count: finalWordCount,
-      content_score: score?.total ?? null,
+      content_score: finalScore,
       diff_summary: input.extraFeedback
         ? `Regenerated with feedback: "${input.extraFeedback.slice(0, 80)}${input.extraFeedback.length > 80 ? "…" : ""}"`
         : "Regenerated (no feedback)",
