@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { assertSafeUrl, SaveAssetError } from "@/lib/storage/save-asset";
 
 describe("assertSafeUrl (SSRF guard)", () => {
@@ -56,5 +56,39 @@ describe("assertSafeUrl (SSRF guard)", () => {
     expect(() =>
       assertSafeUrl("https://V19.TikTokCDN-US.COM/x.mp4")
     ).not.toThrow();
+  });
+
+  describe("COBALT_API_URL dynamic allowlist", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("accepts the cobalt instance host when COBALT_API_URL is set", () => {
+      vi.stubEnv("COBALT_API_URL", "https://pulse-cobalt.onrender.com/");
+      expect(() =>
+        assertSafeUrl("https://pulse-cobalt.onrender.com/tunnel?id=abc")
+      ).not.toThrow();
+    });
+
+    it("rejects the same host when COBALT_API_URL is NOT set", () => {
+      vi.stubEnv("COBALT_API_URL", "");
+      expect(() =>
+        assertSafeUrl("https://pulse-cobalt.onrender.com/tunnel?id=abc")
+      ).toThrow(/not in CDN allowlist/i);
+    });
+
+    it("doesn't open up other onrender.com subdomains", () => {
+      vi.stubEnv("COBALT_API_URL", "https://pulse-cobalt.onrender.com/");
+      expect(() =>
+        assertSafeUrl("https://attacker.onrender.com/payload.mp4")
+      ).toThrow(/not in CDN allowlist/i);
+    });
+
+    it("ignores malformed COBALT_API_URL without crashing", () => {
+      vi.stubEnv("COBALT_API_URL", "not a url");
+      expect(() =>
+        assertSafeUrl("https://example.com/x.mp4")
+      ).toThrow(/not in CDN allowlist/i);
+    });
   });
 });

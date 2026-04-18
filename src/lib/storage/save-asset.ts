@@ -11,17 +11,36 @@ export const MAX_ASSET_BYTES = 50 * 1024 * 1024; // 50 MB
 export const STORAGE_BUCKET = "saved-assets";
 const FETCH_TIMEOUT_MS = 30_000;
 
-// Host allowlist. The services we call (tikwm, later Apify) hand back
-// URLs pointing at these CDNs. Anything else is treated as hostile.
-// NOTE: private IP ranges are rejected separately in `assertSafeUrl`.
+// Host allowlist. The services we call (tikwm, cobalt, later Apify)
+// hand back URLs pointing at these CDNs. Anything else is treated as
+// hostile. NOTE: private IP ranges are rejected separately in
+// `assertSafeUrl`.
 const ALLOWED_HOST_PATTERNS: RegExp[] = [
   /\.tiktokcdn(-[a-z]+)?\.com$/i,
   /\.tiktokcdn\.(com|us|eu)$/i,
   /\.cdninstagram\.com$/i,
   /\.fbcdn\.net$/i,
   /(^|\.)scontent(-[a-z0-9-]+)?\.[a-z0-9-]+\.(cdninstagram|fbcdn)\.(com|net)$/i,
-  /\.ttwstatic\.com$/i, // occasional TikTok cover fallback
+  /\.ttwstatic\.com$/i, // TikTok cover fallback
+  /\.twimg\.com$/i, // Twitter/X media CDN (reached via cobalt redirect)
 ];
+
+/**
+ * Hosts we trust because *we* deployed them — currently just the
+ * configured cobalt instance. Read at call time so tests can stub the
+ * env var.
+ */
+function extraAllowedHosts(): string[] {
+  const hosts: string[] = [];
+  if (process.env.COBALT_API_URL) {
+    try {
+      hosts.push(new URL(process.env.COBALT_API_URL).hostname.toLowerCase());
+    } catch {
+      // Malformed env var — other code will surface the error; don't crash here.
+    }
+  }
+  return hosts;
+}
 
 const PRIVATE_IP_PATTERNS: RegExp[] = [
   /^10\./,
@@ -72,7 +91,9 @@ export function assertSafeUrl(rawUrl: string): URL {
   if (host === "localhost") {
     throw new SaveAssetError("localhost rejected", "ssrf_blocked");
   }
-  if (!ALLOWED_HOST_PATTERNS.some((r) => r.test(host))) {
+  const cdnMatch = ALLOWED_HOST_PATTERNS.some((r) => r.test(host));
+  const extraMatch = extraAllowedHosts().includes(host);
+  if (!cdnMatch && !extraMatch) {
     throw new SaveAssetError(
       `Host not in CDN allowlist: ${host}`,
       "ssrf_blocked"

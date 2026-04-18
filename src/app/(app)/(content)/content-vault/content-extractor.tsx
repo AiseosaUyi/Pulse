@@ -53,7 +53,8 @@ export function ContentExtractor({ tenantSlug }: { tenantSlug: string }) {
         <Link2 size={16} className="text-primary-500" />
         <h2 className="text-sm font-semibold text-foreground">Extract a video</h2>
         <span className="text-text-muted text-xs ml-2">
-          Paste a TikTok link — we pull the HD, no-watermark MP4 and save it to your vault.
+          TikTok, Instagram, YouTube, Twitter/X, Facebook — we pull the HD
+          no-watermark media and save it to your vault.
         </span>
       </div>
 
@@ -138,7 +139,7 @@ export function ContentExtractor({ tenantSlug }: { tenantSlug: string }) {
       )}
 
       <p className="text-text-muted text-[11px] mt-3">
-        TikTok works today. Instagram, YouTube, and Twitter/X save as links for now (download manually).
+        Powered by a self-hosted cobalt instance (for IG/YT/X/FB) + tikwm (for TikTok). LinkedIn saves as a link only.
       </p>
     </div>
   );

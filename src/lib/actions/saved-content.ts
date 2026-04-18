@@ -9,6 +9,10 @@ import {
   TikTokResolveError,
 } from "@/lib/scrape/tiktok-downloader";
 import {
+  resolveViaCobalt,
+  CobaltResolveError,
+} from "@/lib/scrape/cobalt-downloader";
+import {
   fetchBytes,
   uploadAsset,
   deleteAsset,
@@ -142,11 +146,22 @@ export async function saveContentFromUrl(
   }
 
   // TikTok extraction path.
-  if (detection.platform === "tiktok") {
+  if (detection.extractor === "tikwm") {
     return await extractTikTokAndSave(tenantSlug, url, thumbnailEmoji);
   }
 
-  // Shouldn't reach (canExtract=true only for tiktok today), but fail closed.
+  // Instagram / YouTube / Twitter / Facebook via self-hosted cobalt.
+  if (detection.extractor === "cobalt") {
+    return await extractViaCobaltAndSave(
+      tenantSlug,
+      url,
+      detection.platform,
+      thumbnailEmoji
+    );
+  }
+
+  // canExtract was true but no extractor matched — shouldn't happen,
+  // fail closed so the user still keeps the link.
   const row = await insertLinkOnly(admin, tenantSlug, {
     title: fallbackTitleFromUrl(url),
     sourceUrl: url,
@@ -305,6 +320,134 @@ async function extractTikTokAndSave(
     publicUrl: publicUrlFor(row.stored_path),
     thumbnailUrl: publicUrlFor(row.thumbnail_path),
     message: "Saved to vault — video downloaded without watermark.",
+  };
+}
+
+async function extractViaCobaltAndSave(
+  tenantSlug: string,
+  url: string,
+  platform: string,
+  thumbnailEmoji: string
+): Promise<ActionResult<ExtractResult>> {
+  const admin = createAdminClient();
+
+  // 1. Ask cobalt to resolve the URL → a direct media URL.
+  let resolved;
+  try {
+    resolved = await resolveViaCobalt(url);
+  } catch (err) {
+    const message =
+      err instanceof CobaltResolveError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : String(err);
+    const row = await insertLinkOnly(admin, tenantSlug, {
+      title: fallbackTitleFromUrl(url),
+      sourceUrl: url,
+      sourcePlatform: platform,
+      thumbnailEmoji,
+      extractionError: `cobalt resolve failed: ${message}`,
+      reason: `Couldn't extract. Saved as a link — ${message}`,
+    });
+    revalidatePath("/content-vault");
+    return row;
+  }
+
+  // 2. Fetch bytes through our SSRF-guarded helper. The cobalt instance
+  // host was added to the allowlist at startup; CDN redirects land on
+  // scontent.* / *.cdninstagram.com which are also allowlisted.
+  let asset;
+  try {
+    asset = await fetchBytes(resolved.mediaUrl);
+  } catch (err) {
+    const message = err instanceof SaveAssetError ? err.message : String(err);
+    const row = await insertLinkOnly(admin, tenantSlug, {
+      title: resolved.filename ?? fallbackTitleFromUrl(url),
+      sourceUrl: url,
+      sourcePlatform: platform,
+      thumbnailEmoji,
+      extractionError: `fetch failed: ${message}`,
+      reason: `Couldn't download. Saved as a link — ${message}`,
+    });
+    revalidatePath("/content-vault");
+    return row;
+  }
+
+  // 3. Content-hash dedup.
+  const { data: hashMatch } = await admin
+    .from("saved_content")
+    .select("id, stored_path, thumbnail_path")
+    .eq("tenant_slug", tenantSlug)
+    .eq("content_hash", asset.sha256)
+    .maybeSingle();
+
+  if (hashMatch?.stored_path) {
+    return {
+      success: true,
+      id: hashMatch.id,
+      extractionStatus: "extracted",
+      publicUrl: publicUrlFor(hashMatch.stored_path),
+      thumbnailUrl: publicUrlFor(hashMatch.thumbnail_path),
+      message: "Same media already in vault — reopened existing entry.",
+    };
+  }
+
+  // 4. Upload to Supabase Storage.
+  let uploaded;
+  try {
+    uploaded = await uploadAsset(tenantSlug, asset);
+  } catch (err) {
+    const message = err instanceof SaveAssetError ? err.message : String(err);
+    const row = await insertLinkOnly(admin, tenantSlug, {
+      title: resolved.filename ?? fallbackTitleFromUrl(url),
+      sourceUrl: url,
+      sourcePlatform: platform,
+      thumbnailEmoji,
+      extractionError: `upload failed: ${message}`,
+      reason: `Couldn't save to storage. Saved as a link — ${message}`,
+    });
+    revalidatePath("/content-vault");
+    return row;
+  }
+
+  // 5. Insert the row. Cobalt doesn't give us a separate thumbnail, so
+  // the emoji placeholder stays in place for now.
+  const title = resolved.filename ?? fallbackTitleFromUrl(url);
+
+  const { data: row, error: rowError } = await admin
+    .from("saved_content")
+    .insert({
+      tenant_slug: tenantSlug,
+      title,
+      source_platform: platform,
+      source_url: url,
+      thumbnail_emoji: thumbnailEmoji,
+      tags: [],
+      best_for: [],
+      status: "new" as SavedContentStatus,
+      extraction_status: "extracted" as ExtractionStatus,
+      stored_path: uploaded.storagePath,
+      stored_mime: uploaded.mime,
+      file_size_bytes: uploaded.sizeBytes,
+      content_hash: uploaded.sha256,
+    })
+    .select("id, stored_path, thumbnail_path")
+    .single();
+
+  if (rowError || !row) {
+    await deleteAsset(uploaded.storagePath).catch(() => {});
+    return { success: false, error: rowError?.message ?? "Insert failed" };
+  }
+
+  revalidatePath("/content-vault");
+  return {
+    success: true,
+    id: row.id,
+    extractionStatus: "extracted",
+    publicUrl: publicUrlFor(row.stored_path),
+    thumbnailUrl: publicUrlFor(row.thumbnail_path),
+    message: `Saved to vault — ${platform} media downloaded.`,
   };
 }
 
