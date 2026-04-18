@@ -60,10 +60,17 @@ export interface BlogScoreIssue {
   affectedSection?: string;
 }
 
+export interface BlogGooglePreview {
+  title_display: string;
+  url_display: string;
+  meta_display: string;
+}
+
 export interface BlogPostRecord {
   id: string;
   tenantSlug: string;
   title: string;
+  slug: string | null;
   targetKeyword: string | null;
   secondaryKeywords: string[];
   metaDescription: string | null;
@@ -78,6 +85,10 @@ export interface BlogPostRecord {
   subScores: BlogSubScores | null;
   scoreIssues: BlogScoreIssue[];
   scoreWarning: boolean;
+  /** JSON-LD FAQPage object or null. Populated later in Phase D; for now scored from content. */
+  faqSchema: unknown | null;
+  /** Cached Google preview {title_display, url_display, meta_display}. */
+  googlePreview: BlogGooglePreview | null;
   createdAt: string;
   updatedAt: string;
 }

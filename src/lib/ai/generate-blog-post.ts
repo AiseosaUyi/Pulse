@@ -87,13 +87,26 @@ export class BlogGenerationError extends Error {
   }
 }
 
-interface GenerateBlogInput {
+export interface GenerateBlogInput {
   tenantSlug: string;
   tenantName: string;
   voice: BrandVoice | null;
   /** Phase B: Brand Positioning layers with voice on every generation. */
   positioning: BrandPositioning | null;
+  /**
+   * Target keyword. Required for the keyword/SEO path. For a free-form
+   * manual create, callers can pass the title as the keyword OR leave
+   * this empty-string — the prompt degrades gracefully.
+   */
   targetKeyword: string;
+  /**
+   * Optional user-supplied title. Phase C manual-create flow. When
+   * empty the AI generates one from scratch. When set:
+   *   improveTitle=false → AI must use the title verbatim
+   *   improveTitle=true  → AI may polish for SEO but keep intent
+   */
+  titleOverride?: string;
+  improveTitle?: boolean;
   extraContext?: string;
   targetWordCount?: number;
   /** Set false to skip the score+refine loop (e.g. dev/debug). Default true. */
@@ -129,6 +142,16 @@ async function initialGenerate(
 ): Promise<{ post: GeneratedBlogPost; cost: number; durationMs: number }> {
   const started = Date.now();
 
+  // Title rules vary by manual-create mode:
+  //   no override          → AI generates the title
+  //   override + no polish → use verbatim
+  //   override + polish    → may refine for SEO but keep intent
+  const titleRule = !input.titleOverride
+    ? "- Generate a compelling title that includes the target keyword naturally."
+    : input.improveTitle
+      ? `- Starting title: "${input.titleOverride}". You MAY refine it for clarity/SEO but keep the original intent. Do not change meaning — only polish.`
+      : `- Title is FIXED: "${input.titleOverride}". Use this exact string. Do NOT modify it even to improve SEO.`;
+
   const system = [
     `You write SEO-optimized blog posts for ${input.tenantName}.`,
     voiceBlock,
@@ -137,8 +160,9 @@ async function initialGenerate(
     "",
     "Rules:",
     `- **Target word count: ${targetWordCount} words (±10%).** Do NOT deliver significantly fewer words — short drafts are rejected.`,
+    titleRule,
     "- Write in markdown. Use ## for section headings, ### for subheadings.",
-    "- Include the target keyword naturally in title, meta description, first paragraph, one H2, and conclusion. Never keyword-stuff.",
+    "- Include the target keyword naturally in the title (subject to title rule above), meta description, first paragraph, one H2, and conclusion. Never keyword-stuff.",
     "- meta_description is 140-160 characters, action-oriented.",
     "- outline is an array of { heading, bullets } objects covering the section structure.",
     "- content is the full markdown article, starting with the H1 title.",
@@ -148,13 +172,13 @@ async function initialGenerate(
   ].join("\n");
 
   const user = [
-    `Target keyword: ${input.targetKeyword}`,
+    input.targetKeyword ? `Target keyword: ${input.targetKeyword}` : null,
     `**Word count: ${targetWordCount} (±10%). Count before returning.**`,
-    input.extraContext ? `Context/angle: ${input.extraContext}` : "",
+    input.extraContext ? `Context/angle: ${input.extraContext}` : null,
     "",
     "Draft the blog post.",
   ]
-    .filter(Boolean)
+    .filter((s): s is string => s !== null)
     .join("\n");
 
   try {

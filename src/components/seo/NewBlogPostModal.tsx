@@ -5,8 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { generateBlogPostDraft } from "@/lib/actions/blog-posts";
+import { createManualBlogPost } from "@/lib/actions/blog-posts";
+import { LENGTH_BANDS, type LengthBand } from "@/lib/blog/word-count";
 
+/**
+ * Phase C manual-create flow. All three fields (title, keyword,
+ * context) are optional — user must fill at least one. Brand
+ * Positioning + Voice always apply regardless.
+ */
 export function NewBlogPostModal({
   tenantSlug,
   trackedKeywords,
@@ -16,34 +22,39 @@ export function NewBlogPostModal({
   trackedKeywords: string[];
   onClose: () => void;
 }) {
-  const [keyword, setKeyword] = useState(trackedKeywords[0] ?? "");
+  const [title, setTitle] = useState("");
+  const [improveTitle, setImproveTitle] = useState(true);
+  const [keyword, setKeyword] = useState("");
   const [extra, setExtra] = useState("");
-  const [wordCount, setWordCount] = useState("1200");
+  const [band, setBand] = useState<LengthBand>("medium");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [wcWarning, setWcWarning] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+
+  const bandInfo = LENGTH_BANDS[band];
 
   const handleGenerate = () => {
-    if (!keyword.trim()) {
-      setError("Target keyword is required");
+    setError(null);
+    setWarning(null);
+    if (!title.trim() && !keyword.trim() && !extra.trim()) {
+      setError(
+        "Fill at least one field — a title, a target keyword, or some context."
+      );
       return;
     }
-    setError(null);
-    setWcWarning(null);
     startTransition(async () => {
-      const res = await generateBlogPostDraft(tenantSlug, {
-        targetKeyword: keyword.trim(),
+      const res = await createManualBlogPost(tenantSlug, {
+        title: title.trim() || undefined,
+        improveTitle: title.trim() ? improveTitle : undefined,
+        targetKeyword: keyword.trim() || undefined,
         extraContext: extra.trim() || undefined,
-        targetWordCount: Number(wordCount) || 1200,
+        targetWordCount: bandInfo.target,
       });
       if (!res.success) {
         setError(res.error);
         return;
       }
       if (res.wordCountWarning || res.scoreWarning) {
-        // Draft either landed short OR missed the 80 score after 3
-        // refine passes. Keep the modal open so the user sees why
-        // before we close — they can still click Close to proceed.
         const parts: string[] = [];
         if (res.wordCountWarning) {
           parts.push(
@@ -55,12 +66,17 @@ export function NewBlogPostModal({
             `Content score ${res.contentScore ?? "?"}/100 — under the 80 publish bar after 3 refine passes. Open the side panel to see which sub-scores need work.`
           );
         }
-        setWcWarning(parts.join(" "));
+        setWarning(parts.join(" "));
         return;
       }
       onClose();
     });
   };
+
+  // Rough cost estimate — generation ($2/M in + $8/M out on gpt-4.1)
+  // plus ~2000 input + 100 output tokens per score pass on gpt-4o-mini.
+  // Works out to roughly $0.00004 per target word. Display in mills.
+  const costEstimate = (bandInfo.target * 0.00004).toFixed(3);
 
   return (
     <div
@@ -69,9 +85,14 @@ export function NewBlogPostModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-card w-full md:max-w-[560px] md:rounded-2xl border border-border flex flex-col max-h-screen">
+      <div className="bg-card w-full md:max-w-[620px] md:rounded-2xl border border-border flex flex-col max-h-screen">
         <div className="p-5 border-b border-border/30 flex items-center justify-between">
-          <h2 className="text-foreground font-semibold">New blog post</h2>
+          <div>
+            <h2 className="text-foreground font-semibold">New blog post</h2>
+            <p className="text-text-muted text-xs mt-0.5">
+              All fields optional. Brand positioning + voice apply every time.
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="text-text-muted hover:text-foreground text-sm"
@@ -80,11 +101,45 @@ export function NewBlogPostModal({
           </button>
         </div>
 
-        <div className="p-5 space-y-4 overflow-y-auto flex-1">
+        <div className="p-5 space-y-5 overflow-y-auto flex-1">
+          {/* Title */}
           <div>
-            <Label htmlFor="np-keyword">Target keyword</Label>
-            {trackedKeywords.length > 0 ? (
-              <div className="flex flex-wrap gap-2 mb-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="np-title">Title (optional)</Label>
+              <label
+                className={`inline-flex items-center gap-1.5 text-xs ${
+                  title.trim() ? "text-text-muted cursor-pointer" : "text-text-muted/40 cursor-not-allowed"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={improveTitle}
+                  disabled={!title.trim() || isPending}
+                  onChange={(e) => setImproveTitle(e.target.checked)}
+                  className="accent-primary-500"
+                />
+                Let AI polish my title
+              </label>
+            </div>
+            <Input
+              id="np-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Leave blank to let AI generate one from context."
+              disabled={isPending}
+            />
+            {title.trim() && !improveTitle && (
+              <p className="text-xs text-text-muted mt-1.5">
+                Title locked — AI will use it verbatim.
+              </p>
+            )}
+          </div>
+
+          {/* Target keyword */}
+          <div>
+            <Label htmlFor="np-keyword">Target keyword (optional)</Label>
+            {trackedKeywords.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-1 mb-2">
                 {trackedKeywords.slice(0, 10).map((kw) => (
                   <button
                     key={kw}
@@ -100,21 +155,17 @@ export function NewBlogPostModal({
                   </button>
                 ))}
               </div>
-            ) : (
-              <p className="text-xs text-text-muted mb-2">
-                You have no tracked keywords yet. Type one below, or add some
-                at /seo-tracker/keywords.
-              </p>
             )}
             <Input
               id="np-keyword"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="e.g. event ticketing Lagos"
+              placeholder="e.g. event ticketing Lagos — improves the SEO sub-score."
               disabled={isPending}
             />
           </div>
 
+          {/* Context */}
           <div>
             <Label htmlFor="np-extra">Context / angle (optional)</Label>
             <Textarea
@@ -122,30 +173,33 @@ export function NewBlogPostModal({
               value={extra}
               onChange={(e) => setExtra(e.target.value)}
               placeholder={
-                "What should this post cover or argue? e.g. 'Compare us vs Nairabox / Tix Africa without naming them. Lean into Lagos-specific pain points.'"
+                "Anything specific? Your brand positioning + voice are always applied on top of this."
               }
               rows={4}
               disabled={isPending}
             />
           </div>
 
+          {/* Length */}
           <div>
-            <Label htmlFor="np-words">Target word count</Label>
+            <Label htmlFor="np-band">Length</Label>
             <select
-              id="np-words"
-              value={wordCount}
-              onChange={(e) => setWordCount(e.target.value)}
+              id="np-band"
+              value={band}
+              onChange={(e) => setBand(e.target.value as LengthBand)}
               disabled={isPending}
               className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
             >
-              <option value="800">~800 words (short)</option>
-              <option value="1200">~1200 words (standard)</option>
-              <option value="2000">~2000 words (long-form)</option>
-              <option value="3000">~3000 words (pillar)</option>
+              {(Object.entries(LENGTH_BANDS) as Array<[LengthBand, (typeof LENGTH_BANDS)[LengthBand]]>).map(
+                ([key, info]) => (
+                  <option key={key} value={key}>
+                    {info.label} (~{info.target} words)
+                  </option>
+                )
+              )}
             </select>
             <p className="text-xs text-text-muted mt-1.5">
-              Cost estimate: ~${(Number(wordCount) * 0.00004).toFixed(3)} per
-              draft.
+              Cost estimate: ~${costEstimate} per draft (includes score + up to 3 refines).
             </p>
           </div>
 
@@ -155,16 +209,16 @@ export function NewBlogPostModal({
             </p>
           )}
 
-          {wcWarning && (
+          {warning && (
             <div className="rounded-lg border border-status-yellow/40 bg-status-yellow/10 p-3 text-sm text-foreground">
-              {wcWarning}
+              {warning}
             </div>
           )}
         </div>
 
         <div className="p-5 border-t border-border/30 flex items-center justify-end gap-2">
           <Button variant="ghost" onClick={onClose} disabled={isPending}>
-            {wcWarning ? "Close" : "Cancel"}
+            {warning ? "Close" : "Cancel"}
           </Button>
           <Button onClick={handleGenerate} disabled={isPending}>
             {isPending ? "Generating..." : "Generate draft"}

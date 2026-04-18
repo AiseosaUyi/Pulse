@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type {
   BlogGenerationMeta,
+  BlogGooglePreview,
   BlogPostRecord,
   BlogPostStatus,
   BlogPostOutlineItem,
@@ -12,6 +13,7 @@ interface Row {
   id: string;
   tenant_slug: string;
   title: string;
+  slug: string | null;
   target_keyword: string | null;
   secondary_keywords: string[] | null;
   meta_description: string | null;
@@ -25,6 +27,8 @@ interface Row {
   sub_scores: BlogSubScores | null;
   score_issues: BlogScoreIssue[] | null;
   score_warning: boolean | null;
+  faq_schema: unknown | null;
+  google_preview: BlogGooglePreview | null;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +38,7 @@ function rowTo(row: Row): BlogPostRecord {
     id: row.id,
     tenantSlug: row.tenant_slug,
     title: row.title,
+    slug: row.slug ?? null,
     targetKeyword: row.target_keyword,
     secondaryKeywords: row.secondary_keywords ?? [],
     metaDescription: row.meta_description,
@@ -47,6 +52,8 @@ function rowTo(row: Row): BlogPostRecord {
     subScores: row.sub_scores ?? null,
     scoreIssues: row.score_issues ?? [],
     scoreWarning: row.score_warning ?? false,
+    faqSchema: row.faq_schema ?? null,
+    googlePreview: row.google_preview ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
