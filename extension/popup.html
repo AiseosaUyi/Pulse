@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pulse Outbound</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 16px;
+        width: 320px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 13px;
+        color: #0f0f10;
+        background: #fafafa;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 4px;
+        color: #ad112c;
+      }
+      p { margin: 4px 0; color: #6b6b70; font-size: 12px; line-height: 1.5; }
+      .status {
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #fff;
+        border: 1px solid rgba(15, 15, 16, 0.08);
+        margin: 10px 0;
+      }
+      .status strong { color: #0f0f10; }
+      .actions { display: flex; gap: 8px; margin-top: 10px; }
+      .btn {
+        all: unset;
+        cursor: pointer;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+      }
+      .btn-primary { background: #ad112c; color: #fff; }
+      .btn-primary:hover { background: #8d0e25; }
+      .btn-ghost {
+        background: transparent;
+        border: 1px solid rgba(15, 15, 16, 0.12);
+        color: #0f0f10;
+      }
+      code {
+        font-size: 11px;
+        background: rgba(15, 15, 16, 0.06);
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Pulse Outbound</h1>
+    <p>Draft personalized DMs from Pulse while browsing prospects.</p>
+
+    <div id="status" class="status">
+      <p>Checking connection…</p>
+    </div>
+
+    <p>
+      Works on profile pages like <code>instagram.com/joy</code>,
+      <code>tiktok.com/@joy</code>, <code>x.com/joy</code>, and
+      <code>linkedin.com/in/joy</code>.
+    </p>
+
+    <div class="actions">
+      <button id="options-btn" class="btn btn-primary">Open options</button>
+      <button id="pulse-btn" class="btn btn-ghost">Open Pulse</button>
+    </div>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

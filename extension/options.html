@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pulse Outbound — Options</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 32px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 14px;
+        color: #0f0f10;
+        background: #fafafa;
+      }
+      main {
+        max-width: 520px;
+        margin: 0 auto;
+        background: #fff;
+        border: 1px solid rgba(15, 15, 16, 0.08);
+        border-radius: 16px;
+        padding: 28px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        color: #ad112c;
+        font-size: 20px;
+      }
+      p { line-height: 1.5; color: #6b6b70; font-size: 13px; margin: 4px 0 14px; }
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        margin-top: 14px;
+        margin-bottom: 4px;
+      }
+      input {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(15, 15, 16, 0.12);
+        font-size: 13px;
+        font-family: inherit;
+        background: #fff;
+        color: inherit;
+      }
+      .hint { font-size: 11px; color: #6b6b70; margin-top: 4px; }
+      .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+      .btn {
+        all: unset;
+        cursor: pointer;
+        padding: 10px 16px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .btn-primary { background: #ad112c; color: #fff; }
+      .btn-primary:hover { background: #8d0e25; }
+      .btn-ghost { background: transparent; border: 1px solid rgba(15, 15, 16, 0.12); }
+      .saved {
+        background: rgba(21, 128, 61, 0.1);
+        color: #15803d;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 12.5px;
+        margin-top: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Pulse Outbound</h1>
+      <p>
+        Connect this browser to your Pulse workspace. Mint a token under
+        <strong>Settings → Integrations → API tokens</strong>, paste it here.
+        Tokens stay in this browser — they never leave.
+      </p>
+
+      <label for="baseUrl">Pulse URL</label>
+      <input id="baseUrl" type="url" placeholder="https://pulse-ashy-kappa.vercel.app" />
+      <div class="hint">Usually your Vercel URL. Use <code>http://localhost:3000</code> for local dev.</div>
+
+      <label for="token">API token</label>
+      <input id="token" type="password" placeholder="pulse_ext_…" autocomplete="off" />
+      <div class="hint">From Settings → Integrations → API tokens in Pulse.</div>
+
+      <div id="saved" class="saved" style="display:none">Saved.</div>
+
+      <div class="actions">
+        <button id="clear" class="btn btn-ghost">Disconnect</button>
+        <button id="save" class="btn btn-primary">Save</button>
+      </div>
+    </main>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

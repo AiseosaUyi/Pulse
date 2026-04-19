@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getCurrentUser, getCurrentTenant } from "@/lib/auth";
 import { listIntegrations } from "@/lib/services/integrations";
+import { listApiTokens } from "@/lib/actions/api-tokens";
 import { IntegrationsClient } from "./client";
+import { ApiTokensSection } from "./api-tokens";
 
 export default async function IntegrationsSettingsPage() {
   const user = await getCurrentUser();
@@ -31,7 +33,10 @@ export default async function IntegrationsSettingsPage() {
     );
   }
 
-  const integrations = await listIntegrations(tenant.slug);
+  const [integrations, apiTokens] = await Promise.all([
+    listIntegrations(tenant.slug),
+    listApiTokens(tenant.slug),
+  ]);
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-8 py-8 md:py-12">
@@ -55,6 +60,10 @@ export default async function IntegrationsSettingsPage() {
         </p>
       </header>
       <IntegrationsClient tenantSlug={tenant.slug} initial={integrations} />
+
+      <div className="mt-6">
+        <ApiTokensSection tenantSlug={tenant.slug} initial={apiTokens} />
+      </div>
     </div>
   );
 }

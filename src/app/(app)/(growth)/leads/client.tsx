@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Plus,
   Sparkles,
@@ -12,6 +13,8 @@ import {
   Trash2,
   RefreshCw,
   Mail,
+  Copy,
+  Link as LinkIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +27,7 @@ import {
   draftProspectDm,
   qualifyProspect,
   recordInboundReply,
+  updateOutboundDm,
   updateProspectStatus,
   markInboundRead,
 } from "@/lib/actions/outbound";
@@ -32,6 +36,7 @@ import {
   PLATFORM_LABELS,
   STATUS_LABELS,
   type InboundMessageRecord,
+  type OutboundDmRecord,
   type OutboundPlatform,
   type ProspectRecord,
   type ProspectSearchRecord,
@@ -60,18 +65,33 @@ export function OutboundClient({
   initialProspects,
   initialInbox,
   searches,
+  initialDmsByProspect,
 }: {
   tenantSlug: string;
   initialProspects: ProspectRecord[];
   initialInbox: InboundMessageRecord[];
   searches: ProspectSearchRecord[];
+  initialDmsByProspect: Array<[string, OutboundDmRecord[]]>;
 }) {
   const dialogs = useDialogs();
-  const [tab, setTab] = useState<Tab>("pipeline");
+  const searchParams = useSearchParams();
+  const deeplinkProspectId = searchParams.get("prospect");
+  const deeplinkAction = searchParams.get("action");
+
+  const [tab, setTab] = useState<Tab>(() =>
+    searchParams.get("tab") === "inbox" ? "inbox" : "pipeline"
+  );
   const [prospects, setProspects] = useState(initialProspects);
   const [inbox, setInbox] = useState(initialInbox);
+  const dmsByProspect = useMemo(
+    () => new Map(initialDmsByProspect),
+    [initialDmsByProspect]
+  );
   const [selectedProspectId, setSelectedProspectId] = useState<string | null>(
-    initialProspects[0]?.id ?? null
+    () =>
+      deeplinkProspectId ??
+      initialProspects[0]?.id ??
+      null
   );
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -79,10 +99,25 @@ export function OutboundClient({
     "all"
   );
 
+  // Respond to ?action=reply query param — auto-open reply form.
+  const autoOpenReply = deeplinkAction === "reply";
+
   const selectedProspect = useMemo(
     () => prospects.find((p) => p.id === selectedProspectId) ?? null,
     [prospects, selectedProspectId]
   );
+  const selectedDms = useMemo(
+    () => (selectedProspectId ? (dmsByProspect.get(selectedProspectId) ?? []) : []),
+    [dmsByProspect, selectedProspectId]
+  );
+
+  // Scroll the selected prospect into view on load if it came from a deep link.
+  useEffect(() => {
+    if (deeplinkProspectId) {
+      const el = document.getElementById(`prospect-${deeplinkProspectId}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [deeplinkProspectId]);
 
   const filtered = useMemo(() => {
     if (statusFilter === "all") return prospects;
@@ -272,6 +307,7 @@ export function OutboundClient({
                 {filtered.map((p) => (
                   <li
                     key={p.id}
+                    id={`prospect-${p.id}`}
                     className={`px-4 py-3 cursor-pointer transition-colors ${
                       selectedProspectId === p.id
                         ? "bg-primary-500/5"
@@ -330,6 +366,8 @@ export function OutboundClient({
             <ProspectDetail
               prospect={selectedProspect}
               tenantSlug={tenantSlug}
+              dms={selectedDms}
+              autoOpenReply={autoOpenReply}
               onStatusChange={handleStatus}
               onQualify={handleQualify}
               onDraft={handleDraft}
@@ -585,23 +623,50 @@ function ProspectRowActions({
   );
 }
 
+function platformProfileUrl(prospect: ProspectRecord): string {
+  if (prospect.profileUrl) return prospect.profileUrl;
+  const h = prospect.handle;
+  switch (prospect.platform) {
+    case "instagram":
+      return `https://www.instagram.com/${h}/`;
+    case "tiktok":
+      return `https://www.tiktok.com/@${h}`;
+    case "twitter":
+      return `https://twitter.com/${h}`;
+    case "linkedin":
+      return `https://www.linkedin.com/in/${h}/`;
+    default:
+      return "";
+  }
+}
+
 function ProspectDetail({
   prospect,
   tenantSlug,
+  dms,
+  autoOpenReply,
   onStatusChange,
   onQualify,
   onDraft,
 }: {
   prospect: ProspectRecord | null;
   tenantSlug: string;
+  dms: OutboundDmRecord[];
+  autoOpenReply: boolean;
   onStatusChange: (p: ProspectRecord, status: ProspectStatus) => void;
   onQualify: (p: ProspectRecord) => void;
   onDraft: (p: ProspectRecord) => void;
 }) {
   const [replyBody, setReplyBody] = useState("");
-  const [isReplyOpen, setReplyOpen] = useState(false);
+  const [isReplyOpen, setReplyOpen] = useState(autoOpenReply);
   const [isReplyPending, startReply] = useTransition();
   const [localError, setLocalError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [editingDm, setEditingDm] = useState<{
+    id: string;
+    body: string;
+  } | null>(null);
+  const [isDmBusy, setDmBusy] = useState(false);
 
   if (!prospect) {
     return (
@@ -616,12 +681,15 @@ function ProspectDetail({
     );
   }
 
+  const latestDm: OutboundDmRecord | null = dms[0] ?? null;
+
   const handleRecordReply = () => {
     if (!replyBody.trim()) return;
     setLocalError(null);
     startReply(async () => {
       const res = await recordInboundReply(tenantSlug, prospect.id, {
         body: replyBody,
+        inReplyToDmId: latestDm?.id,
       });
       if (!res.success) {
         setLocalError(res.error);
@@ -632,6 +700,75 @@ function ProspectDetail({
       location.reload();
     });
   };
+
+  const copyText = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500);
+    } catch {
+      setLocalError("Couldn't copy to clipboard.");
+    }
+  };
+
+  const handleCopyAndOpen = async () => {
+    if (!latestDm) return;
+    await copyText("dm-and-open", latestDm.body);
+    const url = platformProfileUrl(prospect);
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleCopyReplyLink = async () => {
+    const url = `${window.location.origin}/leads?prospect=${prospect.id}&action=reply`;
+    await copyText("reply-link", url);
+  };
+
+  const handleSaveDmEdit = async () => {
+    if (!editingDm) return;
+    setDmBusy(true);
+    setLocalError(null);
+    const res = await updateOutboundDm(tenantSlug, editingDm.id, {
+      body: editingDm.body,
+    });
+    setDmBusy(false);
+    if (!res.success) {
+      setLocalError(res.error);
+      return;
+    }
+    setEditingDm(null);
+    location.reload();
+  };
+
+  const handleApproveDm = async () => {
+    if (!latestDm) return;
+    setDmBusy(true);
+    const res = await updateOutboundDm(tenantSlug, latestDm.id, {
+      status: "approved",
+    });
+    setDmBusy(false);
+    if (!res.success) {
+      setLocalError(res.error);
+      return;
+    }
+    onStatusChange(prospect, "approved");
+    location.reload();
+  };
+
+  const handleMarkSent = async () => {
+    if (!latestDm) return;
+    setDmBusy(true);
+    const res = await updateOutboundDm(tenantSlug, latestDm.id, {
+      status: "sent",
+    });
+    setDmBusy(false);
+    if (!res.success) {
+      setLocalError(res.error);
+      return;
+    }
+    onStatusChange(prospect, "sent");
+  };
+
+  const profileUrl = platformProfileUrl(prospect);
 
   return (
     <div className="rounded-xl border border-border bg-card">
@@ -652,17 +789,32 @@ function ProspectDetail({
         {prospect.displayName && (
           <p className="text-xs text-text-muted mt-1">{prospect.displayName}</p>
         )}
-        {prospect.profileUrl && (
-          <a
-            href={prospect.profileUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-[11px] text-primary-500 hover:text-primary-600 mt-1"
+        <div className="flex items-center gap-3 mt-1 flex-wrap">
+          {profileUrl && (
+            <a
+              href={profileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-primary-500 hover:text-primary-600"
+            >
+              Open profile
+              <ExternalLink size={11} />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={handleCopyReplyLink}
+            className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-foreground"
+            title="Share this link on Priye's phone — tap to jump to the reply form"
           >
-            Open profile
-            <ExternalLink size={11} />
-          </a>
-        )}
+            {copied === "reply-link" ? (
+              <Check size={11} className="text-status-green" />
+            ) : (
+              <LinkIcon size={11} />
+            )}
+            {copied === "reply-link" ? "Copied" : "Copy reply link"}
+          </button>
+        </div>
       </div>
 
       <div className="p-4 space-y-3">
@@ -694,28 +846,6 @@ function ProspectDetail({
               Draft DM
             </Button>
           )}
-          {prospect.status === "drafted" && (
-            <Button
-              size="sm"
-              onClick={() => onStatusChange(prospect, "approved")}
-              className="gap-1.5"
-            >
-              <Check size={13} />
-              Approve
-            </Button>
-          )}
-          {(prospect.status === "approved" || prospect.status === "sent") && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => onStatusChange(prospect, "sent")}
-              className="gap-1.5"
-              title="Mark sent (manual until Phantombuster/Messenger wired)"
-            >
-              <Send size={13} />
-              Mark sent
-            </Button>
-          )}
           {(prospect.status === "sent" || prospect.status === "replied") && (
             <Button
               size="sm"
@@ -738,6 +868,132 @@ function ProspectDetail({
             </Button>
           )}
         </div>
+
+        {latestDm && (
+          <div className="rounded-lg border border-border/60 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-[11px] uppercase tracking-wide text-text-muted">
+                Latest DM draft · v{latestDm.version} ·{" "}
+                <span className="text-foreground">{latestDm.status}</span>
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => copyText(`dm-${latestDm.id}`, latestDm.body)}
+                  className="text-[11px] text-text-muted hover:text-foreground inline-flex items-center gap-1"
+                >
+                  {copied === `dm-${latestDm.id}` ? (
+                    <Check size={11} className="text-status-green" />
+                  ) : (
+                    <Copy size={11} />
+                  )}
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingDm({ id: latestDm.id, body: latestDm.body })
+                  }
+                  className="text-[11px] text-text-muted hover:text-foreground"
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+
+            {editingDm && editingDm.id === latestDm.id ? (
+              <>
+                <Textarea
+                  rows={5}
+                  value={editingDm.body}
+                  onChange={(e) =>
+                    setEditingDm({ id: latestDm.id, body: e.target.value })
+                  }
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingDm(null)}
+                    disabled={isDmBusy}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveDmEdit}
+                    disabled={isDmBusy}
+                  >
+                    {isDmBusy ? "Saving…" : "Save edit"}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                {latestDm.body}
+              </p>
+            )}
+
+            {latestDm.followupBody && !editingDm && (
+              <div className="pt-2 border-t border-border/30">
+                <p className="text-[10px] uppercase tracking-wide text-text-muted">
+                  Follow-up if no reply in 3d
+                </p>
+                <p className="text-xs text-text-secondary mt-1 leading-relaxed">
+                  {latestDm.followupBody}
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+              {latestDm.status === "drafted" && (
+                <Button
+                  size="sm"
+                  onClick={handleApproveDm}
+                  disabled={isDmBusy}
+                  className="gap-1.5"
+                >
+                  <Check size={13} />
+                  Approve
+                </Button>
+              )}
+              {(latestDm.status === "approved" || latestDm.status === "drafted") && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleCopyAndOpen}
+                  className="gap-1.5"
+                  title="Copies this DM and opens the prospect's profile in a new tab"
+                >
+                  {copied === "dm-and-open" ? (
+                    <Check size={13} className="text-status-green" />
+                  ) : (
+                    <Copy size={13} />
+                  )}
+                  Copy &amp; open profile
+                </Button>
+              )}
+              {latestDm.status === "approved" && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleMarkSent}
+                  disabled={isDmBusy}
+                  className="gap-1.5"
+                  title="Mark sent once you've pasted it into IG / TikTok"
+                >
+                  <Send size={13} />
+                  Mark sent
+                </Button>
+              )}
+              {dms.length > 1 && (
+                <span className="text-[10px] text-text-muted ml-auto">
+                  {dms.length} versions
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {isReplyOpen && (
           <div className="rounded-lg border border-border/60 p-3">
@@ -769,6 +1025,12 @@ function ProspectDetail({
               </Button>
             </div>
           </div>
+        )}
+
+        {!isReplyOpen && localError && (
+          <p className="text-xs text-status-red" role="alert">
+            {localError}
+          </p>
         )}
       </div>
     </div>

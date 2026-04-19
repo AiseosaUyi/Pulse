@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Pulse Outbound",
+  "version": "0.1.0",
+  "description": "Draft personalized IG / TikTok / Twitter / LinkedIn DMs from Pulse while viewing a prospect's profile. Human-in-the-loop by design.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Pulse Outbound"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.instagram.com/*",
+        "https://instagram.com/*",
+        "https://www.tiktok.com/*",
+        "https://tiktok.com/*",
+        "https://twitter.com/*",
+        "https://x.com/*",
+        "https://www.linkedin.com/*",
+        "https://linkedin.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["storage", "clipboardWrite", "activeTab"],
+  "host_permissions": [
+    "https://*.vercel.app/*",
+    "http://localhost:3000/*"
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}
