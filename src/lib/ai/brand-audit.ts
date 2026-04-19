@@ -259,3 +259,365 @@ export async function runBrandAuditAi(
     throw err;
   }
 }
+
+// ──────────────────────────────────────────────────────────
+// Slice 2: competitor discovery, keyword discovery, starter briefs.
+// Each is ONE AI call (<25s) so we can chunk them into a state
+// machine and fit the Vercel Hobby 60s cap per advance step.
+// ──────────────────────────────────────────────────────────
+
+const competitorDiscoverySchema = z.object({
+  competitors: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        domain: z.string().nullable(),
+        why: z
+          .string()
+          .min(1)
+          .describe(
+            "One sentence explaining why this is a competitor for this brand."
+          ),
+      })
+    )
+    .min(3)
+    .max(6),
+});
+
+export interface DiscoveredCompetitor {
+  name: string;
+  domain: string | null;
+  why: string;
+}
+
+export interface CompetitorDiscoveryResult {
+  competitors: DiscoveredCompetitor[];
+  cost: number;
+  durationMs: number;
+}
+
+export async function discoverCompetitorsAi(
+  tenantSlug: string,
+  positioningBlock: string,
+  brandName: string
+): Promise<CompetitorDiscoveryResult> {
+  const system = [
+    "You are a competitive researcher. Given a brand's positioning, name 3-5 REAL direct competitors they would benchmark against.",
+    "",
+    "Rules:",
+    "- Competitors must be real companies that actually exist. If you can't verify 3 real ones, return the most plausible category leaders.",
+    "- Prefer domain-known competitors in the same market/vertical.",
+    "- `domain` should be the bare domain (e.g. `hubspot.com`) without protocol. Null only if you genuinely don't know.",
+    "- `why` is one concrete sentence — not fluff.",
+    "- Return ONLY JSON matching the schema.",
+  ].join("\n");
+
+  const user = [
+    `Brand: ${brandName}`,
+    "",
+    positioningBlock,
+    "",
+    "Name 3-5 competitors this brand would benchmark against.",
+  ].join("\n");
+
+  const started = Date.now();
+  const model = getModel("scoring");
+  const modelId = getModelId("scoring");
+
+  try {
+    const result = await generateText({
+      model,
+      output: Output.object({ schema: competitorDiscoverySchema }),
+      system,
+      prompt: user,
+    });
+
+    const durationMs = Date.now() - started;
+    const usage = result.usage;
+    const cost = estimateCostUsd(modelId, {
+      inputTokens: usage?.inputTokens ?? 0,
+      outputTokens: usage?.outputTokens ?? 0,
+    });
+
+    await logAiCall({
+      tenantSlug,
+      purpose: "scoring",
+      feature: "brand_audit_competitors",
+      model: modelId,
+      inputTokens: usage?.inputTokens,
+      outputTokens: usage?.outputTokens,
+      costUsd: cost,
+      durationMs,
+      success: true,
+    });
+
+    return {
+      competitors: result.output.competitors,
+      cost,
+      durationMs,
+    };
+  } catch (err) {
+    const durationMs = Date.now() - started;
+    const message = err instanceof Error ? err.message : String(err);
+    await logAiCall({
+      tenantSlug,
+      purpose: "scoring",
+      feature: "brand_audit_competitors",
+      model: modelId,
+      durationMs,
+      success: false,
+      errorMessage: message,
+    });
+    throw err;
+  }
+}
+
+// ────────────────
+
+const keywordDiscoverySchema = z.object({
+  keywords: z
+    .array(
+      z.object({
+        keyword: z.string().min(1),
+        intent: z
+          .enum(["informational", "commercial", "transactional", "navigational"])
+          .describe("Search intent category."),
+        difficulty: z.enum(["easy", "medium", "hard"]),
+      })
+    )
+    .min(15)
+    .max(25),
+});
+
+export interface DiscoveredKeyword {
+  keyword: string;
+  intent: "informational" | "commercial" | "transactional" | "navigational";
+  difficulty: "easy" | "medium" | "hard";
+}
+
+export interface KeywordDiscoveryResult {
+  keywords: DiscoveredKeyword[];
+  cost: number;
+  durationMs: number;
+}
+
+export async function discoverKeywordsAi(
+  tenantSlug: string,
+  positioningBlock: string,
+  competitors: DiscoveredCompetitor[]
+): Promise<KeywordDiscoveryResult> {
+  const system = [
+    "You are a senior SEO strategist. Given a brand's positioning and competitor list, propose 15-25 SEO keywords the brand should track.",
+    "",
+    "Rules:",
+    "- Mix long-tail (3-5 word) and mid-tail (1-3 word) keywords — skew toward long-tail.",
+    "- Keywords should be what an actual person types into Google, not marketing copy.",
+    "- Include at least 3 transactional keywords (buyer intent), 3 commercial (comparison/research), and the rest informational.",
+    "- Don't repeat the same phrase with minor word swaps. Each keyword should be distinct.",
+    "- Difficulty: easy = long-tail / niche, medium = 1-2 word with some competition, hard = broad high-volume terms.",
+    "- Return ONLY JSON matching the schema.",
+  ].join("\n");
+
+  const user = [
+    positioningBlock,
+    "",
+    competitors.length > 0
+      ? `Competitors to benchmark against:\n${competitors
+          .map((c) => `- ${c.name}${c.domain ? ` (${c.domain})` : ""}`)
+          .join("\n")}`
+      : "(No competitors identified yet — infer from positioning alone.)",
+    "",
+    "Propose 15-25 SEO keywords this brand should track.",
+  ].join("\n");
+
+  const started = Date.now();
+  const model = getModel("scoring");
+  const modelId = getModelId("scoring");
+
+  try {
+    const result = await generateText({
+      model,
+      output: Output.object({ schema: keywordDiscoverySchema }),
+      system,
+      prompt: user,
+    });
+
+    const durationMs = Date.now() - started;
+    const usage = result.usage;
+    const cost = estimateCostUsd(modelId, {
+      inputTokens: usage?.inputTokens ?? 0,
+      outputTokens: usage?.outputTokens ?? 0,
+    });
+
+    await logAiCall({
+      tenantSlug,
+      purpose: "scoring",
+      feature: "brand_audit_keywords",
+      model: modelId,
+      inputTokens: usage?.inputTokens,
+      outputTokens: usage?.outputTokens,
+      costUsd: cost,
+      durationMs,
+      success: true,
+    });
+
+    return {
+      keywords: result.output.keywords,
+      cost,
+      durationMs,
+    };
+  } catch (err) {
+    const durationMs = Date.now() - started;
+    const message = err instanceof Error ? err.message : String(err);
+    await logAiCall({
+      tenantSlug,
+      purpose: "scoring",
+      feature: "brand_audit_keywords",
+      model: modelId,
+      durationMs,
+      success: false,
+      errorMessage: message,
+    });
+    throw err;
+  }
+}
+
+// ────────────────
+
+const starterBriefsSchema = z.object({
+  briefs: z
+    .array(
+      z.object({
+        title: z
+          .string()
+          .min(1)
+          .describe(
+            "Punchy working title. Should sound like an actual blog post, not a topic category."
+          ),
+        platform: z.enum(["blog", "instagram", "tiktok", "twitter", "linkedin"]),
+        content_type: z
+          .enum(["article", "thread", "post", "video", "carousel"])
+          .describe("What form this brief should take."),
+        outline: z
+          .array(z.string().min(1))
+          .min(3)
+          .max(7)
+          .describe("3-7 bullet-point sections for the content."),
+        draft_content: z
+          .string()
+          .min(40)
+          .describe(
+            "A 2-4 sentence angle/hook — what makes this post worth reading, from the brand's POV."
+          ),
+        seo_keywords: z
+          .array(z.string())
+          .min(1)
+          .max(3)
+          .describe("1-3 target keywords from the discovered list."),
+      })
+    )
+    .length(5),
+});
+
+export interface DiscoveredBrief {
+  title: string;
+  platform: "blog" | "instagram" | "tiktok" | "twitter" | "linkedin";
+  content_type: "article" | "thread" | "post" | "video" | "carousel";
+  outline: string[];
+  draft_content: string;
+  seo_keywords: string[];
+}
+
+export interface StarterBriefsResult {
+  briefs: DiscoveredBrief[];
+  cost: number;
+  durationMs: number;
+}
+
+export async function generateStarterBriefsAi(
+  tenantSlug: string,
+  voiceBlock: string,
+  positioningBlock: string,
+  keywords: DiscoveredKeyword[],
+  competitors: DiscoveredCompetitor[]
+): Promise<StarterBriefsResult> {
+  const system = [
+    "You draft content briefs for the brand below. Produce EXACTLY 5 briefs — a mix of content types (blog, thread, carousel, short video, LinkedIn post).",
+    "",
+    voiceBlock,
+    "",
+    positioningBlock,
+    "",
+    "Rules:",
+    "- Each brief should be something the brand would actually want to publish in their first month.",
+    "- Spread across the content_type enum so the user sees variety (at least 3 distinct types).",
+    "- Pull target keywords from the list provided — don't invent new ones.",
+    "- `draft_content` is the angle/hook, not the finished post. 2-4 sentences.",
+    "- If competitors are listed, 1-2 briefs should counter-position or fill gaps they're missing.",
+    "- Return ONLY JSON matching the schema (exactly 5 briefs).",
+  ].join("\n");
+
+  const user = [
+    "Available SEO keywords (pick 1-3 per brief):",
+    keywords.slice(0, 20).map((k) => `- ${k.keyword} (${k.intent})`).join("\n"),
+    "",
+    competitors.length > 0
+      ? `Competitors we're benchmarking against:\n${competitors
+          .map((c) => `- ${c.name}: ${c.why}`)
+          .join("\n")}`
+      : "(No competitors listed.)",
+    "",
+    "Draft 5 starter content briefs.",
+  ].join("\n");
+
+  const started = Date.now();
+  const model = getModel("synthesis");
+  const modelId = getModelId("synthesis");
+
+  try {
+    const result = await generateText({
+      model,
+      output: Output.object({ schema: starterBriefsSchema }),
+      system,
+      prompt: user,
+    });
+
+    const durationMs = Date.now() - started;
+    const usage = result.usage;
+    const cost = estimateCostUsd(modelId, {
+      inputTokens: usage?.inputTokens ?? 0,
+      outputTokens: usage?.outputTokens ?? 0,
+    });
+
+    await logAiCall({
+      tenantSlug,
+      purpose: "synthesis",
+      feature: "brand_audit_briefs",
+      model: modelId,
+      inputTokens: usage?.inputTokens,
+      outputTokens: usage?.outputTokens,
+      costUsd: cost,
+      durationMs,
+      success: true,
+    });
+
+    return {
+      briefs: result.output.briefs,
+      cost,
+      durationMs,
+    };
+  } catch (err) {
+    const durationMs = Date.now() - started;
+    const message = err instanceof Error ? err.message : String(err);
+    await logAiCall({
+      tenantSlug,
+      purpose: "synthesis",
+      feature: "brand_audit_briefs",
+      model: modelId,
+      durationMs,
+      success: false,
+      errorMessage: message,
+    });
+    throw err;
+  }
+}
