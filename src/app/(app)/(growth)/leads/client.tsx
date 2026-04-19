@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useDialogs } from "@/components/ui/Dialog";
 import {
+  bulkQualifyNewProspects,
   createProspect,
   deleteProspect,
   draftProspectDm,
@@ -32,12 +33,21 @@ import {
   markInboundRead,
 } from "@/lib/actions/outbound";
 import {
+  createProspectSearch,
+  deleteProspectSearch,
+  runProspectSearchNow,
+  updateProspectSearch,
+} from "@/lib/actions/prospect-searches";
+import {
   OUTBOUND_PLATFORMS,
   PLATFORM_LABELS,
+  SIGNAL_LABELS,
+  SIGNAL_TYPES,
   STATUS_LABELS,
   type InboundMessageRecord,
   type OutboundDmRecord,
   type OutboundPlatform,
+  type SignalType,
   type ProspectRecord,
   type ProspectSearchRecord,
   type ProspectStatus,
@@ -291,6 +301,7 @@ export function OutboundClient({
             <div className="flex items-center gap-2 flex-wrap">
               <StatusFilter value={statusFilter} onChange={setStatusFilter} />
               <AddProspectQuickForm onSubmit={handleAddProspect} />
+              <BulkQualifyButton tenantSlug={tenantSlug} prospects={prospects} />
             </div>
 
             {filtered.length === 0 ? (
@@ -388,7 +399,9 @@ export function OutboundClient({
         />
       )}
 
-      {tab === "discovery" && <DiscoveryView searches={searches} />}
+      {tab === "discovery" && (
+        <DiscoveryView tenantSlug={tenantSlug} searches={searches} />
+      )}
     </div>
   );
 }
@@ -1124,68 +1137,434 @@ function InboxView({
   );
 }
 
-function DiscoveryView({ searches }: { searches: ProspectSearchRecord[] }) {
+function DiscoveryView({
+  tenantSlug,
+  searches: initial,
+}: {
+  tenantSlug: string;
+  searches: ProspectSearchRecord[];
+}) {
+  const dialogs = useDialogs();
+  const [searches, setSearches] = useState(initial);
+  const [creating, setCreating] = useState(initial.length === 0);
+  const [runningId, setRunningId] = useState<string | null>(null);
+  const [lastRun, setLastRun] = useState<{
+    searchId: string;
+    inserted: number;
+    qualified: number;
+    skipped: number;
+    candidates: number;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCreate = async (input: {
+    name: string;
+    platform: OutboundPlatform;
+    signalType: SignalType;
+    query: string;
+    autoQualify: boolean;
+  }) => {
+    setError(null);
+    const res = await createProspectSearch(tenantSlug, input);
+    if (!res.success) {
+      setError(res.error);
+      return;
+    }
+    setSearches((prev) => [res.search, ...prev]);
+    setCreating(false);
+  };
+
+  const handleRun = async (search: ProspectSearchRecord) => {
+    setRunningId(search.id);
+    setError(null);
+    setLastRun(null);
+    const res = await runProspectSearchNow(tenantSlug, search.id);
+    setRunningId(null);
+    if (!res.success) {
+      setError(`"${search.name}" — ${res.error}`);
+      return;
+    }
+    setLastRun({
+      searchId: search.id,
+      inserted: res.inserted,
+      qualified: res.qualified,
+      skipped: res.skipped,
+      candidates: res.candidates,
+    });
+    // Bump the last-run stamp locally for snappy UI.
+    setSearches((prev) =>
+      prev.map((s) =>
+        s.id === search.id
+          ? {
+              ...s,
+              lastRunAt: new Date().toISOString(),
+              lastResultCount: res.inserted,
+            }
+          : s
+      )
+    );
+  };
+
+  const handleToggleAutoQualify = async (
+    search: ProspectSearchRecord,
+    next: boolean
+  ) => {
+    setError(null);
+    const res = await updateProspectSearch(tenantSlug, search.id, {
+      autoQualify: next,
+    });
+    if (!res.success) {
+      setError(res.error);
+      return;
+    }
+    setSearches((prev) =>
+      prev.map((s) => (s.id === search.id ? { ...s, autoQualify: next } : s))
+    );
+  };
+
+  const handleDelete = async (search: ProspectSearchRecord) => {
+    const ok = await dialogs.confirm({
+      title: `Delete "${search.name}"?`,
+      subtitle:
+        "The saved search is removed. Prospects already discovered stay — they're in the pipeline.",
+      tone: "destructive",
+      confirmLabel: "Delete search",
+    });
+    if (!ok) return;
+    const res = await deleteProspectSearch(tenantSlug, search.id);
+    if (!res.success) {
+      setError(res.error);
+      return;
+    }
+    setSearches((prev) => prev.filter((s) => s.id !== search.id));
+  };
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-card p-5">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-primary-500/10 text-primary-500 flex items-center justify-center">
-            <Sparkles size={16} />
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="h-9 w-9 rounded-full bg-primary-500/10 text-primary-500 flex items-center justify-center shrink-0">
+              <Sparkles size={16} />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-foreground">
+                Autonomous discovery
+              </h3>
+              <p className="text-xs text-text-muted leading-relaxed">
+                Save searches like <em>&ldquo;event planner Lagos&rdquo;</em>.
+                A nightly job runs them against Google site-search and adds
+                fresh profiles to your pipeline — no scrolling required.
+                Toggle <strong>auto-qualify</strong> to have the AI score
+                each new prospect inline.
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">
-              Saved prospect searches
-            </h3>
-            <p className="text-xs text-text-muted">
-              AI-driven discovery fires these queries on a schedule (coming in
-              Slice 6b — Apify actor for IG hashtags + TikTok keyword search).
-            </p>
-          </div>
+          {!creating && (
+            <Button
+              size="sm"
+              onClick={() => setCreating(true)}
+              className="gap-1.5 shrink-0"
+            >
+              <Plus size={14} />
+              New search
+            </Button>
+          )}
         </div>
       </div>
 
-      {searches.length === 0 ? (
+      {error && (
+        <div
+          className="rounded-lg border border-status-red/30 bg-status-red/5 px-3 py-2 text-sm text-status-red"
+          role="alert"
+        >
+          {error}
+        </div>
+      )}
+
+      {lastRun && (
+        <div
+          className="rounded-lg border border-status-green/30 bg-status-green/5 px-3 py-2 text-sm text-status-green"
+          role="status"
+        >
+          Added {lastRun.inserted} new prospect
+          {lastRun.inserted === 1 ? "" : "s"}
+          {lastRun.qualified > 0 && ` · ${lastRun.qualified} auto-qualified`}
+          {lastRun.skipped > 0 &&
+            ` · ${lastRun.skipped} already in pipeline (skipped)`}
+          {lastRun.candidates === 0 && " · no results came back — try broader keywords"}
+        </div>
+      )}
+
+      {creating && (
+        <DiscoverySearchForm
+          onCancel={() => setCreating(false)}
+          onSubmit={handleCreate}
+        />
+      )}
+
+      {searches.length === 0 && !creating && (
         <div className="rounded-xl border border-dashed border-border p-8 text-center">
           <p className="text-sm text-foreground font-semibold">
-            No searches saved yet.
+            No searches saved yet
           </p>
           <p className="text-xs text-text-muted mt-1 max-w-md mx-auto">
-            For now, add prospects manually via the Pipeline tab. Once the
-            discovery actors are wired, this tab becomes your query builder.
+            Click <strong>New search</strong> above. Your first search could
+            be a keyword your audience uses in bios or captions — e.g.
+            &ldquo;event planner Lagos&rdquo; on Instagram.
           </p>
         </div>
-      ) : (
+      )}
+
+      {searches.length > 0 && (
         <ul className="space-y-2">
-          {searches.map((s) => (
-            <li
-              key={s.id}
-              className="rounded-lg border border-border bg-card p-3"
-            >
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    {s.name}
-                  </p>
-                  <p className="text-xs text-text-muted">
-                    {PLATFORM_LABELS[s.platform]} ·{" "}
-                    {s.signalType.replace("_", " ")} · &ldquo;{s.query}&rdquo;
-                  </p>
+          {searches.map((s) => {
+            const busy = runningId === s.id;
+            return (
+              <li
+                key={s.id}
+                className="rounded-lg border border-border bg-card p-4"
+              >
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">
+                      {s.name}
+                    </p>
+                    <p className="text-xs text-text-muted mt-0.5">
+                      {PLATFORM_LABELS[s.platform]} ·{" "}
+                      {SIGNAL_LABELS[s.signalType]} · &ldquo;{s.query}&rdquo;
+                    </p>
+                    <p className="text-[10px] text-text-muted mt-1">
+                      Last run{" "}
+                      {s.lastRunAt
+                        ? `${new Date(s.lastRunAt).toLocaleString()} · added ${s.lastResultCount}`
+                        : "never"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <label className="flex items-center gap-1.5 text-[11px] text-text-muted cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={s.autoQualify}
+                        onChange={(e) =>
+                          handleToggleAutoQualify(s, e.target.checked)
+                        }
+                        className="accent-primary-500"
+                      />
+                      Auto-qualify
+                    </label>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleRun(s)}
+                      disabled={busy}
+                      className="gap-1.5"
+                    >
+                      {busy ? (
+                        <Loader2 size={11} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={11} />
+                      )}
+                      Run now
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(s)}
+                      disabled={busy}
+                      className="p-1.5 rounded-md text-text-muted hover:text-status-red hover:bg-status-red/10"
+                      title="Delete search"
+                      aria-label="Delete search"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
                 </div>
-                <span className="text-[10px] text-text-muted">
-                  last run{" "}
-                  {s.lastRunAt
-                    ? new Date(s.lastRunAt).toLocaleDateString()
-                    : "never"}
-                </span>
-                <Button variant="ghost" size="sm" disabled className="gap-1.5">
-                  <RefreshCw size={11} />
-                  Run (soon)
-                </Button>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
+  );
+}
+
+function DiscoverySearchForm({
+  onCancel,
+  onSubmit,
+}: {
+  onCancel: () => void;
+  onSubmit: (input: {
+    name: string;
+    platform: OutboundPlatform;
+    signalType: SignalType;
+    query: string;
+    autoQualify: boolean;
+  }) => void | Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [platform, setPlatform] = useState<OutboundPlatform>("instagram");
+  const [signalType, setSignalType] = useState<SignalType>("keyword");
+  const [query, setQuery] = useState("");
+  const [autoQualify, setAutoQualify] = useState(true);
+  const [isPending, startTransition] = useTransition();
+
+  const submit = () => {
+    if (!name.trim() || !query.trim()) return;
+    startTransition(async () => {
+      await onSubmit({ name, platform, signalType, query, autoQualify });
+    });
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-foreground">
+          New saved search
+        </h4>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-xs text-text-muted hover:text-foreground"
+        >
+          Cancel
+        </button>
+      </div>
+
+      <div>
+        <Label>Name</Label>
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Lagos event planners"
+        />
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-3">
+        <div>
+          <Label>Platform</Label>
+          <select
+            value={platform}
+            onChange={(e) => setPlatform(e.target.value as OutboundPlatform)}
+            className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+          >
+            {OUTBOUND_PLATFORMS.filter(
+              (p) => p !== "manual" && p !== "other"
+            ).map((p) => (
+              <option key={p} value={p}>
+                {PLATFORM_LABELS[p]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label>Signal type</Label>
+          <select
+            value={signalType}
+            onChange={(e) => setSignalType(e.target.value as SignalType)}
+            className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+          >
+            {SIGNAL_TYPES.filter((s) => s !== "manual").map((s) => (
+              <option key={s} value={s}>
+                {SIGNAL_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <Label>Search query</Label>
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={
+            signalType === "hashtag"
+              ? "#afrobeats"
+              : 'event planner Lagos'
+          }
+        />
+        <p className="text-[11px] text-text-muted mt-1">
+          This becomes a Google search like{" "}
+          <code>site:{platform}.com &ldquo;{query || "…"}&rdquo;</code> — include
+          quotes in the query itself if you want exact-match.
+        </p>
+      </div>
+
+      <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer">
+        <input
+          type="checkbox"
+          checked={autoQualify}
+          onChange={(e) => setAutoQualify(e.target.checked)}
+          className="mt-0.5 accent-primary-500"
+        />
+        <span>
+          <span className="font-medium">Auto-qualify</span> new prospects — AI
+          scores fit (0-100) and marks as qualified / skip, so your pipeline is
+          already filtered when you open it.
+        </span>
+      </label>
+
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          onClick={submit}
+          disabled={isPending || !name.trim() || !query.trim()}
+        >
+          {isPending ? "Saving…" : "Save search"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function BulkQualifyButton({
+  tenantSlug,
+  prospects,
+}: {
+  tenantSlug: string;
+  prospects: ProspectRecord[];
+}) {
+  const dialogs = useDialogs();
+  const [isPending, startTransition] = useTransition();
+  const newCount = prospects.filter((p) => p.status === "new").length;
+
+  if (newCount === 0) return null;
+
+  const handleClick = () => {
+    startTransition(async () => {
+      const res = await bulkQualifyNewProspects(tenantSlug);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Bulk qualify failed",
+          subtitle: res.error,
+          tone: "warning",
+        });
+        return;
+      }
+      await dialogs.alert({
+        title: `Scored ${res.scored} prospect${res.scored === 1 ? "" : "s"}`,
+        subtitle: `${res.qualified} qualified · ${res.skipped} skipped`,
+        tone: "success",
+      });
+      location.reload();
+    });
+  };
+
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={handleClick}
+      disabled={isPending}
+      className="gap-1.5"
+      title="Run AI qualifier on every 'new' prospect"
+    >
+      {isPending ? (
+        <Loader2 size={12} className="animate-spin" />
+      ) : (
+        <Sparkles size={12} />
+      )}
+      Qualify {newCount} new
+    </Button>
   );
 }

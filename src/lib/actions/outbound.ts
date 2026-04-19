@@ -102,6 +102,54 @@ export async function createProspect(
   };
 }
 
+/**
+ * Bulk AI-qualify every prospect currently in `new` status for the
+ * tenant. Capped to avoid runaway cost + Vercel 300s limit; returns
+ * a summary so the UI can toast progress.
+ */
+export async function bulkQualifyNewProspects(
+  tenantSlug: string,
+  limit = 25
+): Promise<
+  ActionResult<{ scored: number; qualified: number; skipped: number }>
+> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Not authenticated" };
+
+  const tenant = await getTenant(tenantSlug);
+  if (!tenant) return { success: false, error: "Tenant not found" };
+
+  const supabase = await createClient();
+  const { data: rows } = await supabase
+    .from("prospects")
+    .select("id")
+    .eq("tenant_slug", tenantSlug)
+    .eq("status", "new")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  const ids = (rows ?? []).map((r) => r.id as string);
+  if (ids.length === 0) {
+    return { success: true, scored: 0, qualified: 0, skipped: 0 };
+  }
+
+  let scored = 0;
+  let qualified = 0;
+  let skipped = 0;
+  for (const id of ids) {
+    const res = await qualifyProspect(tenantSlug, id);
+    if (!res.success) {
+      skipped += 1;
+      continue;
+    }
+    scored += 1;
+    if (res.status === "qualified") qualified += 1;
+  }
+
+  revalidatePath("/leads");
+  return { success: true, scored, qualified, skipped };
+}
+
 export async function qualifyProspect(
   tenantSlug: string,
   prospectId: string
