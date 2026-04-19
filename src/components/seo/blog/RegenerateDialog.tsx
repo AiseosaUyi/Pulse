@@ -30,6 +30,7 @@ import {
   advanceRegeneration,
   cancelRegeneration,
 } from "@/lib/actions/blog-regeneration";
+import { useDialogs } from "@/components/ui/Dialog";
 import type {
   BlogPostRecord,
   BlogScoreIssue,
@@ -94,6 +95,7 @@ export function RegenerateDialog({
     (post.contentScore != null && post.contentScore < 90) ||
     actionableIssueCount > 0;
 
+  const dialogs = useDialogs();
   const [feedback, setFeedback] = useState(initialFeedback.trim());
   const [useAiSuggestions, setUseAiSuggestions] = useState(defaultUseAi);
   const [view, setView] = useState<ViewPhase>({ kind: "compose" });
@@ -195,13 +197,16 @@ export function RegenerateDialog({
     submit();
   };
 
-  const handleApplyAnyway = () => {
-    if (
-      !window.confirm(
-        "This regeneration scored below 90. Apply it anyway? The old draft is archived to history."
-      )
-    )
-      return;
+  const handleApplyAnyway = async () => {
+    const ok = await dialogs.confirm({
+      title: "Apply this regeneration?",
+      subtitle:
+        "It scored below the 90-point target. Your old draft is archived to version history first, so you can revert anytime.",
+      tone: "warning",
+      confirmLabel: "Apply anyway",
+      cancelLabel: "Go back",
+    });
+    if (!ok) return;
     submit({ force: true });
   };
 

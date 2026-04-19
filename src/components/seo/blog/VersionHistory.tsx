@@ -5,6 +5,7 @@ import { History, Undo2, GitCompare, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DiffViewer } from "./DiffViewer";
 import { revertToVersion } from "@/lib/actions/blog-versions";
+import { useDialogs } from "@/components/ui/Dialog";
 import type { BlogPostVersionRecord } from "@/lib/types/blog-posts";
 
 export function VersionHistory({
@@ -21,13 +22,21 @@ export function VersionHistory({
   currentMarkdown: string;
   onReverted?: () => void;
 }) {
+  const dialogs = useDialogs();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const handleRevert = (versionId: string, versionNumber: number) => {
-    if (!window.confirm(`Revert to v${versionNumber}? Your current draft will be saved as a new version.`))
-      return;
+  const handleRevert = async (versionId: string, versionNumber: number) => {
+    const ok = await dialogs.confirm({
+      title: `Revert to v${versionNumber}?`,
+      subtitle:
+        "Your current draft will be saved as a new version first, so nothing is lost.",
+      tone: "warning",
+      icon: Undo2,
+      confirmLabel: "Revert",
+    });
+    if (!ok) return;
     setError(null);
     startTransition(async () => {
       const res = await revertToVersion(postId, tenantSlug, versionId);

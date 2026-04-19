@@ -13,6 +13,7 @@ import {
   rejectFeedback,
   updateFeedbackTranscription,
 } from "@/lib/actions/blog-feedback";
+import { useDialogs } from "@/components/ui/Dialog";
 import type { BlogPostFeedbackRecord } from "@/lib/types/blog-posts";
 
 const AUDIO_BUCKET = "blog-feedback-audio";
@@ -36,6 +37,7 @@ export function FeedbackPanel({
   /** Fires after a feedback row applies — parent should refetch data. */
   onApplied?: () => void;
 }) {
+  const dialogs = useDialogs();
   const [text, setText] = useState("");
   const [recording, setRecording] = useState(false);
   const [pendingAudio, setPendingAudio] = useState<PendingAudio | null>(null);
@@ -165,8 +167,15 @@ export function FeedbackPanel({
     });
   };
 
-  const handleReject = (id: string) => {
-    if (!window.confirm("Reject this feedback?")) return;
+  const handleReject = async (id: string) => {
+    const ok = await dialogs.confirm({
+      title: "Reject this feedback?",
+      subtitle:
+        "It'll be marked rejected so future regenerations skip it. Your past feedback history keeps the record.",
+      tone: "warning",
+      confirmLabel: "Reject",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await rejectFeedback(id, tenantSlug);
       if (!res.success) setError(res.error);

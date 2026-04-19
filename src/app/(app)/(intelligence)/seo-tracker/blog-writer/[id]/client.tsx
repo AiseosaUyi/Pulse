@@ -18,6 +18,7 @@ import { TiptapEditor, type TiptapChange } from "@/components/seo/blog/TiptapEdi
 import { InlineFeedbackDock } from "@/components/seo/blog/InlineFeedbackDock";
 import { VersionHistory } from "@/components/seo/blog/VersionHistory";
 import { FeedbackPanel } from "@/components/seo/blog/FeedbackPanel";
+import { useDialogs } from "@/components/ui/Dialog";
 import {
   deleteBlogPost,
   updateBlogPost,
@@ -50,6 +51,7 @@ export function BlogEditorPageClient({
   feedback: BlogPostFeedbackRecord[];
 }) {
   const router = useRouter();
+  const dialogs = useDialogs();
 
   const [title, setTitle] = useState(post.title);
   const [metaDescription, setMetaDescription] = useState(
@@ -138,9 +140,15 @@ export function BlogEditorPageClient({
     });
   };
 
-  const handleDelete = () => {
-    if (!window.confirm(`Delete "${post.title}"? This can't be undone.`))
-      return;
+  const handleDelete = async () => {
+    const ok = await dialogs.confirm({
+      title: `Delete "${post.title}"?`,
+      subtitle:
+        "This blog post and all its versions will be permanently removed. You can't undo this.",
+      tone: "destructive",
+      confirmLabel: "Delete post",
+    });
+    if (!ok) return;
     startDelete(async () => {
       const res = await deleteBlogPost(post.id, tenantSlug);
       if (!res.success) {
@@ -152,8 +160,18 @@ export function BlogEditorPageClient({
     });
   };
 
-  const handleBack = () => {
-    if (dirty && !window.confirm("Discard unsaved changes?")) return;
+  const handleBack = async () => {
+    if (dirty) {
+      const ok = await dialogs.confirm({
+        title: "Discard unsaved changes?",
+        subtitle:
+          "Your edits to the title, meta, or content haven't been saved yet. Leaving now will lose them.",
+        tone: "warning",
+        confirmLabel: "Discard",
+        cancelLabel: "Keep editing",
+      });
+      if (!ok) return;
+    }
     router.push("/seo-tracker/blog-writer");
   };
 

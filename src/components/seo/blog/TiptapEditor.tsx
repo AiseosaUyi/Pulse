@@ -32,6 +32,7 @@ import {
   Redo2,
 } from "lucide-react";
 import { countWords } from "@/lib/blog/word-count";
+import { useDialogs } from "@/components/ui/Dialog";
 
 export interface TiptapChange {
   json: JSONContent;
@@ -151,6 +152,7 @@ function Toolbar({
   editor: NonNullable<ReturnType<typeof useEditor>>;
   disabled?: boolean;
 }) {
+  const dialogs = useDialogs();
   const btn = (active: boolean) =>
     `h-8 w-8 inline-flex items-center justify-center rounded-md transition-colors ${
       active
@@ -158,15 +160,28 @@ function Toolbar({
         : "text-text-muted hover:bg-sidebar hover:text-foreground"
     }`;
 
-  const handleLink = () => {
+  const handleLink = async () => {
     const previous = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("Link URL", previous ?? "https://");
+    const url = await dialogs.prompt({
+      title: "Add or edit link",
+      subtitle: "Paste a URL. Leave blank to remove the current link.",
+      icon: LinkIcon,
+      defaultValue: previous ?? "",
+      placeholder: "https://example.com",
+      confirmLabel: "Apply link",
+    });
     if (url === null) return;
-    if (url === "") {
+    const trimmed = url.trim();
+    if (trimmed === "") {
       editor.chain().focus().unsetLink().run();
       return;
     }
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+    editor
+      .chain()
+      .focus()
+      .extendMarkRange("link")
+      .setLink({ href: trimmed })
+      .run();
   };
 
   const handleTable = () => {
