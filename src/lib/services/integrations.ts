@@ -1,7 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type {
-  BlogPublicationRecord,
   IntegrationProvider,
   IntegrationRecord,
   IntegrationStatus,
@@ -82,29 +81,4 @@ export async function getIntegrationSecrets(
     secretToken: data.secret_token,
     secretToken2: data.secret_token_2,
   };
-}
-
-export async function listBlogPublications(
-  tenantSlug: string,
-  blogPostId: string
-): Promise<BlogPublicationRecord[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("blog_publications")
-    .select("*")
-    .eq("tenant_slug", tenantSlug)
-    .eq("blog_post_id", blogPostId)
-    .order("published_at", { ascending: false });
-  if (error || !data) return [];
-  return data.map((row) => ({
-    id: row.id,
-    tenantSlug: row.tenant_slug,
-    blogPostId: row.blog_post_id,
-    provider: row.provider,
-    externalId: row.external_id,
-    externalUrl: row.external_url,
-    status: row.status,
-    error: row.error,
-    publishedAt: row.published_at,
-  }));
 }

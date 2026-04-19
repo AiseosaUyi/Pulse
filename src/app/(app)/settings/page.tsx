@@ -383,11 +383,11 @@ export default async function SettingsPage() {
               className="text-sm text-gray-1200 dark:text-foreground"
               style={{ fontFamily: "'Satoshi-500', var(--font-sans)" }}
             >
-              Connect the accounts Pulse publishes to
+              Connect external data sources + API tokens
             </p>
             <p className="text-xs text-gray-1000 dark:text-text-muted mt-1">
-              Ayrshare for social (X, LinkedIn, Instagram, TikTok), WordPress
-              and Ghost for blog, Resend for email.
+              Google Analytics 4 for web data, plus API tokens for the
+              Pulse Chrome extension.
             </p>
           </div>
           <Link

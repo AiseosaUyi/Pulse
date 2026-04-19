@@ -4,10 +4,6 @@ import { getBlogPostRecord } from "@/lib/services/blog-posts";
 import { listBlogPostVersions } from "@/lib/services/blog-versions";
 import { listBlogPostFeedback } from "@/lib/services/blog-feedback";
 import { listDistributionsForBlogPost } from "@/lib/services/content-distributions";
-import {
-  listIntegrations,
-  listBlogPublications,
-} from "@/lib/services/integrations";
 import { BlogEditorPageClient } from "./client";
 
 // Regenerate + iterate-to-90 can run for up to a minute. Mirror the
@@ -26,14 +22,11 @@ export default async function BlogEditorPage({
   const post = await getBlogPostRecord(tenantSlug, id);
   if (!post) notFound();
 
-  const [versions, feedback, distributions, integrations, publications] =
-    await Promise.all([
-      listBlogPostVersions(tenantSlug, id),
-      listBlogPostFeedback(tenantSlug, id),
-      listDistributionsForBlogPost(tenantSlug, id),
-      listIntegrations(tenantSlug),
-      listBlogPublications(tenantSlug, id),
-    ]);
+  const [versions, feedback, distributions] = await Promise.all([
+    listBlogPostVersions(tenantSlug, id),
+    listBlogPostFeedback(tenantSlug, id),
+    listDistributionsForBlogPost(tenantSlug, id),
+  ]);
 
   return (
     <BlogEditorPageClient
@@ -42,8 +35,6 @@ export default async function BlogEditorPage({
       versions={versions}
       feedback={feedback}
       distributions={distributions}
-      integrations={integrations}
-      publications={publications}
     />
   );
 }

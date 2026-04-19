@@ -19,7 +19,6 @@ import { InlineFeedbackDock } from "@/components/seo/blog/InlineFeedbackDock";
 import { VersionHistory } from "@/components/seo/blog/VersionHistory";
 import { FeedbackPanel } from "@/components/seo/blog/FeedbackPanel";
 import { DistributeDialog } from "@/components/seo/blog/DistributeDialog";
-import { PublishMenu } from "@/components/seo/blog/PublishMenu";
 import { AskCoachButton } from "@/components/seo/blog/AskCoachButton";
 import { useDialogs } from "@/components/ui/Dialog";
 import {
@@ -34,10 +33,6 @@ import type {
   BlogPostVersionRecord,
 } from "@/lib/types/blog-posts";
 import type { ContentDistributionRecord } from "@/lib/types/content-distributions";
-import type {
-  BlogPublicationRecord,
-  IntegrationRecord,
-} from "@/lib/types/integrations";
 
 const STATUS_OPTIONS: BlogPostStatus[] = [
   "draft",
@@ -53,16 +48,12 @@ export function BlogEditorPageClient({
   versions,
   feedback,
   distributions,
-  integrations,
-  publications,
 }: {
   post: BlogPostRecord;
   tenantSlug: string;
   versions: BlogPostVersionRecord[];
   feedback: BlogPostFeedbackRecord[];
   distributions: ContentDistributionRecord[];
-  integrations: IntegrationRecord[];
-  publications: BlogPublicationRecord[];
 }) {
   const router = useRouter();
   const dialogs = useDialogs();
@@ -274,12 +265,6 @@ export function BlogEditorPageClient({
             tenantSlug={tenantSlug}
             blogPostId={post.id}
             disabled={isSaving || isDeleting}
-          />
-          <PublishMenu
-            tenantSlug={tenantSlug}
-            blogPostId={post.id}
-            integrations={integrations}
-            publications={publications}
           />
           <Button
             size="sm"

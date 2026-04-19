@@ -55,8 +55,9 @@ export default async function IntegrationsSettingsPage() {
           Integrations
         </h1>
         <p className="text-sm text-gray-1000 mt-2">
-          Connect the accounts Pulse publishes to. All tokens stay server-side —
-          the browser never sees them.
+          Connect data sources Pulse pulls from, plus API tokens for
+          first-party clients. Credentials stay server-side — the browser
+          never sees them.
         </p>
       </header>
       <IntegrationsClient tenantSlug={tenant.slug} initial={integrations} />

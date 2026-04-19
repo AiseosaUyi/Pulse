@@ -3,9 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
-import { testAyrshareKey } from "@/lib/integrations/ayrshare";
-import { testWordpressConnection } from "@/lib/integrations/wordpress";
-import { testGhostConnection } from "@/lib/integrations/ghost";
 import { testGa4Connection } from "@/lib/integrations/ga4";
 import { getIntegrationSecrets } from "@/lib/services/integrations";
 import type { IntegrationProvider } from "@/lib/types/integrations";
@@ -45,7 +42,6 @@ export async function saveIntegration(
     .upsert(patch, { onConflict: "tenant_slug,provider" });
   if (error) return { success: false, error: error.message };
 
-  // Fire-and-test so the UI immediately sees connected/error state.
   const test = await testIntegration(input.tenantSlug, input.provider);
   revalidatePath("/settings/integrations");
   return { success: true, tested: test.success };
@@ -103,53 +99,6 @@ async function runProviderTest(
   }
 ): Promise<{ ok: boolean; error?: string; detail?: string }> {
   switch (provider) {
-    case "ayrshare": {
-      if (!creds.secretToken) return { ok: false, error: "Missing API key" };
-      const res = await testAyrshareKey(creds.secretToken);
-      return {
-        ok: res.ok,
-        error: res.error,
-        detail: res.platforms
-          ? `${res.platforms.length} social account${
-              res.platforms.length === 1 ? "" : "s"
-            } connected`
-          : undefined,
-      };
-    }
-    case "wordpress": {
-      const siteUrl = String(creds.config.site_url ?? "");
-      const username = String(creds.config.username ?? "");
-      if (!siteUrl || !username || !creds.secretToken) {
-        return { ok: false, error: "Missing site URL, username, or password" };
-      }
-      const res = await testWordpressConnection({
-        siteUrl,
-        username,
-        appPassword: creds.secretToken,
-      });
-      return { ok: res.ok, error: res.error, detail: res.siteName };
-    }
-    case "ghost": {
-      const adminUrl = String(creds.config.admin_url ?? "");
-      const id = creds.secretToken;
-      const secret = creds.secretToken2;
-      if (!adminUrl || !id || !secret) {
-        return { ok: false, error: "Missing admin URL or key" };
-      }
-      const res = await testGhostConnection({
-        adminUrl,
-        adminKey: `${id}:${secret}`,
-      });
-      return { ok: res.ok, error: res.error, detail: res.siteTitle };
-    }
-    case "resend": {
-      // Resend has no cheap test endpoint — we verify presence and
-      // trust the first send to surface auth issues. Good enough.
-      if (!creds.secretToken) {
-        return { ok: false, error: "Missing API key" };
-      }
-      return { ok: true, detail: "Key stored (not tested)" };
-    }
     case "ga4": {
       const propertyId = String(creds.config.property_id ?? "");
       if (!propertyId || !creds.secretToken) {
