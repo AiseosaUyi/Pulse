@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/sidebar/Sidebar";
 import { MobileNav } from "@/components/sidebar/MobileNav";
 import { getCurrentUser, getUserTenants, getCurrentTenant } from "@/lib/auth";
+import { getBrandVoice } from "@/lib/ai/brand-voice";
 
 export default async function AppLayout({
   children,
@@ -16,6 +17,12 @@ export default async function AppLayout({
 
   const currentTenant = await getCurrentTenant();
   const currentSlug = currentTenant?.slug ?? tenants[0].slug;
+
+  // Onboarding gate: a tenant without brand voice hasn't run the audit
+  // yet. Route them to the wizard so every AI feature in the app has
+  // real brand context from the first click.
+  const voice = await getBrandVoice(currentSlug);
+  if (!voice) redirect("/onboarding/audit");
 
   return (
     <>
