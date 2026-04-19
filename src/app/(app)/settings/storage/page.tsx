@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { ArrowLeft, HardDrive } from "lucide-react";
+import { HardDrive } from "lucide-react";
 import {
   getStorageUsage,
   listLargestFiles,
@@ -8,6 +8,7 @@ import {
   STORAGE_QUOTA_BYTES,
 } from "@/lib/services/storage-usage";
 import { StoragePruneClient } from "./client";
+import { SettingsPageHeading } from "../_shared";
 
 export default async function StorageSettingsPage() {
   const cookieStore = await cookies();
@@ -23,27 +24,12 @@ export default async function StorageSettingsPage() {
     pct >= 90 ? "bg-status-red" : pct >= 75 ? "bg-status-yellow" : "bg-status-green";
 
   return (
-    <div className="p-4 md:p-8 max-w-[900px]">
-      <Link
-        href="/settings"
-        className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-foreground mb-4"
-      >
-        <ArrowLeft size={14} />
-        Back to settings
-      </Link>
-
-      <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center shrink-0">
-          <HardDrive size={18} className="text-primary-500" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Storage</h1>
-          <p className="text-text-secondary text-sm mt-0.5">
-            Extracted videos and thumbnails live in Supabase Storage. Prune old
-            files here once you&apos;re past the free-tier limit.
-          </p>
-        </div>
-      </div>
+    <div className="max-w-[900px]">
+      <SettingsPageHeading
+        icon={HardDrive}
+        title="Storage"
+        subtitle="Extracted videos and thumbnails live in Supabase Storage. Prune old files here once you're past the free-tier limit."
+      />
 
       {/* Overall usage */}
       <div className="bg-card rounded-xl p-5 border border-border/50 mb-6">

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { ArrowLeft, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 import {
   getAiUsageSummary,
   getRecentAiCalls,
@@ -42,22 +42,18 @@ export default async function AiUsagePage() {
   });
 
   return (
-    <div className="max-w-3xl mx-auto px-4 md:px-8 py-8 md:py-12 space-y-6">
+    <div className="max-w-[760px] space-y-6">
       <div>
-        <Link
-          href="/settings"
-          className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-foreground mb-3 transition-colors"
-        >
-          <ArrowLeft size={14} />
-          Back to settings
-        </Link>
-        <h1
-          className="text-2_5xl text-gray-1100 tracking-tight"
-          style={{ fontFamily: "'Satoshi-900', var(--font-sans)" }}
-        >
-          AI usage
-        </h1>
-        <p className="text-sm text-gray-1000 mt-2">
+        <div className="flex items-center gap-2 mb-1.5">
+          <Zap size={16} className="text-text-muted" />
+          <h1
+            className="text-xl md:text-2xl text-gray-1100 dark:text-foreground tracking-tight"
+            style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
+          >
+            AI usage
+          </h1>
+        </div>
+        <p className="text-sm text-gray-1000 dark:text-text-muted">
           {monthLabel} · calls made through the AI Gateway for this tenant.
         </p>
       </div>

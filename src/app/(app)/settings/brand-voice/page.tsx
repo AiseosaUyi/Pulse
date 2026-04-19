@@ -8,8 +8,8 @@ export default async function BrandVoicePage() {
   const voice = await getBrandVoice(tenantSlug);
 
   return (
-    <div className="p-4 md:p-8 max-w-[760px]">
-      <div className="mb-6">
+    <div className="max-w-[760px]">
+      <div className="mb-5">
         <h1 className="text-xl md:text-2xl font-bold text-foreground">
           Brand voice
         </h1>
