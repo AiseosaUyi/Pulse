@@ -8,7 +8,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { JSONContent } from "@tiptap/core";
-import { ArrowLeft, History as HistoryIcon } from "lucide-react";
+import { ArrowLeft, History as HistoryIcon, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +18,8 @@ import { TiptapEditor, type TiptapChange } from "@/components/seo/blog/TiptapEdi
 import { InlineFeedbackDock } from "@/components/seo/blog/InlineFeedbackDock";
 import { VersionHistory } from "@/components/seo/blog/VersionHistory";
 import { FeedbackPanel } from "@/components/seo/blog/FeedbackPanel";
+import { DistributeDialog } from "@/components/seo/blog/DistributeDialog";
+import { PublishMenu } from "@/components/seo/blog/PublishMenu";
 import { useDialogs } from "@/components/ui/Dialog";
 import {
   deleteBlogPost,
@@ -30,6 +32,11 @@ import type {
   BlogPostStatus,
   BlogPostVersionRecord,
 } from "@/lib/types/blog-posts";
+import type { ContentDistributionRecord } from "@/lib/types/content-distributions";
+import type {
+  BlogPublicationRecord,
+  IntegrationRecord,
+} from "@/lib/types/integrations";
 
 const STATUS_OPTIONS: BlogPostStatus[] = [
   "draft",
@@ -44,11 +51,17 @@ export function BlogEditorPageClient({
   tenantSlug,
   versions,
   feedback,
+  distributions,
+  integrations,
+  publications,
 }: {
   post: BlogPostRecord;
   tenantSlug: string;
   versions: BlogPostVersionRecord[];
   feedback: BlogPostFeedbackRecord[];
+  distributions: ContentDistributionRecord[];
+  integrations: IntegrationRecord[];
+  publications: BlogPublicationRecord[];
 }) {
   const router = useRouter();
   const dialogs = useDialogs();
@@ -80,6 +93,12 @@ export function BlogEditorPageClient({
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [showFeedbackHistory, setShowFeedbackHistory] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
+  const [showDistribute, setShowDistribute] = useState(false);
+
+  const distributionsReady = distributions.length > 0;
+  const distributionsApproved = distributions.filter(
+    (d) => d.status === "approved"
+  ).length;
 
   const current = {
     markdown: editorState?.markdown ?? post.content,
@@ -231,6 +250,32 @@ export function BlogEditorPageClient({
             {isDeleting ? "Deleting…" : "Delete"}
           </Button>
           <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowDistribute(true)}
+            disabled={isSaving || isDeleting}
+            className="gap-1.5"
+            title={
+              distributionsReady
+                ? `${distributionsApproved} approved · ${distributions.length} drafts`
+                : "Turn this post into 8 channel artifacts"
+            }
+          >
+            <Share2 size={14} />
+            Distribute
+            {distributionsReady && (
+              <span className="ml-0.5 text-[10px] px-1 rounded-full bg-primary-500/10 text-primary-500">
+                {distributions.length}
+              </span>
+            )}
+          </Button>
+          <PublishMenu
+            tenantSlug={tenantSlug}
+            blogPostId={post.id}
+            integrations={integrations}
+            publications={publications}
+          />
+          <Button
             size="sm"
             onClick={handleSave}
             disabled={!dirty || isSaving || isDeleting}
@@ -239,6 +284,17 @@ export function BlogEditorPageClient({
           </Button>
         </div>
       </div>
+
+      <DistributeDialog
+        open={showDistribute}
+        onClose={() => {
+          setShowDistribute(false);
+          router.refresh();
+        }}
+        tenantSlug={tenantSlug}
+        blogPostId={post.id}
+        initial={distributions}
+      />
 
       {/* Body: main editor + sticky sidebar */}
       <div className="grid lg:grid-cols-[1fr_340px] gap-6 items-start">
