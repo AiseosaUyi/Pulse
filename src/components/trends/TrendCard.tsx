@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/button";
 import { dismissTrend, restoreTrend } from "@/lib/actions/trends";
+import { useDialogs } from "@/components/ui/Dialog";
 import type { TrendScout, TrendApplicability } from "@/lib/types/trends";
 
 function applicabilityBadge(
@@ -35,25 +36,42 @@ export function TrendCard({
   trend: TrendScout;
   tenantSlug: string;
 }) {
+  const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
   const [expanded, setExpanded] = useState(false);
   const app = applicabilityBadge(trend.applicability);
 
-  const handleDismiss = () => {
-    const reason = window.prompt(
-      "Why dismissing? (Optional — helps tune what we show next time)"
-    );
+  const handleDismiss = async () => {
+    const reason = await dialogs.prompt({
+      title: "Dismiss this trend",
+      subtitle:
+        "Why are you dismissing it? Optional — it helps tune what we show next time.",
+      placeholder: "e.g. off-brand, saturated, wrong audience…",
+      confirmLabel: "Dismiss",
+    });
     if (reason === null) return;
     startTransition(async () => {
       const res = await dismissTrend(trend.id, tenantSlug, reason || undefined);
-      if (!res.success) alert(res.error);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't dismiss trend",
+          subtitle: res.error,
+          tone: "destructive",
+        });
+      }
     });
   };
 
   const handleRestore = () => {
     startTransition(async () => {
       const res = await restoreTrend(trend.id, tenantSlug);
-      if (!res.success) alert(res.error);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't restore trend",
+          subtitle: res.error,
+          tone: "destructive",
+        });
+      }
     });
   };
 

@@ -7,6 +7,7 @@ import {
   deleteStorageFile,
   purgeTenantStorage,
 } from "@/lib/actions/storage";
+import { useDialogs } from "@/components/ui/Dialog";
 import type { StorageFile } from "@/lib/services/storage-usage";
 import { formatBytes } from "@/lib/services/storage-usage";
 
@@ -17,6 +18,7 @@ export function StoragePruneClient({
   tenantSlug: string;
   files: StorageFile[];
 }) {
+  const dialogs = useDialogs();
   const [busy, startTransition] = useTransition();
   const [purgedPaths, setPurgedPaths] = useState<Set<string>>(new Set());
 
@@ -24,32 +26,52 @@ export function StoragePruneClient({
 
   const visible = files.filter((f) => !purgedPaths.has(f.path));
 
-  const removeOne = (path: string) => {
-    if (!window.confirm("Delete this file from storage?\nThe vault row will be kept but marked as purged.")) return;
+  const removeOne = async (path: string) => {
+    const ok = await dialogs.confirm({
+      title: "Delete this file from storage?",
+      subtitle:
+        "The vault row stays (with its source URL) but the file itself is removed from Supabase Storage. This can't be undone.",
+      tone: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await deleteStorageFile(tenantSlug, path);
       if (!res.success) {
-        alert(res.error);
+        await dialogs.alert({
+          title: "Couldn't delete file",
+          subtitle: res.error,
+          tone: "destructive",
+        });
         return;
       }
       setPurgedPaths((prev) => new Set(prev).add(path));
     });
   };
 
-  const purgeAll = () => {
-    if (
-      !window.confirm(
-        `Delete ALL stored files for ${tenantSlug}?\n\nThis keeps the vault rows (with source URLs) but removes the MP4s and thumbnails from Supabase Storage. Cannot be undone.`
-      )
-    )
-      return;
+  const purgeAll = async () => {
+    const ok = await dialogs.confirm({
+      title: `Purge ALL files for ${tenantSlug}?`,
+      subtitle:
+        "Vault rows with source URLs are kept, but every MP4 and thumbnail is removed from Supabase Storage. This can't be undone.",
+      tone: "destructive",
+      confirmLabel: "Purge everything",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await purgeTenantStorage(tenantSlug);
       if (!res.success) {
-        alert(res.error);
+        await dialogs.alert({
+          title: "Purge failed",
+          subtitle: res.error,
+          tone: "destructive",
+        });
         return;
       }
-      alert(`Purged ${res.deleted} file${res.deleted === 1 ? "" : "s"}.`);
+      await dialogs.alert({
+        title: `Purged ${res.deleted} file${res.deleted === 1 ? "" : "s"}`,
+        subtitle: "Storage has been freed. Vault rows are still intact.",
+        tone: "success",
+      });
       setPurgedPaths(new Set(files.map((f) => f.path)));
     });
   };

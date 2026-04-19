@@ -9,6 +9,7 @@ import {
   analyzeSerpForKeyword,
   deleteSerpAnalysis,
 } from "@/lib/actions/serp";
+import { useDialogs } from "@/components/ui/Dialog";
 import type { SerpAnalysisRecord } from "@/lib/types/serp";
 
 export function SerpAnalysisClient({
@@ -20,6 +21,7 @@ export function SerpAnalysisClient({
   tenantSlug: string;
   trackedKeywords: string[];
 }) {
+  const dialogs = useDialogs();
   const [keyword, setKeyword] = useState("");
   const [region, setRegion] = useState("ng");
   const [isPending, startTransition] = useTransition();
@@ -46,11 +48,23 @@ export function SerpAnalysisClient({
     });
   };
 
-  const handleDelete = (id: string) => {
-    if (!window.confirm("Delete this SERP analysis?")) return;
+  const handleDelete = async (id: string) => {
+    const ok = await dialogs.confirm({
+      title: "Delete this SERP analysis?",
+      subtitle:
+        "The snapshot and its top-10 results are removed. You can re-run the analysis anytime.",
+      tone: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await deleteSerpAnalysis(id, tenantSlug);
-      if (!res.success) alert(res.error);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't delete analysis",
+          subtitle: res.error,
+          tone: "destructive",
+        });
+      }
     });
   };
 

@@ -1,40 +1,70 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import {
   deleteKeywordRanking,
   updateKeywordPosition,
 } from "@/lib/actions/keywords";
+import { useDialogs } from "@/components/ui/Dialog";
 import type { KeywordRanking } from "@/lib/types/seo";
 import { KEYWORD_DIFFICULTY_LABELS } from "@/lib/types/seo";
 
 export function KeywordRow({ kw }: { kw: KeywordRanking }) {
+  const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
 
-  const handleUpdate = () => {
-    const raw = window.prompt(
-      `Update position for "${kw.keyword}"`,
-      kw.position ? String(kw.position) : ""
-    );
+  const handleUpdate = async () => {
+    const raw = await dialogs.prompt({
+      title: `Update rank for "${kw.keyword}"`,
+      subtitle:
+        "Enter the new Google position (1 = top result). Leave blank to clear.",
+      icon: Pencil,
+      defaultValue: kw.position ? String(kw.position) : "",
+      placeholder: "e.g. 7",
+      validate: (v) => {
+        const trimmed = v.trim();
+        if (trimmed === "") return null;
+        const n = Number(trimmed);
+        if (!Number.isFinite(n) || n < 1 || !Number.isInteger(n)) {
+          return "Position must be a positive whole number.";
+        }
+        return null;
+      },
+    });
     if (raw === null) return;
     const trimmed = raw.trim();
     const pos = trimmed === "" ? null : Number(trimmed);
-    if (pos !== null && (!Number.isFinite(pos) || pos < 1)) {
-      alert("Position must be a positive integer");
-      return;
-    }
     startTransition(async () => {
       const res = await updateKeywordPosition(kw.id, pos);
-      if (!res.success) alert(res.error);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't update rank",
+          subtitle: res.error,
+          tone: "destructive",
+        });
+      }
     });
   };
 
-  const handleDelete = () => {
-    if (!window.confirm(`Delete "${kw.keyword}"?`)) return;
+  const handleDelete = async () => {
+    const ok = await dialogs.confirm({
+      title: `Delete "${kw.keyword}"?`,
+      subtitle:
+        "The keyword stops tracking immediately. Historical ranks are removed with it.",
+      tone: "destructive",
+      confirmLabel: "Delete keyword",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await deleteKeywordRanking(kw.id);
-      if (!res.success) alert(res.error);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't delete keyword",
+          subtitle: res.error,
+          tone: "destructive",
+        });
+      }
     });
   };
 

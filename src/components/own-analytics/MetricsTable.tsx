@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { deleteOwnMetric } from "@/lib/actions/own-metrics";
+import { useDialogs } from "@/components/ui/Dialog";
 import type { OwnPostMetric } from "@/lib/types/own-metrics";
 
 function formatNumber(n: number | undefined): string {
@@ -19,13 +20,26 @@ export function MetricsTable({
   metrics: OwnPostMetric[];
   tenantSlug: string;
 }) {
+  const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
 
-  const handleDelete = (id: string) => {
-    if (!window.confirm("Delete this row?")) return;
+  const handleDelete = async (id: string) => {
+    const ok = await dialogs.confirm({
+      title: "Delete this metric row?",
+      subtitle:
+        "The post will disappear from your Own analytics history. This can't be undone.",
+      tone: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await deleteOwnMetric(id, tenantSlug);
-      if (!res.success) alert(res.error);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't delete metric",
+          subtitle: res.error,
+          tone: "destructive",
+        });
+      }
     });
   };
 

@@ -7,6 +7,7 @@ import {
   markAsRead,
   markAsReplied,
 } from "@/lib/actions/engagement";
+import { useDialogs } from "@/components/ui/Dialog";
 import {
   ENGAGEMENT_PLATFORM_LABELS,
   ENGAGEMENT_TYPE_LABELS,
@@ -53,6 +54,7 @@ function timeAgo(iso: string): string {
 }
 
 export function EngagementInbox({ items }: { items: EngagementItem[] }) {
+  const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
 
   if (items.length === 0) {
@@ -78,8 +80,15 @@ export function EngagementInbox({ items }: { items: EngagementItem[] }) {
     });
   };
 
-  const onDelete = (id: string) => {
-    if (!confirm("Delete this message?")) return;
+  const onDelete = async (id: string) => {
+    const ok = await dialogs.confirm({
+      title: "Delete this message?",
+      subtitle:
+        "The engagement item will be removed from the inbox permanently.",
+      tone: "destructive",
+      confirmLabel: "Delete message",
+    });
+    if (!ok) return;
     startTransition(() => {
       deleteEngagementItem(id);
     });

@@ -8,6 +8,7 @@ import {
   deleteSavedContent,
   saveContent,
 } from "@/lib/actions/saved-content";
+import { useDialogs } from "@/components/ui/Dialog";
 import type { SavedContent, SavedContentStatus } from "@/lib/types/saved-content";
 
 interface TrendCard {
@@ -132,6 +133,7 @@ function SavedRow({
   tenantSlug: string;
   content: SavedContent;
 }) {
+  const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
 
   const cycleStatus = () => {
@@ -140,15 +142,33 @@ function SavedRow({
     const next = order[(idx + 1) % order.length];
     startTransition(async () => {
       const res = await updateSavedContentStatus(tenantSlug, content.id, next);
-      if (!res.success) alert(res.error);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't update status",
+          subtitle: res.error,
+          tone: "destructive",
+        });
+      }
     });
   };
 
-  const remove = () => {
-    if (!window.confirm("Delete this saved item?")) return;
+  const remove = async () => {
+    const ok = await dialogs.confirm({
+      title: "Delete this saved item?",
+      subtitle:
+        "It's removed from your vault. The original source on its platform stays where it is.",
+      tone: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await deleteSavedContent(tenantSlug, content.id);
-      if (!res.success) alert(res.error);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't delete item",
+          subtitle: res.error,
+          tone: "destructive",
+        });
+      }
     });
   };
 
@@ -326,6 +346,7 @@ function TrendRow({
   tenantSlug: string;
   trend: TrendCard;
 }) {
+  const dialogs = useDialogs();
   const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -339,7 +360,11 @@ function TrendRow({
         thumbnailEmoji: trend.thumbnailEmoji,
       });
       if (!res.success) {
-        alert(res.error);
+        await dialogs.alert({
+          title: "Couldn't save to vault",
+          subtitle: res.error,
+          tone: "destructive",
+        });
         return;
       }
       setSaved(true);

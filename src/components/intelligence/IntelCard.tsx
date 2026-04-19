@@ -4,6 +4,7 @@ import { type IntelCard as IntelCardType } from "@/lib/types/intelligence";
 import { Badge } from "@/components/ui/Badge";
 import { useState, useTransition } from "react";
 import { generateBriefFromCard } from "@/lib/actions/briefs";
+import { useDialogs } from "@/components/ui/Dialog";
 
 interface IntelCardProps {
   card: IntelCardType;
@@ -47,6 +48,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export function IntelCard({ card, tenantSlug }: IntelCardProps) {
+  const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
   const [briefGenerated, setBriefGenerated] = useState(false);
 
@@ -56,7 +58,11 @@ export function IntelCard({ card, tenantSlug }: IntelCardProps) {
       if (result.success) {
         setBriefGenerated(true);
       } else {
-        alert(result.error);
+        await dialogs.alert({
+          title: "Couldn't generate brief",
+          subtitle: result.error,
+          tone: "destructive",
+        });
       }
     });
   };

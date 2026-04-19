@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/button";
 import { BriefEditor } from "@/components/briefs/BriefEditor";
 import { updateBriefStatus, dismissBrief } from "@/lib/actions/briefs";
+import { useDialogs } from "@/components/ui/Dialog";
 import type { ContentBrief, ContentBriefStatus } from "@/lib/types/intelligence";
 
 const DISMISS_DELAY_MS = 5000;
@@ -33,6 +34,7 @@ export function BriefCard({
   brief: ContentBrief;
   tenantSlug: string;
 }) {
+  const dialogs = useDialogs();
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [pendingDismiss, setPendingDismiss] = useState<{
@@ -56,7 +58,13 @@ export function BriefCard({
             tenantSlug,
             pendingDismiss.reason ?? undefined
           );
-          if (!res.success) alert(res.error);
+          if (!res.success) {
+            await dialogs.alert({
+              title: "Couldn't dismiss this brief",
+              subtitle: res.error,
+              tone: "destructive",
+            });
+          }
           setPendingDismiss(null);
         });
         return;
@@ -76,14 +84,24 @@ export function BriefCard({
   const handleApprove = () => {
     startTransition(async () => {
       const res = await updateBriefStatus(brief.id, tenantSlug, "approved");
-      if (!res.success) alert(res.error);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't approve brief",
+          subtitle: res.error,
+          tone: "destructive",
+        });
+      }
     });
   };
 
-  const handleDismiss = () => {
-    const reason = window.prompt(
-      "Why are you dismissing this brief? (Optional — helps prompt tuning)"
-    );
+  const handleDismiss = async () => {
+    const reason = await dialogs.prompt({
+      title: "Dismiss this brief",
+      subtitle:
+        "Tell us why — it helps tune future suggestions. Optional, leave blank to skip.",
+      placeholder: "e.g. off-topic, already covered, low quality…",
+      confirmLabel: "Dismiss",
+    });
     if (reason === null) return;
     setPendingDismiss({
       reason: reason.trim() || null,

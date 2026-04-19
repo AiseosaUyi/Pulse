@@ -23,6 +23,7 @@ import {
   deleteProgrammaticPage,
   updateProgrammaticPageStatus,
 } from "@/lib/actions/programmatic";
+import { useDialogs } from "@/components/ui/Dialog";
 import type {
   ProgrammaticTemplateRecord,
   ProgrammaticPageRecord,
@@ -279,37 +280,48 @@ function GenerateButton({
   combos: number;
   pageCount: number;
 }) {
+  const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
 
-  const handle = () => {
+  const handle = async () => {
     const skip = pageCount > 0;
     const toMake = skip ? combos - pageCount : combos;
-    const msg = skip
-      ? `Generate ${toMake} new page${
-          toMake === 1 ? "" : "s"
-        } (skip ${pageCount} existing)? ~$${(toMake * 0.01).toFixed(2)} estimate.`
-      : `Generate ${combos} page${
-          combos === 1 ? "" : "s"
-        }? ~$${(combos * 0.01).toFixed(2)} estimate.`;
-    if (!window.confirm(msg)) return;
+    const count = skip ? toMake : combos;
+    const cost = (count * 0.01).toFixed(2);
+    const ok = await dialogs.confirm({
+      title: `Generate ${count} page${count === 1 ? "" : "s"}?`,
+      subtitle: skip
+        ? `We'll skip the ${pageCount} pages that already exist. Estimated cost: ~$${cost}.`
+        : `Each page uses one AI call. Estimated cost: ~$${cost}.`,
+      tone: "default",
+      icon: Play,
+      confirmLabel: "Generate",
+    });
+    if (!ok) return;
 
     startTransition(async () => {
       const res = await generatePagesFromTemplate(tenantSlug, templateId, {
         skipExisting: skip,
       });
       if (!res.success) {
-        alert(res.error);
+        await dialogs.alert({
+          title: "Generation failed",
+          subtitle: res.error,
+          tone: "destructive",
+        });
         return;
       }
       const parts = [`Generated ${res.generated}`];
       if (res.skipped > 0) parts.push(`skipped ${res.skipped}`);
       if (res.failed > 0) parts.push(`failed ${res.failed}`);
-      alert(
-        parts.join(" · ") +
-          (res.failures.length > 0
-            ? `\n\nFirst failure: ${res.failures[0]}`
-            : "")
-      );
+      await dialogs.alert({
+        title: parts.join(" · "),
+        subtitle:
+          res.failures.length > 0
+            ? `First failure: ${res.failures[0]}`
+            : "Pages are ready in the list below.",
+        tone: res.failed > 0 ? "warning" : "success",
+      });
     });
   };
 
@@ -330,22 +342,30 @@ function DeleteTemplateButton({
   templateId: string;
   pageCount: number;
 }) {
+  const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
 
   return (
     <button
-      onClick={() => {
-        if (
-          !window.confirm(
-            `Delete template and ${pageCount} generated page${
-              pageCount === 1 ? "" : "s"
-            }?`
-          )
-        )
-          return;
+      onClick={async () => {
+        const ok = await dialogs.confirm({
+          title: "Delete template?",
+          subtitle: `The template and ${pageCount} generated page${
+            pageCount === 1 ? "" : "s"
+          } will be permanently removed. This can't be undone.`,
+          tone: "destructive",
+          confirmLabel: "Delete everything",
+        });
+        if (!ok) return;
         startTransition(async () => {
           const res = await deleteProgrammaticTemplate(tenantSlug, templateId);
-          if (!res.success) alert(res.error);
+          if (!res.success) {
+            await dialogs.alert({
+              title: "Couldn't delete template",
+              subtitle: res.error,
+              tone: "destructive",
+            });
+          }
         });
       }}
       disabled={isPending}
@@ -364,14 +384,27 @@ function DeletePageButton({
   tenantSlug: string;
   pageId: string;
 }) {
+  const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
   return (
     <button
-      onClick={() => {
-        if (!window.confirm("Delete this page?")) return;
+      onClick={async () => {
+        const ok = await dialogs.confirm({
+          title: "Delete this page?",
+          subtitle:
+            "Removed from the programmatic set. You can regenerate from the template anytime.",
+          tone: "destructive",
+        });
+        if (!ok) return;
         startTransition(async () => {
           const res = await deleteProgrammaticPage(tenantSlug, pageId);
-          if (!res.success) alert(res.error);
+          if (!res.success) {
+            await dialogs.alert({
+              title: "Couldn't delete page",
+              subtitle: res.error,
+              tone: "destructive",
+            });
+          }
         });
       }}
       disabled={isPending}
@@ -392,6 +425,7 @@ function StatusToggle({
   pageId: string;
   status: "draft" | "published";
 }) {
+  const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
   const next = status === "draft" ? "published" : "draft";
   return (
@@ -403,7 +437,13 @@ function StatusToggle({
             pageId,
             next
           );
-          if (!res.success) alert(res.error);
+          if (!res.success) {
+            await dialogs.alert({
+              title: "Couldn't update status",
+              subtitle: res.error,
+              tone: "destructive",
+            });
+          }
         })
       }
       disabled={isPending}

@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { generateWeeklyDigest } from "@/lib/actions/weekly-digest";
+import { useDialogs } from "@/components/ui/Dialog";
 
 export function GenerateDigestButton({
   tenantSlug,
@@ -12,12 +13,19 @@ export function GenerateDigestButton({
   tenantSlug: string;
   hasDigest: boolean;
 }) {
+  const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
 
   const handleClick = () => {
     startTransition(async () => {
       const res = await generateWeeklyDigest(tenantSlug, { force: true });
-      if (!res.success) alert(res.error);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't generate digest",
+          subtitle: res.error,
+          tone: "destructive",
+        });
+      }
     });
   };
 

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { saveBriefContent } from "@/lib/actions/briefs";
+import { useDialogs } from "@/components/ui/Dialog";
 import type { ContentBrief } from "@/lib/types/intelligence";
 
 export function BriefEditor({
@@ -17,6 +18,7 @@ export function BriefEditor({
   tenantSlug: string;
   onClose: () => void;
 }) {
+  const dialogs = useDialogs();
   const [title, setTitle] = useState(brief.title);
   const [draftContent, setDraftContent] = useState(brief.draftContent);
   const [isPending, startTransition] = useTransition();
@@ -47,8 +49,18 @@ export function BriefEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty, title, draftContent]);
 
-  const handleClose = () => {
-    if (dirty && !window.confirm("Discard unsaved changes?")) return;
+  const handleClose = async () => {
+    if (dirty) {
+      const ok = await dialogs.confirm({
+        title: "Discard unsaved changes?",
+        subtitle:
+          "Your edits to this brief haven't been saved. Closing now will lose them.",
+        tone: "warning",
+        confirmLabel: "Discard",
+        cancelLabel: "Keep editing",
+      });
+      if (!ok) return;
+    }
     onClose();
   };
 
