@@ -46,15 +46,7 @@ export const navGroups: NavGroup[] = [
   {
     label: "INTELLIGENCE",
     items: [
-      {
-        label: "Intel feed",
-        href: "/intel-feed",
-        iconName: "Eye",
-        children: [
-          { label: "Feed", href: "/intel-feed", iconName: "Eye" },
-          { label: "Brand voice", href: "/settings/brand-voice", iconName: "Sparkles" },
-        ],
-      },
+      { label: "Intel feed", href: "/intel-feed", iconName: "Eye" },
       { label: "SEO command center", href: "/seo-tracker", iconName: "Search" },
     ],
   },

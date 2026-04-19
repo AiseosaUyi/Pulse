@@ -4,7 +4,18 @@ import type { DashboardStats, Suggestion } from "@/lib/types/dashboard";
 import type { PlatformConnection } from "@/lib/types/tenant";
 import type { OwnMetricsPayload } from "@/lib/types/own-metrics";
 
-const ACTIVE_LEAD_STATUSES = ["new", "contacted", "warm"] as const;
+// Outbound pipeline states that count as "active" for the dashboard
+// stat — anything pre-close/pre-dismiss. Mirrors /leads KPIs.
+const ACTIVE_PROSPECT_STATUSES = [
+  "new",
+  "qualifying",
+  "qualified",
+  "drafted",
+  "approved",
+  "sent",
+  "replied",
+  "handed_off",
+] as const;
 
 function formatReach(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -47,10 +58,10 @@ export async function getDashboardStats(
         .gte("captured_at", twoWeeksAgo.toISOString())
         .lt("captured_at", weekAgo.toISOString()),
       supabase
-        .from("leads")
+        .from("prospects")
         .select("id, status", { count: "exact", head: false })
         .eq("tenant_slug", tenantSlug)
-        .in("status", ACTIVE_LEAD_STATUSES as unknown as string[]),
+        .in("status", ACTIVE_PROSPECT_STATUSES as unknown as string[]),
       supabase
         .from("campaigns")
         .select("spend")
@@ -74,8 +85,11 @@ export async function getDashboardStats(
   const postsThisWeek = ownThisWeek.data?.length ?? 0;
 
   const activeLeadsCount = activeLeadsRes.count ?? 0;
+  // "Needs follow-up" = qualified prospects without a drafted/sent DM yet.
   const needsFollowup =
-    activeLeadsRes.data?.filter((l) => l.status === "new").length ?? 0;
+    activeLeadsRes.data?.filter(
+      (l) => l.status === "qualified" || l.status === "new"
+    ).length ?? 0;
 
   const adSpendTotal =
     adSpendRes.data?.reduce((sum, c) => sum + Number(c.spend ?? 0), 0) ?? 0;
@@ -111,12 +125,14 @@ export async function getDashboardStats(
       subtitle: `${connected}/4 platforms connected`,
     },
     activeLeads: {
-      label: "Active leads",
+      label: "Active prospects",
       value: String(activeLeadsCount),
       subtitle:
         needsFollowup > 0
           ? `${needsFollowup} need follow-up`
-          : "All caught up",
+          : activeLeadsCount === 0
+            ? "Add via Outbound → Add prospect"
+            : "All caught up",
     },
     adSpend: {
       label: "Ad spend (active)",
