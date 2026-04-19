@@ -6,23 +6,26 @@ import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { PlatformBreakdown } from "@/components/dashboard/PlatformBreakdown";
 import { PulseSuggestions } from "@/components/dashboard/PulseSuggestions";
 import { CoachFeed } from "@/components/coach/CoachFeed";
+import { WeeklyReviewBanner } from "@/components/dashboard/WeeklyReviewBanner";
 import { getDashboardStats, getPlatforms, getSuggestions } from "@/lib/services/dashboard";
 import { getNotifications } from "@/lib/services/notifications";
 import { getTenant } from "@/lib/services/tenants";
 import { listActiveCoachActions } from "@/lib/services/coach";
+import { getLatestWeeklyReview } from "@/lib/services/weekly-reviews";
 import { formatCurrency } from "@/lib/utils/format";
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
 
-  const [tenant, stats, platforms, suggestions, notifications, coachActions] = await Promise.all([
+  const [tenant, stats, platforms, suggestions, notifications, coachActions, weeklyReview] = await Promise.all([
     getTenant(tenantSlug),
     getDashboardStats(tenantSlug),
     getPlatforms(tenantSlug),
     getSuggestions(tenantSlug),
     getNotifications(tenantSlug),
     listActiveCoachActions(tenantSlug, 8),
+    getLatestWeeklyReview(tenantSlug),
   ]);
 
   if (!tenant || !stats) {
@@ -79,7 +82,15 @@ export default async function DashboardPage() {
         <StatCard data={adSpendFormatted} />
       </div>
 
-      {/* AI Coach — full width, top priority */}
+      {/* Weekly business review — synthesis of what Pulse shipped this week */}
+      <div className="mb-4">
+        <WeeklyReviewBanner
+          tenantSlug={tenantSlug}
+          initial={weeklyReview}
+        />
+      </div>
+
+      {/* AI Coach — priority actions queue */}
       <div className="mb-4">
         <CoachFeed tenantSlug={tenantSlug} initial={coachActions} />
       </div>

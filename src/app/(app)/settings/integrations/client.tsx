@@ -35,6 +35,7 @@ function emptyForm(): ProviderForm {
     wordpress: { site_url: "", username: "", appPassword: "" },
     ghost: { admin_url: "", admin_key: "" },
     resend: { apiKey: "", from_email: "", from_name: "" },
+    ga4: { property_id: "", service_account_json: "" },
   };
 }
 
@@ -60,6 +61,9 @@ export function IntegrationsClient({
       if (rec.provider === "resend") {
         base.resend.from_email = String(rec.config.from_email ?? "");
         base.resend.from_name = String(rec.config.from_name ?? "");
+      }
+      if (rec.provider === "ga4") {
+        base.ga4.property_id = String(rec.config.property_id ?? "");
       }
     }
     return base;
@@ -142,6 +146,48 @@ export function IntegrationsClient({
         config = { from_email: form.from_email, from_name: form.from_name };
         secretToken = form.apiKey;
         break;
+      case "ga4": {
+        if (!form.property_id) {
+          setError("GA4 property ID is required");
+          return;
+        }
+        if (!form.service_account_json && !getRecord("ga4")?.hasSecret) {
+          setError("Service-account JSON is required");
+          return;
+        }
+        // Parse to pull the client_email for display (and validate early).
+        let projectId: string | undefined;
+        let clientEmail: string | undefined;
+        if (form.service_account_json) {
+          try {
+            const parsed = JSON.parse(form.service_account_json) as {
+              client_email?: string;
+              project_id?: string;
+              private_key?: string;
+            };
+            if (!parsed.client_email || !parsed.private_key) {
+              setError(
+                "Service-account JSON missing client_email or private_key"
+              );
+              return;
+            }
+            projectId = parsed.project_id;
+            clientEmail = parsed.client_email;
+          } catch {
+            setError("Service-account JSON is not valid JSON");
+            return;
+          }
+        }
+        config = {
+          property_id: form.property_id,
+          client_email: clientEmail ?? getRecord("ga4")?.config.client_email,
+          project_id: projectId ?? getRecord("ga4")?.config.project_id,
+        };
+        if (form.service_account_json) {
+          secretToken = form.service_account_json;
+        }
+        break;
+      }
     }
 
     setBusyProvider(provider);
@@ -169,6 +215,7 @@ export function IntegrationsClient({
     }
     if (provider === "wordpress") updateForm(provider, "appPassword", "");
     if (provider === "ghost") updateForm(provider, "admin_key", "");
+    if (provider === "ga4") updateForm(provider, "service_account_json", "");
     startTransition(() => {
       // Reload records from the server via router refresh on parent.
       location.reload();
@@ -457,6 +504,45 @@ function renderFields(
               onChange={(e) => onChange("from_name", e.target.value)}
               placeholder="Your Brand Newsletter"
             />
+          </div>
+        </div>
+      );
+    case "ga4":
+      return (
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="ga4-prop">GA4 property ID</Label>
+            <Input
+              id="ga4-prop"
+              value={form.property_id}
+              onChange={(e) => onChange("property_id", e.target.value)}
+              placeholder="e.g. 412345678"
+            />
+            <p className="text-[11px] text-text-muted mt-1">
+              In GA4, go to Admin → Property settings → Property ID. Just
+              the numeric ID.
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="ga4-sa">Service-account JSON</Label>
+            <textarea
+              id="ga4-sa"
+              rows={6}
+              value={form.service_account_json}
+              onChange={(e) => onChange("service_account_json", e.target.value)}
+              placeholder={
+                secretPlaceholder ||
+                `{\n  "type": "service_account",\n  "project_id": "...",\n  "private_key": "-----BEGIN PRIVATE KEY-----\\n...",\n  "client_email": "pulse@project.iam.gserviceaccount.com",\n  ...\n}`
+              }
+              className="w-full rounded-lg border border-border bg-card text-xs font-mono leading-relaxed px-3 py-2"
+              spellCheck={false}
+              autoComplete="off"
+            />
+            <p className="text-[11px] text-text-muted mt-1">
+              Create a service account in GCP, grant it <strong>Viewer</strong>{" "}
+              on your GA4 property (Admin → Property Access Management → add
+              the client_email), then paste the full JSON key file here.
+            </p>
           </div>
         </div>
       );

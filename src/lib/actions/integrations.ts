@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { testAyrshareKey } from "@/lib/integrations/ayrshare";
 import { testWordpressConnection } from "@/lib/integrations/wordpress";
 import { testGhostConnection } from "@/lib/integrations/ghost";
+import { testGa4Connection } from "@/lib/integrations/ga4";
 import { getIntegrationSecrets } from "@/lib/services/integrations";
 import type { IntegrationProvider } from "@/lib/types/integrations";
 
@@ -148,6 +149,27 @@ async function runProviderTest(
         return { ok: false, error: "Missing API key" };
       }
       return { ok: true, detail: "Key stored (not tested)" };
+    }
+    case "ga4": {
+      const propertyId = String(creds.config.property_id ?? "");
+      if (!propertyId || !creds.secretToken) {
+        return {
+          ok: false,
+          error: "Missing property ID or service-account JSON",
+        };
+      }
+      const res = await testGa4Connection({
+        propertyId,
+        serviceAccountJson: creds.secretToken,
+      });
+      return {
+        ok: res.ok,
+        error: res.error,
+        detail:
+          res.ok && res.totalUsers != null
+            ? `${res.totalUsers.toLocaleString()} users in last 7 days`
+            : undefined,
+      };
     }
   }
 }

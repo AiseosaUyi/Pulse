@@ -3,6 +3,7 @@ export const INTEGRATION_PROVIDERS = [
   "wordpress",
   "ghost",
   "resend",
+  "ga4",
 ] as const;
 
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
@@ -60,6 +61,7 @@ export const PROVIDER_LABELS: Record<IntegrationProvider, string> = {
   wordpress: "WordPress",
   ghost: "Ghost",
   resend: "Resend (email)",
+  ga4: "Google Analytics 4",
 };
 
 export const PROVIDER_BLURBS: Record<IntegrationProvider, string> = {
@@ -71,6 +73,8 @@ export const PROVIDER_BLURBS: Record<IntegrationProvider, string> = {
     "Publish blog posts to Ghost via the Admin API. Needs your admin API URL and Admin Key (id:secret).",
   resend:
     "Send newsletter blurbs + email blasts with Resend. Needs an API key and a verified sender email.",
+  ga4:
+    "Pull page + conversion data into Pulse so Coach can score what actually worked. Needs your GA4 property ID and a service-account JSON.",
 };
 
 export interface BlogPublicationRecord {
