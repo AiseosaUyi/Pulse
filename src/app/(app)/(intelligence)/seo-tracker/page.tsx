@@ -6,7 +6,6 @@ import { deriveSEOMetrics, getKeywordRankings } from "@/lib/services/seo";
 import { listBlogPosts } from "@/lib/services/blog-posts";
 import { KEYWORD_DIFFICULTY_LABELS } from "@/lib/types/seo";
 import type { BlogPostStatus } from "@/lib/types/blog-posts";
-import { AddKeywordButton } from "./client";
 
 const statusVariant: Record<BlogPostStatus, "published" | "draft_status" | "planned" | "dismissed"> = {
   draft: "draft_status",
@@ -30,11 +29,6 @@ export default async function SEODashboardPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between mb-4">
-        <div />
-        <AddKeywordButton />
-      </div>
-
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         {metrics.map((m) => (
           <div key={m.label} className="bg-card rounded-xl p-4 border border-border/50">
