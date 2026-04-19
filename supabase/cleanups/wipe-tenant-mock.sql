@@ -26,8 +26,15 @@ delete from engagement_items  where tenant_slug = 'gruve';
 delete from leads             where tenant_slug = 'gruve';
 delete from campaigns         where tenant_slug = 'gruve';
 
+-- `platforms` lives inside tenants.settings (JSONB), not as a
+-- top-level column. Use jsonb_set to reset just that key.
 update tenants
-set platforms = '[]'::jsonb
+set settings = jsonb_set(
+  coalesce(settings, '{}'::jsonb),
+  '{platforms}',
+  '[]'::jsonb,
+  true
+)
 where slug = 'gruve';
 
 commit;
