@@ -18,14 +18,24 @@ export default async function PlatformScorePage() {
       </div>
 
       {!hasAnyData ? (
-        <div className="bg-card rounded-2xl border border-border/50 p-10 text-center">
-          <p className="text-foreground font-semibold mb-1">No data yet</p>
-          <p className="text-text-muted text-sm max-w-[480px] mx-auto">
-            Connect your platforms in{" "}
-            <Link href="/settings" className="text-primary-500 hover:underline">Settings</Link>{" "}
-            and start importing post metrics via{" "}
-            <Link href="/own-analytics" className="text-primary-500 hover:underline">Own analytics</Link>.
-            Scores compute from posts in the last 30 days, engagement rate, audience size, and connection health.
+        <div className="bg-card rounded-2xl border border-border/50 p-8 max-w-[720px] mx-auto">
+          <p className="text-foreground font-semibold mb-2">No data yet</p>
+          <p className="text-text-muted text-sm leading-relaxed">
+            Platform Score is a real rubric — 40% post frequency + 30%
+            engagement rate + 20% audience + 10% connection health — but it
+            needs data to score against.
+          </p>
+          <p className="text-text-muted text-sm leading-relaxed mt-2">
+            Fastest path: go to{" "}
+            <Link href="/post-history" className="text-primary-500 hover:underline">
+              Post History
+            </Link>{" "}
+            and log your recent 30 days of posts with reach / likes /
+            comments. Scores populate within a minute.
+          </p>
+          <p className="text-text-muted text-sm leading-relaxed mt-2">
+            Automatic sync from Meta Graph + TikTok Business API is on the
+            roadmap — both are free but require platform app review.
           </p>
         </div>
       ) : (

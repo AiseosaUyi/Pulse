@@ -74,10 +74,21 @@ export default async function PostHistoryPage() {
       </div>
 
       {posts.length === 0 ? (
-        <div className="bg-card rounded-xl border border-border/50 p-10 text-center">
-          <p className="text-sm text-foreground font-medium">No posts logged yet</p>
-          <p className="text-text-secondary text-xs mt-1">
-            Click &ldquo;Log Post&rdquo; after publishing something to start tracking performance.
+        <div className="bg-card rounded-xl border border-border/50 p-8 max-w-[720px] mx-auto">
+          <p className="text-sm text-foreground font-semibold mb-2">
+            No posts logged yet
+          </p>
+          <p className="text-text-secondary text-xs leading-relaxed">
+            Post History tracks what you ship and how it performs. Pulse
+            can&apos;t auto-pull metrics from IG / TikTok / X / LinkedIn
+            yet — that needs platform API integrations (Meta Graph, TikTok
+            Business, both free but need app review).
+          </p>
+          <p className="text-text-secondary text-xs leading-relaxed mt-2">
+            Until then, after you post something, click{" "}
+            <span className="font-medium text-foreground">Log Post</span> top-right
+            and fill in the metrics from the native analytics view. The Platform
+            Score page + Dashboard breakdown both compute from these entries.
           </p>
         </div>
       ) : (

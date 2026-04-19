@@ -39,10 +39,20 @@ export function PlatformBreakdown({ platforms }: PlatformBreakdownProps) {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-4">
           Platform Breakdown
         </h2>
-        <div className="text-center py-8">
-          <p className="text-text-secondary text-sm">No platforms connected</p>
-          <p className="text-text-muted text-xs mt-1">
-            Connect your first platform to see analytics
+        <div className="py-6">
+          <p className="text-foreground text-sm font-medium">
+            No platforms connected yet
+          </p>
+          <p className="text-text-muted text-xs mt-2 leading-relaxed">
+            Pulse needs your IG / TikTok / X / LinkedIn Business accounts to
+            pull follower counts + engagement. That requires Meta Graph and
+            TikTok Business API approval (free, but takes a few days). Until
+            then, log posts manually from Post History to populate this card.
+          </p>
+          <p className="text-text-muted text-xs mt-2 leading-relaxed">
+            If you just want to fake it for a demo, visit Post History and use
+            <span className="font-medium text-foreground"> Log Post</span> —
+            the platform score and breakdown derive from posts you log.
           </p>
         </div>
       </div>

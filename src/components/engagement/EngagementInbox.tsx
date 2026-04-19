@@ -59,10 +59,20 @@ export function EngagementInbox({ items }: { items: EngagementItem[] }) {
 
   if (items.length === 0) {
     return (
-      <div className="bg-card rounded-xl border border-border/50 p-10 text-center">
-        <p className="text-sm text-foreground font-medium">Inbox is empty</p>
-        <p className="text-text-secondary text-xs mt-1">
-          Click &ldquo;Log Message&rdquo; when something comes in that needs tracking.
+      <div className="bg-card rounded-xl border border-border/50 p-8 max-w-[720px] mx-auto">
+        <p className="text-sm text-foreground font-semibold mb-2">
+          Inbox is empty
+        </p>
+        <p className="text-text-secondary text-xs leading-relaxed">
+          This is the unified inbox for comments, DMs, and @-mentions across IG,
+          TikTok, X, and LinkedIn. Pulse can&apos;t auto-pull them yet —
+          that needs Meta Messenger Webhook approval + TikTok Business API access
+          (both free but require app review, a few days each).
+        </p>
+        <p className="text-text-secondary text-xs leading-relaxed mt-2">
+          Until then, use <span className="font-medium text-foreground">Log Message</span>{" "}
+          top-right to mirror in a notable comment or DM so it doesn&apos;t get lost.
+          Replies you log on a prospect from the Outbound tab also surface here.
         </p>
       </div>
     );

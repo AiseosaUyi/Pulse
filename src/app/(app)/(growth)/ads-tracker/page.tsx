@@ -100,10 +100,19 @@ export default async function AdsTrackerPage() {
         </div>
 
         {campaigns.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border p-6 text-center">
-            <p className="text-sm text-foreground font-medium">No campaigns logged yet</p>
-            <p className="text-text-secondary text-xs mt-1">
-              Use &ldquo;New campaign&rdquo; if you want to track spend by hand.
+          <div className="rounded-xl border border-dashed border-border p-6">
+            <p className="text-sm text-foreground font-medium mb-1">
+              No campaigns logged yet
+            </p>
+            <p className="text-text-secondary text-xs leading-relaxed">
+              This is optional — only log here if you want cross-campaign ROAS
+              in one view. For per-ad creative critique, use the AI Creative
+              Critic above — it doesn&apos;t need anything stored.
+            </p>
+            <p className="text-text-secondary text-xs leading-relaxed mt-2">
+              Meta / TikTok Ads API auto-sync is on the roadmap so you
+              won&apos;t have to log by hand. Free APIs, needs platform
+              approval.
             </p>
           </div>
         ) : (
