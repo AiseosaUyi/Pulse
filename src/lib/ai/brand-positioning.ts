@@ -21,20 +21,19 @@ export const brandPositioningSchema = z.object({
       })
     )
     .min(1, "At least one target demographic"),
+  // OpenAI strict structured-output requires every property in the
+  // `required` array. `.default([])` and `.optional()` both produce
+  // non-required fields, which trip the "Missing '<field>'" error.
+  // Arrays that can be empty must be present-but-empty, not absent.
   topics_to_cover: z.array(z.string().min(1)).max(30),
-  topics_to_avoid: z.array(z.string().min(1)).max(30).default([]),
-  competitors: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        // Nullable (not optional) so OpenAI strict structured-output
-        // accepts the nested schema — strict mode requires every
-        // property to be listed in `required`.
-        domain: z.string().nullable(),
-        why_we_beat_them: z.string().nullable(),
-      })
-    )
-    .default([]),
+  topics_to_avoid: z.array(z.string().min(1)).max(30),
+  competitors: z.array(
+    z.object({
+      name: z.string().min(1),
+      domain: z.string().nullable(),
+      why_we_beat_them: z.string().nullable(),
+    })
+  ),
   differentiators: z
     .array(z.string().min(1))
     .min(1, "At least one differentiator")
