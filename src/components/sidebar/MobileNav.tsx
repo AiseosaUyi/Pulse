@@ -4,16 +4,25 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { SidebarNav } from "./SidebarNav";
 import { TenantSwitcher } from "./TenantSwitcher";
+import { OnboardingChecklist } from "./OnboardingChecklist";
 import { Logo } from "@/components/ui/Logo";
 import type { TenantMembership } from "@/lib/auth";
+import type { OnboardingProgress } from "@/lib/services/onboarding";
 import { cn } from "@/lib/utils";
 
 interface MobileNavProps {
   tenants: TenantMembership[];
   currentTenantSlug: string;
+  currentTenantName: string;
+  onboardingProgress: OnboardingProgress;
 }
 
-export function MobileNav({ tenants, currentTenantSlug }: MobileNavProps) {
+export function MobileNav({
+  tenants,
+  currentTenantSlug,
+  currentTenantName,
+  onboardingProgress,
+}: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -52,6 +61,12 @@ export function MobileNav({ tenants, currentTenantSlug }: MobileNavProps) {
             <X size={16} className="text-text-muted" />
           </button>
         </div>
+
+        <OnboardingChecklist
+          progress={onboardingProgress}
+          tenantSlug={currentTenantSlug}
+          tenantName={currentTenantName}
+        />
 
         <div className="flex-1 min-h-0 flex flex-col" onClick={() => setIsOpen(false)}>
           <SidebarNav />
