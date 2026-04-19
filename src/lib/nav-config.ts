@@ -23,11 +23,11 @@ export const navGroups: NavGroup[] = [
     items: [
       {
         label: "Content",
-        href: "/content-vault",
+        href: "/ai-content",
         iconName: "FolderOpen",
         children: [
+          { label: "Calendar & briefs", href: "/ai-content", iconName: "Sparkles" },
           { label: "Vault", href: "/content-vault", iconName: "FolderOpen" },
-          { label: "AI content engine", href: "/ai-content", iconName: "Sparkles" },
         ],
       },
       { label: "Engagement inbox", href: "/engagement", iconName: "MessageCircle" },
@@ -52,7 +52,6 @@ export const navGroups: NavGroup[] = [
         iconName: "Eye",
         children: [
           { label: "Feed", href: "/intel-feed", iconName: "Eye" },
-          { label: "Content briefs", href: "/content-briefs", iconName: "FileText" },
           { label: "Brand voice", href: "/settings/brand-voice", iconName: "Sparkles" },
         ],
       },
