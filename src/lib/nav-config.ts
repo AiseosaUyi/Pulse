@@ -39,8 +39,8 @@ export const navGroups: NavGroup[] = [
   {
     label: "GROWTH",
     items: [
-      { label: "Leads & outreach", href: "/leads", iconName: "Target" },
-      { label: "Ads tracker", href: "/ads-tracker", iconName: "Diamond" },
+      { label: "Outbound", href: "/leads", iconName: "Target" },
+      { label: "Ads critic", href: "/ads-tracker", iconName: "Diamond" },
     ],
   },
   {

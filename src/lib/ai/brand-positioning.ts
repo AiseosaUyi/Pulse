@@ -27,8 +27,11 @@ export const brandPositioningSchema = z.object({
     .array(
       z.object({
         name: z.string().min(1),
-        domain: z.string().optional(),
-        why_we_beat_them: z.string().optional(),
+        // Nullable (not optional) so OpenAI strict structured-output
+        // accepts the nested schema — strict mode requires every
+        // property to be listed in `required`.
+        domain: z.string().nullable(),
+        why_we_beat_them: z.string().nullable(),
       })
     )
     .default([]),

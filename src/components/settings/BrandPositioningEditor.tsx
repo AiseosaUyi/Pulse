@@ -62,7 +62,7 @@ export function BrandPositioningEditor({ tenantSlug, initial }: Props) {
       ...s,
       competitors: [
         ...s.competitors,
-        { name: "", domain: "", why_we_beat_them: "" },
+        { name: "", domain: null, why_we_beat_them: null },
       ],
     }));
 
@@ -98,8 +98,8 @@ export function BrandPositioningEditor({ tenantSlug, initial }: Props) {
       competitors: state.competitors
         .map((c) => ({
           name: c.name.trim(),
-          domain: c.domain?.trim() || undefined,
-          why_we_beat_them: c.why_we_beat_them?.trim() || undefined,
+          domain: c.domain?.trim() || null,
+          why_we_beat_them: c.why_we_beat_them?.trim() || null,
         }))
         .filter((c) => c.name),
     };

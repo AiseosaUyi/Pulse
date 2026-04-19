@@ -20,6 +20,7 @@ import { VersionHistory } from "@/components/seo/blog/VersionHistory";
 import { FeedbackPanel } from "@/components/seo/blog/FeedbackPanel";
 import { DistributeDialog } from "@/components/seo/blog/DistributeDialog";
 import { PublishMenu } from "@/components/seo/blog/PublishMenu";
+import { AskCoachButton } from "@/components/seo/blog/AskCoachButton";
 import { useDialogs } from "@/components/ui/Dialog";
 import {
   deleteBlogPost,
@@ -269,6 +270,11 @@ export function BlogEditorPageClient({
               </span>
             )}
           </Button>
+          <AskCoachButton
+            tenantSlug={tenantSlug}
+            blogPostId={post.id}
+            disabled={isSaving || isDeleting}
+          />
           <PublishMenu
             tenantSlug={tenantSlug}
             blogPostId={post.id}

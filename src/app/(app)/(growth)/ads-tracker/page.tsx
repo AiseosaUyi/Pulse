@@ -1,3 +1,9 @@
+// Ads Critic + manual campaign tracker. The AI Creative Critic is
+// the primary feature — it's the one thing we can ship on an ads
+// tab that actually reduces cost without piping in Meta/TikTok data.
+// The old campaign table is kept below as a compressed side-panel
+// for operators who still log spend by hand.
+
 import { Badge } from "@/components/ui/Badge";
 import { getCurrentTenant } from "@/lib/auth";
 import { getCampaigns, summarize } from "@/lib/services/campaigns";
@@ -9,6 +15,7 @@ import {
 } from "@/lib/types/campaigns";
 import { formatCurrency } from "@/lib/utils/format";
 import { AddCampaignButton } from "./client";
+import { AdCritiquePanel } from "./ad-critique";
 
 const statusBadge: Record<CampaignStatus, { variant: "active" | "overdue" | "opportunity" | "needs_posts" }> = {
   active: { variant: "active" },
@@ -40,132 +47,141 @@ export default async function AdsTrackerPage() {
   const currency = tenantMeta?.currency ?? "NGN";
 
   return (
-    <div className="p-4 md:p-8 max-w-[1200px]">
-      <div className="flex items-start justify-between mb-8">
+    <div className="p-4 md:p-8 max-w-[1200px] space-y-6">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Ads Tracker</h1>
-          <p className="text-text-secondary text-sm mt-0.5">Campaign performance and spend tracking</p>
-        </div>
-        <AddCampaignButton />
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4">
-        <div className="bg-card rounded-xl p-4 border border-border/50">
-          <p className="text-text-secondary text-xs">Total Spend</p>
-          <p className="text-2xl font-bold text-foreground mt-1">{formatCurrency(summary.totalSpend, currency)}</p>
-        </div>
-        <div className="bg-card rounded-xl p-4 border border-border/50">
-          <p className="text-text-secondary text-xs">Total Revenue</p>
-          <p className="text-2xl font-bold text-status-green mt-1">{formatCurrency(summary.totalRevenue, currency)}</p>
-        </div>
-        <div className="bg-card rounded-xl p-4 border border-primary-500/30">
-          <p className="text-text-secondary text-xs">ROAS (Return on Ad Spend)</p>
-          <p className="text-2xl font-bold text-primary-500 mt-1">{summary.overallRoas}x</p>
-          <p className="text-text-muted text-[10px] mt-0.5">
-            Every {formatCurrency(1, currency)} spent returns {formatCurrency(summary.overallRoas, currency)}
-          </p>
-        </div>
-        <div className="bg-card rounded-xl p-4 border border-border/50">
-          <p className="text-text-secondary text-xs">Conversions</p>
-          <p className="text-2xl font-bold text-status-green mt-1">{summary.totalConversions}</p>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-        <div className="bg-card rounded-xl p-4 border border-border/50">
-          <p className="text-text-secondary text-xs">Impressions</p>
-          <p className="text-xl font-bold text-foreground mt-1">
-            {summary.totalImpressions >= 1000
-              ? `${(summary.totalImpressions / 1000).toFixed(1)}K`
-              : summary.totalImpressions.toString()}
-          </p>
-        </div>
-        <div className="bg-card rounded-xl p-4 border border-border/50">
-          <p className="text-text-secondary text-xs">Clicks</p>
-          <p className="text-xl font-bold text-foreground mt-1">{summary.totalClicks.toLocaleString()}</p>
-        </div>
-        <div className="bg-card rounded-xl p-4 border border-border/50">
-          <p className="text-text-secondary text-xs">Active Campaigns</p>
-          <p className="text-xl font-bold text-foreground mt-1">{summary.active}</p>
-        </div>
-        <div className="bg-card rounded-xl p-4 border border-border/50">
-          <p className="text-text-secondary text-xs">Avg. Cost/Conversion</p>
-          <p className="text-xl font-bold text-foreground mt-1">
-            {summary.avgCostPerConversion > 0 ? formatCurrency(summary.avgCostPerConversion, currency) : "—"}
+          <h1 className="text-2xl font-bold text-foreground">Ads Critic</h1>
+          <p className="text-text-secondary text-sm mt-0.5">
+            Paste a running Meta or TikTok ad. Get a ruthless critique that
+            tells you whether to ship, polish, or kill — plus a rewrite.
           </p>
         </div>
       </div>
 
-      {campaigns.length === 0 ? (
-        <div className="bg-card rounded-xl border border-border/50 p-10 text-center">
-          <p className="text-sm text-foreground font-medium">No campaigns yet</p>
-          <p className="text-text-secondary text-xs mt-1">
-            Click &ldquo;New Campaign&rdquo; to start tracking ad spend and performance.
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto -mx-4 md:mx-0">
-          <div className="bg-card rounded-xl border border-border/50 overflow-hidden min-w-[900px] md:min-w-0">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border/50">
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Campaign</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Platform</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Status</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Spend</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Revenue</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide text-primary-500">ROAS</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Conv.</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Cost/Conv.</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Period</th>
-                </tr>
-              </thead>
-              <tbody>
-                {campaigns.map((c) => (
-                  <tr key={c.id} className="border-b border-border/30 last:border-0 hover:bg-card-hover transition-colors">
-                    <td className="px-5 py-3.5 text-sm text-foreground font-medium">{c.name}</td>
-                    <td className="px-5 py-3.5 text-sm text-text-secondary">{CAMPAIGN_PLATFORM_LABELS[c.platform]}</td>
-                    <td className="px-5 py-3.5">
-                      <Badge variant={statusBadge[c.status].variant}>
-                        {CAMPAIGN_STATUS_LABELS[c.status]}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3.5 text-sm text-foreground text-right">
-                      {c.spend > 0 ? formatCurrency(c.spend, currency) : "—"}
-                    </td>
-                    <td className="px-4 py-3.5 text-sm text-status-green text-right">
-                      {c.revenue > 0 ? formatCurrency(c.revenue, currency) : "—"}
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      {c.roas > 0 ? (
-                        <span
-                          className={`text-sm font-bold ${
-                            c.roas >= 5
-                              ? "text-status-green"
-                              : c.roas >= 2
-                                ? "text-status-yellow"
-                                : "text-status-red"
-                          }`}
-                        >
-                          {c.roas.toFixed(1)}x
-                        </span>
-                      ) : (
-                        <span className="text-text-muted text-sm">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5 text-sm text-text-secondary text-right">
-                      {c.conversions > 0 ? c.conversions : "—"}
-                    </td>
-                    <td className="px-4 py-3.5 text-sm text-text-secondary text-right">
-                      {c.costPerConversion > 0 ? formatCurrency(c.costPerConversion, currency) : "—"}
-                    </td>
-                    <td className="px-4 py-3.5 text-xs text-text-muted">{formatPeriod(c.startDate, c.endDate)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {tenant && <AdCritiquePanel tenantSlug={tenant.slug} />}
+
+      {/* Manual campaign tracker — secondary. Kept for operators who
+          log spend by hand. If you pipe in Meta/TikTok reports later,
+          this becomes the auto-populated overview. */}
+      <section className="bg-card rounded-2xl border border-border/50 p-5">
+        <div className="flex items-start justify-between mb-4 gap-2 flex-wrap">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
+              Manual campaign tracker
+            </h2>
+            <p className="text-xs text-text-muted mt-1">
+              Log spend + revenue by hand while we wait on Meta / TikTok data
+              connectors.
+            </p>
           </div>
+          <AddCampaignButton />
         </div>
-      )}
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <MiniStat
+            label="Total spend"
+            value={formatCurrency(summary.totalSpend, currency)}
+          />
+          <MiniStat
+            label="Total revenue"
+            value={formatCurrency(summary.totalRevenue, currency)}
+            tone="green"
+          />
+          <MiniStat
+            label="ROAS"
+            value={`${summary.overallRoas}x`}
+            tone="primary"
+          />
+          <MiniStat
+            label="Conversions"
+            value={summary.totalConversions.toString()}
+            tone="green"
+          />
+        </div>
+
+        {campaigns.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border p-6 text-center">
+            <p className="text-sm text-foreground font-medium">No campaigns logged yet</p>
+            <p className="text-text-secondary text-xs mt-1">
+              Use &ldquo;New campaign&rdquo; if you want to track spend by hand.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto -mx-5 md:mx-0">
+            <div className="rounded-xl border border-border/50 overflow-hidden min-w-[720px] md:min-w-0">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border/50 bg-sidebar/40">
+                    <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Campaign</th>
+                    <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Platform</th>
+                    <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Status</th>
+                    <th className="text-right px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Spend</th>
+                    <th className="text-right px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary-500">ROAS</th>
+                    <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Period</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {campaigns.map((c) => (
+                    <tr key={c.id} className="border-b border-border/30 last:border-0 hover:bg-card-hover transition-colors">
+                      <td className="px-4 py-3 text-sm text-foreground font-medium">{c.name}</td>
+                      <td className="px-4 py-3 text-sm text-text-secondary">{CAMPAIGN_PLATFORM_LABELS[c.platform]}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={statusBadge[c.status].variant}>
+                          {CAMPAIGN_STATUS_LABELS[c.status]}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-foreground text-right">
+                        {c.spend > 0 ? formatCurrency(c.spend, currency) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {c.roas > 0 ? (
+                          <span
+                            className={`text-sm font-bold ${
+                              c.roas >= 5
+                                ? "text-status-green"
+                                : c.roas >= 2
+                                  ? "text-status-yellow"
+                                  : "text-status-red"
+                            }`}
+                          >
+                            {c.roas.toFixed(1)}x
+                          </span>
+                        ) : (
+                          <span className="text-text-muted text-sm">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-text-muted">{formatPeriod(c.startDate, c.endDate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "green" | "primary";
+}) {
+  const valueColor =
+    tone === "green"
+      ? "text-status-green"
+      : tone === "primary"
+        ? "text-primary-500"
+        : "text-foreground";
+  return (
+    <div className="rounded-xl p-3 border border-border/50 bg-sidebar/30">
+      <p className="text-text-secondary text-[11px] uppercase tracking-wide">{label}</p>
+      <p className={`text-lg font-bold mt-0.5 ${valueColor}`}>{value}</p>
     </div>
   );
 }

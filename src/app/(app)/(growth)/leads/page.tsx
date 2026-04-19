@@ -1,119 +1,90 @@
-import { Badge } from "@/components/ui/Badge";
+// Slice 6 — Outbound. Reboots the old Leads table as an AI-powered
+// prospect pipeline. Discovery (manual + search-driven) → qualify →
+// draft DM → approve → send → inbox.
+//
+// The old mock-leads module is left intact in src/lib/data — a
+// follow-up can delete it once the outbound flow has production data.
+
 import { getCurrentTenant } from "@/lib/auth";
-import { getLeads, summarize } from "@/lib/services/leads";
 import {
-  LEAD_STATUS_LABELS,
-  LEAD_TYPE_LABELS,
-  LEAD_VALUE_LABELS,
-  type LeadStatus,
-  type LeadValue,
-} from "@/lib/types/leads";
-import { AddLeadButton } from "./client";
-
-const statusBadge: Record<LeadStatus, { variant: "active" | "urgent" | "overdue" | "opportunity" | "high_impact" }> = {
-  new: { variant: "opportunity" },
-  contacted: { variant: "active" },
-  warm: { variant: "high_impact" },
-  cold: { variant: "overdue" },
-  converted: { variant: "active" },
-};
-
-const valueAccent: Record<LeadValue, string> = {
-  low: "text-text-secondary",
-  medium: "text-text-secondary",
-  high: "text-status-green",
-  very_high: "text-primary-500",
-};
-
-const dateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!match) return "—";
-  const [, y, m, d] = match;
-  return dateFormatter.format(new Date(Number(y), Number(m) - 1, Number(d)));
-}
+  listInbox,
+  listProspects,
+  listSearches,
+  countOutboundKpis,
+} from "@/lib/services/outbound";
+import { OutboundClient } from "./client";
 
 export default async function LeadsPage() {
   const tenant = await getCurrentTenant();
-  const leads = tenant ? await getLeads(tenant.slug) : [];
-  const summary = summarize(leads);
+  if (!tenant) {
+    return (
+      <div className="p-4 md:p-8">
+        <h1 className="text-2xl font-bold text-foreground">Outbound</h1>
+        <p className="text-text-secondary text-sm mt-2">Select a tenant first.</p>
+      </div>
+    );
+  }
+
+  const [prospects, searches, inbox, kpis] = await Promise.all([
+    listProspects(tenant.slug, { limit: 100 }),
+    listSearches(tenant.slug),
+    listInbox(tenant.slug, 30),
+    countOutboundKpis(tenant.slug),
+  ]);
 
   return (
     <div className="p-4 md:p-8 max-w-[1200px]">
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex items-start justify-between mb-6 gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Leads &amp; Outreach</h1>
-          <p className="text-text-secondary text-sm mt-0.5">Track and manage your marketing leads</p>
-        </div>
-        <AddLeadButton />
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-        <div className="bg-card rounded-xl p-4 border border-border/50">
-          <p className="text-text-secondary text-xs">Total Leads</p>
-          <p className="text-2xl font-bold text-foreground mt-1">{summary.total}</p>
-        </div>
-        <div className="bg-card rounded-xl p-4 border border-border/50">
-          <p className="text-text-secondary text-xs">Warm</p>
-          <p className="text-2xl font-bold text-primary-500 mt-1">{summary.warm}</p>
-        </div>
-        <div className="bg-card rounded-xl p-4 border border-border/50">
-          <p className="text-text-secondary text-xs">Gone Cold</p>
-          <p className="text-2xl font-bold text-status-red mt-1">{summary.cold}</p>
-        </div>
-        <div className="bg-card rounded-xl p-4 border border-border/50">
-          <p className="text-text-secondary text-xs">New</p>
-          <p className="text-2xl font-bold text-status-green mt-1">{summary.newCount}</p>
+          <h1 className="text-2xl font-bold text-foreground">Outbound</h1>
+          <p className="text-text-secondary text-sm mt-0.5">
+            AI finds prospects, scores fit, drafts DMs. You approve each one
+            before send. Replies show up in the inbox.
+          </p>
         </div>
       </div>
 
-      {leads.length === 0 ? (
-        <div className="bg-card rounded-xl border border-border/50 p-10 text-center">
-          <p className="text-sm text-foreground font-medium">No leads yet</p>
-          <p className="text-text-secondary text-xs mt-1">Click &ldquo;Add Lead&rdquo; to capture your first contact.</p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto -mx-4 md:mx-0">
-          <div className="bg-card rounded-xl border border-border/50 overflow-hidden min-w-[800px] md:min-w-0">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border/50">
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Name</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Company</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Type</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Status</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Last Contact</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Next Action</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leads.map((lead) => (
-                  <tr key={lead.id} className="border-b border-border/30 last:border-0 hover:bg-card-hover transition-colors">
-                    <td className="px-5 py-3.5 text-sm text-foreground font-medium">{lead.name}</td>
-                    <td className="px-5 py-3.5 text-sm text-text-secondary">{lead.company ?? "—"}</td>
-                    <td className="px-5 py-3.5 text-xs text-text-muted">{LEAD_TYPE_LABELS[lead.type]}</td>
-                    <td className="px-5 py-3.5">
-                      <Badge variant={statusBadge[lead.status].variant}>
-                        {LEAD_STATUS_LABELS[lead.status]}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-text-secondary">{formatDate(lead.lastContact)}</td>
-                    <td className="px-5 py-3.5 text-sm text-text-secondary max-w-[200px] truncate">{lead.nextAction ?? "—"}</td>
-                    <td className="px-5 py-3.5">
-                      <span className={`text-xs font-medium ${valueAccent[lead.value]}`}>
-                        {LEAD_VALUE_LABELS[lead.value]}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-6">
+        <Kpi label="Prospects" value={kpis.total} />
+        <Kpi label="Qualified" value={kpis.qualified} tone="primary" />
+        <Kpi label="Ready to send" value={kpis.drafted} tone="yellow" />
+        <Kpi label="Sent" value={kpis.sent} tone="green" />
+        <Kpi
+          label="Inbox"
+          value={kpis.inboxUnread}
+          tone={kpis.inboxUnread > 0 ? "primary" : "default"}
+        />
+      </div>
+
+      <OutboundClient
+        tenantSlug={tenant.slug}
+        initialProspects={prospects}
+        initialInbox={inbox}
+        searches={searches}
+      />
+    </div>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: number;
+  tone?: "default" | "primary" | "yellow" | "green";
+}) {
+  const tones = {
+    default: "text-foreground",
+    primary: "text-primary-500",
+    yellow: "text-status-yellow",
+    green: "text-status-green",
+  };
+  return (
+    <div className="bg-card rounded-xl p-4 border border-border/50">
+      <p className="text-text-secondary text-xs">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${tones[tone]}`}>{value}</p>
     </div>
   );
 }
