@@ -14,7 +14,7 @@ import {
   type CampaignStatus,
 } from "@/lib/types/campaigns";
 import { formatCurrency } from "@/lib/utils/format";
-import { AddCampaignButton } from "./client";
+import { AddCampaignButton, DeleteCampaignButton } from "./client";
 import { AdCritiquePanel } from "./ad-critique";
 
 const statusBadge: Record<CampaignStatus, { variant: "active" | "overdue" | "opportunity" | "needs_posts" }> = {
@@ -118,6 +118,7 @@ export default async function AdsTrackerPage() {
                     <th className="text-right px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Spend</th>
                     <th className="text-right px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary-500">ROAS</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Period</th>
+                    <th className="w-8 px-2 py-2" aria-label="Actions"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -151,6 +152,9 @@ export default async function AdsTrackerPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs text-text-muted">{formatPeriod(c.startDate, c.endDate)}</td>
+                      <td className="px-2 py-3 text-right">
+                        <DeleteCampaignButton campaignId={c.id} campaignName={c.name} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
