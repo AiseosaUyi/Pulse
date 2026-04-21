@@ -2,12 +2,18 @@
    stomping host-site styles. All colors match the Pulse design
    system (maroon #ad112c primary, rounded-2xl surfaces). */
 
-.pulse-ext-fab {
-  all: unset;
+.pulse-ext-fab-group {
   position: fixed;
   right: 20px;
   bottom: 20px;
   z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pulse-ext-fab {
+  all: unset;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -31,6 +37,213 @@
 .pulse-ext-fab__logo {
   font-size: 16px;
   line-height: 1;
+}
+
+.pulse-ext-fab-debug {
+  all: unset;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(15, 15, 16, 0.75);
+  color: #fff;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  position: relative;
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.pulse-ext-fab-debug:hover {
+  transform: translateY(-1px);
+  background: rgba(15, 15, 16, 0.9);
+}
+
+.pulse-ext-fab-debug--alert::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #dc2626;
+  box-shadow: 0 0 0 2px #fff;
+  animation: pulse-ext-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-ext-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+/* Log panel — appears above the FAB when the bug icon is clicked */
+.pulse-ext-log {
+  position: fixed;
+  right: 20px;
+  bottom: 72px;
+  width: 420px;
+  max-width: calc(100vw - 40px);
+  max-height: 70vh;
+  z-index: 2147483647;
+  background: #ffffff;
+  color: #0f0f10;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 15, 16, 0.08);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12.5px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pulse-ext-log {
+    background: #121214;
+    color: #f4f4f5;
+    border-color: rgba(244, 244, 245, 0.1);
+  }
+}
+
+.pulse-ext-log__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(15, 15, 16, 0.08);
+}
+
+.pulse-ext-log__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ad112c;
+}
+
+.pulse-ext-log__subtitle {
+  font-size: 11px;
+  color: #6b6b70;
+  margin-top: 2px;
+}
+
+.pulse-ext-log__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pulse-ext-log__action {
+  all: unset;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #6b6b70;
+}
+
+.pulse-ext-log__action:hover {
+  background: rgba(15, 15, 16, 0.06);
+  color: inherit;
+}
+
+.pulse-ext-log__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pulse-ext-log__empty {
+  padding: 20px 10px;
+  color: #6b6b70;
+  line-height: 1.5;
+}
+
+.pulse-ext-log__empty p + p {
+  margin-top: 8px;
+}
+
+.pulse-ext-log__entry {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: rgba(15, 15, 16, 0.03);
+}
+
+.pulse-ext-log__entry--success {
+  border-color: rgba(21, 128, 61, 0.2);
+  background: rgba(21, 128, 61, 0.06);
+}
+
+.pulse-ext-log__entry--warn {
+  border-color: rgba(202, 138, 4, 0.25);
+  background: rgba(250, 204, 21, 0.1);
+}
+
+.pulse-ext-log__entry--error {
+  border-color: rgba(185, 28, 28, 0.3);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.pulse-ext-log__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  color: #6b6b70;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 3px;
+}
+
+.pulse-ext-log__kind {
+  font-weight: 600;
+  color: inherit;
+}
+
+.pulse-ext-log__message {
+  font-size: 12px;
+  line-height: 1.4;
+  color: inherit;
+  word-break: break-word;
+}
+
+.pulse-ext-log__context {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pulse-ext-log__context code {
+  font-size: 10.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(15, 15, 16, 0.08);
+  color: inherit;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.pulse-ext-log__footer {
+  border-top: 1px solid rgba(15, 15, 16, 0.08);
+  padding: 8px 14px;
+  font-size: 10.5px;
+  color: #6b6b70;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.pulse-ext-log__footer code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
 }
 
 .pulse-ext-sidebar {

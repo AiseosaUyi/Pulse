@@ -11,6 +11,7 @@
 (async () => {
   const detectModule = await import(chrome.runtime.getURL("lib/detect.js"));
   const apiModule = await import(chrome.runtime.getURL("lib/api.js"));
+  const logModule = await import(chrome.runtime.getURL("lib/log.js"));
   const { detectProspect, scrapeProfileMeta } = detectModule;
   const {
     lookupProspect,
@@ -20,9 +21,11 @@
     markDmSent,
     PulseApiError,
   } = apiModule;
+  const { appendEvent, readLog, clearLog, withLogging } = logModule;
 
   let sidebar = null;
   let fab = null;
+  let logPanel = null;
   let lastUrl = location.href;
   let cachedProspect = null;
   let cachedDm = null;
@@ -40,14 +43,30 @@
       return;
     }
     if (fab) return;
-    fab = document.createElement("button");
-    fab.className = "pulse-ext-fab";
-    fab.type = "button";
-    fab.innerHTML = `
+
+    // Wrap the save button + a small debug icon so they render as a unit.
+    fab = document.createElement("div");
+    fab.className = "pulse-ext-fab-group";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "pulse-ext-fab";
+    saveBtn.type = "button";
+    saveBtn.innerHTML = `
       <span class="pulse-ext-fab__logo">◐</span>
       <span class="pulse-ext-fab__label">Save to Pulse</span>
     `;
-    fab.addEventListener("click", () => handleQuickSave(target));
+    saveBtn.addEventListener("click", () => handleQuickSave(target));
+
+    const debugBtn = document.createElement("button");
+    debugBtn.className = "pulse-ext-fab-debug";
+    debugBtn.type = "button";
+    debugBtn.title = "View Pulse event log (last 30 actions)";
+    debugBtn.setAttribute("aria-label", "View event log");
+    debugBtn.textContent = "⟳";
+    debugBtn.addEventListener("click", () => toggleLogPanel(target));
+
+    fab.appendChild(saveBtn);
+    fab.appendChild(debugBtn);
     document.body.appendChild(fab);
   }
 
@@ -66,11 +85,18 @@
       });
       cachedProspect = res.prospect ?? null;
       cachedDm = res.dm ?? null;
-      setFabLabel(
-        res.prospect?.status === "qualified"
-          ? "✓ Saved (qualified)"
-          : "✓ Saved"
-      );
+      const qualified = res.prospect?.status === "qualified";
+      setFabLabel(qualified ? "✓ Saved (qualified)" : "✓ Saved");
+      appendEvent({
+        level: "success",
+        kind: "quick-save",
+        message: qualified ? "saved · qualified" : "saved",
+        context: {
+          platform: target.platform,
+          handle: target.handle,
+          url: target.profileUrl,
+        },
+      });
       setTimeout(() => {
         if (fab) setFabLabel(originalLabel ?? "Save to Pulse");
       }, 1800);
@@ -82,15 +108,43 @@
             : err.message
           : "Save failed";
       setFabLabel(msg);
+      appendEvent({
+        level: "error",
+        kind: "quick-save",
+        message:
+          err && typeof err === "object" && "message" in err
+            ? String(err.message)
+            : String(err),
+        context: {
+          platform: target.platform,
+          handle: target.handle,
+          url: target.profileUrl,
+          status:
+            err && typeof err === "object" && "status" in err
+              ? err.status
+              : undefined,
+        },
+      });
       setTimeout(() => {
         if (fab) setFabLabel(originalLabel ?? "Save to Pulse");
       }, 2200);
+      // Let the user pop the log panel to see the full error.
+      flashDebugBadge();
     }
   }
 
   function setFabLabel(text) {
     const label = fab?.querySelector(".pulse-ext-fab__label");
     if (label) label.textContent = text;
+  }
+
+  function flashDebugBadge() {
+    const btn = fab?.querySelector(".pulse-ext-fab-debug");
+    if (!btn) return;
+    btn.classList.add("pulse-ext-fab-debug--alert");
+    setTimeout(() => {
+      btn?.classList.remove("pulse-ext-fab-debug--alert");
+    }, 4000);
   }
 
   function openSidebar(target) {
@@ -155,15 +209,21 @@
       `<div class="pulse-ext-empty">Checking Pulse for @${escapeHtml(target.handle)}…</div>`
     );
     try {
-      const data = await lookupProspect({
-        platform: target.platform,
-        handle: target.handle,
-      });
+      const data = await withLogging(
+        "lookup",
+        { platform: target.platform, handle: target.handle },
+        () =>
+          lookupProspect({
+            platform: target.platform,
+            handle: target.handle,
+          })
+      );
       cachedProspect = data.prospect ?? null;
       cachedDm = data.dm ?? null;
       renderSidebarContent(target);
     } catch (err) {
       renderBody(errorBlock(err));
+      flashDebugBadge();
     }
   }
 
@@ -171,25 +231,41 @@
     renderBody(`<div class="pulse-ext-empty">Saving @${escapeHtml(target.handle)}…</div>`);
     const meta = scrapeProfileMeta(target.platform);
     try {
-      const res = await upsertProspect({
-        platform: target.platform,
-        handle: target.handle,
-        profileUrl: target.profileUrl,
-        displayName: meta.displayName,
-        bio: meta.bio,
-      });
+      const res = await withLogging(
+        "save",
+        { platform: target.platform, handle: target.handle },
+        () =>
+          upsertProspect({
+            platform: target.platform,
+            handle: target.handle,
+            profileUrl: target.profileUrl,
+            displayName: meta.displayName,
+            bio: meta.bio,
+          })
+      );
       cachedProspect = res.prospect ?? null;
       cachedDm = res.dm ?? null;
       renderSidebarContent(target);
     } catch (err) {
       renderBody(errorBlock(err));
+      flashDebugBadge();
     }
   }
 
   async function handleCopyPrimary(target) {
     try {
-      const res = await fetchPrimaryTemplate(target.platform);
+      const res = await withLogging(
+        "copy-primary",
+        { platform: target.platform, handle: target.handle },
+        () => fetchPrimaryTemplate(target.platform)
+      );
       if (!res.template) {
+        await appendEvent({
+          level: "warn",
+          kind: "copy-primary",
+          message: `no primary template set for ${target.platform}`,
+          context: { platform: target.platform },
+        });
         renderBody(
           `<div class="pulse-ext-empty">No primary template set for ${target.platform}. Open Pulse → Outbound → Templates, mark one as Primary, then try again.</div>`
         );
@@ -202,6 +278,7 @@
       });
     } catch (err) {
       renderBody(errorBlock(err));
+      flashDebugBadge();
     }
   }
 
@@ -211,32 +288,43 @@
     );
     const meta = scrapeProfileMeta(target.platform);
     try {
-      const data = await draftDm({
-        platform: target.platform,
-        handle: target.handle,
-        profileUrl: target.profileUrl,
-        displayName: meta.displayName,
-        bio: meta.bio,
-        signalSummary: meta.bio
-          ? `Profile bio: ${meta.bio.slice(0, 200)}`
-          : undefined,
-      });
+      const data = await withLogging(
+        "draft",
+        { platform: target.platform, handle: target.handle },
+        () =>
+          draftDm({
+            platform: target.platform,
+            handle: target.handle,
+            profileUrl: target.profileUrl,
+            displayName: meta.displayName,
+            bio: meta.bio,
+            signalSummary: meta.bio
+              ? `Profile bio: ${meta.bio.slice(0, 200)}`
+              : undefined,
+          })
+      );
       cachedDm = data.dm ?? null;
       cachedProspect = data.prospect ?? cachedProspect;
       renderSidebarContent(target, { preferDm: true });
     } catch (err) {
       renderBody(errorBlock(err));
+      flashDebugBadge();
     }
   }
 
   async function handleMarkSent(target) {
     if (!cachedDm) return;
     try {
-      await markDmSent(cachedDm.id);
+      await withLogging(
+        "mark-sent",
+        { dmId: cachedDm.id },
+        () => markDmSent(cachedDm.id)
+      );
       flashFabTemp("Marked sent in Pulse", 1500);
       handleLookup(target);
     } catch (err) {
       renderBody(errorBlock(err));
+      flashDebugBadge();
     }
   }
 
@@ -407,6 +495,103 @@
       sidebar.remove();
       sidebar = null;
     }
+    if (!target && logPanel) {
+      logPanel.remove();
+      logPanel = null;
+    }
+  }
+
+  // ───────────────────────────────────────────────
+  // Debug / event log
+  // ───────────────────────────────────────────────
+
+  async function toggleLogPanel(target) {
+    if (logPanel) {
+      logPanel.remove();
+      logPanel = null;
+      return;
+    }
+    logPanel = document.createElement("div");
+    logPanel.className = "pulse-ext-log";
+    document.body.appendChild(logPanel);
+    await renderLogPanel(target);
+  }
+
+  async function renderLogPanel(target) {
+    if (!logPanel) return;
+    const entries = await readLog();
+    const config = await apiModule.getConfig();
+    const tokenStatus = config.token ? "set" : "missing";
+    const baseUrl = config.baseUrl ?? "(default)";
+    logPanel.innerHTML = `
+      <div class="pulse-ext-log__header">
+        <div>
+          <div class="pulse-ext-log__title">Pulse event log</div>
+          <div class="pulse-ext-log__subtitle">
+            Last ${entries.length} event${entries.length === 1 ? "" : "s"}
+          </div>
+        </div>
+        <div class="pulse-ext-log__actions">
+          <button data-pulse-log-refresh class="pulse-ext-log__action" title="Refresh">↻</button>
+          <button data-pulse-log-clear class="pulse-ext-log__action" title="Clear log">clear</button>
+          <button data-pulse-log-close class="pulse-ext-log__action" aria-label="Close">×</button>
+        </div>
+      </div>
+      <div class="pulse-ext-log__body">
+        ${entries.length === 0 ? emptyLogBlock() : entries.map(renderLogEntry).join("")}
+      </div>
+      <div class="pulse-ext-log__footer">
+        <span>Token: <strong>${escapeHtml(tokenStatus)}</strong></span>
+        <span>Base: <code>${escapeHtml(baseUrl)}</code></span>
+      </div>
+    `;
+    logPanel
+      .querySelector("[data-pulse-log-close]")
+      ?.addEventListener("click", () => toggleLogPanel(target));
+    logPanel
+      .querySelector("[data-pulse-log-refresh]")
+      ?.addEventListener("click", () => renderLogPanel(target));
+    logPanel
+      .querySelector("[data-pulse-log-clear]")
+      ?.addEventListener("click", async () => {
+        await clearLog();
+        renderLogPanel(target);
+      });
+  }
+
+  function emptyLogBlock() {
+    return `
+      <div class="pulse-ext-log__empty">
+        <p>No events yet.</p>
+        <p>As you save prospects, copy templates, or draft DMs, each
+        action lands here with success/error detail so you can debug
+        without reloading the page.</p>
+      </div>
+    `;
+  }
+
+  function renderLogEntry(entry) {
+    const levelClass = `pulse-ext-log__entry--${entry.level ?? "info"}`;
+    const ts = new Date(entry.ts).toLocaleTimeString();
+    const ctx = entry.context
+      ? Object.entries(entry.context)
+          .filter(([, v]) => v !== undefined && v !== null && v !== "")
+          .map(
+            ([k, v]) =>
+              `<code>${escapeHtml(k)}=${escapeHtml(String(v))}</code>`
+          )
+          .join(" ")
+      : "";
+    return `
+      <div class="pulse-ext-log__entry ${levelClass}">
+        <div class="pulse-ext-log__meta">
+          <span class="pulse-ext-log__kind">${escapeHtml(entry.kind ?? "event")}</span>
+          <span class="pulse-ext-log__ts">${escapeHtml(ts)}</span>
+        </div>
+        <div class="pulse-ext-log__message">${escapeHtml(entry.message ?? "")}</div>
+        ${ctx ? `<div class="pulse-ext-log__context">${ctx}</div>` : ""}
+      </div>
+    `;
   }
 
   // Right-click the FAB to open the sidebar (save is still one click).
