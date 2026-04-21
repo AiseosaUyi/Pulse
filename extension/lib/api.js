@@ -1,24 +1,34 @@
-// Pulse API client for the extension. All requests go through the
-// tenant API token stored in chrome.storage.sync.
+// Pulse API client for the extension. Storage (token + base URL)
+// lives in the background service worker — dynamically-imported
+// modules only see `chrome.runtime`, not `chrome.storage`. We route
+// every storage call through `chrome.runtime.sendMessage`.
 
-const DEFAULT_BASE = "https://pulse-ashy-kappa.vercel.app";
-
-export async function getConfig() {
-  const { pulseBaseUrl, pulseToken } = await chrome.storage.sync.get([
-    "pulseBaseUrl",
-    "pulseToken",
-  ]);
-  return {
-    baseUrl: (pulseBaseUrl || DEFAULT_BASE).replace(/\/+$/, ""),
-    token: pulseToken || null,
-  };
+async function sendBackground(kind, payload = {}) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.runtime.sendMessage({ kind, ...payload }, (reply) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        if (!reply || reply.ok !== true) {
+          reject(new Error(reply?.error ?? "background error"));
+          return;
+        }
+        resolve(reply.data);
+      });
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
+  });
 }
 
-export async function setConfig({ baseUrl, token }) {
-  const patch = {};
-  if (baseUrl !== undefined) patch.pulseBaseUrl = baseUrl;
-  if (token !== undefined) patch.pulseToken = token;
-  await chrome.storage.sync.set(patch);
+export async function getConfig() {
+  return sendBackground("config.get");
+}
+
+export async function setConfig(patch) {
+  return sendBackground("config.set", { patch });
 }
 
 async function request(path, { method = "GET", body } = {}) {

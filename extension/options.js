@@ -28,7 +28,9 @@ const clearBtn = document.getElementById("clear");
   });
 
   clearBtn.addEventListener("click", async () => {
-    await chrome.storage.sync.remove(["pulseToken"]);
+    // Route through the background worker so this works identically
+    // regardless of whether chrome.storage is reachable directly.
+    await setConfig({ clearToken: true });
     tokenEl.placeholder = "pulse_ext_…";
     tokenEl.value = "";
     savedEl.textContent = "Disconnected.";
