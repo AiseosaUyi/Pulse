@@ -246,6 +246,16 @@
   font-size: 10.5px;
 }
 
+.pulse-ext-log__pipeline-detail {
+  padding: 8px 14px;
+  font-size: 11px;
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+  border-top: 1px solid rgba(185, 28, 28, 0.2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-word;
+}
+
 .pulse-ext-sidebar {
   position: fixed;
   top: 20px;

@@ -520,7 +520,22 @@
   async function renderLogPanel(target) {
     if (!logPanel) return;
     const entries = await readLog();
-    const config = await apiModule.getConfig();
+
+    // Ping the background via sendMessage so the user can SEE whether
+    // the content script ↔ service worker pipeline is alive. If this
+    // throws 'reading sync' or similar, the fix isn't actually loaded.
+    let pipelineStatus = "ok";
+    let pipelineDetail = "";
+    let config = { baseUrl: "(unknown)", token: null };
+    try {
+      config = await apiModule.getConfig();
+    } catch (err) {
+      pipelineStatus = "fail";
+      pipelineDetail =
+        err && typeof err === "object" && "message" in err
+          ? String(err.message)
+          : String(err);
+    }
     const tokenStatus = config.token ? "set" : "missing";
     const baseUrl = config.baseUrl ?? "(default)";
     logPanel.innerHTML = `
@@ -544,7 +559,13 @@
         <span>Token: <strong>${escapeHtml(tokenStatus)}</strong></span>
         <span>Base: <code>${escapeHtml(baseUrl)}</code></span>
         <span>v${escapeHtml(chrome.runtime.getManifest().version)}</span>
+        <span>Pipeline: <strong style="color: ${pipelineStatus === "ok" ? "#15803d" : "#b91c1c"}">${escapeHtml(pipelineStatus)}</strong></span>
       </div>
+      ${
+        pipelineStatus === "fail"
+          ? `<div class="pulse-ext-log__pipeline-detail">Pipeline error: ${escapeHtml(pipelineDetail)}</div>`
+          : ""
+      }
     `;
     logPanel
       .querySelector("[data-pulse-log-close]")
