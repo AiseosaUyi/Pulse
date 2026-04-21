@@ -76,6 +76,65 @@
   animation: pulse-ext-blink 1.2s ease-in-out infinite;
 }
 
+/* Opportunistic-capture FAB (appears on hashtag / post / followers
+   pages alongside the profile Save FAB where applicable). */
+.pulse-ext-capture-fab {
+  all: unset;
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 2147483646;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 10px 14px;
+  border-radius: 999px;
+  background: #0f0f10;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  max-width: 280px;
+}
+
+.pulse-ext-capture-fab:hover {
+  transform: translateY(-1px);
+  background: #1a1a1c;
+}
+
+.pulse-ext-capture-fab--empty {
+  opacity: 0.6;
+}
+
+.pulse-ext-capture-fab__icon {
+  font-size: 15px;
+  line-height: 1;
+  color: #ad112c;
+}
+
+.pulse-ext-capture-fab__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pulse-ext-capture-fab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ad112c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 @keyframes pulse-ext-blink {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.35; }

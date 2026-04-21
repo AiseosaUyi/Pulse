@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pulse Outbound",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Draft personalized IG / TikTok / Twitter / LinkedIn DMs from Pulse while viewing a prospect's profile. Human-in-the-loop by design.",
   "action": {
     "default_popup": "popup.html",
@@ -28,7 +28,7 @@
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["storage", "clipboardWrite", "activeTab"],
+  "permissions": ["storage", "clipboardWrite", "activeTab", "tabs"],
   "host_permissions": [
     "https://*.vercel.app/*",
     "http://localhost:3000/*"

@@ -184,6 +184,11 @@ export async function POST(req: Request) {
         bio: (body.bio as string) ?? null,
         follower_count: (body.followerCount as number) ?? null,
         signal_summary: (body.signalSummary as string) ?? null,
+        // Optional payload — crawler / bulk uploader carries hashtag,
+        // post URL, session metadata here so the AI qualifier + UI
+        // can show rich context later.
+        signal_data:
+          (body.signalData as Record<string, unknown>) ?? undefined,
       },
       { onConflict: "tenant_slug,platform,handle" }
     )

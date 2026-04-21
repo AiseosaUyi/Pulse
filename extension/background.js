@@ -8,6 +8,8 @@ const DEFAULT_BASE = "https://pulse-ashy-kappa.vercel.app";
 const CONFIG_KEYS = ["pulseBaseUrl", "pulseToken"];
 const LOG_KEY = "pulseEventLog";
 const MAX_LOG_ENTRIES = 30;
+const CAPTURED_KEY = "pulseCaptured";
+const MAX_CAPTURED_ENTRIES = 500;
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === "install") {
@@ -66,6 +68,138 @@ async function appendLogEntry(entry) {
 
 async function clearLog() {
   await writeLog([]);
+}
+
+// ──────────────────────────────────────────────
+// Captured prospects store (local-only staging area)
+// Content scripts can't reach chrome.storage.local. Same pattern
+// as log storage — all access routes through here via sendMessage.
+// ──────────────────────────────────────────────
+
+async function readCaptured() {
+  const stored = await chrome.storage.local.get(CAPTURED_KEY);
+  return Array.isArray(stored[CAPTURED_KEY]) ? stored[CAPTURED_KEY] : [];
+}
+
+async function writeCaptured(entries) {
+  await chrome.storage.local.set({ [CAPTURED_KEY]: entries });
+}
+
+function dedupKeyFor(entry) {
+  return `${entry.platform}:${entry.handle}`;
+}
+
+async function appendCaptured(items) {
+  // items is an array of {platform, handle, profileUrl, hashtag?,
+  // postUrl?, source, sessionId?}. Dedup against existing 'local'
+  // entries so repeat captures of the same person on the same
+  // hashtag collapse to one row.
+  const current = await readCaptured();
+  const existingLocal = new Set(
+    current
+      .filter((c) => c.status === "local")
+      .map(dedupKeyFor)
+  );
+  const now = Date.now();
+  let added = 0;
+  let skipped = 0;
+  const toAdd = [];
+
+  for (const raw of items) {
+    const platform = String(raw?.platform ?? "").toLowerCase();
+    const handle = String(raw?.handle ?? "")
+      .trim()
+      .replace(/^@/, "")
+      .toLowerCase();
+    if (!platform || !handle) {
+      skipped += 1;
+      continue;
+    }
+    const key = `${platform}:${handle}`;
+    if (existingLocal.has(key)) {
+      skipped += 1;
+      continue;
+    }
+    existingLocal.add(key);
+    added += 1;
+    toAdd.push({
+      id: `cap_${now}_${Math.random().toString(36).slice(2, 7)}_${handle}`,
+      platform,
+      handle,
+      profileUrl: raw?.profileUrl ?? null,
+      capturedAt: now,
+      source: raw?.source ?? "opportunistic",
+      hashtag: raw?.hashtag ?? null,
+      postUrl: raw?.postUrl ?? null,
+      sessionId: raw?.sessionId ?? null,
+      status: "local",
+      note: null,
+    });
+  }
+
+  // Prepend the newest so the UI shows them at top; FIFO-prune on overflow.
+  let next = [...toAdd, ...current];
+  if (next.length > MAX_CAPTURED_ENTRIES) {
+    // Keep all local entries, drop oldest uploaded/skipped first.
+    const nonLocal = next.filter((e) => e.status !== "local");
+    const local = next.filter((e) => e.status === "local");
+    nonLocal.sort((a, b) => b.capturedAt - a.capturedAt);
+    const keepNonLocal = nonLocal.slice(
+      0,
+      Math.max(0, MAX_CAPTURED_ENTRIES - local.length)
+    );
+    next = [...local, ...keepNonLocal];
+  }
+  await writeCaptured(next);
+  return { added, skipped, total: next.length };
+}
+
+async function updateCapturedStatus({ ids, status }) {
+  if (!Array.isArray(ids) || ids.length === 0) return { updated: 0 };
+  const idSet = new Set(ids);
+  const current = await readCaptured();
+  let updated = 0;
+  const next = current.map((e) => {
+    if (idSet.has(e.id)) {
+      updated += 1;
+      return { ...e, status };
+    }
+    return e;
+  });
+  await writeCaptured(next);
+  return { updated };
+}
+
+async function deleteCaptured({ ids }) {
+  if (!Array.isArray(ids) || ids.length === 0) return { deleted: 0 };
+  const idSet = new Set(ids);
+  const current = await readCaptured();
+  const next = current.filter((e) => !idSet.has(e.id));
+  await writeCaptured(next);
+  return { deleted: current.length - next.length };
+}
+
+async function clearCaptured() {
+  await writeCaptured([]);
+  return { cleared: true };
+}
+
+async function capturedStats() {
+  const current = await readCaptured();
+  const local = current.filter((e) => e.status === "local");
+  const uploaded = current.filter((e) => e.status === "uploaded");
+  const skipped = current.filter((e) => e.status === "skipped");
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const today = current.filter(
+    (e) => new Date(e.capturedAt).toISOString().slice(0, 10) === todayKey
+  );
+  return {
+    total: current.length,
+    local: local.length,
+    uploaded: uploaded.length,
+    skipped: skipped.length,
+    today: today.length,
+  };
 }
 
 /**
@@ -127,6 +261,13 @@ const HANDLERS = {
   "log.append": (msg) => appendLogEntry(msg.entry ?? {}),
   "log.clear": () => clearLog(),
   "api.call": (msg) => apiCall(msg),
+  "captured.list": () => readCaptured(),
+  "captured.append": (msg) => appendCaptured(msg.items ?? []),
+  "captured.update-status": (msg) =>
+    updateCapturedStatus({ ids: msg.ids ?? [], status: msg.status ?? "local" }),
+  "captured.delete": (msg) => deleteCaptured({ ids: msg.ids ?? [] }),
+  "captured.clear": () => clearCaptured(),
+  "captured.stats": () => capturedStats(),
 };
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

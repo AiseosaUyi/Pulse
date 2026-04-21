@@ -1,8 +1,9 @@
-import { getConfig } from "./lib/api.js";
+import { capturedStats, getConfig } from "./lib/api.js";
 
 const statusEl = document.getElementById("status");
 const optionsBtn = document.getElementById("options-btn");
 const pulseBtn = document.getElementById("pulse-btn");
+const capturedBtn = document.getElementById("captured-btn");
 
 (async () => {
   const { baseUrl, token } = await getConfig();
@@ -17,11 +18,26 @@ const pulseBtn = document.getElementById("pulse-btn");
     `;
   }
 
+  // Counts for the captured-prospects button.
+  try {
+    const stats = await capturedStats();
+    const localCount = stats?.local ?? 0;
+    if (localCount > 0) {
+      capturedBtn.innerHTML = `Captured prospects <span class="count">${localCount}</span>`;
+    }
+  } catch {
+    // ignore — button works without count
+  }
+
   optionsBtn.addEventListener("click", () => {
     chrome.runtime.openOptionsPage();
   });
 
   pulseBtn.addEventListener("click", () => {
     chrome.tabs.create({ url: `${baseUrl}/leads` });
+  });
+
+  capturedBtn.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("captured.html") });
   });
 })();

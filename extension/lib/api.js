@@ -114,3 +114,39 @@ export async function markDmSent(dmId) {
     method: "POST",
   });
 }
+
+export async function bulkUploadProspects(items) {
+  return request("/api/ext/prospects/bulk", {
+    method: "POST",
+    body: { items },
+  });
+}
+
+// ──────────────────────────────────────────────
+// Captured-store facade — proxied through background
+// (content scripts can't reach chrome.storage.local directly).
+// ──────────────────────────────────────────────
+
+export async function capturedList() {
+  return sendBackground("captured.list");
+}
+
+export async function capturedAppend(items) {
+  return sendBackground("captured.append", { items });
+}
+
+export async function capturedUpdateStatus(ids, status) {
+  return sendBackground("captured.update-status", { ids, status });
+}
+
+export async function capturedDelete(ids) {
+  return sendBackground("captured.delete", { ids });
+}
+
+export async function capturedClear() {
+  return sendBackground("captured.clear");
+}
+
+export async function capturedStats() {
+  return sendBackground("captured.stats");
+}

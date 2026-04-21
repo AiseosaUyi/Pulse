@@ -1,0 +1,263 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: #0f0f10;
+  background: #fafafa;
+}
+
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px 24px 48px;
+}
+
+.hdr {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+h1 {
+  font-size: 20px;
+  margin: 0;
+  color: #ad112c;
+}
+
+.sub {
+  margin: 2px 0 0;
+  color: #6b6b70;
+  font-size: 12.5px;
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  all: unset;
+  cursor: pointer;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+  transition: background 120ms ease;
+}
+
+.btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #ad112c;
+  color: #fff;
+}
+.btn-primary:hover:not([disabled]) {
+  background: #8d0e25;
+}
+
+.btn-ghost {
+  background: #fff;
+  color: #0f0f10;
+  border: 1px solid rgba(15, 15, 16, 0.12);
+}
+.btn-ghost:hover:not([disabled]) {
+  background: rgba(15, 15, 16, 0.04);
+}
+
+.btn-danger {
+  background: #fff;
+  color: #b91c1c;
+  border: 1px solid rgba(185, 28, 28, 0.25);
+}
+.btn-danger:hover:not([disabled]) {
+  background: rgba(185, 28, 28, 0.06);
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid rgba(15, 15, 16, 0.08);
+  margin-bottom: 12px;
+  font-size: 12.5px;
+}
+
+.filter-bar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.filter-bar .spacer {
+  flex: 1;
+}
+
+.filter-bar .search input {
+  width: 240px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 15, 16, 0.12);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+
+.alert {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  margin-bottom: 12px;
+}
+
+.alert.success {
+  background: rgba(21, 128, 61, 0.08);
+  color: #15803d;
+  border: 1px solid rgba(21, 128, 61, 0.2);
+}
+
+.alert.error {
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+  border: 1px solid rgba(185, 28, 28, 0.25);
+}
+
+.list {
+  background: #fff;
+  border: 1px solid rgba(15, 15, 16, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.list .empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: #6b6b70;
+  margin: 0;
+}
+
+.group {
+  border-top: 1px solid rgba(15, 15, 16, 0.06);
+}
+.group:first-child {
+  border-top: 0;
+}
+
+.group-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: rgba(15, 15, 16, 0.04);
+  font-size: 12px;
+  color: #6b6b70;
+}
+
+.group-hdr strong {
+  color: #0f0f10;
+  font-weight: 700;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid rgba(15, 15, 16, 0.04);
+}
+
+.row input[type="checkbox"] {
+  accent-color: #ad112c;
+}
+
+.row .handle {
+  font-weight: 600;
+  color: #0f0f10;
+  text-decoration: none;
+}
+
+.row .handle:hover {
+  color: #ad112c;
+  text-decoration: underline;
+}
+
+.row .meta {
+  font-size: 11px;
+  color: #6b6b70;
+  margin-top: 2px;
+}
+
+.row .status-pill {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.row .status-pill.local {
+  background: rgba(15, 15, 16, 0.08);
+  color: #6b6b70;
+}
+
+.row .status-pill.uploaded {
+  background: rgba(21, 128, 61, 0.12);
+  color: #15803d;
+}
+
+.row .status-pill.skipped {
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
+
+.row .icon-btn {
+  all: unset;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #6b6b70;
+}
+
+.row .icon-btn:hover {
+  background: rgba(15, 15, 16, 0.06);
+  color: #0f0f10;
+}
+
+.ftr {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #6b6b70;
+}
+
+.ftr .spacer {
+  flex: 1;
+}
+
+.ftr a {
+  color: #ad112c;
+  text-decoration: none;
+}
+
+.ftr a:hover {
+  text-decoration: underline;
+}

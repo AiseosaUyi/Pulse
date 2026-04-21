@@ -45,6 +45,29 @@
         border: 1px solid rgba(15, 15, 16, 0.12);
         color: #0f0f10;
       }
+      .btn .count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        margin-left: 6px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.2);
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .btn-ghost .count { background: rgba(15, 15, 16, 0.08); color: inherit; }
+      .secondary { margin-top: 10px; text-align: center; }
+      .link {
+        all: unset;
+        cursor: pointer;
+        font-size: 11.5px;
+        color: #6b6b70;
+        text-decoration: underline;
+      }
+      .link:hover { color: #0f0f10; }
       code {
         font-size: 11px;
         background: rgba(15, 15, 16, 0.06);
@@ -68,8 +91,12 @@
     </p>
 
     <div class="actions">
-      <button id="options-btn" class="btn btn-primary">Open options</button>
+      <button id="captured-btn" class="btn btn-primary">Captured prospects</button>
       <button id="pulse-btn" class="btn btn-ghost">Open Pulse</button>
+    </div>
+
+    <div class="secondary">
+      <button id="options-btn" class="link">Options</button>
     </div>
 
     <script type="module" src="popup.js"></script>

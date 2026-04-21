@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pulse · Captured prospects</title>
+    <link rel="stylesheet" href="captured.css" />
+  </head>
+  <body>
+    <main>
+      <header class="hdr">
+        <div>
+          <h1>Captured prospects</h1>
+          <p class="sub" id="sub">Loading…</p>
+        </div>
+        <div class="actions">
+          <button id="select-all" class="btn btn-ghost">Select local</button>
+          <button id="deselect" class="btn btn-ghost">Clear selection</button>
+          <button id="export" class="btn btn-ghost">Export CSV</button>
+          <button id="delete" class="btn btn-danger" disabled>Delete</button>
+          <button id="upload" class="btn btn-primary" disabled>Upload to Pulse</button>
+        </div>
+      </header>
+
+      <div class="filter-bar">
+        <label><input type="radio" name="filter" value="local" checked /> Local (not uploaded)</label>
+        <label><input type="radio" name="filter" value="uploaded" /> Already uploaded</label>
+        <label><input type="radio" name="filter" value="all" /> All</label>
+        <span class="spacer"></span>
+        <label class="search">
+          <input type="search" id="search" placeholder="Filter by handle or hashtag…" />
+        </label>
+      </div>
+
+      <div id="alert" class="alert" hidden></div>
+
+      <div id="list" class="list">
+        <p class="empty">Loading…</p>
+      </div>
+
+      <footer class="ftr">
+        <span id="ftr-status">—</span>
+        <span class="spacer"></span>
+        <a href="#" id="open-leads">Open /leads in Pulse →</a>
+      </footer>
+    </main>
+    <script type="module" src="captured.js"></script>
+  </body>
+</html>

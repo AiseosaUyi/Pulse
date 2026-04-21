@@ -12,7 +12,15 @@
   const detectModule = await import(chrome.runtime.getURL("lib/detect.js"));
   const apiModule = await import(chrome.runtime.getURL("lib/api.js"));
   const logModule = await import(chrome.runtime.getURL("lib/log.js"));
-  const { detectProspect, scrapeProfileMeta } = detectModule;
+  const {
+    detectProspect,
+    scrapeProfileMeta,
+    isHashtagPage,
+    isPostPage,
+    isFollowersPage,
+    currentHashtag,
+    extractVisibleHandles,
+  } = detectModule;
   const {
     lookupProspect,
     upsertProspect,
@@ -20,11 +28,13 @@
     fetchPrimaryTemplate,
     markDmSent,
     PulseApiError,
+    capturedAppend,
   } = apiModule;
   const { appendEvent, readLog, clearLog, withLogging } = logModule;
 
   let sidebar = null;
   let fab = null;
+  let captureFab = null;
   let logPanel = null;
   let lastUrl = location.href;
   let cachedProspect = null;
@@ -491,6 +501,7 @@
   function syncToCurrentPage() {
     const target = currentTarget();
     ensureFab(target);
+    ensureCaptureFab();
     if (!target && sidebar) {
       sidebar.remove();
       sidebar = null;
@@ -499,6 +510,120 @@
       logPanel.remove();
       logPanel = null;
     }
+  }
+
+  // ──────────────────────────────────────────────
+  // Opportunistic capture FAB — lives on hashtag/post/followers
+  // pages. Zero ban risk: one click harvests handles visible in the
+  // viewport into local-only staging. Nothing hits Pulse until the
+  // user reviews in the Captured tab.
+  // ──────────────────────────────────────────────
+
+  function shouldShowCaptureFab() {
+    return isHashtagPage() || isPostPage() || isFollowersPage();
+  }
+
+  function ensureCaptureFab() {
+    if (!shouldShowCaptureFab()) {
+      if (captureFab) {
+        captureFab.remove();
+        captureFab = null;
+      }
+      return;
+    }
+    if (captureFab) {
+      refreshCaptureCount();
+      return;
+    }
+    captureFab = document.createElement("button");
+    captureFab.className = "pulse-ext-capture-fab";
+    captureFab.type = "button";
+    captureFab.innerHTML = `
+      <span class="pulse-ext-capture-fab__icon">⊕</span>
+      <span class="pulse-ext-capture-fab__label">Capture visible</span>
+      <span class="pulse-ext-capture-fab__count" data-pulse-capture-count>0</span>
+    `;
+    captureFab.addEventListener("click", handleOpportunisticCapture);
+    document.body.appendChild(captureFab);
+    refreshCaptureCount();
+    // Refresh the count as IG lazy-loads more tiles on scroll.
+    const poll = setInterval(() => {
+      if (!captureFab || !document.body.contains(captureFab)) {
+        clearInterval(poll);
+        return;
+      }
+      refreshCaptureCount();
+    }, 1500);
+  }
+
+  function refreshCaptureCount() {
+    if (!captureFab) return;
+    const handles = extractVisibleHandles(document);
+    const el = captureFab.querySelector("[data-pulse-capture-count]");
+    if (el) el.textContent = String(handles.length);
+    captureFab.classList.toggle(
+      "pulse-ext-capture-fab--empty",
+      handles.length === 0
+    );
+  }
+
+  async function handleOpportunisticCapture() {
+    if (!captureFab) return;
+    const labelEl = captureFab.querySelector(".pulse-ext-capture-fab__label");
+    const originalLabel = labelEl?.textContent ?? "Capture visible";
+    const setLabel = (text) => {
+      if (labelEl) labelEl.textContent = text;
+    };
+
+    const handles = extractVisibleHandles(document);
+    if (handles.length === 0) {
+      setLabel("No handles visible yet");
+      setTimeout(() => setLabel(originalLabel), 1800);
+      return;
+    }
+
+    setLabel("Saving…");
+    const sessionId = `sess_${Date.now()}`;
+    const hashtag = currentHashtag();
+    const items = handles.map((h) => ({
+      platform: h.platform,
+      handle: h.handle,
+      profileUrl: h.profileUrl,
+      postUrl: h.postUrl,
+      hashtag,
+      sessionId,
+      source: "opportunistic",
+    }));
+
+    try {
+      const res = await capturedAppend(items);
+      const added = res?.added ?? 0;
+      const skipped = res?.skipped ?? 0;
+      await appendEvent({
+        level: "success",
+        kind: "capture-visible",
+        message: `added ${added} · skipped ${skipped} (dedup)`,
+        context: { hashtag, visible: handles.length, added, skipped },
+      });
+      setLabel(
+        added > 0
+          ? `✓ Saved ${added}${skipped > 0 ? ` (+${skipped} dup)` : ""}`
+          : "All already captured"
+      );
+    } catch (err) {
+      await appendEvent({
+        level: "error",
+        kind: "capture-visible",
+        message:
+          err && typeof err === "object" && "message" in err
+            ? String(err.message)
+            : String(err),
+        context: { hashtag, visible: handles.length },
+      });
+      setLabel("Save failed — open log");
+      flashDebugBadge();
+    }
+    setTimeout(() => setLabel(originalLabel), 2400);
   }
 
   // ───────────────────────────────────────────────
