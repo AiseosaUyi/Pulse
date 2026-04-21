@@ -1,7 +1,15 @@
-// Pulse API client for the extension. Storage (token + base URL)
-// lives in the background service worker — dynamically-imported
-// modules only see `chrome.runtime`, not `chrome.storage`. We route
-// every storage call through `chrome.runtime.sendMessage`.
+// Pulse API client for the extension. Two layers of indirection
+// through the background service worker:
+//
+//   1. Storage (token + base URL) — content scripts' imported
+//      modules can't reach chrome.storage. Background owns it.
+//   2. fetch() — MV3 content scripts can't bypass CORS (Chrome 73+).
+//      Background has host_permissions and runs in its own origin.
+//
+// So the content script never talks directly to the Pulse backend —
+// it sendMessages the background, which does the fetch. This is the
+// Chrome-recommended pattern for cross-origin calls from content
+// scripts and avoids every CORS / mixed-content edge case.
 
 async function sendBackground(kind, payload = {}) {
   return new Promise((resolve, reject) => {
@@ -31,38 +39,56 @@ export async function setConfig(patch) {
   return sendBackground("config.set", { patch });
 }
 
-async function request(path, { method = "GET", body } = {}) {
-  const { baseUrl, token } = await getConfig();
-  if (!token) {
-    throw new PulseApiError(
-      "No Pulse API token set. Open options to paste one.",
-      401
-    );
-  }
-  const res = await fetch(`${baseUrl}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new PulseApiError(
-      data?.error || `${res.status} ${res.statusText}`,
-      res.status
-    );
-  }
-  return data;
-}
-
 export class PulseApiError extends Error {
   constructor(message, status) {
     super(message);
     this.name = "PulseApiError";
     this.status = status;
   }
+}
+
+async function request(path, { method = "GET", body } = {}) {
+  // api.call is handled in background.js — it reads config, does
+  // the fetch from the worker's origin (CORS-free), and returns a
+  // normalized envelope.
+  const reply = await new Promise((resolve, reject) => {
+    try {
+      chrome.runtime.sendMessage(
+        { kind: "api.call", path, method, body },
+        (r) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          resolve(r);
+        }
+      );
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
+  });
+
+  if (!reply || reply.ok !== true) {
+    // Two flavors of failure:
+    //   - reply.ok=false with .data = the fetch happened but the
+    //     Pulse API returned non-2xx. Bubble the API error message.
+    //   - !reply.ok (outer) = the background router itself failed.
+    const bg = reply?.data;
+    const status = bg?.status ?? reply?.data?.status ?? 0;
+    const message =
+      bg?.error ?? reply?.error ?? "background call failed";
+    throw new PulseApiError(message, status);
+  }
+
+  // reply.data is the envelope { ok, status, data, error }.
+  const envelope = reply.data;
+  if (!envelope.ok) {
+    throw new PulseApiError(
+      envelope.error ?? `${envelope.status} error`,
+      envelope.status
+    );
+  }
+  return envelope.data;
 }
 
 export async function lookupProspect({ platform, handle }) {

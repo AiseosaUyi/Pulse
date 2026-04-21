@@ -68,6 +68,54 @@ async function clearLog() {
   await writeLog([]);
 }
 
+/**
+ * Cross-origin fetch proxy. MV3 content scripts can't bypass CORS
+ * (Chrome 73+), so every API call from lib/api.js is forwarded
+ * here. The service worker has full host_permissions reach and
+ * doesn't inherit the page's CORS rules.
+ *
+ * Takes a relative `path` (e.g. "/api/ext/prospect"), not a full
+ * URL — the worker prepends the tenant's base URL from config
+ * and adds the bearer token. That keeps the token out of the
+ * content script entirely.
+ */
+async function apiCall(msg) {
+  const { baseUrl, token } = await getConfig();
+  if (!token) {
+    return { ok: false, status: 401, error: "No Pulse API token set" };
+  }
+  const path = String(msg.path ?? "");
+  const method = String(msg.method ?? "GET").toUpperCase();
+  const body = msg.body ?? null;
+
+  try {
+    const res = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const parsed = await res.json().catch(() => ({}));
+    return {
+      ok: res.ok,
+      status: res.status,
+      data: parsed,
+      error: res.ok ? null : parsed?.error ?? `${res.status} ${res.statusText}`,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      error:
+        err && typeof err === "object" && "message" in err
+          ? String(err.message)
+          : String(err),
+    };
+  }
+}
+
 // Single onMessage router. Every handler returns a Promise; we
 // wrap it below in a sendResponse dispatcher that keeps the
 // message channel open with `return true`.
@@ -78,6 +126,7 @@ const HANDLERS = {
   "log.write": (msg) => writeLog(msg.entries ?? []),
   "log.append": (msg) => appendLogEntry(msg.entry ?? {}),
   "log.clear": () => clearLog(),
+  "api.call": (msg) => apiCall(msg),
 };
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
