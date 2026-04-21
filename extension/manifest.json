@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pulse Outbound",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Draft personalized IG / TikTok / Twitter / LinkedIn DMs from Pulse while viewing a prospect's profile. Human-in-the-loop by design.",
   "action": {
     "default_popup": "popup.html",

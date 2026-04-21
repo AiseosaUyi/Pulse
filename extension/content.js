@@ -543,6 +543,7 @@
       <div class="pulse-ext-log__footer">
         <span>Token: <strong>${escapeHtml(tokenStatus)}</strong></span>
         <span>Base: <code>${escapeHtml(baseUrl)}</code></span>
+        <span>v${escapeHtml(chrome.runtime.getManifest().version)}</span>
       </div>
     `;
     logPanel
