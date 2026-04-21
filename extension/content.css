@@ -225,3 +225,76 @@
   line-height: 1.4;
   color: inherit;
 }
+
+/* v2 additions — Save-first flow */
+
+.pulse-ext-toast {
+  font-size: 12.5px;
+  line-height: 1.4;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(21, 128, 61, 0.08);
+  color: #15803d;
+  margin-bottom: 10px;
+}
+
+.pulse-ext-status {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 15, 16, 0.04);
+  margin-bottom: 10px;
+}
+
+.pulse-ext-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pulse-ext-chip {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(15, 15, 16, 0.08);
+  color: #6b6b70;
+}
+
+.pulse-ext-chip--primary {
+  background: rgba(173, 17, 44, 0.12);
+  color: #ad112c;
+}
+
+.pulse-ext-muted {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #6b6b70;
+  margin: 6px 0 0;
+}
+
+.pulse-ext-details {
+  border-top: 1px solid rgba(15, 15, 16, 0.08);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+
+.pulse-ext-details > summary {
+  font-size: 11.5px;
+  color: #6b6b70;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.pulse-ext-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pulse-ext-details__body {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

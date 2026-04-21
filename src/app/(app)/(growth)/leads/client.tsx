@@ -52,8 +52,14 @@ import {
   type ProspectSearchRecord,
   type ProspectStatus,
 } from "@/lib/types/outbound";
+import { TemplatesView } from "./templates-view";
+import { resolvePrimaryTemplate } from "@/lib/actions/outbound-templates";
+import type {
+  OutboundTemplateRecord,
+  TemplatePlatform,
+} from "@/lib/types/outbound-templates";
 
-type Tab = "pipeline" | "inbox" | "discovery";
+type Tab = "pipeline" | "inbox" | "discovery" | "templates";
 
 const STATUS_TONE: Record<ProspectStatus, string> = {
   new: "bg-sidebar text-text-muted",
@@ -76,12 +82,14 @@ export function OutboundClient({
   initialInbox,
   searches,
   initialDmsByProspect,
+  initialTemplates,
 }: {
   tenantSlug: string;
   initialProspects: ProspectRecord[];
   initialInbox: InboundMessageRecord[];
   searches: ProspectSearchRecord[];
   initialDmsByProspect: Array<[string, OutboundDmRecord[]]>;
+  initialTemplates: OutboundTemplateRecord[];
 }) {
   const dialogs = useDialogs();
   const searchParams = useSearchParams();
@@ -264,6 +272,11 @@ export function OutboundClient({
               label: "Discovery",
               count: searches.length,
             },
+            {
+              key: "templates" as const,
+              label: "Templates",
+              count: initialTemplates.length,
+            },
           ] satisfies Array<{ key: Tab; label: string; count: number }>
         ).map((t) => (
           <button
@@ -302,6 +315,11 @@ export function OutboundClient({
               <StatusFilter value={statusFilter} onChange={setStatusFilter} />
               <AddProspectQuickForm onSubmit={handleAddProspect} />
               <BulkQualifyButton tenantSlug={tenantSlug} prospects={prospects} />
+              <CopyPrimaryTemplateButton
+                tenantSlug={tenantSlug}
+                templates={initialTemplates}
+                prospect={selectedProspect}
+              />
             </div>
 
             {filtered.length === 0 ? (
@@ -401,6 +419,10 @@ export function OutboundClient({
 
       {tab === "discovery" && (
         <DiscoveryView tenantSlug={tenantSlug} searches={searches} />
+      )}
+
+      {tab === "templates" && (
+        <TemplatesView tenantSlug={tenantSlug} initial={initialTemplates} />
       )}
     </div>
   );
@@ -1565,6 +1587,85 @@ function BulkQualifyButton({
         <Sparkles size={12} />
       )}
       Qualify {newCount} new
+    </Button>
+  );
+}
+
+function CopyPrimaryTemplateButton({
+  tenantSlug,
+  templates,
+  prospect,
+}: {
+  tenantSlug: string;
+  templates: OutboundTemplateRecord[];
+  prospect: ProspectRecord | null;
+}) {
+  const dialogs = useDialogs();
+  const [isPending, startTransition] = useTransition();
+  const [copied, setCopied] = useState(false);
+
+  // Resolve a sensible default platform — the selected prospect's,
+  // or fall back to the platform with the most primary-having
+  // templates, or 'any'.
+  const platform: TemplatePlatform =
+    prospect && prospect.platform !== "manual" && prospect.platform !== "other"
+      ? (prospect.platform as TemplatePlatform)
+      : (templates.find((t) => t.isPrimary)?.platform ?? "any");
+
+  const hasAnyTemplate = templates.length > 0;
+
+  const handleClick = () => {
+    startTransition(async () => {
+      const res = await resolvePrimaryTemplate(tenantSlug, platform);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't load template",
+          subtitle: res.error,
+          tone: "warning",
+        });
+        return;
+      }
+      if (!res.template) {
+        await dialogs.alert({
+          title: "No primary template set",
+          subtitle: hasAnyTemplate
+            ? `Mark one of your templates as Primary for ${platform} in the Templates tab.`
+            : "Save a template first in the Templates tab, then mark it as primary.",
+          tone: "info",
+        });
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(res.template.body);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch {
+        await dialogs.alert({
+          title: "Couldn't copy",
+          subtitle: "Clipboard access denied.",
+          tone: "warning",
+        });
+      }
+    });
+  };
+
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={handleClick}
+      disabled={isPending}
+      className="gap-1.5"
+      title={`Copy primary template for ${platform}`}
+    >
+      {isPending ? (
+        <Loader2 size={12} className="animate-spin" />
+      ) : copied ? (
+        <Check size={12} className="text-status-green" />
+      ) : (
+        <Copy size={12} />
+      )}
+      {copied ? "Copied" : "Copy primary"}
     </Button>
   );
 }

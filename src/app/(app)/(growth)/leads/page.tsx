@@ -13,6 +13,7 @@ import {
   countOutboundKpis,
 } from "@/lib/services/outbound";
 import { listAllDmsByProspect } from "@/lib/services/outbound-dms-bulk";
+import { listTemplates } from "@/lib/services/outbound-templates";
 import { OutboundClient } from "./client";
 import type { OutboundDmRecord } from "@/lib/types/outbound";
 
@@ -27,13 +28,15 @@ export default async function LeadsPage() {
     );
   }
 
-  const [prospects, searches, inbox, kpis, dmsByProspect] = await Promise.all([
-    listProspects(tenant.slug, { limit: 100 }),
-    listSearches(tenant.slug),
-    listInbox(tenant.slug, 30),
-    countOutboundKpis(tenant.slug),
-    listAllDmsByProspect(tenant.slug),
-  ]);
+  const [prospects, searches, inbox, kpis, dmsByProspect, templates] =
+    await Promise.all([
+      listProspects(tenant.slug, { limit: 100 }),
+      listSearches(tenant.slug),
+      listInbox(tenant.slug, 30),
+      countOutboundKpis(tenant.slug),
+      listAllDmsByProspect(tenant.slug),
+      listTemplates(tenant.slug),
+    ]);
 
   // Flatten the Map into a serializable array for the client component.
   const dms: Array<[string, OutboundDmRecord[]]> = Array.from(
@@ -70,6 +73,7 @@ export default async function LeadsPage() {
         initialInbox={inbox}
         searches={searches}
         initialDmsByProspect={dms}
+        initialTemplates={templates}
       />
     </div>
   );

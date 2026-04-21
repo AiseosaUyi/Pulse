@@ -67,3 +67,14 @@ export async function upsertProspect(input) {
 export async function draftDm(input) {
   return request("/api/ext/draft-dm", { method: "POST", body: input });
 }
+
+export async function fetchPrimaryTemplate(platform) {
+  const params = new URLSearchParams({ platform });
+  return request(`/api/ext/primary-template?${params.toString()}`);
+}
+
+export async function markDmSent(dmId) {
+  return request(`/api/ext/dm/${encodeURIComponent(dmId)}/sent`, {
+    method: "POST",
+  });
+}
