@@ -14,31 +14,41 @@ async function setTenantCookie(slug: string) {
   });
 }
 
+function tokenCandidates(raw: string): string[] {
+  const out = new Set<string>([raw]);
+  try {
+    out.add(decodeURIComponent(raw));
+  } catch {}
+  return [...out];
+}
+
 export async function acceptInvite(formData: FormData) {
-  const token = String(formData.get("token") ?? "").trim();
+  const rawToken = String(formData.get("token") ?? "").trim();
   const displayName = String(formData.get("displayName") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
   function fail(message: string): never {
-    const path = token ? `/invite/${encodeURIComponent(token)}` : "/login";
+    const path = rawToken ? `/invite/${encodeURIComponent(rawToken)}` : "/login";
     redirect(`${path}?error=${encodeURIComponent(message)}`);
   }
 
-  if (!token) redirect("/login?error=" + encodeURIComponent("Missing invite token"));
+  if (!rawToken) redirect("/login?error=" + encodeURIComponent("Missing invite token"));
   if (!displayName) fail("Full name is required");
   if (password.length < 8) fail("Password must be at least 8 characters");
 
   const admin = createAdminClient();
 
+  const candidates = tokenCandidates(rawToken);
   const { data: invite } = await admin
     .from("invitations")
-    .select("email, role, tenant_slug")
-    .eq("token", token)
+    .select("token, email, role, tenant_slug")
+    .in("token", candidates)
     .is("accepted_at", null)
     .gt("expires_at", new Date().toISOString())
     .maybeSingle();
 
   if (!invite) fail("This invite is invalid or expired");
+  const token = invite.token;
 
   const email = invite.email.toLowerCase();
 

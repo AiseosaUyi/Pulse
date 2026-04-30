@@ -12,12 +12,20 @@ interface InviteContext {
   inviterName: string | null;
 }
 
-async function loadInvite(token: string): Promise<InviteContext | null> {
+function tokenCandidates(raw: string): string[] {
+  const out = new Set<string>([raw]);
+  try {
+    out.add(decodeURIComponent(raw));
+  } catch {}
+  return [...out];
+}
+
+async function loadInvite(rawToken: string): Promise<InviteContext | null> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("invitations")
     .select("email, role, tenant_slug, invited_by, tenants(name)")
-    .eq("token", token)
+    .in("token", tokenCandidates(rawToken))
     .is("accepted_at", null)
     .gt("expires_at", new Date().toISOString())
     .maybeSingle();
