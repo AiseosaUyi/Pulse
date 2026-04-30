@@ -49,7 +49,15 @@ export default async function LoginPage({
           />
         </div>
         <div>
-          <Label htmlFor="login-password">Password</Label>
+          <div className="flex items-center justify-between mb-1.5">
+            <Label htmlFor="login-password" className="mb-0">Password</Label>
+            <Link
+              href="/forgot-password"
+              className="text-xs text-primary-500 hover:text-primary-600 [font-family:'Satoshi-500',var(--font-sans)]"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <PasswordInput name="password" required autoComplete="current-password" placeholder="Enter your password" />
         </div>
         <Button type="submit" size="xl" className="w-full">

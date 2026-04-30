@@ -181,6 +181,121 @@ export function buildInviteEmail({ tenantName, inviterName, role, acceptUrl }: I
   return { subject, html, text };
 }
 
+interface OtpEmailInput {
+  to: string;
+  otp: string;
+  expiresInMinutes: number;
+}
+
+export function buildPasswordOtpEmail({ otp, expiresInMinutes }: OtpEmailInput): { subject: string; html: string; text: string } {
+  const subject = `Your PULSE password reset code: ${otp}`;
+  const previewText = `Use ${otp} to reset your PULSE password. Expires in ${expiresInMinutes} minutes.`;
+
+  const otpDigits = otp.split("");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="x-apple-disable-message-reformatting" />
+<meta name="color-scheme" content="light" />
+<meta name="supported-color-schemes" content="light" />
+<title>${escapeHtml(subject)}</title>
+<style>
+  @media (max-width: 480px) {
+    .container { width: 100% !important; }
+    .px { padding-left: 24px !important; padding-right: 24px !important; }
+    .h1 { font-size: 22px !important; line-height: 30px !important; }
+    .otp { font-size: 32px !important; letter-spacing: 8px !important; }
+    .digit { width: 36px !important; height: 48px !important; font-size: 24px !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#f6f5f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;-webkit-font-smoothing:antialiased;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(previewText)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6f5f2;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" class="container" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:560px;">
+          <tr>
+            <td style="padding:0 0 24px 0;">
+              <span style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-weight:900;font-size:28px;letter-spacing:-0.5px;color:#ad112c;">PULSE</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#ffffff;border:1px solid #e8e4dc;border-radius:16px;overflow:hidden;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:6px;background:linear-gradient(135deg,#ad112c 0%,#7a0a1f 100%);"></td>
+                </tr>
+                <tr>
+                  <td class="px" style="padding:40px 48px 8px 48px;">
+                    <p style="margin:0 0 8px 0;font-size:13px;font-weight:600;letter-spacing:0.6px;text-transform:uppercase;color:#ad112c;">Password reset</p>
+                    <h1 class="h1" style="margin:0 0 16px 0;font-size:26px;line-height:34px;font-weight:800;letter-spacing:-0.4px;color:#0d0d0d;">
+                      Your verification code
+                    </h1>
+                    <p style="margin:0 0 24px 0;font-size:15px;line-height:22px;color:#3f3f3f;">
+                      Enter the 6-digit code below to set a new password. This code expires in <strong style="color:#0d0d0d;">${expiresInMinutes} minutes</strong>.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="px" style="padding:0 48px 8px 48px;" align="center">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        ${otpDigits
+                          .map(
+                            (d) => `<td class="digit" style="width:44px;height:56px;background:#faf8f4;border:1px solid #ece7dd;border-radius:10px;text-align:center;vertical-align:middle;font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;font-size:28px;font-weight:700;color:#0d0d0d;letter-spacing:0;padding:0 4px;">${escapeHtml(d)}</td><td style="width:6px;"></td>`
+                          )
+                          .join("")}
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="px" style="padding:24px 48px 0 48px;" align="center">
+                    <p style="margin:0;font-size:13px;line-height:20px;color:#7a7a7a;">
+                      Or copy this code: <strong style="color:#ad112c;font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;letter-spacing:1px;">${escapeHtml(otp)}</strong>
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="px" style="padding:32px 48px 40px 48px;">
+                    <div style="height:1px;background:#ece7dd;margin-bottom:20px;"></div>
+                    <p style="margin:0;font-size:12px;line-height:18px;color:#9a9a9a;">
+                      If you didn&rsquo;t request a password reset, you can safely ignore this email — your password won&rsquo;t change.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 8px 0 8px;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9a9a9a;">
+                Sent by PULSE — your marketing OS.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = [
+    `Your PULSE password reset code: ${otp}`,
+    "",
+    `This code expires in ${expiresInMinutes} minutes.`,
+    "",
+    "If you didn't request this, ignore this email — your password won't change.",
+  ].join("\n");
+
+  return { subject, html, text };
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
