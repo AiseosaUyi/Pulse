@@ -38,7 +38,9 @@ export function TenantSwitcher({ tenants, currentSlug }: TenantSwitcherProps) {
 
   async function signOut() {
     const supabase = createClient();
-    await supabase.auth.signOut();
+    // scope: 'local' — only this device. Default 'global' revokes every
+    // refresh token for the user and signs them out everywhere.
+    await supabase.auth.signOut({ scope: "local" });
     router.push("/login");
     router.refresh();
   }

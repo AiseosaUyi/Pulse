@@ -15,12 +15,15 @@ export async function createClient() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // called from a Server Component — ignore; proxy refreshes the session.
+          for (const { name, value, options } of cookiesToSet) {
+            try {
+              cookieStore.set(name, value, options);
+            } catch (err) {
+              // Only swallow the expected Server-Component write error;
+              // any other failure is a real bug that must surface.
+              const msg = err instanceof Error ? err.message : String(err);
+              if (!msg.includes("Cookies can only be modified")) throw err;
+            }
           }
         },
       },

@@ -107,6 +107,11 @@ export async function acceptInvite(formData: FormData) {
     .eq("token", token);
 
   const supabase = await createClient();
+  // Clear any pre-existing session (e.g. the inviter testing their own invite)
+  // so the chunked auth cookies are wiped before the invitee's session is
+  // written. scope:'local' only touches this browser.
+  await supabase.auth.signOut({ scope: "local" });
+
   const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
   if (signInErr) {
     fail(`Account ready but sign-in failed: ${signInErr.message}. Try the login page.`);
