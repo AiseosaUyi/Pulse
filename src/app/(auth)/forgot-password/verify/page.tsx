@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Mail } from "lucide-react";
+import { ArrowLeft, Mail, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { OtpInput } from "./OtpInput";
@@ -9,11 +9,13 @@ import { verifyPasswordOtp, requestPasswordReset } from "../actions";
 export default async function VerifyOtpPage({
   searchParams,
 }: {
-  searchParams: Promise<{ email?: string; error?: string }>;
+  searchParams: Promise<{ email?: string; error?: string; resent?: string }>;
 }) {
   const params = await searchParams;
   const email = params.email?.trim().toLowerCase();
   if (!email) redirect("/forgot-password");
+
+  const justResent = params.resent === "1";
 
   return (
     <div className="bg-card border border-white-200 rounded-2xl p-8">
@@ -45,16 +47,24 @@ export default async function VerifyOtpPage({
       </form>
 
       <div className="mt-6 flex items-center justify-center gap-3 text-sm">
-        <form action={requestPasswordReset}>
-          <input type="hidden" name="email" value={email} />
-          <button
-            type="submit"
-            className="inline-flex items-center gap-1.5 text-gray-1000 hover:text-primary-500 transition-colors cursor-pointer [font-family:'Satoshi-500',var(--font-sans)]"
-          >
-            <Mail size={14} />
-            Resend code
-          </button>
-        </form>
+        {justResent ? (
+          <span className="inline-flex items-center gap-1.5 text-success-500 [font-family:'Satoshi-500',var(--font-sans)]">
+            <CheckCircle2 size={14} />
+            New code sent
+          </span>
+        ) : (
+          <form action={requestPasswordReset}>
+            <input type="hidden" name="email" value={email} />
+            <input type="hidden" name="from" value="verify" />
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 text-gray-1000 hover:text-primary-500 transition-colors cursor-pointer [font-family:'Satoshi-500',var(--font-sans)]"
+            >
+              <Mail size={14} />
+              Resend code
+            </button>
+          </form>
+        )}
         <span className="text-white-200">·</span>
         <Link
           href="/login"
