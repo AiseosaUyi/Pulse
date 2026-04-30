@@ -8,6 +8,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getTenant } from "@/lib/services/tenants";
 import { getBrandContext } from "@/lib/ai/brand-positioning";
+import { getOutboundFilters } from "@/lib/server/outbound-filters";
 import { qualifyProspectAi, OutboundAiError } from "@/lib/ai/outbound";
 import {
   inputFromSearch,
@@ -141,7 +142,10 @@ async function qualifyInlineIfRequested(
   if (inserted.length === 0) return 0;
   const tenant = await getTenant(tenantSlug);
   if (!tenant) return 0;
-  const { voice, positioning } = await getBrandContext(tenantSlug);
+  const [{ voice, positioning }, filters] = await Promise.all([
+    getBrandContext(tenantSlug),
+    getOutboundFilters(tenantSlug),
+  ]);
 
   const admin = createAdminClient();
   let qualified = 0;
@@ -153,6 +157,7 @@ async function qualifyInlineIfRequested(
         tenantName: tenant.name,
         voice,
         positioning,
+        filters,
         prospect,
       });
       await admin
