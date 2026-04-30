@@ -121,6 +121,30 @@ export async function verifyPasswordOtp(formData: FormData) {
   }
 
   const admin = createAdminClient();
+  const cookieStore = await cookies();
+
+  // Idempotent re-submit: if the caller already holds a reset_token cookie
+  // that points at a still-valid row for this email (i.e. they just
+  // verified successfully and the form was double-submitted or the back
+  // button bounced them here), forward them to /reset instead of running
+  // the OTP check against a row whose otp_hash is already cleared.
+  const existingToken = cookieStore.get(RESET_COOKIE)?.value;
+  if (existingToken) {
+    const { data: existing } = await admin
+      .from("password_reset_otps")
+      .select("email, expires_at")
+      .eq("reset_token", existingToken)
+      .is("used_at", null)
+      .maybeSingle();
+    if (
+      existing &&
+      existing.email.toLowerCase() === email &&
+      new Date(existing.expires_at).getTime() > Date.now()
+    ) {
+      redirect("/forgot-password/reset");
+    }
+  }
+
   const { data: row } = await admin
     .from("password_reset_otps")
     .select("id, otp_hash, attempts, expires_at, used_at")
@@ -164,7 +188,6 @@ export async function verifyPasswordOtp(formData: FormData) {
     })
     .eq("id", row.id);
 
-  const cookieStore = await cookies();
   cookieStore.set(RESET_COOKIE, resetToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
