@@ -22,10 +22,14 @@ export async function login(formData: FormData) {
 
   // Ensure the tenant cookie points to a tenant the user belongs to.
   const cookieStore = await cookies();
-  const { data: memberships } = await supabase
-    .from("memberships")
-    .select("tenant_slug")
-    .order("created_at", { ascending: true });
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: memberships } = user
+    ? await supabase
+        .from("memberships")
+        .select("tenant_slug")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true })
+    : { data: [] };
 
   const slugs = (memberships ?? []).map((m) => m.tenant_slug);
   const currentCookie = cookieStore.get("tenant")?.value;

@@ -47,9 +47,17 @@ export async function requireUser(): Promise<UserProfile> {
 // Returns all tenants the current user is a member of.
 export async function getUserTenants(): Promise<TenantMembership[]> {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // Must filter by user_id explicitly: the memberships RLS policy lets you
+  // read any membership in a tenant you belong to (so /settings/team can
+  // display co-members). Without this filter the query would return Aise's
+  // owner row to a user who's only a member of the same tenant.
   const { data, error } = await supabase
     .from("memberships")
     .select("role, tenant_slug, tenants (slug, name)")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: true });
 
   if (error || !data) return [];

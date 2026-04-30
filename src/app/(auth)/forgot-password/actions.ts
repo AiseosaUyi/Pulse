@@ -232,10 +232,14 @@ export async function resetPassword(formData: FormData) {
   }
 
   // Make sure tenant cookie points at one of the user's tenants.
-  const { data: memberships } = await supabase
-    .from("memberships")
-    .select("tenant_slug")
-    .order("created_at", { ascending: true });
+  const { data: { user: signedIn } } = await supabase.auth.getUser();
+  const { data: memberships } = signedIn
+    ? await supabase
+        .from("memberships")
+        .select("tenant_slug")
+        .eq("user_id", signedIn.id)
+        .order("created_at", { ascending: true })
+    : { data: [] };
   const slugs = (memberships ?? []).map((m) => m.tenant_slug);
   if (slugs.length > 0) {
     const current = cookieStore.get("tenant")?.value;
