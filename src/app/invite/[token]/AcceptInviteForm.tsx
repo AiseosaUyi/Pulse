@@ -4,21 +4,10 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { acceptInvite } from "./actions";
 
-export function AcceptInviteForm({ token, email }: { token: string; email: string }) {
+export function AcceptInviteForm({ token }: { token: string }) {
   return (
     <form action={acceptInvite} className="space-y-5">
       <input type="hidden" name="token" value={token} />
-
-      <div>
-        <Label htmlFor="iv-email">Email</Label>
-        <Input
-          id="iv-email"
-          type="email"
-          defaultValue={email}
-          readOnly
-          className="opacity-70 cursor-not-allowed"
-        />
-      </div>
 
       <div>
         <Label htmlFor="iv-name">Full name</Label>
@@ -28,7 +17,7 @@ export function AcceptInviteForm({ token, email }: { token: string; email: strin
           type="text"
           required
           autoComplete="name"
-          placeholder="Jane Doe"
+          placeholder="Enter your name"
         />
       </div>
 

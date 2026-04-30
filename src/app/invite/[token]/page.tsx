@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Logo } from "@/components/ui/Logo";
 import { AcceptInviteForm } from "./AcceptInviteForm";
-import { Mail, Building2 } from "lucide-react";
+import { Mail } from "lucide-react";
 
 interface InviteContext {
   email: string;
@@ -110,32 +110,17 @@ export default async function InvitePage({
                 . Set your name and password below to get started.
               </p>
 
-              <div className="mb-6 space-y-2.5 p-4 rounded-xl bg-white-100 dark:bg-white-50 border border-white-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center text-primary-500">
-                    <Building2 size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold tracking-wide uppercase text-gray-500">
-                      Organization
-                    </p>
-                    <p className="text-sm text-gray-1100 truncate [font-family:'Satoshi-500',var(--font-sans)]">
-                      {invite.tenantName}
-                    </p>
-                  </div>
+              <div className="mb-6 flex items-center gap-3 p-3.5 rounded-xl bg-white-100 dark:bg-white-50 border border-white-200">
+                <div className="w-9 h-9 rounded-lg bg-primary-50 flex items-center justify-center text-primary-500 shrink-0">
+                  <Mail size={16} />
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center text-primary-500">
-                    <Mail size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold tracking-wide uppercase text-gray-500">
-                      Email
-                    </p>
-                    <p className="text-sm text-gray-1100 truncate [font-family:'Satoshi-500',var(--font-sans)]">
-                      {invite.email}
-                    </p>
-                  </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-semibold tracking-[0.14em] uppercase text-gray-500 leading-none mb-1">
+                    Joining as
+                  </p>
+                  <p className="text-sm text-gray-1100 truncate [font-family:'Satoshi-500',var(--font-sans)]">
+                    {invite.email}
+                  </p>
                 </div>
               </div>
 
@@ -145,7 +130,7 @@ export default async function InvitePage({
                 </div>
               )}
 
-              <AcceptInviteForm token={token} email={invite.email} />
+              <AcceptInviteForm token={token} />
 
               <p className="mt-6 text-sm text-gray-1000 text-center">
                 Already have an account?{" "}
