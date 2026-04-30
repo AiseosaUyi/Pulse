@@ -41,14 +41,34 @@ export async function acceptInvite(formData: FormData) {
   const candidates = tokenCandidates(rawToken);
   const { data: invite } = await admin
     .from("invitations")
-    .select("token, email, role, tenant_slug")
+    .select("token, email, role, tenant_slug, accepted_at")
     .in("token", candidates)
-    .is("accepted_at", null)
     .gt("expires_at", new Date().toISOString())
     .maybeSingle();
 
   if (!invite) fail("This invite is invalid or expired");
   const token = invite.token;
+
+  // Idempotent re-submit: if this invite was already accepted (e.g. user
+  // double-submitted or hit back), try to sign them in with what they typed
+  // and forward to the dashboard. Falls back to login on mismatch.
+  if (invite.accepted_at) {
+    const supabase = await createClient();
+    await supabase.auth.signOut({ scope: "local" });
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: invite.email.toLowerCase(),
+      password,
+    });
+    if (signInErr) {
+      redirect(
+        `/login?next=${encodeURIComponent("/dashboard")}&error=${encodeURIComponent(
+          "This invite was already accepted. Sign in to continue."
+        )}`,
+      );
+    }
+    await setTenantCookie(invite.tenant_slug);
+    redirect("/dashboard");
+  }
 
   const email = invite.email.toLowerCase();
 

@@ -10,6 +10,7 @@ interface InviteContext {
   tenantSlug: string;
   role: string;
   inviterName: string | null;
+  alreadyAccepted: boolean;
 }
 
 function tokenCandidates(raw: string): string[] {
@@ -24,9 +25,8 @@ async function loadInvite(rawToken: string): Promise<InviteContext | null> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("invitations")
-    .select("email, role, tenant_slug, invited_by, tenants(name)")
+    .select("email, role, tenant_slug, invited_by, accepted_at, tenants(name)")
     .in("token", tokenCandidates(rawToken))
-    .is("accepted_at", null)
     .gt("expires_at", new Date().toISOString())
     .maybeSingle();
 
@@ -49,6 +49,7 @@ async function loadInvite(rawToken: string): Promise<InviteContext | null> {
     tenantSlug: data.tenant_slug,
     role: data.role,
     inviterName,
+    alreadyAccepted: Boolean(data.accepted_at),
   };
 }
 
@@ -83,6 +84,25 @@ export default async function InvitePage({
             </p>
             <Link
               href="/login"
+              className="inline-block text-sm text-primary-500 hover:text-primary-600 [font-family:'Satoshi-500',var(--font-sans)]"
+            >
+              Go to sign in
+            </Link>
+          </div>
+        ) : invite.alreadyAccepted ? (
+          <div className="bg-card border border-white-200 rounded-2xl p-8 text-center">
+            <h2
+              className="text-xl text-gray-1100 mb-2"
+              style={{ fontFamily: "'Satoshi-900', var(--font-sans)" }}
+            >
+              You&apos;re all set
+            </h2>
+            <p className="text-sm text-gray-1000 mb-6">
+              This invite has already been accepted. Sign in with the password you set
+              to continue to {invite.tenantName}.
+            </p>
+            <Link
+              href={`/login?next=${encodeURIComponent("/dashboard")}`}
               className="inline-block text-sm text-primary-500 hover:text-primary-600 [font-family:'Satoshi-500',var(--font-sans)]"
             >
               Go to sign in
