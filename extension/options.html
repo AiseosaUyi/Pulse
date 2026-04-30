@@ -90,6 +90,32 @@
         <button id="clear" class="btn btn-ghost">Disconnect</button>
         <button id="save" class="btn btn-primary">Save</button>
       </div>
+
+      <hr style="border:0; border-top:1px solid rgba(15,15,16,0.08); margin:24px 0;" />
+
+      <h2 style="margin:0 0 4px; font-size:15px;">Passive capture</h2>
+      <p>
+        When on, Pulse quietly captures post authors, commenters, and
+        tagged people you naturally view on Instagram — no scrolling or
+        automation, so your account stays safe. The tenant-wide toggle
+        lives in Pulse &rarr; Settings &rarr; Outbound filters; this
+        switch lets you disable capture on <em>this</em> device only.
+      </p>
+      <label style="display:flex; align-items:center; gap:8px; font-weight:500; margin-top:8px;">
+        <input id="passive-disabled" type="checkbox" />
+        Disable passive capture on this device
+      </label>
+
+      <h2 style="margin:20px 0 4px; font-size:15px;">Filter set</h2>
+      <p>
+        Event-intent keywords, geographic scope, and competitor
+        platforms that drive local pre-scoring. Edit in Pulse.
+      </p>
+      <a id="open-filters" href="#" target="_blank" rel="noreferrer"
+         style="color:#ad112c; font-size:12.5px; text-decoration:none;">
+        Open /settings/outbound-filters &rarr;
+      </a>
+      <div id="filter-summary" class="hint" style="margin-top:10px;">Loading filters…</div>
     </main>
 
     <script type="module" src="options.js"></script>

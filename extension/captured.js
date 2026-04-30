@@ -68,11 +68,18 @@ async function refresh() {
 function visibleEntries() {
   const q = search.trim().toLowerCase();
   return all.filter((e) => {
-    if (filter !== "all" && e.status !== filter) return false;
+    if (filter === "auto-discarded") {
+      if (e.status !== "skipped" || e.skipReason !== "auto_no_intent_match") {
+        return false;
+      }
+    } else if (filter !== "all" && e.status !== filter) {
+      return false;
+    }
     if (!q) return true;
     return (
       e.handle.toLowerCase().includes(q) ||
-      (e.hashtag ?? "").toLowerCase().includes(q)
+      (e.hashtag ?? "").toLowerCase().includes(q) ||
+      (e.intentQuote ?? "").toLowerCase().includes(q)
     );
   });
 }
@@ -130,6 +137,9 @@ function render() {
   listEl.querySelectorAll("[data-action='skip-one']").forEach((b) => {
     b.addEventListener("click", handleSkipOne);
   });
+  listEl.querySelectorAll("[data-action='unskip-one']").forEach((b) => {
+    b.addEventListener("click", handleUnskipOne);
+  });
   listEl.querySelectorAll("[data-group-select]").forEach((b) => {
     b.addEventListener("click", handleGroupSelect);
   });
@@ -137,39 +147,90 @@ function render() {
 
 function renderRow(entry) {
   const ageLabel = formatAge(entry.capturedAt);
-  const sourceLabel =
-    entry.source === "scheduled" ? "scheduled crawl" : "captured visible";
+  const sourceLabel = sourceLabelFor(entry);
+  const sourceType = entry.sourceType ?? entry.source ?? "manual";
   const postBadge = entry.postUrl
     ? `<a href="${escapeHtml(entry.postUrl)}" target="_blank" rel="noreferrer" class="icon-btn">from post</a>`
     : "";
   const checked = selected.has(entry.id) ? "checked" : "";
   const disabled = entry.status !== "local" ? "disabled" : "";
+  const statusLabel = statusLabelFor(entry);
+  const statusClass =
+    entry.status === "skipped" && entry.skipReason === "auto_no_intent_match"
+      ? "skipped auto"
+      : escapeHtml(entry.status);
   return `
     <div class="row" data-id="${escapeHtml(entry.id)}">
       <input type="checkbox" data-id="${escapeHtml(entry.id)}" ${checked} ${disabled} />
-      <div>
+      <div class="body">
         <a class="handle" href="${escapeHtml(entry.profileUrl ?? "#")}" target="_blank" rel="noreferrer">
           @${escapeHtml(entry.handle)}
         </a>
         <div class="meta">
+          <span class="source-pill ${escapeHtml(sourceType)}">${escapeHtml(sourceType)}</span>
           ${ageLabel} · ${escapeHtml(sourceLabel)}
           ${entry.hashtag ? ` · #${escapeHtml(entry.hashtag)}` : ""}
         </div>
+        ${renderIntentQuote(entry)}
+        ${renderMatchChips(entry)}
       </div>
       <div>
-        <span class="status-pill ${escapeHtml(entry.status)}">${escapeHtml(entry.status)}</span>
+        <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
         ${postBadge}
       </div>
       <div>
         ${
           entry.status === "local"
             ? `<button class="icon-btn" data-action="skip-one" data-id="${escapeHtml(entry.id)}">skip</button>`
-            : ""
+            : entry.status === "skipped" && entry.skipReason === "auto_no_intent_match"
+              ? `<button class="icon-btn" data-action="unskip-one" data-id="${escapeHtml(entry.id)}">unskip</button>`
+              : ""
         }
         <button class="icon-btn" data-action="delete-one" data-id="${escapeHtml(entry.id)}">delete</button>
       </div>
     </div>
   `;
+}
+
+function sourceLabelFor(entry) {
+  if (entry.source === "passive") return "passive capture";
+  if (entry.source === "scheduled") return "scheduled crawl";
+  if (entry.source === "manual") return "manual save";
+  return "captured visible";
+}
+
+function statusLabelFor(entry) {
+  if (entry.status === "skipped" && entry.skipReason === "auto_no_intent_match") {
+    return "auto-discarded";
+  }
+  return entry.status;
+}
+
+function renderIntentQuote(entry) {
+  if (entry.intentQuote) {
+    return `<div class="intent-quote">${escapeHtml(entry.intentQuote)}</div>`;
+  }
+  if (entry.sourceType && entry.sourceType !== "opportunistic") {
+    return `<div class="intent-quote empty">No intent quote — likely low quality</div>`;
+  }
+  return "";
+}
+
+function renderMatchChips(entry) {
+  const q = entry.qualifyLocal;
+  if (!q) return "";
+  const chips = [];
+  for (const k of q.matchedKeywords ?? []) {
+    chips.push(`<span class="match-chip keyword">${escapeHtml(k)}</span>`);
+  }
+  for (const c of q.matchedCompetitors ?? []) {
+    chips.push(`<span class="match-chip competitor">${escapeHtml(c)}</span>`);
+  }
+  for (const g of q.matchedGeo ?? []) {
+    chips.push(`<span class="match-chip geo">${escapeHtml(g)}</span>`);
+  }
+  if (chips.length === 0) return "";
+  return `<div class="match-chips">${chips.join("")}</div>`;
 }
 
 function updateSummary() {
@@ -278,6 +339,19 @@ async function handleSkipOne(e) {
   }
 }
 
+async function handleUnskipOne(e) {
+  const id = e.target.dataset.id;
+  if (!id) return;
+  try {
+    // Back to local so the user can upload it after all — auditing
+    // a filter miss without manually re-capturing.
+    await capturedUpdateStatus([id], "local");
+    await refresh();
+  } catch (err) {
+    showAlert(`Couldn't restore: ${err?.message ?? err}`, "error");
+  }
+}
+
 async function handleDelete() {
   if (selected.size === 0) return;
   const ids = Array.from(selected);
@@ -301,13 +375,23 @@ async function handleUpload() {
       platform: e.platform,
       handle: e.handle,
       profileUrl: e.profileUrl,
+      displayName: e.displayName ?? null,
       signalSummary: buildSignalSummary(e),
       signalData: {
         source: e.source,
+        source_type: e.sourceType ?? null,
+        intent_quote: e.intentQuote ?? null,
+        caption_text: e.captionText ?? null,
+        comment_text: e.commentText ?? null,
         hashtag: e.hashtag ?? null,
         post_url: e.postUrl ?? null,
+        captured_from_url: e.capturedFromUrl ?? null,
         captured_at: new Date(e.capturedAt).toISOString(),
+        taken_at: e.takenAt ?? null,
         session_id: e.sessionId ?? null,
+        passive: e.passive === true,
+        dom_version: e.domVersion ?? null,
+        local_qualify: e.qualifyLocal ?? null,
       },
     }));
 
@@ -389,10 +473,16 @@ function csvCell(value) {
 
 function buildSignalSummary(entry) {
   const parts = [];
-  if (entry.hashtag) parts.push(`#${entry.hashtag}`);
-  parts.push(
-    entry.source === "scheduled" ? "scheduled crawl" : "captured from IG feed"
-  );
+  if (entry.sourceType) parts.push(`[${entry.sourceType}]`);
+  if (entry.intentQuote) {
+    const quote = entry.intentQuote.replace(/\s+/g, " ").trim().slice(0, 120);
+    parts.push(quote);
+  } else if (entry.hashtag) {
+    parts.push(`#${entry.hashtag}`);
+  }
+  if (entry.source === "passive") parts.push("passive capture");
+  else if (entry.source === "scheduled") parts.push("scheduled crawl");
+  else parts.push("captured from IG feed");
   parts.push(new Date(entry.capturedAt).toLocaleDateString());
   return parts.join(" · ");
 }

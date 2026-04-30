@@ -261,3 +261,107 @@ h1 {
 .ftr a:hover {
   text-decoration: underline;
 }
+
+/* Source-type pill — shows WHERE the handle came from. */
+.source-pill {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  font-weight: 600;
+}
+
+.source-pill.post_author {
+  background: rgba(21, 128, 61, 0.12);
+  color: #15803d;
+}
+.source-pill.commenter {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+}
+.source-pill.tagged {
+  background: rgba(147, 51, 234, 0.1);
+  color: #7e22ce;
+}
+.source-pill.opportunistic,
+.source-pill.manual,
+.source-pill.passive,
+.source-pill.scheduled {
+  background: rgba(15, 15, 16, 0.08);
+  color: #6b6b70;
+}
+
+/* Intent quote — the caption/comment text that triggered capture. */
+.intent-quote {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: rgba(15, 15, 16, 0.03);
+  border-left: 2px solid rgba(173, 17, 44, 0.3);
+  font-size: 12px;
+  color: #0f0f10;
+  line-height: 1.4;
+  font-style: italic;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.intent-quote.empty {
+  background: rgba(220, 38, 38, 0.04);
+  border-left-color: rgba(185, 28, 28, 0.3);
+  color: #b91c1c;
+  font-style: normal;
+}
+
+/* Match chips — what the local pre-score hit. */
+.match-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.match-chip {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(15, 15, 16, 0.05);
+  color: #6b6b70;
+  border: 1px solid rgba(15, 15, 16, 0.08);
+}
+
+.match-chip.keyword {
+  background: rgba(21, 128, 61, 0.08);
+  color: #15803d;
+  border-color: rgba(21, 128, 61, 0.2);
+}
+
+.match-chip.competitor {
+  background: rgba(234, 88, 12, 0.08);
+  color: #c2410c;
+  border-color: rgba(234, 88, 12, 0.2);
+}
+
+.match-chip.geo {
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.2);
+}
+
+/* Row body gets more vertical breathing room now that intent
+   quotes + chips live inside it. */
+.row {
+  align-items: flex-start;
+}
+
+.row .body {
+  min-width: 0;
+}
+
+.row .status-pill.skipped.auto {
+  background: rgba(234, 88, 12, 0.1);
+  color: #c2410c;
+}

@@ -10,6 +10,18 @@ const LOG_KEY = "pulseEventLog";
 const MAX_LOG_ENTRIES = 30;
 const CAPTURED_KEY = "pulseCaptured";
 const MAX_CAPTURED_ENTRIES = 500;
+const FILTERS_KEY = "pulseOutboundFilters";
+const FILTERS_TTL_MS = 10 * 60 * 1000;
+// Fallback shape when nothing is cached and the API is unreachable.
+// Keeps classifier callable on airplane-mode / 401. The server is the
+// source of truth — this is strictly a last-resort stub.
+const FALLBACK_FILTERS = {
+  keywords: [],
+  geoScope: [],
+  competitorUrls: [],
+  passiveCaptureEnabled: true,
+  dwellMs: 1200,
+};
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === "install") {
@@ -122,6 +134,16 @@ async function appendCaptured(items) {
     }
     existingLocal.add(key);
     added += 1;
+    const qualifyLocal =
+      raw?.qualifyLocal && typeof raw.qualifyLocal === "object"
+        ? raw.qualifyLocal
+        : null;
+    // Source-aware auto-routing: captures whose local pre-score
+    // returned 'discard' land in `status: skipped` with a reason
+    // tag. They stay visible under the Auto-discarded filter so
+    // the user can audit misses without them bleeding into the
+    // queue ready for upload.
+    const autoDiscard = qualifyLocal?.verdict === "discard";
     toAdd.push({
       id: `cap_${now}_${Math.random().toString(36).slice(2, 7)}_${handle}`,
       platform,
@@ -129,11 +151,22 @@ async function appendCaptured(items) {
       profileUrl: raw?.profileUrl ?? null,
       capturedAt: now,
       source: raw?.source ?? "opportunistic",
+      sourceType: raw?.sourceType ?? null,
       hashtag: raw?.hashtag ?? null,
       postUrl: raw?.postUrl ?? null,
       sessionId: raw?.sessionId ?? null,
-      status: "local",
+      status: autoDiscard ? "skipped" : "local",
+      skipReason: autoDiscard ? "auto_no_intent_match" : null,
       note: null,
+      intentQuote: raw?.intentQuote ?? null,
+      captionText: raw?.captionText ?? null,
+      commentText: raw?.commentText ?? null,
+      capturedFromUrl: raw?.capturedFromUrl ?? null,
+      passive: raw?.passive === true,
+      domVersion: raw?.domVersion ?? null,
+      qualifyLocal,
+      displayName: raw?.displayName ?? null,
+      takenAt: raw?.takenAt ?? null,
     });
   }
 
@@ -182,6 +215,74 @@ async function deleteCaptured({ ids }) {
 async function clearCaptured() {
   await writeCaptured([]);
   return { cleared: true };
+}
+
+// ──────────────────────────────────────────────
+// Outbound filters cache
+// The tenant-wide keywords/geo/competitors list is fetched from
+// /api/ext/outbound-filters and mirrored in chrome.storage.local with
+// a 10-minute TTL. Content script call sites pre-score captures
+// locally (verdict: keep|defer|discard) without a network round-trip.
+// A force=true bypasses the TTL on demand (e.g. options page save).
+// ──────────────────────────────────────────────
+
+async function readFiltersCache() {
+  const stored = await chrome.storage.local.get(FILTERS_KEY);
+  const entry = stored[FILTERS_KEY];
+  if (!entry || typeof entry !== "object") return null;
+  return entry;
+}
+
+async function writeFiltersCache(entry) {
+  await chrome.storage.local.set({ [FILTERS_KEY]: entry });
+}
+
+async function fetchFiltersFromApi() {
+  const envelope = await apiCall({
+    path: "/api/ext/outbound-filters",
+    method: "GET",
+  });
+  if (!envelope.ok) {
+    throw new Error(
+      envelope.error ?? `fetch filters failed (${envelope.status})`
+    );
+  }
+  const payload = envelope.data ?? {};
+  if (!payload.filters) throw new Error("filters missing in response");
+  return payload.filters;
+}
+
+async function getFilters({ force = false } = {}) {
+  const cached = await readFiltersCache();
+  const fresh =
+    cached &&
+    typeof cached.fetchedAt === "number" &&
+    Date.now() - cached.fetchedAt < FILTERS_TTL_MS;
+  if (!force && fresh && cached.filters) {
+    return { filters: cached.filters, source: "cache", fetchedAt: cached.fetchedAt };
+  }
+  try {
+    const filters = await fetchFiltersFromApi();
+    const entry = { filters, fetchedAt: Date.now() };
+    await writeFiltersCache(entry);
+    return { filters, source: "network", fetchedAt: entry.fetchedAt };
+  } catch (err) {
+    if (cached?.filters) {
+      // Stale-but-usable — better than breaking capture on a bad network.
+      return {
+        filters: cached.filters,
+        source: "stale",
+        fetchedAt: cached.fetchedAt ?? 0,
+        error: err?.message ?? String(err),
+      };
+    }
+    return {
+      filters: FALLBACK_FILTERS,
+      source: "fallback",
+      fetchedAt: 0,
+      error: err?.message ?? String(err),
+    };
+  }
 }
 
 async function capturedStats() {
@@ -268,6 +369,7 @@ const HANDLERS = {
   "captured.delete": (msg) => deleteCaptured({ ids: msg.ids ?? [] }),
   "captured.clear": () => clearCaptured(),
   "captured.stats": () => capturedStats(),
+  "filters.get": (msg) => getFilters({ force: msg?.force === true }),
 };
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

@@ -150,3 +150,14 @@ export async function capturedClear() {
 export async function capturedStats() {
   return sendBackground("captured.stats");
 }
+
+// ──────────────────────────────────────────────
+// Outbound filters facade — keywords/geo/competitors/passive toggle
+// pulled from Pulse and cached in chrome.storage.local by background.
+// Content scripts call this to drive local pre-scoring without a
+// network hit per capture.
+// ──────────────────────────────────────────────
+
+export async function fetchOutboundFilters({ force = false } = {}) {
+  return sendBackground("filters.get", { force });
+}

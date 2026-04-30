@@ -20,6 +20,15 @@
     isFollowersPage,
     currentHashtag,
     extractVisibleHandles,
+    IG_DOM_V,
+    isPostModalOpen,
+    getPostArticleRoot,
+    extractPostAuthorFromOverlay,
+    extractCommentAuthorsWithText,
+    extractTaggedPeople,
+    extractIntentQuote,
+    observePostCommentList,
+    localPreScore,
   } = detectModule;
   const {
     lookupProspect,
@@ -29,6 +38,7 @@
     markDmSent,
     PulseApiError,
     capturedAppend,
+    fetchOutboundFilters,
   } = apiModule;
   const { appendEvent, readLog, clearLog, withLogging } = logModule;
 
@@ -741,6 +751,325 @@
     `;
   }
 
+  // ───────────────────────────────────────────────
+  // Passive observer — the quality-lead capture engine
+  //
+  // The observer runs silently while the user browses IG normally.
+  // No scrolling, clicking, or URL navigation is performed. When
+  // something interesting mounts (a post modal opens, a comment
+  // scrolls into view), we extract the author/commenter/tagged
+  // handles + their intent quote, run a local pre-score against
+  // the tenant's filter list, and stage the row in the captured
+  // store. Nothing is uploaded until the user reviews in the
+  // Captured page.
+  // ───────────────────────────────────────────────
+
+  let cachedFilters = null;
+  let filtersFetchedAt = 0;
+  const FILTERS_REFRESH_MS = 10 * 60 * 1000;
+  let passiveSessionId = `sess_${Date.now()}`;
+  let passiveSessionStartedAt = Date.now();
+  let passiveActive = false;
+  let localPassiveDisabled = false;
+  let lastPassiveUrl = null;
+  const capturedInSession = new Set();
+  let currentPostArticle = null;
+  let commentObserverTeardown = () => {};
+  const feedArticleDwell = new WeakMap();
+  let scrollSweepHandle = null;
+
+  async function refreshFilters(force = false) {
+    const stale = Date.now() - filtersFetchedAt > FILTERS_REFRESH_MS;
+    if (!force && cachedFilters && !stale) return cachedFilters;
+    try {
+      const reply = await fetchOutboundFilters({ force });
+      cachedFilters = reply?.filters ?? cachedFilters ?? null;
+      filtersFetchedAt = Date.now();
+    } catch {
+      // Leave cachedFilters as-is; passive still works with whatever
+      // we last had (or with null — localPreScore tolerates null).
+    }
+    return cachedFilters;
+  }
+
+  async function isLocalPassiveDisabled() {
+    return new Promise((resolve) => {
+      try {
+        chrome.storage?.sync?.get?.(
+          "pulsePassiveDisabled",
+          (stored) => resolve(stored?.pulsePassiveDisabled === true)
+        );
+      } catch {
+        resolve(false);
+      }
+    });
+  }
+
+  function shouldBePassivelyActive() {
+    if (typeof location === "undefined") return false;
+    const host = location.hostname.replace(/^www\./, "");
+    if (host !== "instagram.com") return false;
+    if (localPassiveDisabled) return false;
+    if (cachedFilters && cachedFilters.passiveCaptureEnabled === false) {
+      return false;
+    }
+    return true;
+  }
+
+  function resetSession() {
+    passiveSessionId = `sess_${Date.now()}`;
+    passiveSessionStartedAt = Date.now();
+    capturedInSession.clear();
+  }
+
+  function maybeRotateSession() {
+    const tenMin = 10 * 60 * 1000;
+    if (Date.now() - passiveSessionStartedAt > tenMin) resetSession();
+  }
+
+  function dwellMs() {
+    const v = Number(cachedFilters?.dwellMs);
+    return Number.isFinite(v) && v >= 400 ? v : 1200;
+  }
+
+  async function stageCapture({
+    handle,
+    sourceType,
+    captionText = null,
+    commentText = null,
+    altText = null,
+    displayName = null,
+    postUrl = null,
+    takenAt = null,
+  }) {
+    if (!handle) return;
+    if (capturedInSession.has(handle)) return;
+    capturedInSession.add(handle);
+
+    const intentQuote = extractIntentQuote({
+      sourceType,
+      captionText,
+      commentText,
+      altText,
+    });
+    const qualifyLocal = localPreScore(
+      { captionText, commentText, intentQuote, sourceType },
+      cachedFilters
+    );
+    const hashtag = currentHashtag();
+    const item = {
+      platform: "instagram",
+      handle,
+      profileUrl: `https://www.instagram.com/${handle}/`,
+      postUrl,
+      hashtag,
+      sessionId: passiveSessionId,
+      source: "passive",
+      sourceType,
+      intentQuote,
+      captionText,
+      commentText,
+      capturedFromUrl: location.href,
+      passive: true,
+      domVersion: IG_DOM_V.version,
+      qualifyLocal,
+      displayName,
+      takenAt,
+    };
+
+    try {
+      const res = await capturedAppend([item]);
+      appendEvent({
+        level: qualifyLocal.verdict === "discard" ? "info" : "success",
+        kind: "passive-capture",
+        message: `${sourceType} @${handle} · ${qualifyLocal.verdict}`,
+        context: {
+          handle,
+          sourceType,
+          verdict: qualifyLocal.verdict,
+          keywords: qualifyLocal.matchedKeywords.join(",") || undefined,
+          competitors: qualifyLocal.matchedCompetitors.join(",") || undefined,
+          added: res?.added,
+        },
+      });
+    } catch (err) {
+      appendEvent({
+        level: "error",
+        kind: "passive-capture",
+        message:
+          err && typeof err === "object" && "message" in err
+            ? String(err.message)
+            : String(err),
+        context: { handle, sourceType },
+      });
+    }
+  }
+
+  function handleCommentIntersect(li) {
+    const root = currentPostArticle ?? getPostArticleRoot();
+    if (!root) return;
+    // Extract all comments from the list and find the one whose li
+    // matches our intersected node. Cheaper than per-li re-parse.
+    const all = extractCommentAuthorsWithText(root);
+    if (all.length === 0) return;
+    const liText = (li.textContent ?? "").replace(/\s+/g, " ").trim();
+    // Best-effort: match by handle prefix at start of liText, or by
+    // substring of comment text.
+    let match = null;
+    for (const c of all) {
+      if (liText.toLowerCase().startsWith(c.handle.toLowerCase())) {
+        match = c;
+        break;
+      }
+    }
+    if (!match && all.length > 0) {
+      // fallback: pick the most-similar-text comment
+      match = all.find((c) => liText.includes(c.commentText.slice(0, 32)));
+    }
+    if (!match) return;
+    stageCapture({
+      handle: match.handle,
+      sourceType: "commenter",
+      commentText: match.commentText,
+    });
+  }
+
+  async function onPostModalOpened(article) {
+    if (!article || article === currentPostArticle) return;
+    commentObserverTeardown();
+    currentPostArticle = article;
+    // Dwell for the caption/author extraction so we don't capture
+    // an author whose modal the user immediately closed.
+    const startedAt = Date.now();
+    setTimeout(async () => {
+      if (currentPostArticle !== article) return;
+      if (Date.now() - startedAt < dwellMs() - 50) return;
+      const author = extractPostAuthorFromOverlay(article);
+      if (author?.handle) {
+        await stageCapture({
+          handle: author.handle,
+          sourceType: "post_author",
+          captionText: author.captionText,
+          displayName: author.displayName,
+          postUrl: author.postUrl,
+          takenAt: author.takenAt,
+        });
+      }
+      const tagged = extractTaggedPeople();
+      for (const t of tagged) {
+        if (t.handle === author?.handle) continue;
+        await stageCapture({
+          handle: t.handle,
+          sourceType: "tagged",
+          captionText: author?.captionText ?? null,
+        });
+      }
+    }, dwellMs());
+
+    commentObserverTeardown = observePostCommentList(
+      article,
+      handleCommentIntersect,
+      { threshold: 0.5, dwellMs: dwellMs() }
+    );
+  }
+
+  function sweepFeedArticles() {
+    if (!passiveActive) return;
+    if (isPostModalOpen()) return;
+    if (!(isHashtagPage() || /\/explore(\/|$)/.test(location.pathname) || location.pathname === "/")) {
+      return;
+    }
+    const articles = document.querySelectorAll("main article");
+    for (const article of articles) {
+      if (!(article instanceof Element)) continue;
+      const rect = article.getBoundingClientRect();
+      const inView =
+        rect.top < window.innerHeight &&
+        rect.bottom > 0 &&
+        rect.height > 100;
+      if (!inView) {
+        feedArticleDwell.delete(article);
+        continue;
+      }
+      const firstSeen = feedArticleDwell.get(article);
+      if (!firstSeen) {
+        feedArticleDwell.set(article, Date.now());
+        continue;
+      }
+      if (Date.now() - firstSeen < dwellMs()) continue;
+      // dwell met — extract author from alt + caption if available
+      const img = article.querySelector("img[alt]");
+      const alt = img?.getAttribute("alt") ?? "";
+      const authorMatch = /by\s+@([a-zA-Z0-9._]{2,30})\b/i.exec(alt);
+      if (authorMatch) {
+        const handle = authorMatch[1].toLowerCase();
+        stageCapture({
+          handle,
+          sourceType: "post_author",
+          altText: alt,
+        });
+        // Avoid re-firing on this article.
+        feedArticleDwell.set(article, Number.MAX_SAFE_INTEGER);
+      }
+    }
+  }
+
+  function handlePassiveScroll() {
+    if (scrollSweepHandle) return;
+    scrollSweepHandle = setTimeout(() => {
+      scrollSweepHandle = null;
+      sweepFeedArticles();
+    }, 300);
+  }
+
+  function onDomMutate() {
+    if (!passiveActive) return;
+    if (isPostModalOpen()) {
+      const article = getPostArticleRoot();
+      if (article) onPostModalOpened(article);
+    } else if (currentPostArticle) {
+      commentObserverTeardown();
+      commentObserverTeardown = () => {};
+      currentPostArticle = null;
+    }
+  }
+
+  function startPassive() {
+    if (passiveActive) return;
+    passiveActive = true;
+    window.addEventListener("scroll", handlePassiveScroll, { passive: true });
+  }
+
+  function stopPassive() {
+    if (!passiveActive) return;
+    passiveActive = false;
+    commentObserverTeardown();
+    commentObserverTeardown = () => {};
+    currentPostArticle = null;
+    window.removeEventListener("scroll", handlePassiveScroll);
+  }
+
+  async function refreshPassiveActivation() {
+    localPassiveDisabled = await isLocalPassiveDisabled();
+    await refreshFilters();
+    if (shouldBePassivelyActive()) {
+      startPassive();
+      onDomMutate();
+    } else {
+      stopPassive();
+    }
+  }
+
+  function onPassiveUrlChange() {
+    maybeRotateSession();
+    if (location.href !== lastPassiveUrl) {
+      lastPassiveUrl = location.href;
+      // URL change often implies a different hashtag/post — rotate
+      // session so dedup doesn't suppress legitimate re-captures.
+      resetSession();
+    }
+  }
+
   // Right-click the FAB to open the sidebar (save is still one click).
   document.addEventListener("contextmenu", (e) => {
     if (!fab || !(e.target instanceof Node) || !fab.contains(e.target)) return;
@@ -750,12 +1079,31 @@
   });
 
   syncToCurrentPage();
+  refreshPassiveActivation();
+  // Refresh filters + activation every 10 min in long-lived tabs.
+  setInterval(refreshPassiveActivation, FILTERS_REFRESH_MS);
+  // React to options-page toggle changes without a reload.
+  try {
+    chrome.storage?.onChanged?.addListener?.((changes, area) => {
+      if (area === "sync" && "pulsePassiveDisabled" in changes) {
+        refreshPassiveActivation();
+      }
+    });
+  } catch {
+    // noop
+  }
+
   const observer = new MutationObserver(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
+      onPassiveUrlChange();
       syncToCurrentPage();
     }
+    onDomMutate();
   });
   observer.observe(document.body, { childList: true, subtree: true });
-  window.addEventListener("popstate", syncToCurrentPage);
+  window.addEventListener("popstate", () => {
+    onPassiveUrlChange();
+    syncToCurrentPage();
+  });
 })();
