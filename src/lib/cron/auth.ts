@@ -8,6 +8,8 @@
 // directly. In development or when running tests we relax the Vercel
 // header check (the bearer is still required).
 
+import { timingSafeEqual } from "node:crypto";
+
 export type CronAuthResult =
   | { ok: true }
   | { ok: false; status: 401 | 503; error: string };
@@ -21,6 +23,23 @@ export interface VerifyOptions {
   requireVercelHeader?: boolean;
 }
 
+function constantTimeEquals(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  // timingSafeEqual throws on length mismatch; pad to avoid leaking length
+  // via early-return. Compare against the longer of the two.
+  if (ab.length !== bb.length) {
+    const max = Math.max(ab.length, bb.length);
+    const pa = Buffer.alloc(max);
+    const pb = Buffer.alloc(max);
+    ab.copy(pa);
+    bb.copy(pb);
+    timingSafeEqual(pa, pb);
+    return false;
+  }
+  return timingSafeEqual(ab, bb);
+}
+
 export function verifyCronRequest(opts: VerifyOptions): CronAuthResult {
   const secret = opts.secret ?? process.env.CRON_SECRET;
   if (!secret) {
@@ -32,7 +51,7 @@ export function verifyCronRequest(opts: VerifyOptions): CronAuthResult {
   }
 
   const authHeader = opts.getHeader("authorization") ?? "";
-  if (authHeader !== `Bearer ${secret}`) {
+  if (!constantTimeEquals(authHeader, `Bearer ${secret}`)) {
     return { ok: false, status: 401, error: "Unauthorized" };
   }
 
