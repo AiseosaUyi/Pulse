@@ -16,6 +16,7 @@ export const SIGNAL_TYPES = [
   "event_attendee",
   "recent_post",
   "manual",
+  "ticketing_platform",
 ] as const;
 
 export type SignalType = (typeof SIGNAL_TYPES)[number];
@@ -133,6 +134,7 @@ export const SIGNAL_LABELS: Record<SignalType, string> = {
   event_attendee: "Event attendee",
   recent_post: "Recent post",
   manual: "Manual",
+  ticketing_platform: "Ticketing platform",
 };
 
 export const STATUS_LABELS: Record<ProspectStatus, string> = {
