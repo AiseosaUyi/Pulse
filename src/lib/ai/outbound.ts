@@ -21,6 +21,7 @@ import type {
   OutboundPlatform,
   ProspectRecord,
 } from "@/lib/types/outbound";
+import type { OutboundFilters } from "@/lib/types/outbound-filters";
 
 // ──────────────────────────────────────────────────────────
 // Qualifier
@@ -64,6 +65,13 @@ export interface QualifyInput {
   tenantName: string;
   voice: BrandVoice | null;
   positioning: BrandPositioning | null;
+  /**
+   * User-configured outbound filters (keywords + geo + competitors).
+   * Optional — when null, the qualifier falls back to brand context
+   * only. Call sites that want sharper scoring should load via
+   * getOutboundFilters(tenantSlug) and pass it through.
+   */
+  filters?: OutboundFilters | null;
   prospect: ProspectRecord;
 }
 
@@ -116,16 +124,43 @@ export async function qualifyProspectAi(
 }
 
 function buildQualifySystem(input: QualifyInput): string {
-  const { tenantName, voice, positioning } = input;
+  const { tenantName, voice, positioning, filters } = input;
   const lines = [
     `You screen prospects for ${tenantName} before we DM them. Score 0-100 and justify.`,
     "",
     "Rules:",
     "- A high score means the prospect matches our audience AND has a recent activation signal (posted, attending an event, asking in public).",
-    "- Penalize competitors, bots, inactive accounts, celebrities/influencers obviously outside our reach.",
+    "- Penalize competitors (other vendors/planners — NOT buyers), bots, inactive accounts, celebrities/influencers obviously outside our reach.",
     "- 85+ means 'worth a personalized DM from a human'. Reserve it.",
     "- The `reason` must cite the concrete signal, not generic affirmations.",
+    "- Weigh capture sources: `post_author` (strongest — they posted publicly), `commenter` (medium — public intent comment on-topic), `tagged` (weaker — someone else tagged them), `opportunistic`/`manual` (weakest — no surrounding context).",
   ];
+  if (filters) {
+    if (filters.keywords.length > 0) {
+      lines.push(
+        "",
+        `Event-intent keywords of interest: ${filters.keywords.slice(0, 80).join(", ")}. Presence in bio or intent_quote is a strong positive.`
+      );
+    }
+    if (filters.geoScope.length > 0) {
+      const geo = filters.geoScope
+        .map(
+          (g) =>
+            `${g.country}${g.states.length > 0 ? ` (${g.states.slice(0, 12).join(", ")}${g.states.length > 12 ? ", ..." : ""})` : ""}`
+        )
+        .join("; ");
+      lines.push(
+        "",
+        `Geographic scope: ${geo}. If the bio or intent_quote mentions a specific location OUTSIDE this scope, cap the score under 50.`
+      );
+    }
+    if (filters.competitorUrls.length > 0) {
+      lines.push(
+        "",
+        `Competitor event platforms: ${filters.competitorUrls.join(", ")}. If the prospect's bio or captured post links to any of these, treat it as a POACH opportunity — bump the score notably and call it out in the reason.`
+      );
+    }
+  }
   if (voice) lines.push("", `Audience: ${voice.audience}`);
   lines.push("", buildPositioningBlock(positioning));
   return lines.join("\n");
@@ -133,6 +168,44 @@ function buildQualifySystem(input: QualifyInput): string {
 
 function buildQualifyUser(input: QualifyInput): string {
   const { prospect } = input;
+  const signalData = (prospect.signalData ?? {}) as Record<string, unknown>;
+  const sourceType =
+    typeof signalData.source_type === "string"
+      ? (signalData.source_type as string)
+      : null;
+  const intentQuote =
+    typeof signalData.intent_quote === "string"
+      ? (signalData.intent_quote as string)
+      : null;
+  const capturedFrom =
+    typeof signalData.captured_from_url === "string"
+      ? (signalData.captured_from_url as string)
+      : null;
+  const localQualify =
+    signalData.local_qualify && typeof signalData.local_qualify === "object"
+      ? (signalData.local_qualify as {
+          matchedKeywords?: string[];
+          matchedCompetitors?: string[];
+          matchedGeo?: string[];
+          verdict?: string;
+        })
+      : null;
+  const localSummary = localQualify
+    ? [
+        localQualify.matchedKeywords?.length
+          ? `keywords=${localQualify.matchedKeywords.join("|")}`
+          : "",
+        localQualify.matchedCompetitors?.length
+          ? `competitors=${localQualify.matchedCompetitors.join("|")}`
+          : "",
+        localQualify.matchedGeo?.length
+          ? `geo=${localQualify.matchedGeo.join("|")}`
+          : "",
+        localQualify.verdict ? `verdict=${localQualify.verdict}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "";
   return [
     `Platform: ${prospect.platform}`,
     `Handle: @${prospect.handle}`,
@@ -141,9 +214,13 @@ function buildQualifyUser(input: QualifyInput): string {
       ? `Followers: ${prospect.followerCount.toLocaleString()}`
       : "",
     prospect.bio ? `Bio: ${prospect.bio}` : "",
+    sourceType ? `Source type: ${sourceType}` : "",
+    intentQuote ? `Intent quote: ${intentQuote}` : "",
+    capturedFrom ? `Captured from: ${capturedFrom}` : "",
     prospect.signalSummary ? `Signal: ${prospect.signalSummary}` : "",
-    Object.keys(prospect.signalData ?? {}).length
-      ? `Signal data: ${JSON.stringify(prospect.signalData).slice(0, 800)}`
+    localSummary ? `Local pre-score: ${localSummary}` : "",
+    Object.keys(signalData).length
+      ? `Signal data: ${JSON.stringify(signalData).slice(0, 800)}`
       : "",
     "",
     "Score and justify.",

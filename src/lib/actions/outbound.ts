@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getTenant } from "@/lib/services/tenants";
 import { getBrandContext } from "@/lib/ai/brand-positioning";
+import { getOutboundFilters } from "@/lib/server/outbound-filters";
 import { getProspect } from "@/lib/services/outbound";
 import {
   draftOutboundDmAi,
@@ -168,12 +169,16 @@ export async function qualifyProspect(
     .eq("id", prospectId);
 
   try {
-    const { voice, positioning } = await getBrandContext(tenantSlug);
+    const [{ voice, positioning }, filters] = await Promise.all([
+      getBrandContext(tenantSlug),
+      getOutboundFilters(tenantSlug),
+    ]);
     const { result } = await qualifyProspectAi({
       tenantSlug,
       tenantName: tenant.name,
       voice,
       positioning,
+      filters,
       prospect,
     });
 

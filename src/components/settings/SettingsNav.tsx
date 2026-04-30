@@ -18,6 +18,7 @@ import {
   HardDrive,
   Target,
   Plug,
+  Radar,
   type LucideIcon,
 } from "lucide-react";
 
@@ -50,6 +51,11 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Trend scouts",
         href: "/settings/trend-scouts",
         icon: TrendingUp,
+      },
+      {
+        label: "Outbound filters",
+        href: "/settings/outbound-filters",
+        icon: Radar,
       },
     ],
   },
