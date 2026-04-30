@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentTenant } from "@/lib/auth";
+import { sendBrevoEmail, buildInviteEmail, getAppBaseUrl } from "@/lib/integrations/brevo";
 
 function result(success: boolean, message: string) {
   return { success, message };
@@ -97,16 +98,49 @@ export async function inviteTeammate(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { error } = await supabase.from("invitations").insert({
-    email,
-    tenant_slug: tenant.slug,
+  const { data: invite, error } = await supabase
+    .from("invitations")
+    .insert({
+      email,
+      tenant_slug: tenant.slug,
+      role,
+      invited_by: user.id,
+    })
+    .select("token")
+    .single();
+
+  if (error || !invite) return result(false, error?.message ?? "Could not create invite");
+
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("display_name, username")
+    .eq("id", user.id)
+    .maybeSingle();
+  const inviterName = profile?.display_name || profile?.username || user.email || "A teammate";
+
+  const acceptUrl = `${getAppBaseUrl()}/invite/${encodeURIComponent(invite.token)}`;
+  const { subject, html, text } = buildInviteEmail({
+    to: email,
+    tenantName: tenant.name,
+    inviterName,
     role,
-    invited_by: user.id,
+    acceptUrl,
   });
 
-  if (error) return result(false, error.message);
+  const sendRes = await sendBrevoEmail({
+    to: { email },
+    subject,
+    htmlContent: html,
+    textContent: text,
+    replyTo: user.email ? { email: user.email, name: inviterName } : undefined,
+    tags: ["invitation", `tenant:${tenant.slug}`],
+  });
 
   revalidatePath("/settings");
+  if (!sendRes.ok) {
+    return result(false, `Email failed (${sendRes.error}). Invite link: ${acceptUrl}`);
+  }
   return result(true, `Invite sent to ${email}`);
 }
 

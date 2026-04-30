@@ -188,6 +188,7 @@ export default async function TeamSettingsPage() {
                 <ul className="divide-y divide-white-200">
                   {invites.map((inv) => (
                     <li key={inv.id} className="py-3 flex items-center gap-3">
+                      <Avatar url={null} name={inv.email} size="md" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-1200 dark:text-foreground truncate">
                           {inv.email}
