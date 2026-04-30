@@ -49,42 +49,60 @@ export async function requestPasswordReset(formData: FormData) {
 
   const admin = createAdminClient();
 
-  // Look the user up. We always show the same success state regardless
-  // (don't leak which emails are registered), but we only actually send
-  // the email + write a row when the user exists.
-  const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
-  const user = list?.users.find((u) => u.email?.toLowerCase() === email);
+  // Look the user up across pages. listUsers caps perPage; paginate until we
+  // find the email or run out. We don't surface the result (anti-enumeration),
+  // but the server logs tell us whether the user was found.
+  let user: { id: string; email?: string } | null = null;
+  for (let page = 1; page <= 10; page++) {
+    const { data: list, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) {
+      console.error("[pwreset] listUsers failed", { page, error: error.message });
+      break;
+    }
+    const found = list?.users.find((u) => u.email?.toLowerCase() === email);
+    if (found) { user = found; break; }
+    if (!list?.users.length || list.users.length < 1000) break;
+  }
+  console.log("[pwreset] requested", { email, userFound: Boolean(user) });
 
   if (user) {
     // Invalidate any prior unused OTPs for this email so a stale code
     // can't compete with the fresh one.
-    await admin
+    const { error: invalidateErr } = await admin
       .from("password_reset_otps")
       .update({ used_at: new Date().toISOString() })
       .ilike("email", email)
       .is("used_at", null);
+    if (invalidateErr) console.error("[pwreset] invalidate prior failed", invalidateErr);
 
     const otp = generateOtp();
     const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60_000).toISOString();
 
-    await admin.from("password_reset_otps").insert({
+    const { error: insertErr } = await admin.from("password_reset_otps").insert({
       email,
       otp_hash: hashOtp(otp),
       expires_at: expiresAt,
     });
+    if (insertErr) {
+      // Most common cause: migration 035 not applied yet. Bail loudly so
+      // we don't email a code that can never be redeemed.
+      console.error("[pwreset] insert OTP row failed", insertErr);
+      failTo("/forgot-password", "Reset isn't available right now. Try again in a moment.");
+    }
 
     const { subject, html, text } = buildPasswordOtpEmail({
       to: email,
       otp,
       expiresInMinutes: OTP_TTL_MINUTES,
     });
-    await sendBrevoEmail({
+    const sendRes = await sendBrevoEmail({
       to: { email },
       subject,
       htmlContent: html,
       textContent: text,
       tags: ["password-reset"],
     });
+    console.log("[pwreset] brevo send", sendRes);
   }
 
   redirect(verifyUrl(email, fromVerify ? { resent: "1" } : {}));
