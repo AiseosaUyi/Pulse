@@ -4,10 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth";
-import type {
-  ContentFormatTemplate,
-  ContentMedium,
-} from "@/lib/types/content-engine";
+import type { ContentMedium } from "@/lib/types/content-engine";
 
 type ActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -288,5 +285,3 @@ export async function deleteTemplate(
   revalidatePath("/settings/content-engine");
   return { success: true };
 }
-
-export type { ContentFormatTemplate };

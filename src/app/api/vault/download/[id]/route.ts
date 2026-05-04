@@ -179,10 +179,12 @@ export async function GET(
       platform: row.source_platform,
       message: reason,
     });
+    const isTimeout = reason.includes("timed out");
+    const userMessage = isTimeout
+      ? `Download service is slow right now (${row.source_platform}). Try again in a few seconds — the resolver was warming up.`
+      : `Couldn't refresh the download link (${row.source_platform}): ${reason}. The original post may have been deleted or made private.`;
     return NextResponse.json(
-      {
-        error: `Couldn't refresh the download link (${row.source_platform}): ${reason}. The original post may have been deleted.`,
-      },
+      { error: userMessage },
       { status: 502 }
     );
   }
