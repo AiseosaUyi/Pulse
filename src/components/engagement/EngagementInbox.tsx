@@ -1,11 +1,12 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import {
   deleteEngagementItem,
   markAsRead,
   markAsReplied,
+  sendEngagementReply,
 } from "@/lib/actions/engagement";
 import { useDialogs } from "@/components/ui/Dialog";
 import {
@@ -56,6 +57,31 @@ function timeAgo(iso: string): string {
 export function EngagementInbox({ items }: { items: EngagementItem[] }) {
   const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
+  const [openReplyId, setOpenReplyId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [replyError, setReplyError] = useState<string | null>(null);
+
+  const canReplyVia = (platform: EngagementPlatform, type: string): boolean => {
+    if (platform === "instagram") {
+      return type === "comment" || type === "mention" || type === "dm";
+    }
+    if (platform === "linkedin") return type === "comment" || type === "reply";
+    return false;
+  };
+
+  const onSendReply = (id: string) => {
+    if (!draft.trim()) return;
+    setReplyError(null);
+    startTransition(async () => {
+      const res = await sendEngagementReply(id, draft);
+      if (res.success) {
+        setOpenReplyId(null);
+        setDraft("");
+      } else {
+        setReplyError(res.error);
+      }
+    });
+  };
 
   if (items.length === 0) {
     return (
@@ -175,6 +201,23 @@ export function EngagementInbox({ items }: { items: EngagementItem[] }) {
                     {item.read ? "Mark unread" : "Mark read"}
                   </button>
 
+                  {canReplyVia(item.platform, item.type) && !item.replied && (
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => {
+                        setOpenReplyId(
+                          openReplyId === item.id ? null : item.id
+                        );
+                        setDraft("");
+                        setReplyError(null);
+                      }}
+                      className="text-[10px] px-2 py-1 rounded bg-primary-500/10 text-primary-500 hover:bg-primary-500/20 transition-colors disabled:opacity-50 font-medium"
+                    >
+                      Reply
+                    </button>
+                  )}
+
                   {item.replied ? (
                     <button
                       type="button"
@@ -205,6 +248,43 @@ export function EngagementInbox({ items }: { items: EngagementItem[] }) {
                     <Trash2 size={14} />
                   </button>
                 </div>
+
+                {openReplyId === item.id && (
+                  <div className="mt-3 flex flex-col gap-2">
+                    <textarea
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      placeholder={`Reply via ${ENGAGEMENT_PLATFORM_LABELS[item.platform]}…`}
+                      rows={3}
+                      className="w-full text-sm rounded border border-border/50 bg-background p-2 text-foreground focus:outline-none focus:border-primary-500/50"
+                      disabled={isPending}
+                    />
+                    {replyError && (
+                      <p className="text-xs text-status-red">{replyError}</p>
+                    )}
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => {
+                          setOpenReplyId(null);
+                          setDraft("");
+                        }}
+                        className="text-[11px] px-3 py-1.5 rounded border border-border/50 text-text-secondary hover:border-foreground/30"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isPending || !draft.trim()}
+                        onClick={() => onSendReply(item.id)}
+                        className="text-[11px] px-3 py-1.5 rounded bg-primary-500 text-white hover:bg-primary-500/90 disabled:opacity-50 font-medium"
+                      >
+                        {isPending ? "Sending…" : "Send reply"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -2,7 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveActiveConnection } from "@/lib/composio/resolve-alias";
+import {
+  publishInstagramSinglePost,
+  publishLinkedInTextPost,
+  publishTikTokVideo,
+} from "@/lib/composio/executors";
 import type { ScheduledPostStatus } from "@/lib/types/scheduled-posts";
+import type { Toolkit } from "@/lib/composio/client";
 
 type ActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -61,6 +69,135 @@ export async function updateScheduledPostStatus(
   if (error) return { success: false, error: error.message };
   revalidatePath("/ai-content");
   return { success: true };
+}
+
+// Publishes a scheduled post via Composio when an active connection
+// exists for the post's platform. Records the result in
+// scheduled_post_publications and creates a `posts` row tied via
+// scheduled_posts.posted_post_id.
+//
+// When no Composio connection is active for the platform we return
+// a `success: false` result with `reason: 'not_connected'` so the UI
+// can prompt the user to connect (Ayrshare fallback can branch in
+// here later when its publish executor is wired).
+interface PublishInput {
+  tenantSlug: string;
+  scheduledPostId: string;
+  // Optional media URL for IG/TikTok publishes. LinkedIn ignored unless
+  // it's an article-style share (separate flow).
+  mediaUrl?: string;
+}
+
+export async function publishScheduledPost(
+  input: PublishInput
+): Promise<
+  | { success: true; postId: string; externalId: string }
+  | { success: false; error: string; reason?: "not_connected" }
+> {
+  const supabase = await createClient();
+  const { data: sp, error: spErr } = await supabase
+    .from("scheduled_posts")
+    .select("id, platform, caption, content_type, scheduled_for")
+    .eq("id", input.scheduledPostId)
+    .eq("tenant_slug", input.tenantSlug)
+    .single();
+
+  if (spErr || !sp) {
+    return { success: false, error: spErr?.message ?? "Post not found" };
+  }
+
+  const platform = sp.platform.toLowerCase() as Toolkit;
+  if (!["instagram", "tiktok", "linkedin"].includes(platform)) {
+    return {
+      success: false,
+      error: `Composio publish is not supported for ${platform}`,
+    };
+  }
+
+  const conn = await resolveActiveConnection(input.tenantSlug, platform);
+  if (!conn) {
+    return {
+      success: false,
+      error: `No active ${platform} connection for this workspace`,
+      reason: "not_connected",
+    };
+  }
+
+  let externalId = "";
+  try {
+    if (platform === "instagram") {
+      if (!input.mediaUrl) {
+        return { success: false, error: "Instagram publish requires mediaUrl" };
+      }
+      const ct = sp.content_type ?? "image";
+      const mediaType =
+        ct === "video" ? "video" : ct === "carousel" ? "image" : "image";
+      const out = await publishInstagramSinglePost(conn, {
+        mediaUrl: input.mediaUrl,
+        caption: sp.caption ?? undefined,
+        mediaType,
+      });
+      externalId = out.mediaId;
+    } else if (platform === "linkedin") {
+      const out = await publishLinkedInTextPost(conn, sp.caption ?? "");
+      externalId = out.postUrn;
+    } else {
+      // tiktok
+      if (!input.mediaUrl) {
+        return { success: false, error: "TikTok publish requires mediaUrl" };
+      }
+      const out = await publishTikTokVideo(conn, {
+        videoUrl: input.mediaUrl,
+        caption: sp.caption ?? undefined,
+      });
+      externalId = out.publishId;
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Publish failed",
+    };
+  }
+
+  // Insert posts row first so we can link from scheduled_posts.posted_post_id.
+  // Use admin client because RLS forbids inserts during server actions
+  // when the user is a member but not the row's creator until commit.
+  const admin = createAdminClient();
+  const { data: post, error: postErr } = await admin
+    .from("posts")
+    .insert({
+      tenant_slug: input.tenantSlug,
+      title: (sp.caption ?? "").slice(0, 120) || "Untitled",
+      platform,
+      content_type: sp.content_type ?? "text",
+      posted_at: new Date().toISOString().slice(0, 10),
+    })
+    .select("id")
+    .single();
+
+  if (postErr || !post) {
+    return { success: false, error: postErr?.message ?? "Posts insert failed" };
+  }
+
+  await admin
+    .from("scheduled_post_publications")
+    .insert({
+      tenant_slug: input.tenantSlug,
+      scheduled_post_id: input.scheduledPostId,
+      provider: "composio",
+      platform,
+      external_id: externalId,
+      status: "published",
+    });
+
+  await admin
+    .from("scheduled_posts")
+    .update({ status: "posted", posted_post_id: post.id })
+    .eq("id", input.scheduledPostId);
+
+  revalidatePath("/ai-content");
+  revalidatePath("/post-history");
+  return { success: true, postId: post.id, externalId };
 }
 
 export async function deleteScheduledPost(

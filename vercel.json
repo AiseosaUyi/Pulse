@@ -20,6 +20,14 @@
     {
       "path": "/api/cron/scrape-ticketing-platforms",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/composio-sync-engagement",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/composio-sync-insights",
+      "schedule": "0 * * * *"
     }
   ]
 }
