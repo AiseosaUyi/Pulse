@@ -36,8 +36,13 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  // API routes own their own auth (Bearer token for /api/ext/*, getCurrentUser
+  // for /api/vault/*, cron secret for /api/cron/*) and return JSON 401. A
+  // redirect-to-login HTML response breaks JSON fetches and cross-origin
+  // extension calls, so let the route handler run and 401 itself.
+  const isApi = pathname.startsWith("/api/");
 
-  if (!user && !isPublic) {
+  if (!user && !isPublic && !isApi) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
