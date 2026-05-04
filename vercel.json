@@ -23,11 +23,11 @@
     },
     {
       "path": "/api/cron/composio-sync-engagement",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/composio-sync-insights",
-      "schedule": "0 * * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }
