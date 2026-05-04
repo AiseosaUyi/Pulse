@@ -19,6 +19,7 @@ import {
   Target,
   Plug,
   Radar,
+  Film,
   type LucideIcon,
 } from "lucide-react";
 
@@ -47,6 +48,11 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         icon: Target,
       },
       { label: "Brand voice", href: "/settings/brand-voice", icon: Sparkles },
+      {
+        label: "Content engine",
+        href: "/settings/content-engine",
+        icon: Film,
+      },
       {
         label: "Trend scouts",
         href: "/settings/trend-scouts",

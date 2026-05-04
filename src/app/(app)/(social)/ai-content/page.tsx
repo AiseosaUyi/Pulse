@@ -7,14 +7,18 @@ import {
   buildCalendarWeek,
 } from "@/lib/services/scheduled-posts";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
+import { listForTenant as listContentPlans } from "@/lib/services/content-plans";
 import { AIContentClient } from "./client";
 import { ContentBriefsClient } from "@/app/(app)/(intelligence)/content-briefs/client";
+import { VideoPlansTab } from "./_video-plans-tab";
 
-type Tab = "calendar" | "briefs";
+type Tab = "calendar" | "briefs" | "videos";
 
 function normalizeTab(raw: string | string[] | undefined): Tab {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  return value === "briefs" ? "briefs" : "calendar";
+  if (value === "briefs") return "briefs";
+  if (value === "videos") return "videos";
+  return "calendar";
 }
 
 export default async function ContentPage({
@@ -33,13 +37,14 @@ export default async function ContentPage({
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 7);
 
-  const [allBriefs, scheduled, voice] = await Promise.all([
+  const [allBriefs, scheduled, voice, videoPlans] = await Promise.all([
     listBriefs(tenantSlug, { includeDismissed: true }),
     listScheduledPosts(tenantSlug, {
       from: weekStart.toISOString(),
       to: weekEnd.toISOString(),
     }),
     getBrandVoice(tenantSlug),
+    listContentPlans(tenantSlug, { limit: 30 }),
   ]);
 
   const calendar = buildCalendarWeek(scheduled, weekStart);
@@ -86,6 +91,14 @@ export default async function ContentPage({
           {allBriefs.length > 0 && (
             <span className="ml-1.5 text-[10px] px-1.5 rounded-full bg-sidebar">
               {allBriefs.length}
+            </span>
+          )}
+        </TabLink>
+        <TabLink href="/ai-content?tab=videos" active={tab === "videos"}>
+          Video plans
+          {videoPlans.length > 0 && (
+            <span className="ml-1.5 text-[10px] px-1.5 rounded-full bg-sidebar">
+              {videoPlans.length}
             </span>
           )}
         </TabLink>
@@ -222,6 +235,10 @@ export default async function ContentPage({
           tenantSlug={tenantSlug}
           hasVoice={voice !== null}
         />
+      )}
+
+      {tab === "videos" && (
+        <VideoPlansTab tenantSlug={tenantSlug} initial={videoPlans} />
       )}
     </div>
   );
