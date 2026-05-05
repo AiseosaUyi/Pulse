@@ -9,8 +9,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getBrandVoice, type BrandVoice } from "@/lib/ai/brand-voice";
 
 export const brandPositioningSchema = z.object({
-  mission: z.string().min(1, "Mission is required").max(400),
-  value_proposition: z.string().min(1, "Value proposition is required").max(400),
+  // 2000-char ceiling protects every AI prompt's token budget without
+  // squeezing real users — normal mission/value-prop writing fits in
+  // ~200 chars; the old 400-char cap was tripping users with longer
+  // narratives. ~500 tokens worst-case still leaves the prompt healthy.
+  mission: z.string().min(1, "Mission is required").max(2000),
+  value_proposition: z
+    .string()
+    .min(1, "Value proposition is required")
+    .max(2000),
   target_demographics: z
     .array(
       z.object({

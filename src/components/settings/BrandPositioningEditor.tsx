@@ -17,6 +17,27 @@ interface Props {
   initial: BrandPositioning | null;
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  mission: "Mission",
+  value_proposition: "Value proposition",
+  target_demographics: "Target audience",
+  topics_to_cover: "Topics to cover",
+  topics_to_avoid: "Topics to avoid",
+  competitors: "Competitors",
+  differentiators: "Differentiators",
+  segment: "Segment",
+  pain_points: "Pain points",
+  name: "Competitor name",
+  domain: "Competitor domain",
+  why_we_beat_them: "Why we beat them",
+};
+
+function formatFieldPath(path: ReadonlyArray<PropertyKey>): string {
+  if (path.length === 0) return "Form";
+  const head = String(path[0]);
+  return FIELD_LABELS[head] ?? head;
+}
+
 const EMPTY: BrandPositioning = {
   mission: "",
   value_proposition: "",
@@ -107,8 +128,24 @@ export function BrandPositioningEditor({ tenantSlug, initial }: Props) {
     const parsed = brandPositioningSchema.safeParse(payload);
     if (!parsed.success) {
       setError(
-        parsed.error.issues.map((i) => i.message).join(" · ") ||
-          "Validation failed"
+        parsed.error.issues
+          .map((i) => {
+            const field = formatFieldPath(i.path);
+            if (i.code === "too_big") {
+              const max =
+                "maximum" in i && typeof i.maximum === "number"
+                  ? i.maximum
+                  : undefined;
+              return max
+                ? `${field} is too long (max ${max} characters)`
+                : `${field} is too long`;
+            }
+            if (i.code === "too_small") {
+              return `${field} is required`;
+            }
+            return `${field}: ${i.message}`;
+          })
+          .join(" · ") || "Validation failed"
       );
       return;
     }
