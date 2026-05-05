@@ -2,9 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentUser } from "@/lib/auth";
 import { getTenant } from "@/lib/services/tenants";
 import { getBrandContext } from "@/lib/ai/brand-positioning";
 import { generateBlogPost, BlogGenerationError } from "@/lib/ai/generate-blog-post";
+import {
+  generateBlogIdeas,
+  BlogIdeationError,
+  type BlogType,
+  type FeatureMeta,
+  type GeneratedIdeaRow,
+} from "@/lib/ai/blog-ideate";
 import { countWords } from "@/lib/blog/word-count";
 import { buildGooglePreview } from "@/lib/blog/google-preview";
 import { uniqueSlugFor } from "@/lib/blog/slug";
@@ -34,7 +43,12 @@ async function persistGeneratedPost(
   tenantName: string,
   tenantDomain: string,
   generation: Awaited<ReturnType<typeof generateBlogPost>>,
-  targetKeyword: string
+  targetKeyword: string,
+  extras: {
+    blogType?: BlogType;
+    blogIdeaId?: string;
+    featureMeta?: FeatureMeta | null;
+  } = {}
 ): Promise<ActionResult<CreateBlogResult>> {
   const { post: draft, meta, score } = generation;
 
@@ -72,6 +86,9 @@ async function persistGeneratedPost(
       sub_scores: score?.subScores ?? null,
       score_issues: score?.issues ?? [],
       score_warning: scoreWarning,
+      blog_type: extras.blogType ?? null,
+      blog_idea_id: extras.blogIdeaId ?? null,
+      feature_meta: extras.featureMeta ?? null,
     })
     .select("id")
     .single();
@@ -242,6 +259,152 @@ export async function updateBlogPost(
   if (error) return { success: false, error: error.message };
   revalidatePath("/seo-tracker/blog-writer");
   revalidatePath("/seo-tracker");
+  return { success: true };
+}
+
+/**
+ * Ideation step. Returns 3 candidate ideas (or 1 for feature
+ * announcements) without committing a full blog post yet — the user
+ * picks their favourite, then `commitBlogIdea` runs the full
+ * generator. Each idea is persisted to `blog_post_ideas` so we can
+ * audit + retry.
+ */
+export async function generateBlogIdeasAction(
+  tenantSlug: string,
+  input: {
+    blogType: BlogType;
+    feature?: FeatureMeta;
+    extraContext?: string;
+  }
+): Promise<ActionResult<{ batchId: string; ideas: GeneratedIdeaRow[] }>> {
+  const tenant = await getTenant(tenantSlug);
+  if (!tenant) return { success: false, error: "Tenant not found" };
+  const user = await getCurrentUser();
+
+  try {
+    const result = await generateBlogIdeas({
+      tenantSlug,
+      blogType: input.blogType,
+      feature: input.feature,
+      extraContext: input.extraContext,
+      createdBy: user?.id ?? null,
+    });
+    return { success: true, batchId: result.batchId, ideas: result.ideas };
+  } catch (err) {
+    if (err instanceof BlogIdeationError) {
+      return { success: false, error: err.message };
+    }
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Ideation failed",
+    };
+  }
+}
+
+/**
+ * Commit a chosen idea → full blog post. Marks the picked idea
+ * 'picked' and the rest of the batch 'dismissed' so they don't
+ * keep showing up.
+ */
+export async function commitBlogIdea(
+  tenantSlug: string,
+  ideaId: string,
+  input: {
+    targetWordCount?: number;
+    extraContext?: string;
+  } = {}
+): Promise<ActionResult<CreateBlogResult>> {
+  const admin = createAdminClient();
+  const { data: ideaRow, error: fetchErr } = await admin
+    .from("blog_post_ideas")
+    .select("*")
+    .eq("id", ideaId)
+    .eq("tenant_slug", tenantSlug)
+    .maybeSingle();
+
+  if (fetchErr || !ideaRow) {
+    return { success: false, error: "Idea not found" };
+  }
+  if (ideaRow.status !== "pending") {
+    return {
+      success: false,
+      error: "This idea has already been picked or dismissed.",
+    };
+  }
+
+  const tenant = await getTenant(tenantSlug);
+  if (!tenant) return { success: false, error: "Tenant not found" };
+  const { voice, positioning } = await getBrandContext(tenantSlug);
+
+  const featureMeta = (ideaRow.feature_meta as FeatureMeta | null) ?? null;
+  const ideaContext = [
+    `Premise: ${ideaRow.premise}`,
+    ideaRow.angle ? `Angle: ${ideaRow.angle}` : null,
+    ideaRow.trending_signal ? `Tied to trend: ${ideaRow.trending_signal}` : null,
+    featureMeta
+      ? `Feature: ${featureMeta.name} — ${featureMeta.about}. Audience: ${featureMeta.audience}. Benefits: ${featureMeta.benefits}`
+      : null,
+    input.extraContext ? `Extra: ${input.extraContext}` : null,
+  ]
+    .filter((s): s is string => s !== null)
+    .join("\n");
+
+  try {
+    const generation = await generateBlogPost({
+      tenantSlug,
+      tenantName: tenant.name,
+      voice,
+      positioning,
+      targetKeyword: ideaRow.target_keyword || ideaRow.title,
+      titleOverride: ideaRow.title,
+      improveTitle: true,
+      extraContext: ideaContext,
+      targetWordCount: input.targetWordCount,
+    });
+
+    const persistResult = await persistGeneratedPost(
+      tenantSlug,
+      tenant.name,
+      tenant.domain,
+      generation,
+      ideaRow.target_keyword || ideaRow.title,
+      {
+        blogType: ideaRow.blog_type as BlogType,
+        blogIdeaId: ideaRow.id as string,
+        featureMeta,
+      }
+    );
+
+    if (persistResult.success) {
+      // Stamp the picked idea + dismiss its siblings.
+      await admin
+        .from("blog_post_ideas")
+        .update({ status: "picked" })
+        .eq("id", ideaRow.id);
+      await admin
+        .from("blog_post_ideas")
+        .update({ status: "dismissed" })
+        .eq("batch_id", ideaRow.batch_id)
+        .eq("status", "pending");
+    }
+
+    return persistResult;
+  } catch (err) {
+    return { success: false, error: humanizeGenerationError(err) };
+  }
+}
+
+export async function dismissBlogIdea(
+  tenantSlug: string,
+  ideaId: string
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("blog_post_ideas")
+    .update({ status: "dismissed" })
+    .eq("id", ideaId)
+    .eq("tenant_slug", tenantSlug);
+  if (error) return { success: false, error: error.message };
   return { success: true };
 }
 
