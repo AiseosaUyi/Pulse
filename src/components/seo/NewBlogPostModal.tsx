@@ -18,7 +18,7 @@ import {
   type FeatureAudience,
   type FeatureMeta,
   type GeneratedIdeaRow,
-} from "@/lib/ai/blog-ideate";
+} from "@/lib/types/blog-ideation";
 import { LENGTH_BANDS, type LengthBand } from "@/lib/blog/word-count";
 
 /**

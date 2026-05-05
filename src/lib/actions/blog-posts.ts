@@ -7,13 +7,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { getTenant } from "@/lib/services/tenants";
 import { getBrandContext } from "@/lib/ai/brand-positioning";
 import { generateBlogPost, BlogGenerationError } from "@/lib/ai/generate-blog-post";
-import {
-  generateBlogIdeas,
-  BlogIdeationError,
-  type BlogType,
-  type FeatureMeta,
-  type GeneratedIdeaRow,
-} from "@/lib/ai/blog-ideate";
+import { generateBlogIdeas, BlogIdeationError } from "@/lib/ai/blog-ideate";
+import type {
+  BlogType,
+  FeatureMeta,
+  GeneratedIdeaRow,
+} from "@/lib/types/blog-ideation";
 import { countWords } from "@/lib/blog/word-count";
 import { buildGooglePreview } from "@/lib/blog/google-preview";
 import { uniqueSlugFor } from "@/lib/blog/slug";
