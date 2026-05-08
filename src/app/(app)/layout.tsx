@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/sidebar/Sidebar";
 import { MobileNav } from "@/components/sidebar/MobileNav";
 import { DialogProvider } from "@/components/ui/Dialog";
+import { Toaster } from "@/components/ui/Toaster";
 import { getCurrentUser, getUserTenants, getCurrentTenant } from "@/lib/auth";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
 import { getOnboardingProgress } from "@/lib/services/onboarding";
@@ -52,6 +53,7 @@ export default async function AppLayout({
           {children}
         </main>
       </div>
+      <Toaster />
     </DialogProvider>
   );
 }

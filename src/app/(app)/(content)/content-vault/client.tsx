@@ -59,7 +59,7 @@ export function VaultClient({ tenantSlug, saved, trends }: Props) {
         <div className="bg-card rounded-xl border border-border/50">
           <div className="p-5 border-b border-border/50 flex items-center justify-between flex-wrap gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
-              Saved content
+              Extracts
             </h2>
             <div className="flex gap-1.5">
               {FILTERS.map((f) => (
@@ -81,7 +81,7 @@ export function VaultClient({ tenantSlug, saved, trends }: Props) {
           {visible.length === 0 ? (
             <div className="p-10 text-center">
               <p className="text-foreground font-medium mb-1">
-                {filter === "all" ? "No saved content yet" : `No ${filter} items`}
+                {filter === "all" ? "No extracts yet" : `No ${filter} items`}
               </p>
               <p className="text-text-muted text-sm">
                 Paste a link above to save your first item.

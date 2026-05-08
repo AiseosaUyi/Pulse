@@ -28,6 +28,10 @@
     {
       "path": "/api/cron/composio-sync-insights",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/drive-reconcile",
+      "schedule": "0 4 * * *"
     }
   ]
 }

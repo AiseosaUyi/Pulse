@@ -118,6 +118,36 @@ All figures assume CC+gstack pace. Real calendar time for the founder is gated b
 
 ---
 
+## P8 — Content Pipeline (post-MVP follow-ups)
+
+Captured during /plan-eng-review on 2026-05-08. Plan file: `~/.gstack/projects/Pulse/aiseosauyi-idahor-main-content-pipeline-plan-20260508-112310.md`.
+
+### Calendar/Plan view + bulk-edit polish
+- **What:** Drag-drop weekly calendar grid for `content_items.scheduled_at`; bulk-edit dialog (multi-select rows → apply status/assignee/platforms); smart filename→title heuristic surfacing; mobile-friendly upload affordances.
+- **Why:** Table + grid covers the visibility ask, but ops teams plan in calendar shape. Bulk-edit is the second-most-requested action after upload.
+- **Pros:** Major UX upgrade; addresses the "30 files at once" pain point that bulk-apply in stepper only half-solves.
+- **Cons:** ~3 days of work; calendar libs are heavy; drag-drop has its own QA surface.
+- **Context:** Defer to v1.1 once Pipeline shape is validated in production. Calendar can use `react-day-picker` + custom drop-zones per day. Bulk-edit uses the existing Dialog primitive.
+- **Depends on:** Pipeline MVP shipped + 2 weeks of usage data so we know what teams actually do.
+
+### Auto-generate scheduled_posts rows on status=scheduled
+- **What:** When a `content_item` flips to `status='scheduled'`, generate one `scheduled_posts` row per selected platform that references a new `content_item_id` column.
+- **Why:** Bridges Content Pipeline (asset-shaped) to existing posting machinery (post-shaped). Sets up the path for actual publishing without changing Pipeline UX.
+- **Pros:** Reuses existing posting infra; makes Pipeline status="Posted" stop being purely manual once posting is wired up.
+- **Cons:** Requires a `content_item_id` column on `scheduled_posts`; needs reverse-lookup so editing the asset cascades to linked scheduled_posts; conflict resolution if user edits the platform list after scheduling.
+- **Context:** Migration: add `scheduled_posts.content_item_id uuid references content_items(id) on delete set null`. Trigger or service-layer fanout in `actions/content-pipeline.ts:updateContentItem`.
+- **Depends on:** Pipeline MVP shipped.
+
+### Google OAuth verification submission
+- **What:** Submit Pulse's Google OAuth app for verification with Drive scopes. While in "Testing" mode, capped at 100 users.
+- **Why:** Required before broad launch. Without verification, every new user past 100 hits a Google block.
+- **Pros:** Unblocks scale.
+- **Cons:** 4-6 weeks of Google review; requires privacy policy URL, demo video of the OAuth flow, security questionnaire. Drive scopes are "sensitive" so the reviewer typically requests a homepage screencast.
+- **Context:** Operational, not engineering. Owner: founder. Trigger: when active user count crosses 75 (warning sign), submit. Track at https://console.cloud.google.com/apis/credentials/consent.
+- **Depends on:** Pipeline MVP shipped + privacy policy at `/legal/privacy` exists.
+
+---
+
 ## Suggested build order
 
 1. **Today/tomorrow:** finish P0 (security hygiene) + P1 polish (close F2 loop cleanly)
