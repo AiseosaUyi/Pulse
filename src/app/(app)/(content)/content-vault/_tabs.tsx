@@ -13,7 +13,7 @@ export function ContentVaultTabs() {
   const path = usePathname() ?? "";
   return (
     <nav className="border-b border-border mb-6 -mx-4 md:mx-0">
-      <ul className="flex items-center gap-1 px-4 md:px-0 overflow-x-auto">
+      <ul className="flex items-center gap-1 px-4 md:px-0">
         {TABS.map(({ href, label, Icon }) => {
           const active = path === href || path.startsWith(`${href}/`);
           return (
