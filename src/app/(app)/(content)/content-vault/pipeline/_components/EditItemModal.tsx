@@ -29,7 +29,7 @@ const PLATFORM_LABELS: Record<ContentPlatform, string> = {
 interface Props {
   item: ContentItemWithDisplay;
   contentTypes: ContentType[];
-  members: Array<{ id: string; name: string }>;
+  members: Array<{ id: string; name: string; avatarUrl: string | null }>;
   onClose: () => void;
 }
 

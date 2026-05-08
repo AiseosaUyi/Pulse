@@ -273,7 +273,7 @@ export async function listContentTypes(
 
 export async function listAssignableMembers(
   tenantSlug: string
-): Promise<Array<{ id: string; name: string }>> {
+): Promise<Array<{ id: string; name: string; avatarUrl: string | null }>> {
   const supabase = await createClient();
   // Two-step query — direct join on auth.users / profiles via FK
   // hint is fragile across Supabase versions. Cheap to do as two
@@ -288,13 +288,14 @@ export async function listAssignableMembers(
   );
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, display_name, username")
+    .select("id, display_name, username, avatar_url")
     .in("id", userIds);
   const profileMap = new Map(
     ((profiles as Array<{
       id: string;
       display_name: string | null;
       username: string | null;
+      avatar_url: string | null;
     }> | null) ?? []).map((p) => [p.id, p])
   );
   return userIds
@@ -303,6 +304,7 @@ export async function listAssignableMembers(
       return {
         id,
         name: p?.display_name ?? p?.username ?? "Member",
+        avatarUrl: p?.avatar_url ?? null,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));

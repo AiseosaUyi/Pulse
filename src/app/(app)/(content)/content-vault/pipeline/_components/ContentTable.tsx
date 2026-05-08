@@ -3,12 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
-import {
-  ExternalLink,
-  FileVideo,
-  ImageIcon,
-  User,
-} from "lucide-react";
+import { ExternalLink, FileVideo, ImageIcon } from "lucide-react";
 import { useDialogs } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/Toaster";
@@ -28,12 +23,13 @@ import { BulkActionBar } from "./BulkActionBar";
 import { EditItemModal } from "./EditItemModal";
 import { InlineTypePicker } from "./InlineTypePicker";
 import { InlineSchedulePicker } from "./InlineSchedulePicker";
+import { InlineAssigneePicker } from "./InlineAssigneePicker";
 import { DownloadButton } from "./DownloadButton";
 
 interface Props {
   items: ContentItemWithDisplay[];
   contentTypes: ContentType[];
-  members: Array<{ id: string; name: string }>;
+  members: Array<{ id: string; name: string; avatarUrl: string | null }>;
   nextCursor: ContentItemFilters["cursor"] | null;
 }
 
@@ -306,8 +302,10 @@ export function ContentTable({
                         aria-label={`Select ${item.title}`}
                       />
                     </Td>
-                    {/* Thumbnail column — checkbox overlays on hover too */}
-                    <Td>
+                    {/* Thumbnail column — sits flush against the title
+                     * cell (no right padding here, no left padding on
+                     * Title) so the thumb visually anchors the title. */}
+                    <Td className="pr-0">
                       <div className="relative group">
                         {item.thumbnailUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -323,7 +321,7 @@ export function ContentTable({
                         )}
                       </div>
                     </Td>
-                    <Td>
+                    <Td className="pl-2">
                       <div className="font-medium text-foreground line-clamp-1 max-w-[200px]">
                         {item.title}
                       </div>
@@ -360,29 +358,15 @@ export function ContentTable({
                         scheduledAt={item.scheduledAt}
                       />
                     </Td>
-                    {/* Assigned — avatar + first name only */}
+                    {/* Assigned — click avatar/icon to open picker */}
                     <Td>
-                      {item.assignedTo ? (
-                        <div className="flex items-center gap-2">
-                          {item.assignedToAvatarUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={item.assignedToAvatarUrl}
-                              alt=""
-                              className="w-6 h-6 rounded-full object-cover"
-                            />
-                          ) : (
-                            <span className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                              <User size={12} className="text-text-muted" />
-                            </span>
-                          )}
-                          <span className="text-foreground text-sm whitespace-nowrap">
-                            {item.assignedToFirstName ?? "—"}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-text-muted text-xs">Not set</span>
-                      )}
+                      <InlineAssigneePicker
+                        itemId={item.id}
+                        assignedTo={item.assignedTo}
+                        assignedToFirstName={item.assignedToFirstName}
+                        assignedToAvatarUrl={item.assignedToAvatarUrl}
+                        members={members}
+                      />
                     </Td>
                     <Td>
                       <div className="flex items-center justify-end gap-0.5">
@@ -455,6 +439,14 @@ function Th({
   );
 }
 
-function Td({ children }: { children?: React.ReactNode }) {
-  return <td className="px-3 py-2.5 align-middle">{children}</td>;
+function Td({
+  children,
+  className = "",
+}: {
+  children?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <td className={`px-3 py-2.5 align-middle ${className}`}>{children}</td>
+  );
 }

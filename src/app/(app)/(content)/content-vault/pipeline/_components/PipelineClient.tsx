@@ -19,7 +19,7 @@ interface Props {
   tenantSlug: string;
   sections: ContentSection[];
   contentTypes: ContentType[];
-  members: Array<{ id: string; name: string }>;
+  members: Array<{ id: string; name: string; avatarUrl: string | null }>;
   activeSectionSlug: string;
   filters: ContentItemFilters;
   items: ContentItemWithDisplay[];

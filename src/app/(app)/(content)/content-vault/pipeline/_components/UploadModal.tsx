@@ -62,7 +62,7 @@ interface Props {
   tenantSlug: string;
   sections: ContentSection[];
   contentTypes: ContentType[];
-  members: Array<{ id: string; name: string }>;
+  members: Array<{ id: string; name: string; avatarUrl: string | null }>;
   activeSectionSlug: string;
   onClose: () => void;
   /** Called when the user creates a new content type from inside this
@@ -651,7 +651,7 @@ function MetadataPanel({
   activeIdx: number;
   setActiveIdx: (i: number) => void;
   contentTypes: ContentType[];
-  members: Array<{ id: string; name: string }>;
+  members: Array<{ id: string; name: string; avatarUrl: string | null }>;
   updateDraft: (idx: number, patch: Partial<ItemDraft>) => void;
   togglePlatform: (idx: number, p: ContentPlatform) => void;
   onTypeSelect: (idx: number, value: string) => void;
