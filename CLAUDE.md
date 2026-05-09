@@ -17,7 +17,9 @@ pnpm db:seed      # One-time founder + Gruve/Sippy seed (reads SEED_* + SUPABASE
 
 Single test: `pnpm test tests/unit/foo.test.ts`. Tests live under `tests/unit`, `tests/integration`, `tests/smoke`, `tests/e2e`. Playwright config at `playwright.config.ts`, Vitest at `vitest.config.ts`.
 
-DB migrations live in `supabase/migrations/`, named `NNN_*.sql` — currently through 032. Apply via Supabase SQL Editor (paste + run) or `supabase db push` after `supabase login --token <pat>` and `supabase link --project-ref <ref>`.
+DB migrations live in `supabase/migrations/`, named `NNN_*.sql` — currently through 042. Apply via Supabase SQL Editor (paste + run) or `supabase db push` after `supabase login --token <pat>` and `supabase link --project-ref <ref>`.
+
+When modifying a table, **grep prior migrations first** — retrofits later in the chain can change column shapes/RLS for tables defined earlier (e.g. 002 retrofit affected 009).
 
 One-off tenant cleanup scripts live in `supabase/cleanups/` (e.g. `wipe-tenant-mock.sql` resets seeded mock data for a tenant). Paste into the SQL Editor and run.
 
@@ -119,8 +121,9 @@ All AI calls go through `src/lib/ai/gateway.ts`:
 - **Chrome extension** (Tier 2): `extension/` folder, MV3. Injects "Draft with Pulse" FAB on IG/TikTok/X/LinkedIn profiles. Auths via tenant API tokens (`tenant_api_tokens` table, created at `/settings/integrations`). Endpoints at `/api/ext/*`.
 - **GA4 analytics** (Slice 7a): `src/lib/integrations/ga4.ts` — service-account JWT auth, no extra deps. `web_analytics_daily` table. Feeds the Weekly Business Review.
 - **Weekly Business Review** (Slice 7a): `src/lib/ai/weekly-review.ts` — synthesizes module counts into a narrative. Dashboard banner, stored on extended `weekly_digests`.
+- **Content Pipeline** (P8): `/content-vault/pipeline` — Drive-backed media library with metadata + status + scheduling. Resumable PUT to `/api/integrations/drive/upload-chunk` streams files straight to the user's connected Drive; `content_items` (041) holds the metadata; `042` adds the status enum. Daily `drive-reconcile` cron flags missing/permission-lost files. Drive OAuth lives at `/api/integrations/drive/{connect,callback}`. Tabs: `Extracts` (legacy Saved) + `Pipeline`. The `Saved` directory still exists at `/content-vault/saved` — only the label was renamed.
 
-The 100x product roadmap is `docs/pulse-100x-roadmap.md` — check it for what's shipped vs pending.
+The 100x product roadmap is `docs/pulse-100x-roadmap.md`. Long-form context for the most recent roadmap items lives in `TODOS.md` under `## P8`.
 
 ## Theming
 
@@ -130,9 +133,12 @@ The Gruve light palette + full token scale are in `globals.css` `@theme`. The `h
 
 **Dark mode keeps Gruve red as the brand color.** See `DARK-THEME.md` for the palette spec.
 
-**Two recurring footguns:**
+**Recurring footguns:**
 1. `text-white` is *not* theme-aware (Tailwind built-in = literal `#ffffff`). Use `text-foreground` for body text on cards. `text-white` is correct only on colored backgrounds.
 2. `bg-white` is also literal. Use `bg-card` for theme-tracking surfaces.
+3. **Modal scroll regions need `h-[Xvh]`, not `max-h-[Xvh]`.** Percentage heights (`h-full`) only resolve when every ancestor has a *definite* height. `max-h` alone makes the container content-sized until it overflows, which collapses `h-full` on inner scroll regions to `auto` and breaks `overflow-y-auto`. See `UploadModal.tsx` — the metadata phase uses `h-[90vh]` so the sidebar's `overflow-y-auto` actually has bounded content to clip.
+4. **Don't use inline `ref={(el) => ...}` callbacks for `scrollIntoView`.** React re-creates the lambda each render → ref re-fires → element scrolls back, blocking manual scrolling. Use a stable ref + `useEffect` keyed on the trigger value (see `UploadModal` `desktopActiveRef`).
+5. **Native datetime-local picker icons are stubborn.** `[&::-webkit-calendar-picker-indicator]:hidden` + `onClick={(e) => e.currentTarget.showPicker?.()}` is the reliable way to hide the native indicator and replace it with a custom icon. `opacity:0` + `flex-1` tricks were unreliable across webkit builds. See `UploadModal` Post-schedule input.
 
 ## Sidebar navigation
 
@@ -143,6 +149,8 @@ Items in `src/lib/nav-config.ts` (typed). Icon names map to Lucide imports in `c
 - **Light** — `GRUVE-DESIGN.md` is the canonical spec (maroon `#ad112c`, Satoshi @font-face, pill buttons, rounded-lg inputs, rounded-2xl cards, blue focus rings, no in-app gradients).
 - **Dark** — `DARK-THEME.md` documents the dark palette, surface hierarchy, and conversion rules.
 - **Dialogs** — always use the `Dialog` / `useDialogs` primitives from `src/components/ui/Dialog.tsx`. Never `window.confirm/alert/prompt`.
+- **Toasts** — `toast.success/error(...)` from `src/components/ui/Toaster.tsx`. The `<Toaster />` is mounted once in `(app)/layout.tsx`.
+- **Inline cell editors** — `StatusPill`, `InlineSchedulePicker`, `InlineAssigneePicker`, `InlineTypePicker` (under `content-vault/pipeline/_components/`) all share a portaled-popover pattern: `useLayoutEffect` measures the trigger rect, `createPortal(menu, document.body)` renders fixed-position so the menu is never clipped by the table's `overflow-x`. When adding a new inline editor, copy this pattern — anything inline-rendered will get clipped.
 - **Fonts** — `@font-face` references `/public/fonts/Satoshi-{Regular,Medium,Bold,Black}.woff2`. Files aren't in the repo; falls back to system sans-serif until dropped in.
 
 ## Skill routing
