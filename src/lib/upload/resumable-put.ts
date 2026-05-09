@@ -1,5 +1,5 @@
 // Browser-side resumable upload to a Drive session URI. Chunks the
-// file into 8MB blocks (Drive requires multiples of 256KB). Reports
+// file into 4MB blocks (Drive requires multiples of 256KB). Reports
 // progress, supports cancellation. All work happens in the browser —
 // the Pulse server is not in the data path.
 //
@@ -7,7 +7,11 @@
 // localStorage; resume() queries Drive for the current byte offset
 // and continues.
 
-const CHUNK_BYTES = 8 * 1024 * 1024; // 8 MB
+// 4 MB keeps each chunk under Vercel's default 4.5 MB function request
+// body limit (we proxy chunks via /api/integrations/drive/upload-chunk
+// to dodge browser CORS on the direct-to-Drive PUT). 4 MiB is a clean
+// multiple of 256 KB, which Drive's resumable upload requires.
+const CHUNK_BYTES = 4 * 1024 * 1024; // 4 MB
 const STORAGE_KEY_PREFIX = "pulse:upload-session:";
 
 interface ResumableInit {
@@ -153,7 +157,7 @@ async function queryUploadStatus(
 
 /**
  * Run a resumable upload to completion via the Pulse server proxy.
- * Each 8MB chunk goes browser → /api/integrations/drive/upload-chunk
+ * Each 4MB chunk goes browser → /api/integrations/drive/upload-chunk
  * → Drive's resumable session URI. The proxy hop sidesteps browser
  * CORS rejections that block direct browser→Drive PUTs in some
  * networks.

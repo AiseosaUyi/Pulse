@@ -3,17 +3,17 @@
 // configurations. This proxy moves that single hop server-side
 // where CORS doesn't apply.
 //
-// Browser PUTs an 8MB chunk to this endpoint with the upload
+// Browser PUTs a 4MB chunk to this endpoint with the upload
 // session ID and Content-Range header. Server validates the
 // session belongs to the user, forwards the chunk to Drive's
 // resumable URI with the same Content-Range, and returns Drive's
 // response (status + body + Range header) back to the browser.
 //
-// Each chunk is bounded by the resumable-put chunk size (8MB),
-// well under Vercel's default body size limit even on the smallest
-// plan. For very large files (>1GB) the user uploads many chunks
-// in sequence — bandwidth flows through Pulse but in bounded
-// pieces.
+// Chunk size is set in src/lib/upload/resumable-put.ts to 4MB so
+// each request stays under Vercel's 4.5MB default function body
+// limit (8MB chunks 413'd in production). For very large files
+// (>1GB) the browser uploads many chunks in sequence — bandwidth
+// flows through Pulse but in bounded pieces.
 
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
