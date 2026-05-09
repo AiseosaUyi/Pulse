@@ -17,13 +17,13 @@ import type {
   ContentType,
 } from "@/lib/types/content-pipeline";
 import { StatusPill } from "./StatusPill";
-import { PlatformBadges } from "./PlatformBadges";
 import { RowActionsMenu } from "./RowActionsMenu";
 import { BulkActionBar } from "./BulkActionBar";
 import { EditItemModal } from "./EditItemModal";
 import { InlineTypePicker } from "./InlineTypePicker";
 import { InlineSchedulePicker } from "./InlineSchedulePicker";
 import { InlineAssigneePicker } from "./InlineAssigneePicker";
+import { InlinePlatformPicker } from "./InlinePlatformPicker";
 import { DownloadButton } from "./DownloadButton";
 
 interface Props {
@@ -347,7 +347,10 @@ export function ContentTable({
                       />
                     </Td>
                     <Td>
-                      <PlatformBadges platforms={item.platforms} />
+                      <InlinePlatformPicker
+                        itemId={item.id}
+                        platforms={item.platforms}
+                      />
                     </Td>
                     <Td>
                       <StatusPill itemId={item.id} status={item.status} />
