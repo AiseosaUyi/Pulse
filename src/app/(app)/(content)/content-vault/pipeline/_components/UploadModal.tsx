@@ -107,12 +107,14 @@ export function UploadModal({
     "select"
   );
   // When on, edits to the active draft propagate to every other
-  // draft (except per-file fields like title). The footer also
-  // surfaces an "Upload all" CTA so the user can skip the per-file
-  // walk entirely. Toggling ON also retroactively pushes the
-  // active draft's broadcastable fields to every other draft, so
-  // a user who set up file #1 and then toggled doesn't have to
-  // re-enter values.
+  // draft. The footer also surfaces an "Upload all" CTA so the
+  // user can skip the per-file walk entirely. Titles broadcast
+  // with an auto-incrementing numeric suffix — the edited draft
+  // keeps the bare title and siblings become "<title> 01",
+  // "<title> 02", etc. (zero-padded to batch width). Toggling ON
+  // also retroactively pushes the active draft's broadcastable
+  // fields to every other draft, so a user who set up file #1
+  // and then toggled doesn't have to re-enter values.
   const [applyToAll, setApplyToAllState] = useState(false);
   const setApplyToAll = (next: boolean) => {
     setApplyToAllState(next);
@@ -126,7 +128,18 @@ export function UploadModal({
         scheduledAt: active.scheduledAt,
         assignedTo: active.assignedTo,
       };
-      return prev.map((d, i) => (i === activeIdx ? d : { ...d, ...broadcast }));
+      const total = prev.length;
+      const width = Math.max(2, String(Math.max(total - 1, 1)).length);
+      let seq = 1;
+      return prev.map((d, i) => {
+        if (i === activeIdx) return d;
+        const merged = { ...d, ...broadcast };
+        if (total > 1 && active.title.trim()) {
+          merged.title = `${active.title} ${String(seq).padStart(width, "0")}`;
+          seq++;
+        }
+        return merged;
+      });
     });
   };
   // Local mirror of contentTypes — the upload modal can add to this
@@ -226,9 +239,23 @@ export function UploadModal({
       for (const k of PER_FILE_FIELDS) {
         delete broadcast[k as keyof typeof broadcast];
       }
-      return prev.map((d, i) =>
-        i === idx ? { ...d, ...patch } : { ...d, ...broadcast }
-      );
+      // Title is per-file storage but broadcasts with a numeric
+      // suffix when applyToAll is on: edited draft keeps the bare
+      // title, siblings get "<title> 01", "<title> 02", etc.
+      const baseTitle =
+        typeof patch.title === "string" ? patch.title : null;
+      const total = prev.length;
+      const width = Math.max(2, String(Math.max(total - 1, 1)).length);
+      let seq = 1;
+      return prev.map((d, i) => {
+        if (i === idx) return { ...d, ...patch };
+        const merged = { ...d, ...broadcast };
+        if (baseTitle !== null && total > 1 && baseTitle.trim()) {
+          merged.title = `${baseTitle} ${String(seq).padStart(width, "0")}`;
+          seq++;
+        }
+        return merged;
+      });
     });
   };
 
@@ -930,8 +957,9 @@ function MetadataPanel({
 
         {/* Apply-to-all toggle — only meaningful for batches.
          * When on, edits to the active draft propagate to every
-         * other draft (except per-file fields like title), and
-         * the footer adds an "Upload all" CTA next to Next. */}
+         * other draft. Titles get an auto-incrementing suffix so
+         * you don't have to rename each file. The footer adds an
+         * "Upload all" CTA next to Next. */}
         {drafts.length > 1 ? (
           <label className="flex items-start gap-3 p-3 rounded-xl border border-border bg-gray-50/60 dark:bg-gray-900/30 cursor-pointer select-none">
             <button
@@ -956,8 +984,9 @@ function MetadataPanel({
                 Apply to all {drafts.length} files
               </span>
               <span className="block text-xs text-text-muted mt-0.5">
-                Edits made here will sync to every other file in this
-                batch (except titles).
+                Edits sync to every other file. Titles get auto-numbered
+                — &ldquo;Cat video&rdquo; becomes &ldquo;Cat video 01&rdquo;,
+                &ldquo;Cat video 02&rdquo;, etc.
               </span>
             </span>
           </label>
