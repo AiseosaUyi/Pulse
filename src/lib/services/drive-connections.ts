@@ -7,7 +7,6 @@
 // refresh wins; both end up with a valid token.
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import {
   DriveError,
   refreshAccessToken,
@@ -55,12 +54,20 @@ export interface DriveConnectionStatus {
 }
 
 /**
- * RLS-scoped read for the settings UI. Owner/admin gated by policy.
+ * Tenant-scoped read of the UI-safe Drive connection snapshot.
+ *
+ * Uses the admin client because the underlying row's RLS is owner/admin-only
+ * (it holds refresh + access tokens), but the boolean "is Drive connected for
+ * this tenant?" needs to be visible to every member — otherwise the pipeline
+ * page renders the Connect prompt for non-admins and pushes them to settings,
+ * which is also gated. Callers must pass a tenantSlug that came from
+ * getCurrentTenant()/membership-validated input; this function does not
+ * re-validate membership.
  */
 export async function getDriveConnectionStatus(
   tenantSlug: string
 ): Promise<DriveConnectionStatus> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data } = await supabase
     .from("tenant_drive_connections")
     .select("status, root_folder_id, connected_at, last_error")
