@@ -78,6 +78,34 @@ function fileMeta(ref: ImageRef, fallbackName: string) {
   };
 }
 
+/** Publish all `scheduled` posts whose scheduled_at has passed. */
+export async function sweepDuePublishes(): Promise<{
+  status: "ok" | "partial" | "failed";
+  rowsProcessed: number;
+  metadata: Record<string, unknown>;
+}> {
+  const admin = createAdminClient();
+  const { data: due } = await admin
+    .from("blog_posts")
+    .select("id")
+    .eq("status", "scheduled")
+    .lte("scheduled_at", new Date().toISOString())
+    .limit(25);
+  const posts = due ?? [];
+  let ok = 0;
+  let failed = 0;
+  for (const p of posts) {
+    const r = await runPublish({ blogPostId: p.id });
+    if (r.status === "succeeded") ok++;
+    else failed++;
+  }
+  return {
+    status: failed > 0 && ok > 0 ? "partial" : failed > 0 ? "failed" : "ok",
+    rowsProcessed: posts.length,
+    metadata: { ok, failed },
+  };
+}
+
 export async function runPublish(args: {
   blogPostId: string;
   triggeredBy?: string | null;

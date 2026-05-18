@@ -1,11 +1,11 @@
-// Publishes due scheduled posts. No longer cron-scheduled (folded into
-// seo-maintenance for Hobby's daily/low-count cron limits) — kept as a
-// bearer-gated manual/on-demand trigger. One cron_runs row.
+// Single daily SEO cron (Hobby plan: daily-only + low cron count).
+// Runs all six SEO jobs in one invocation. Bearer-gated; one cron_runs
+// row. Scheduled 08:00 UTC so decay detection matches Pack C §10.
 
 import { NextResponse } from "next/server";
 import { verifyFromRequest } from "@/lib/cron/auth";
 import { withCronRun } from "@/lib/cron/run-tracker";
-import { sweepDuePublishes } from "@/lib/seo/publish-runner";
+import { runSeoMaintenance } from "@/lib/seo/maintenance";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -15,8 +15,8 @@ export async function POST(req: Request) {
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
-  const result = await withCronRun("seo-publish-sweep", () =>
-    sweepDuePublishes()
+  const result = await withCronRun("seo-maintenance", () =>
+    runSeoMaintenance()
   );
   return NextResponse.json(result);
 }

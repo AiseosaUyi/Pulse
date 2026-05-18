@@ -6,8 +6,9 @@ Pulse on a trusted machine — never paste keys/secrets into Discord/CI.
 
 Pre-reqs (before the window):
 - [ ] A9 window agreed (date/time/owners) — **this is the only gate**.
-- [ ] Pulse Vercel plan confirmed (Pro if `*/5` publish-sweep cron is
-      kept; else it's already switched to hourly).
+- [ ] Cron footprint is Hobby-safe: all SEO jobs run from one daily
+      `seo-maintenance` cron (08:00 UTC). No Pro upgrade required. Split
+      back to per-job sub-daily schedules later if/when on Pro.
 - [ ] Gruve has sent the GSC service-account **email** (non-secret).
 - [ ] Migrations 043–049 applied to Supabase.
 - [ ] PR #1 (`feat/ai-seo-os`) reviewed; Pack C spec PR diffed.

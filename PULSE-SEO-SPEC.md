@@ -261,8 +261,13 @@ enforced) until Gruve provisions its analytics DB — callers degrade gracefully
 
 `withCronRun(jobName, fn)` writes one `cron_runs` row per invocation
 (`running → ok | partial | failed | skipped`, `rows_processed`, `error`,
-`metadata`). All SEO crons (publish sweep, outcome capture, preview-jti sweep,
-internal-link crawler) and existing crons are wrapped.
+`metadata`). **Vercel Hobby** caps cron frequency (daily) and count, so all
+six SEO jobs run from a single daily cron `seo-maintenance` (08:00 UTC, so
+decay matches Pack C §10) via `runSeoMaintenance()` — publish sweep, rec
+outcomes, rec generate, decay detect, beacon process, preview-jti sweep,
+each isolated. The individual `/api/cron/seo-*` routes remain bearer-gated
+for manual/on-demand trigger but are no longer scheduled. On Pro they can
+be split back to independent sub-daily schedules (one-line per cron).
 
 ## §17 Gateway / models
 
