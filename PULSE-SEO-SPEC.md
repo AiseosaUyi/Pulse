@@ -74,7 +74,8 @@ migration 048 (this spec, §11).
   `outcome_30d` / `outcome_due_at` (the moat columns — present from day one).
 - **`seo_internal_links`** (045): observed from→to anchor graph.
 - **`seo_webhook_events`** (045): raw inbound (Contentful confirms, beacons).
-- **`seo_post_embeddings`** (046): pgvector(3072), keyed `(tenant_slug, slug)`.
+- **`seo_post_embeddings`** (046): pgvector(1536) — pgvector HNSW caps at
+  2000 dims so 3072 is impossible; keyed `(tenant_slug, slug)`.
 - **`seo_posts`** (046): lightweight published-content projection.
 - **`cron_runs`** (047): one row per cron invocation.
 - **`seo_preview_jti`** (048, this spec §11): jti replay cache, 5-min TTL.
@@ -172,7 +173,8 @@ measured_30d`. Rec `type` ∈ {`title_rewrite`, `meta_rewrite`,
 ## §10 Embeddings & internal linking
 
 `src/lib/vector/embed.ts` → `embedSeoPost(post)`: `text-embedding-3-large` @
-3072 dims, **on publish only** (not per editor save), `content_hash` =
+1536 dims (pgvector HNSW 2000-dim ceiling), **on publish only** (not per
+editor save), `content_hash` =
 sha256(normalized body) for staleness, upsert `seo_post_embeddings`, `logAiCall`
 purpose `seo-embedding`. Internal-link recs use cosine-nearest published posts
 (HNSW index in 046) filtered against the observed `seo_internal_links` graph.

@@ -20,7 +20,7 @@ export type Purpose =
   | "vision" // screenshot OCR / post-metrics extraction
   | "seo-longform" // SEO blog generation (Phase SEO/Phase 1)
   | "seo-scoring" // SEO recommendation scoring / title rewrites
-  | "seo-embedding"; // 3072-dim post embeddings for internal-link suggestions
+  | "seo-embedding"; // 1536-dim post embeddings for internal-link suggestions
 
 export function getModel(purpose: Purpose): LanguageModel {
   switch (purpose) {

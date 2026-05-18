@@ -12,7 +12,11 @@ import { openai } from "@ai-sdk/openai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { estimateCostUsd, getModelId, logAiCall } from "@/lib/ai/gateway";
 
-const MODEL = "text-embedding-3-large"; // 3072 dims (mig 046)
+const MODEL = "text-embedding-3-large";
+// 1536 dims (NOT the 3072 default): pgvector HNSW indexes cap at 2000
+// dimensions, so vector(3072)+HNSW is impossible. text-embedding-3-large
+// supports dimension reduction with negligible quality loss (mig 046).
+const DIMENSIONS = 1536;
 
 /** Normalize body text so cosmetic edits don't churn embeddings. */
 function normalize(text: string): string {
@@ -71,6 +75,7 @@ export async function embedSeoPost(
     const { embedding, usage } = await embed({
       model: openai.textEmbeddingModel(MODEL),
       value: normalize(input.bodyText),
+      providerOptions: { openai: { dimensions: DIMENSIONS } },
     });
 
     const tokens = usage?.tokens ?? 0;
