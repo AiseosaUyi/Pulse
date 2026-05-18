@@ -40,20 +40,23 @@ export async function POST(req: Request) {
     payload = { _unparsed: raw };
   }
 
+  // C4 envelope: { receivedAt, ipTrunc, country, ua, events:[{name,
+  // occurredAt, sessionId, slug?, payload}] }. No tenant or pulseId at
+  // beacon time — events join to posts by `slug`, resolved (with tenant)
+  // by the normalizer. Store the whole envelope verbatim.
   const p = (payload ?? {}) as Record<string, unknown>;
-  const tenantSlug =
-    typeof p.tenantSlug === "string" ? p.tenantSlug : null;
+  const events = Array.isArray(p.events) ? p.events : [];
   const eventType =
-    typeof p.type === "string" ? p.type : "beacon.unknown";
+    events.length > 0 ? "beacon.batch" : "beacon.empty";
 
   const supabase = createAdminClient();
   const { error } = await supabase.from("seo_webhook_events").insert({
-    tenant_slug: tenantSlug,
+    tenant_slug: null, // resolved per-event by slug in the normalizer
     source: "gruve-beacon",
     event_type: eventType,
     payload: p,
     signature_ok: true,
-    // processed_at left null — the C4 normalizer claims it later.
+    // processed_at left null — the normalizer claims it.
   });
 
   if (error) {

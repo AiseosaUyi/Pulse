@@ -12,7 +12,8 @@ const PRIVATE_PEM = process.env.PULSE_JWKS_PRIVATE_KEY;
 const KID = process.env.PULSE_JWKS_KID ?? "pulse-seo-1";
 const ISS = "pulse";
 const AUD = process.env.GRUVE_API_AUDIENCE ?? "gruve-api";
-const BASE = process.env.GRUVE_API_BASE_URL; // e.g. https://gruve.events
+// Gruve confirmed canonical base is www.
+const BASE = process.env.GRUVE_API_BASE_URL ?? "https://www.gruve.events";
 
 export class GruveNotConfiguredError extends Error {
   constructor() {
@@ -73,22 +74,104 @@ export async function gruveApiGet<T = unknown>(
   return (await res.json()) as T;
 }
 
-// ── The 6 Pulse-facing endpoints (C5) ────────────────────────────────
-// Names are placeholders; wire them to gruveApiGet with real paths/types
-// when C5 arrives. Throwing keeps callers honest until then.
-const pending = (name: string) => {
-  throw new GruveContractPendingError(name);
-};
+/** Authenticated POST against Gruve. */
+export async function gruveApiPost<T = unknown>(
+  path: string,
+  body?: unknown
+): Promise<T> {
+  if (!isGruveConfigured()) throw new GruveNotConfiguredError();
+  const token = await signGruveJwt();
+  const res = await fetch(new URL(path, BASE), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Gruve ${path} → ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as T;
+}
+
+// ── The 6 Pulse-facing endpoints (C5 — exact contracts from Gruve) ────
+// All cursor-paginated by ISO date; 60 req/min/token. Until Gruve
+// provisions its analytics DB these return { data: [] } with auth still
+// enforced — callers degrade gracefully (no special-casing needed).
+type DateRange = { slug?: string; from: string; to: string };
+
+export interface EngagementRow {
+  date: string;
+  slug: string;
+  views: number;
+  unique_views: number;
+  dwell_p50_ms: number;
+  dwell_p90_ms: number;
+  scroll_p50: number;
+  scroll_p90: number;
+  internal_links: number;
+  outbound_clicks: number;
+  cta_clicks: number;
+  to_event_clicks: number;
+  conversions: number;
+}
+export interface ConversionRow {
+  date: string;
+  slug: string;
+  views: number;
+  to_event_clicks: number;
+  conversions: number;
+}
+export interface CrawlerRow {
+  date: string;
+  slug: string;
+  bot_class: string;
+  hits: number;
+}
+export interface EventsTrafficRow {
+  slug: string;
+  clicks: number;
+  sessions: number;
+}
+export interface InternalLinkRow {
+  from_slug: string;
+  to_slug: string;
+  anchor: string;
+  observed: string;
+}
+type Page<T> = { data: T[]; nextCursor?: string | null };
 
 export const gruve = {
-  // e.g. published post performance, keyword positions, backlinks, etc.
-  getPostPerformance: (_slug: string): Promise<never> =>
-    pending("getPostPerformance"),
-  getKeywordPositions: (_slug: string): Promise<never> =>
-    pending("getKeywordPositions"),
-  getBacklinks: (_slug: string): Promise<never> => pending("getBacklinks"),
-  getSiteTaxonomy: (): Promise<never> => pending("getSiteTaxonomy"),
-  getPublishedIndex: (): Promise<never> => pending("getPublishedIndex"),
-  getTrafficSummary: (_range: string): Promise<never> =>
-    pending("getTrafficSummary"),
+  engagement: (
+    q: DateRange & { cursor?: string; limit?: number }
+  ): Promise<Page<EngagementRow>> =>
+    gruveApiGet("/api/pulse/engagement", {
+      ...(q.slug ? { slug: q.slug } : {}),
+      from: q.from,
+      to: q.to,
+      ...(q.cursor ? { cursor: q.cursor } : {}),
+      ...(q.limit ? { limit: q.limit } : {}),
+    }),
+  conversions: (q: DateRange): Promise<Page<ConversionRow>> =>
+    gruveApiGet("/api/pulse/conversions", {
+      ...(q.slug ? { slug: q.slug } : {}),
+      from: q.from,
+      to: q.to,
+    }),
+  crawlers: (q: DateRange): Promise<Page<CrawlerRow>> =>
+    gruveApiGet("/api/pulse/crawlers", {
+      ...(q.slug ? { slug: q.slug } : {}),
+      from: q.from,
+      to: q.to,
+    }),
+  eventsTraffic: (
+    eventAddress: string
+  ): Promise<{ eventAddress: string; data: EventsTrafficRow[] }> =>
+    gruveApiGet("/api/pulse/events-traffic", { eventAddress }),
+  internalLinkGraph: (): Promise<{ data: InternalLinkRow[] }> =>
+    gruveApiGet("/api/pulse/internal-link-graph"),
+  reindex: (): Promise<{ ok: boolean; triggered: boolean }> =>
+    gruveApiPost("/api/pulse/reindex"),
 };

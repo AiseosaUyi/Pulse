@@ -1,45 +1,77 @@
-// Beacon normalizer (PULSE-SEO-SPEC.md §14). Claims unprocessed
-// seo_webhook_events (source 'gruve-beacon') and normalizes them so
-// §9's outcome capture can use real Gruve-reported metrics.
+// Beacon normalizer (PULSE-SEO-SPEC.md §14, wire contract C4 — now
+// fixed). Claims unprocessed seo_webhook_events (source 'gruve-beacon'),
+// parses the C4 envelope, resolves each event's `slug` → blog_posts
+// (tenant), and accumulates per-(tenant,slug,date) into
+// seo_post_engagement_daily. Idempotent at event-row granularity:
+// every row is stamped processed_at exactly once.
 //
-// [GRUVE-PENDING C4]: the exact payload schema is unknown, so
-// `mapBeaconPayload` is a documented best-effort over the most likely
-// shape ({ slug|pulseId, type, metrics:{...} }). It is the ONLY thing
-// to change when C4 arrives — the claim/mark/idempotency framework
-// around it is final. Unmappable events are marked processed with
-// signature_ok=false-style note so nothing silently loops forever.
+// C4 envelope:
+//   { receivedAt, ipTrunc, country, ua,
+//     events: [{ name, occurredAt, sessionId, slug?, payload }] }
+// Event names (fixed): blog_view · blog_scroll{depth} ·
+//   blog_dwell{msActive} · blog_outbound · blog_internal_link ·
+//   blog_share · blog_cta_click · web_vitals (not rolled up).
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export interface NormalizedBeacon {
-  slug: string | null;
-  pulseId: string | null;
-  eventType: string;
-  metrics: Record<string, number>;
+interface BeaconEvent {
+  name: string;
+  occurredAt: string;
+  sessionId: string;
+  slug?: string;
+  payload?: Record<string, unknown>;
 }
 
-/** Best-effort until C4. Returns null if the row can't be mapped yet. */
-export function mapBeaconPayload(payload: unknown): NormalizedBeacon | null {
-  if (!payload || typeof payload !== "object") return null;
-  const p = payload as Record<string, unknown>;
-  const slug = typeof p.slug === "string" ? p.slug : null;
-  const pulseId = typeof p.pulseId === "string" ? p.pulseId : null;
-  if (!slug && !pulseId) return null;
+interface Acc {
+  views: number;
+  dwell_ms_total: number;
+  scroll_depth_sum: number;
+  outbound_clicks: number;
+  internal_clicks: number;
+  shares: number;
+  cta_clicks: number;
+}
+const zero = (): Acc => ({
+  views: 0,
+  dwell_ms_total: 0,
+  scroll_depth_sum: 0,
+  outbound_clicks: 0,
+  internal_clicks: 0,
+  shares: 0,
+  cta_clicks: 0,
+});
 
-  const rawMetrics =
-    p.metrics && typeof p.metrics === "object"
-      ? (p.metrics as Record<string, unknown>)
-      : {};
-  const metrics: Record<string, number> = {};
-  for (const [k, v] of Object.entries(rawMetrics)) {
-    if (typeof v === "number") metrics[k] = v;
+function utcDate(iso: string): string | null {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+function fold(acc: Acc, ev: BeaconEvent): void {
+  const pl = ev.payload ?? {};
+  switch (ev.name) {
+    case "blog_view":
+      acc.views += 1;
+      break;
+    case "blog_dwell":
+      acc.dwell_ms_total += Number(pl.msActive ?? 0) || 0;
+      break;
+    case "blog_scroll":
+      acc.scroll_depth_sum += Number(pl.depth ?? 0) || 0;
+      break;
+    case "blog_outbound":
+      acc.outbound_clicks += 1;
+      break;
+    case "blog_internal_link":
+      acc.internal_clicks += 1;
+      break;
+    case "blog_share":
+      acc.shares += 1;
+      break;
+    case "blog_cta_click":
+      acc.cta_clicks += 1;
+      break;
+    // web_vitals: kept raw in seo_webhook_events, not rolled up.
   }
-  return {
-    slug,
-    pulseId,
-    eventType: typeof p.type === "string" ? p.type : "beacon.unknown",
-    metrics,
-  };
 }
 
 export async function processUnprocessedBeacons(): Promise<{
@@ -48,7 +80,7 @@ export async function processUnprocessedBeacons(): Promise<{
   metadata: Record<string, unknown>;
 }> {
   const supabase = createAdminClient();
-  const { data: events } = await supabase
+  const { data: rows } = await supabase
     .from("seo_webhook_events")
     .select("id, payload")
     .eq("source", "gruve-beacon")
@@ -56,35 +88,99 @@ export async function processUnprocessedBeacons(): Promise<{
     .order("received_at", { ascending: true })
     .limit(200);
 
-  const list = events ?? [];
-  let mapped = 0;
-  let unmapped = 0;
-
-  for (const ev of list) {
-    const norm = mapBeaconPayload(ev.payload);
-    // Stamp processed_at either way so a permanently-unmappable event
-    // (pre-C4 / malformed) doesn't loop forever. metadata records which.
-    const patch: Record<string, unknown> = {
-      processed_at: new Date().toISOString(),
-    };
-    if (norm) {
-      mapped++;
-      // When C4 lands, persist `norm` into post metrics here so §9
-      // outcome capture reads Gruve-reported numbers. For now the
-      // normalized projection is recorded on the event row's payload
-      // is left intact; downstream wiring is the C4 task.
-    } else {
-      unmapped++;
-    }
-    await supabase
-      .from("seo_webhook_events")
-      .update(patch)
-      .eq("id", ev.id);
+  const list = rows ?? [];
+  if (list.length === 0) {
+    return { status: "ok", rowsProcessed: 0, metadata: { batches: 0 } };
   }
 
+  // slug → tenant_slug (null = no matching post). Cached across batches.
+  const tenantBySlug = new Map<string, string | null>();
+  const resolveTenant = async (slug: string): Promise<string | null> => {
+    if (tenantBySlug.has(slug)) return tenantBySlug.get(slug)!;
+    const { data } = await supabase
+      .from("blog_posts")
+      .select("tenant_slug")
+      .eq("slug", slug)
+      .limit(1)
+      .maybeSingle();
+    const t = data?.tenant_slug ?? null;
+    tenantBySlug.set(slug, t);
+    return t;
+  };
+
+  // (tenant|slug|date) → Acc
+  const agg = new Map<string, Acc>();
+  let events = 0;
+  let unmatched = 0;
+
+  for (const row of list) {
+    const env = (row.payload ?? {}) as { events?: BeaconEvent[] };
+    for (const ev of env.events ?? []) {
+      events++;
+      if (!ev?.slug || !ev.occurredAt) {
+        unmatched++;
+        continue;
+      }
+      const tenant = await resolveTenant(ev.slug);
+      const date = utcDate(ev.occurredAt);
+      if (!tenant || !date) {
+        unmatched++;
+        continue;
+      }
+      const key = `${tenant}|${ev.slug}|${date}`;
+      const acc = agg.get(key) ?? zero();
+      fold(acc, ev);
+      agg.set(key, acc);
+    }
+  }
+
+  // Upsert accumulations (read-modify-write; safe because each beacon
+  // row is processed exactly once via processed_at).
+  for (const [key, acc] of agg) {
+    const [tenant_slug, slug, date] = key.split("|");
+    const { data: existing } = await supabase
+      .from("seo_post_engagement_daily")
+      .select(
+        "views, dwell_ms_total, scroll_depth_sum, outbound_clicks, internal_clicks, shares, cta_clicks"
+      )
+      .eq("tenant_slug", tenant_slug)
+      .eq("slug", slug)
+      .eq("date", date)
+      .maybeSingle();
+    const base = existing ?? zero();
+    await supabase.from("seo_post_engagement_daily").upsert(
+      {
+        tenant_slug,
+        slug,
+        date,
+        views: base.views + acc.views,
+        dwell_ms_total: Number(base.dwell_ms_total) + acc.dwell_ms_total,
+        scroll_depth_sum: base.scroll_depth_sum + acc.scroll_depth_sum,
+        outbound_clicks: base.outbound_clicks + acc.outbound_clicks,
+        internal_clicks: base.internal_clicks + acc.internal_clicks,
+        shares: base.shares + acc.shares,
+        cta_clicks: base.cta_clicks + acc.cta_clicks,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "tenant_slug,slug,date" }
+    );
+  }
+
+  // Stamp every claimed row processed.
+  const ids = list.map((r) => r.id);
+  await supabase
+    .from("seo_webhook_events")
+    .update({ processed_at: new Date().toISOString() })
+    .in("id", ids);
+
   return {
-    status: unmapped > 0 && mapped === 0 && list.length > 0 ? "partial" : "ok",
+    status: unmatched > 0 ? "partial" : "ok",
     rowsProcessed: list.length,
-    metadata: { mapped, unmapped, c4_pending: true },
+    metadata: {
+      batches: list.length,
+      events,
+      unmatched,
+      slugsRolledUp: agg.size,
+    },
   };
 }

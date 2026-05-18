@@ -11,8 +11,10 @@ import { SignJWT } from "jose";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const SECRET = process.env.PREVIEW_SHARED_SECRET;
+// Canonical base is www (Gruve confirmed: avoids a redirect hop;
+// bare gruve.events also resolves but redirects).
 const GRUVE_BASE =
-  process.env.GRUVE_PREVIEW_BASE_URL ?? "https://gruve.events";
+  process.env.GRUVE_PREVIEW_BASE_URL ?? "https://www.gruve.events";
 const JTI_TTL_MS = 5 * 60_000; // ledger window
 const TOKEN_TTL = "60s"; // jwt exp
 

@@ -209,24 +209,38 @@ publishes.
 `src/lib/seo/preview-token.ts` mints **HS256** JWT: secret
 `PREVIEW_SHARED_SECRET`, `iss:"pulse"`, `aud:"gruve-preview"`, `exp: 60s`,
 random `jti` recorded in `seo_preview_jti` (rejected on replay within 5 min),
-`contentType: "blog" | "story"`. Editor preview pane iframes
-`https://gruve.events/api/preview?token=<jwt>&slug=<slug>`. **Acceptance M2.**
+`contentType: "blog"` (Gruve confirmed; send `"blog"`). Editor preview pane
+iframes `https://www.gruve.events/api/preview?token=<jwt>&slug=<slug>`. Gruve
+verifies HS256 (alg-pinned), checks the token's own `exp` (no cap — keep ≈60s),
+and does **not** enforce single-use `jti` (no Redis their side) so our
+`seo_preview_jti` ledger is advisory only. Gruve sends
+`CSP: frame-ancestors 'self' https://pulse-ashy-kappa.vercel.app` and no
+`X-Frame-Options`. **Acceptance M2.**
 
-## §14 Beacon receiver
+## §14 Beacon receiver — C4 RESOLVED
 
 `POST /api/seo/beacon`: verify `Authorization: Bearer PULSE_BEACON_SECRET`,
-persist raw payload to `seo_webhook_events` (source `gruve-beacon`), respond
-202. Normalization into post metrics feeds §9 outcome capture. Payload schema
-**[GRUVE-PENDING]** (wire contract C4) — receiver + auth + raw persistence ship
-now; the parser lands when C4 is supplied.
+persist the envelope to `seo_webhook_events` (source `gruve-beacon`), 202. The
+`seo-beacon-process` cron normalizes it. **C4 envelope (fixed):**
+`{ receivedAt, ipTrunc, country, ua, events:[{ name, occurredAt, sessionId,
+slug?, payload }] }` — events join to posts by **`slug`** (no pulseId at beacon
+time); tenant resolved via `blog_posts.slug`. Event set:
+`blog_view` · `blog_scroll{depth}` · `blog_dwell{msActive}` · `blog_outbound` ·
+`blog_internal_link` · `blog_share` · `blog_cta_click` · `web_vitals`. Rolled
+up per `(tenant,slug,date)` into `seo_post_engagement_daily` (mig 049);
+`web_vitals` kept raw only. Revalidation is Gruve's Contentful webhook
+(`/api/revalidate`, HMAC) — Pulse never calls it.
 
-## §15 Gruve data reads
+## §15 Gruve data reads — C5 RESOLVED
 
-Pulse calls Gruve's Pulse-facing APIs with a JWT signed by Pulse's **RS256**
-private key; Pulse hosts JWKS at
-`https://pulse.gruve.events/.well-known/jwks.json`. The set of endpoints
-(names, paths, params — wire contract C5) is **[GRUVE-PENDING]**. A typed client
-interface is stubbed; implementations land when C5 is supplied.
+Base `https://www.gruve.events`. Pulse signs an **RS256** JWT
+(`iss:"pulse"`, `aud:"gruve-api"`); Gruve verifies via our JWKS at
+`https://pulse-ashy-kappa.vercel.app/.well-known/jwks.json`. Six endpoints
+implemented in `gruve-client.ts`: `GET /api/pulse/engagement`, `/conversions`,
+`/crawlers`, `/events-traffic`, `/internal-link-graph`, `POST /api/pulse/reindex`.
+Cursor-paginated (ISO date), 60 req/min/token. Dormant (`{data:[]}`, auth still
+enforced) until Gruve provisions its analytics DB — callers degrade gracefully;
+`snapshotPostMetrics` falls back C5 → beacon rollup → GA4.
 
 ## §16 Cron observability
 
@@ -260,13 +274,19 @@ call `logAiCall`s (success and failure).
 `CONTENTFUL_SPACE_ID=nc7eiymdfagh`. Publishes a content-type change to Gruve
 production — requires the Gruve lead's go-ahead before running.
 
-## Open cross-repo items ([GRUVE-PENDING])
+## Open cross-repo items
 
-1. Wire contract **C4** — beacon payload schema (§14).
-2. Wire contract **C5** — the 6 Gruve Pulse-facing API contracts (§15).
-3. Env/creds: `CONTENTFUL_CMA_TOKEN`, Contentful **CDA delivery token**,
-   `PREVIEW_SHARED_SECRET`, `PULSE_BEACON_SECRET`, Pulse RS256 private key +
-   JWKS hosting.
-4. Confirm `seo-longform` model (gpt-5 vs claude-opus-4-7) and the
-   `author_image → authorImage` map line (§5).
-5. Recommendation generation rubrics §9 (original spec §13–§16 if available).
+- ✅ **C4** (beacon schema) — RESOLVED, wired (§14).
+- ✅ **C5** (6 Gruve APIs) — RESOLVED, implemented; dormant until Gruve's
+  analytics DB is provisioned (§15).
+- ✅ Preview framing, claims, contentType, revalidation — confirmed (§13).
+- ⏳ **Gruve ops** (not Pulse code): mint Contentful **CMA token** → run
+  Appendix C script; configure Contentful webhook → `/api/revalidate` +
+  `CONTENTFUL_WEBHOOK_SECRET`; set `PULSE_BEACON_URL`/`PULSE_JWKS_URL`.
+- ⏳ **Pulse ops**: set env (`CONTENTFUL_*`, `PREVIEW_SHARED_SECRET`,
+  `PULSE_BEACON_SECRET`, `PULSE_JWKS_PRIVATE_KEY`/`KID`); share the two
+  generated secrets with Gruve securely.
+- ⏳ Advanced rec rubrics §9 (`keyword_capture`/`backlink_outreach`/
+  `decay_alert`) — still need original spec §13–§16; deterministic
+  baseline already shipped.
+- `seo-longform` = OpenAI `gpt-5` (decision stands).

@@ -4,6 +4,7 @@
 // analytics data so apply/outcome never hard-fail.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { gruve, isGruveConfigured } from "@/lib/seo/gruve-client";
 
 export interface PostMetricsSnapshot {
   captured: boolean;
@@ -42,6 +43,64 @@ export async function snapshotPostMetrics(
 
   if (!slug) return empty;
 
+  // 1) Canonical source: Gruve C5 /api/pulse/engagement. Returns
+  //    { data: [] } until Gruve provisions its analytics DB — that
+  //    just falls through to the next source. Never throws here.
+  if (isGruveConfigured()) {
+    try {
+      const res = await gruve.engagement({ slug, from: fromDate, to: toDate });
+      if (res.data.length > 0) {
+        const g = res.data.reduce(
+          (a, r) => ({
+            pageviews: a.pageviews + (r.views ?? 0),
+            users: a.users + (r.unique_views ?? 0),
+            conversions: a.conversions + (r.conversions ?? 0),
+          }),
+          { pageviews: 0, users: 0, conversions: 0 }
+        );
+        return {
+          captured: true,
+          window_days: windowDays,
+          from: fromDate,
+          to: toDate,
+          pageviews: g.pageviews,
+          sessions: g.pageviews, // C5 has no sessions field
+          users: g.users,
+          conversions: g.conversions,
+          avg_bounce_rate: 0,
+        };
+      }
+    } catch {
+      /* fall through to beacon rollup / GA4 */
+    }
+  }
+
+  // 2) Realtime fallback: beacon rollup (seo_post_engagement_daily).
+  const { data: beacon } = await supabase
+    .from("seo_post_engagement_daily")
+    .select("views")
+    .eq("tenant_slug", tenantSlug)
+    .eq("slug", slug)
+    .gte("date", fromDate)
+    .lte("date", toDate);
+  if (beacon && beacon.length > 0) {
+    const views = beacon.reduce((a, r) => a + (r.views ?? 0), 0);
+    if (views > 0) {
+      return {
+        captured: true,
+        window_days: windowDays,
+        from: fromDate,
+        to: toDate,
+        pageviews: views,
+        sessions: views,
+        users: 0,
+        conversions: 0,
+        avg_bounce_rate: 0,
+      };
+    }
+  }
+
+  // 3) Last resort: GA4 web_analytics_daily.
   const { data, error } = await supabase
     .from("web_analytics_daily")
     .select("pageviews, sessions, users, conversions, bounce_rate")
