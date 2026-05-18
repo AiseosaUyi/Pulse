@@ -88,3 +88,29 @@ Pre-reqs (before the window):
   needed; unset `CONTENTFUL_CMA_TOKEN` to halt publishing.
 - Revert PR #1 / unset env to fully disable; nothing publishes without
   `CONTENTFUL_CMA_TOKEN`.
+
+---
+
+## Staging-first variant (Gruve tests on gamma.gruve.events)
+
+Gruve must NOT hit production first. Pulse-side this is **env-only** —
+no code/branch change. `feat/ai-seo-os` is the test branch (preview
+deploy); do NOT merge PR #1 → main until staging passes.
+
+**Phase A — staging.** Set on the Pulse test deployment:
+`GRUVE_PREVIEW_BASE_URL=https://gamma.gruve.events`,
+`GRUVE_API_BASE_URL=https://gamma.gruve.events`,
+`CONTENTFUL_ENVIRONMENT=<staging env>`, staging-scoped
+`CONTENTFUL_CMA_TOKEN`. Run model migration against the staging env.
+Joint dry run on qa-pulse-e2e-2026-05 against gamma.
+
+**Phase B — go-live.** Merge PR #1 → main; flip
+`GRUVE_*_BASE_URL`→`https://www.gruve.events`,
+`CONTENTFUL_ENVIRONMENT=master`, prod CMA token; re-run model
+migration against master.
+
+**⚠️ CTO question (blocks true isolation):** does Gruve staging use a
+separate Contentful environment/space from prod `master`? If shared,
+test publishes surface in production — need a staging Contentful
+environment, or accept throwaway-slug + unpublish. Beacon/JWKS stay
+pointed at the same Pulse URL (Pulse-live is acceptable per owner).
