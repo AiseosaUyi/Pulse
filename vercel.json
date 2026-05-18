@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/.well-known/jwks.json",
+      "destination": "/api/jwks"
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/scrape-trends",
@@ -32,6 +38,18 @@
     {
       "path": "/api/cron/drive-reconcile",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/seo-publish-sweep",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/seo-rec-outcomes",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/seo-preview-jti-sweep",
+      "schedule": "0 * * * *"
     }
   ]
 }
