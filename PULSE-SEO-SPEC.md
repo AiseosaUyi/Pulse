@@ -165,10 +165,25 @@ measured_30d`. Rec `type` ∈ {`title_rewrite`, `meta_rewrite`,
   `outcome_due_at = now() + 30d`. A daily cron captures `outcome_30d` once
   `outcome_due_at` passes. This wiring is built in Phase 8 regardless of whether
   generation logic is finalized.
-- **Generation logic** per rec type (scoring thresholds, internal-link
-  candidate selection from `seo_post_embeddings` + `seo_internal_links`, decay
-  detection) — _(inferred skeleton; exact rubrics **[GRUVE-PENDING]** pending
-  the original spec §13–§16 if/when supplied; defaults documented in code)._
+- **Generation status** per rec type:
+  - ✅ Deterministic (live, from `scoreSeoExtras`): `meta_rewrite`,
+    `content_refresh`, `internal_link_add`, `schema_add`, `faq_add`.
+  - ✅ `decay_alert` — Pack C §10 implemented (`detect-decay.ts`,
+    `seo-decay-detect` cron 08:00 UTC): `decay = 1 - MA30/MA90` (mean
+    daily clicks), flag if `> 0.25` and 90-day clicks `> 50`. Clicks via
+    C5 engagement → beacon rollup. SERP-confirmation (Pack C §10.4) is a
+    non-gating enhancement (`serp_confirmed:false`) — no publish-date
+    SERP snapshot store yet.
+  - ⛔ `keyword_capture` — needs Pack C §7 **Google Search Console API**
+    (impressions/position per query). No GSC connector in Pulse —
+    blocked on a new data source, not logic.
+  - ⛔ `backlink_outreach` — needs **Ahrefs** backlink-intersection.
+    No Ahrefs connector — blocked on a new data source.
+  - `title_rewrite`/`internal_link_receive` — covered by `meta_rewrite`/
+    `internal_link_add` paths; distinct emitters deferred.
+  - §4.2 composite 0–100 weights arrived garbled in transit; deterministic
+    confidence (0.85 bad / 0.55 warn) stands until the clean full Pack C
+    `PULSE-SEO-SPEC.md` is received.
 
 ## §10 Embeddings & internal linking
 

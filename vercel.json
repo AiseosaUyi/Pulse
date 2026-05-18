@@ -58,6 +58,10 @@
     {
       "path": "/api/cron/seo-beacon-process",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/seo-decay-detect",
+      "schedule": "0 8 * * *"
     }
   ]
 }
