@@ -20,6 +20,8 @@ import { VersionHistory } from "@/components/seo/blog/VersionHistory";
 import { FeedbackPanel } from "@/components/seo/blog/FeedbackPanel";
 import { DistributeDialog } from "@/components/seo/blog/DistributeDialog";
 import { AskCoachButton } from "@/components/seo/blog/AskCoachButton";
+import { SeoPanel } from "@/components/seo/blog/SeoPanel";
+import { scoreSeoExtras } from "@/lib/ai/seo/score-seo-extras";
 import { useDialogs } from "@/components/ui/Dialog";
 import {
   deleteBlogPost,
@@ -97,6 +99,28 @@ export function BlogEditorPageClient({
     json: editorState?.json ?? initialJson,
     wordCount: editorState?.wordCount ?? post.wordCount,
   };
+
+  // SEO signals recomputed on every editor change. Deterministic text
+  // analysis only — no AI cost, O(post-length) on the client. SERP
+  // context (avg word count, top domains) wires in via a future server
+  // prefetch; passed as null until then.
+  //
+  // No dedicated seo_meta_title input yet; the H1/title doubles as the
+  // SEO title until we ship a separate input. Migration 043 adds
+  // seo_meta_title on blog_posts for the generator to write to; once a
+  // Meta-title input lands in the UI, swap this.
+  const seoExtras = useMemo(
+    () =>
+      scoreSeoExtras({
+        seoMetaTitle: title || null,
+        seoMetaDescription: metaDescription || null,
+        bodyMarkdown: current.markdown ?? "",
+        jsonLdBlocks: [],
+        serpAvgWordCount: null,
+        serpTopDomains: [],
+      }),
+    [title, metaDescription, current.markdown]
+  );
 
   const titleDirty = title !== baseline.title;
   const metaDirty = metaDescription !== baseline.metaDescription;
@@ -380,6 +404,10 @@ export function BlogEditorPageClient({
            scrolls. `top-4` keeps the dock visible below the app
            header; `max-h-[calc(100vh-2rem)]` prevents overflow. */}
         <aside className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto flex flex-col gap-3">
+          {/* SEO signals — supplementary to the rubric ScoreBreakdown,
+              live-updated as the user edits. Phase 1 of the SEO module. */}
+          <SeoPanel extras={seoExtras} />
+
           <div className="rounded-lg border border-border bg-card">
             <div className="px-4 py-3 border-b border-border/30">
               <h3 className="text-foreground font-semibold text-sm">

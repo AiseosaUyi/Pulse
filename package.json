@@ -33,7 +33,9 @@
     "ai": "^6.0.168",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "contentful-management": "^12.5.0",
     "diff": "^9.0.0",
+    "jose": "^6.2.3",
     "lucide-react": "^1.8.0",
     "next": "16.2.3",
     "react": "19.2.4",
@@ -52,6 +54,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "tailwindcss": "^4",
+    "tsx": "^4.22.1",
     "typescript": "^5",
     "vitest": "^4.1.4"
   }
