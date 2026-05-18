@@ -8,6 +8,7 @@
 import { useState, useTransition } from "react";
 import { ExternalLink, Eye, RefreshCw } from "lucide-react";
 import { getSeoPreviewUrl } from "@/lib/actions/seo-preview";
+import { syncBlogDraftToContentful } from "@/lib/actions/seo-contentful-sync";
 import { toast } from "@/components/ui/Toaster";
 
 export function SeoPreviewPane({ postId }: { postId: string }) {
@@ -16,6 +17,15 @@ export function SeoPreviewPane({ postId }: { postId: string }) {
 
   const load = () =>
     start(async () => {
+      // Push the current draft to Contentful (unpublished) so Gruve's
+      // preview renders the latest content. Skips silently pre-cutover
+      // (no CMA token) — preview still works against existing data.
+      const sync = await syncBlogDraftToContentful(postId);
+      if (!sync.success) {
+        setUrl(null);
+        toast.error(sync.error);
+        return;
+      }
       const res = await getSeoPreviewUrl(postId);
       if (res.success) setUrl(res.url);
       else {
