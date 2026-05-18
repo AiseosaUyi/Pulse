@@ -21,6 +21,7 @@ import { FeedbackPanel } from "@/components/seo/blog/FeedbackPanel";
 import { DistributeDialog } from "@/components/seo/blog/DistributeDialog";
 import { AskCoachButton } from "@/components/seo/blog/AskCoachButton";
 import { SeoPanel } from "@/components/seo/blog/SeoPanel";
+import { SeoPreviewPane } from "@/components/seo/blog/SeoPreviewPane";
 import { scoreSeoExtras } from "@/lib/ai/seo/score-seo-extras";
 import { useDialogs } from "@/components/ui/Dialog";
 import {
@@ -407,6 +408,9 @@ export function BlogEditorPageClient({
           {/* SEO signals — supplementary to the rubric ScoreBreakdown,
               live-updated as the user edits. Phase 1 of the SEO module. */}
           <SeoPanel extras={seoExtras} />
+
+          {/* Live preview on Gruve (SEO module §13, milestone M2). */}
+          <SeoPreviewPane postId={post.id} />
 
           <div className="rounded-lg border border-border bg-card">
             <div className="px-4 py-3 border-b border-border/30">
