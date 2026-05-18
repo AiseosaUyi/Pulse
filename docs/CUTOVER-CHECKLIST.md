@@ -1,11 +1,18 @@
 # Cutover checklist — Pulse ↔ Gruve SEO go-live
 
+> **WINDOW LOCKED: 2026-05-19, 09:00 WAT (UTC+1) = 08:00 UTC.**
+> ~45–60 min, both teams live on Discord.
+
 One coordinated window (~45–60 min), both teams live on **Discord**.
 Run top-to-bottom; do not skip a gate. Commands prefixed `!` are run by
 Pulse on a trusted machine — never paste keys/secrets into Discord/CI.
 
 Pre-reqs (before the window):
-- [ ] A9 window agreed (date/time/owners) — **this is the only gate**.
+- [x] A9 window agreed: 2026-05-19 09:00 WAT / 08:00 UTC.
+- [ ] PR #2 (Pack C authoritative spec) merged into `feat/ai-seo-os`
+      (user/repo-owner action — additive docs only).
+- [ ] GSC siteUrl string sent to Gruve to authorize (recommend
+      `sc-domain:gruve.events`; confirm their property type).
 - [ ] Cron footprint is Hobby-safe: all SEO jobs run from one daily
       `seo-maintenance` cron (08:00 UTC). No Pro upgrade required. Split
       back to per-job sub-daily schedules later if/when on Pro.
