@@ -41,7 +41,7 @@
     },
     {
       "path": "/api/cron/seo-publish-sweep",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/seo-rec-outcomes",
