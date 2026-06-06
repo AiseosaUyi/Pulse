@@ -7,8 +7,9 @@
 
 import "server-only";
 import { SignJWT, importPKCS8 } from "jose";
+import { normalizePrivateKeyPem } from "@/lib/seo/pem";
 
-const PRIVATE_PEM = process.env.PULSE_JWKS_PRIVATE_KEY;
+const PRIVATE_PEM = normalizePrivateKeyPem(process.env.PULSE_JWKS_PRIVATE_KEY);
 const KID = process.env.PULSE_JWKS_KID ?? "pulse-seo-1";
 const ISS = "pulse";
 const AUD = process.env.GRUVE_API_AUDIENCE ?? "gruve-api";

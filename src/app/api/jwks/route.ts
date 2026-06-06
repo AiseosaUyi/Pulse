@@ -10,11 +10,12 @@
 import { NextResponse } from "next/server";
 import { createPrivateKey, createPublicKey } from "node:crypto";
 import { exportJWK } from "jose";
+import { normalizePrivateKeyPem } from "@/lib/seo/pem";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const pem = process.env.PULSE_JWKS_PRIVATE_KEY;
+  const pem = normalizePrivateKeyPem(process.env.PULSE_JWKS_PRIVATE_KEY);
   const kid = process.env.PULSE_JWKS_KID ?? "pulse-seo-1";
 
   if (!pem) {
