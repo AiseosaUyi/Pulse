@@ -30,7 +30,7 @@ export function normalizePrivateKeyPem(
   // If it collapsed onto a single line, rebuild a valid PEM: markers on
   // their own lines, base64 body re-wrapped at 64 chars.
   if (!s.includes("\n") && s.includes("-----BEGIN")) {
-    const m = s.match(/-----BEGIN ([^-]+)-----\s*(.*?)\s*-----END \1-----/s);
+    const m = s.match(/-----BEGIN ([^-]+)-----\s*([\s\S]*?)\s*-----END \1-----/);
     if (m) {
       const label = m[1].trim();
       const body = m[2].replace(/\s+/g, "");
