@@ -1,7 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/invite", "/forgot-password", "/api/cron"];
+// `/.well-known` is exempt so Gruve can fetch the JWKS (rewritten to
+// /api/jwks) without the auth redirect. The vercel.json rewrite runs
+// AFTER this proxy, so the original `/.well-known/jwks.json` path must
+// pass through here un-gated or it 307s to /login.
+const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/invite", "/forgot-password", "/api/cron", "/.well-known"];
 
 // Refreshes the Supabase session and gates unauthenticated routes.
 // Called from proxy.ts on every request.
