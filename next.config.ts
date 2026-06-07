@@ -9,6 +9,21 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/**/*": ["./prompts/**/*"],
   },
+  // Serve the Pulse JWKS at the canonical /.well-known/jwks.json that Gruve
+  // fetches (PULSE-ASK.md §1). Defined here (not only vercel.json) so it
+  // applies under `next dev` too — vercel.json rewrites run only on the
+  // Vercel platform, which made this path unverifiable locally and masked
+  // whether it resolved at all. beforeFiles runs before the auth proxy; the
+  // proxy then sees /api/jwks (isApi → passes through un-gated).
+  async rewrites() {
+    return {
+      beforeFiles: [
+        { source: "/.well-known/jwks.json", destination: "/api/jwks" },
+      ],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
 };
 
 export default nextConfig;

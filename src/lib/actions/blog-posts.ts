@@ -236,6 +236,19 @@ export async function updateBlogPost(
     content?: string;
     secondaryKeywords?: string[];
     status?: BlogPostStatus;
+    question?: string | null;
+    author?: string | null;
+    authorImage?: string | null;
+    coverImage?: { url: string; fileName?: string | null; contentType?: string | null; alt?: string | null } | null;
+    thumbnail?: { url: string; fileName?: string | null; contentType?: string | null; alt?: string | null } | null;
+    tags?: string[];
+    category?: string | null;
+    authorBio?: string | null;
+    authorTitle?: string | null;
+    authorUrl?: string | null;
+    publishedDate?: string | null;
+    updatedDate?: string | null;
+    noindex?: boolean;
   }
 ): Promise<ActionResult> {
   const supabase = await createClient();
@@ -248,6 +261,19 @@ export async function updateBlogPost(
   }
   if (patch.secondaryKeywords !== undefined) update.secondary_keywords = patch.secondaryKeywords;
   if (patch.status !== undefined) update.status = patch.status;
+  if (patch.question !== undefined) update.question = patch.question;
+  if (patch.author !== undefined) update.author = patch.author;
+  if (patch.authorImage !== undefined) update.author_image = patch.authorImage;
+  if (patch.coverImage !== undefined) update.cover_image = patch.coverImage;
+  if (patch.thumbnail !== undefined) update.thumbnail = patch.thumbnail;
+  if (patch.tags !== undefined) update.tags = patch.tags;
+  if (patch.category !== undefined) update.category = patch.category;
+  if (patch.authorBio !== undefined) update.author_bio = patch.authorBio;
+  if (patch.authorTitle !== undefined) update.author_title = patch.authorTitle;
+  if (patch.authorUrl !== undefined) update.author_url = patch.authorUrl;
+  if (patch.publishedDate !== undefined) update.published_date = patch.publishedDate;
+  if (patch.updatedDate !== undefined) update.updated_date = patch.updatedDate;
+  if (patch.noindex !== undefined) update.noindex = patch.noindex;
   if (Object.keys(update).length === 0) return { success: true };
 
   const { error } = await supabase

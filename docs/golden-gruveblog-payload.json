@@ -1,0 +1,169 @@
+{
+  "_README": "Golden gruveBlog payload — the exact shape Pulse's upsertGruveBlog (src/lib/integrations/contentful.ts, mapToGruveBlogFields) sends to the Contentful CMA. Exercises every high-risk render surface Gruve flagged: embedded asset INSIDE the content RichText, bannerImage + thumbnail, author + authorImage, faqItems + jsonLd. Locale is en-US (Gruve confirmed handlers key on fields.<x>['en-US']). The `_assets` block is NOT sent in the entry — it documents the referenced assets so Gruve can validate embedded-asset re-linking + protocol-relative URL handling against real ids.",
+  "_assets": {
+    "asset_banner_001": {
+      "sys": { "id": "asset_banner_001", "type": "Asset" },
+      "fields": {
+        "title": { "en-US": "How to run a hybrid event — cover" },
+        "file": {
+          "en-US": {
+            "fileName": "hybrid-event-cover.jpg",
+            "contentType": "image/jpeg",
+            "url": "//images.ctfassets.net/nc7eiymdfagh/asset_banner_001/hybrid-event-cover.jpg"
+          }
+        }
+      }
+    },
+    "asset_thumb_001": {
+      "sys": { "id": "asset_thumb_001", "type": "Asset" },
+      "fields": {
+        "title": { "en-US": "How to run a hybrid event — thumbnail" },
+        "file": {
+          "en-US": {
+            "fileName": "hybrid-event-thumb.jpg",
+            "contentType": "image/jpeg",
+            "url": "//images.ctfassets.net/nc7eiymdfagh/asset_thumb_001/hybrid-event-thumb.jpg"
+          }
+        }
+      }
+    },
+    "asset_author_001": {
+      "sys": { "id": "asset_author_001", "type": "Asset" },
+      "fields": {
+        "title": { "en-US": "Ada Obi — portrait" },
+        "file": {
+          "en-US": {
+            "fileName": "ada-obi.jpg",
+            "contentType": "image/jpeg",
+            "url": "//images.ctfassets.net/nc7eiymdfagh/asset_author_001/ada-obi.jpg"
+          }
+        }
+      }
+    },
+    "asset_inline_001": {
+      "sys": { "id": "asset_inline_001", "type": "Asset" },
+      "fields": {
+        "title": { "en-US": "Run-of-show diagram (embedded in body)" },
+        "file": {
+          "en-US": {
+            "fileName": "run-of-show.png",
+            "contentType": "image/png",
+            "url": "//images.ctfassets.net/nc7eiymdfagh/asset_inline_001/run-of-show.png"
+          }
+        }
+      }
+    }
+  },
+  "entry": {
+    "sys": { "contentType": { "sys": { "id": "gruveBlog" } } },
+    "fields": {
+      "title": { "en-US": "How to Run a Hybrid Event That Doesn't Fall Apart" },
+      "slug": { "en-US": "qa-pulse-e2e-2026-05" },
+      "description": {
+        "en-US": "A practical run-of-show for hybrid events: AV redundancy, the 15-minute pre-flight, and the handoff that keeps remote and in-person audiences in sync."
+      },
+      "content": {
+        "en-US": {
+          "nodeType": "document",
+          "data": {},
+          "content": [
+            {
+              "nodeType": "paragraph",
+              "data": {},
+              "content": [
+                {
+                  "nodeType": "text",
+                  "value": "Hybrid events fail at the seams — the moment a remote feed lags behind the room. Here is the run-of-show we use.",
+                  "marks": [],
+                  "data": {}
+                }
+              ]
+            },
+            {
+              "nodeType": "heading-2",
+              "data": {},
+              "content": [
+                { "nodeType": "text", "value": "The run-of-show", "marks": [], "data": {} }
+              ]
+            },
+            {
+              "nodeType": "embedded-asset-block",
+              "data": {
+                "target": {
+                  "sys": { "id": "asset_inline_001", "type": "Link", "linkType": "Asset" }
+                }
+              },
+              "content": []
+            },
+            {
+              "nodeType": "paragraph",
+              "data": {},
+              "content": [
+                {
+                  "nodeType": "text",
+                  "value": "Start AV redundancy checks 15 minutes before doors. Assign one owner to the remote feed only.",
+                  "marks": [],
+                  "data": {}
+                },
+                {
+                  "nodeType": "hyperlink",
+                  "data": { "uri": "https://www.gruve.events/blog/av-checklist" },
+                  "content": [
+                    { "nodeType": "text", "value": "our AV checklist", "marks": [], "data": {} }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "bannerImage": {
+        "en-US": { "sys": { "id": "asset_banner_001", "type": "Link", "linkType": "Asset" } }
+      },
+      "thumbnail": {
+        "en-US": { "sys": { "id": "asset_thumb_001", "type": "Link", "linkType": "Asset" } }
+      },
+      "author": { "en-US": "Ada Obi" },
+      "authorImage": {
+        "en-US": { "sys": { "id": "asset_author_001", "type": "Link", "linkType": "Asset" } }
+      },
+      "minuteRead": { "en-US": 6 },
+      "seoTitle": { "en-US": "How to Run a Hybrid Event (Run-of-Show + AV Redundancy)" },
+      "seoDescription": {
+        "en-US": "The exact hybrid-event run-of-show: AV redundancy, a 15-minute pre-flight, and the remote/in-person handoff. Copy it for your next event."
+      },
+      "canonicalUrl": { "en-US": "https://www.gruve.events/blog/qa-pulse-e2e-2026-05" },
+      "faqItems": {
+        "en-US": [
+          {
+            "question": "How early should AV checks start for a hybrid event?",
+            "answer": "Begin redundancy checks 15 minutes before doors, with a dedicated owner on the remote feed."
+          },
+          {
+            "question": "What is the most common hybrid-event failure?",
+            "answer": "Remote feed latency drifting out of sync with the in-room program."
+          }
+        ]
+      },
+      "jsonLd": {
+        "en-US": {
+          "@context": "https://schema.org",
+          "@type": "BlogPosting",
+          "headline": "How to Run a Hybrid Event That Doesn't Fall Apart",
+          "author": { "@type": "Person", "name": "Ada Obi" },
+          "mainEntityOfPage": "https://www.gruve.events/blog/qa-pulse-e2e-2026-05"
+        }
+      },
+      "pulseId": { "en-US": "00000000-0000-4000-8000-00000000e2e5" },
+      "pulseMetadata": {
+        "en-US": {
+          "source": "pulse-seo",
+          "blogPostId": "00000000-0000-4000-8000-00000000e2e5",
+          "publishRunId": "golden-fixture",
+          "generatedBy": "openai/gpt-5",
+          "schemaVersion": 1
+        }
+      }
+    }
+  }
+}

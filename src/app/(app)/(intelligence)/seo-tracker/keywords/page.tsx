@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { getKeywordRankings, deriveSEOMetrics } from "@/lib/services/seo";
 import { KeywordRow } from "@/components/keywords/KeywordRow";
+import { BackfillDeeplinksButton } from "@/components/keywords/BackfillDeeplinksButton";
 import { AddKeywordButton } from "../client";
 
 export default async function KeywordsPage() {
@@ -24,7 +25,10 @@ export default async function KeywordsPage() {
             Positions update via the edit button on each row.
           </p>
         </div>
-        <AddKeywordButton />
+        <div className="flex items-center gap-2">
+          <BackfillDeeplinksButton />
+          <AddKeywordButton />
+        </div>
       </div>
 
       {/* Summary */}

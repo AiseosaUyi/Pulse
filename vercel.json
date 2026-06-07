@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/.well-known/jwks.json",
+      "destination": "/api/jwks"
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/scrape-trends",
@@ -32,6 +38,10 @@
     {
       "path": "/api/cron/drive-reconcile",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/seo-maintenance",
+      "schedule": "0 8 * * *"
     }
   ]
 }

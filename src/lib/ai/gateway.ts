@@ -17,7 +17,10 @@ export type Purpose =
   | "scoring" // content-score sub-score rating
   | "embedding" // vector embeddings for dedup (Phase E)
   | "transcription" // Whisper voice-feedback (Phase D)
-  | "vision"; // screenshot OCR / post-metrics extraction
+  | "vision" // screenshot OCR / post-metrics extraction
+  | "seo-longform" // SEO blog generation (Phase SEO/Phase 1)
+  | "seo-scoring" // SEO recommendation scoring / title rewrites
+  | "seo-embedding"; // 1536-dim post embeddings for internal-link suggestions
 
 export function getModel(purpose: Purpose): LanguageModel {
   switch (purpose) {
@@ -32,12 +35,22 @@ export function getModel(purpose: Purpose): LanguageModel {
       return openai("gpt-4o-mini");
     case "vision":
       return openai("gpt-4o");
+    case "seo-longform":
+      // Long-form SEO drafts. gpt-5 picked over gpt-4.1 for stronger
+      // structure on competitor-context-heavy prompts. Re-benchmark
+      // after 30 drafts via /benchmark-models; consider Anthropic
+      // Opus only if quality gap is measurable.
+      return openai("gpt-5");
+    case "seo-scoring":
+      // Same logic as 'scoring' — cheap rater, structured output.
+      return openai("gpt-4o-mini");
     case "embedding":
+    case "seo-embedding":
     case "transcription":
       // These purposes don't use LanguageModel — they have their own
       // call paths (embedText / Whisper). getModel is a no-op sentinel
       // for them. Callers that need actual clients should use their
-      // purpose-specific helpers.
+      // purpose-specific helpers (embedSeoPost in src/lib/vector/embed.ts).
       return openai("gpt-4.1");
   }
 }
@@ -45,17 +58,25 @@ export function getModel(purpose: Purpose): LanguageModel {
 export function getModelId(purpose: Purpose): string {
   switch (purpose) {
     case "synthesis":
-    case "embedding":
     case "transcription":
       return "openai/gpt-4.1";
     case "scoring":
+    case "seo-scoring":
       return "openai/gpt-4o-mini";
     case "vision":
       return "openai/gpt-4o";
+    case "seo-longform":
+      return "openai/gpt-5";
+    case "embedding":
+      return "openai/text-embedding-3-large";
+    case "seo-embedding":
+      return "openai/text-embedding-3-large";
   }
 }
 
 // Published rates as of 2026. Update if OpenAI changes pricing.
+// text-embedding-3-large is priced per 1M input tokens only (no output);
+// modeled as input-only here so estimateCostUsd works without a special case.
 const COST_PER_MTOK: Record<
   string,
   { input: number; output: number; cache_read: number }
@@ -64,6 +85,7 @@ const COST_PER_MTOK: Record<
   "openai/gpt-4o": { input: 2.5, output: 10, cache_read: 1.25 },
   "openai/gpt-4o-mini": { input: 0.15, output: 0.6, cache_read: 0.075 },
   "openai/gpt-5": { input: 1.25, output: 10, cache_read: 0.125 },
+  "openai/text-embedding-3-large": { input: 0.13, output: 0, cache_read: 0 },
 };
 
 export function estimateCostUsd(
