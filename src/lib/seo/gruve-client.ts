@@ -6,6 +6,7 @@
 // wrappers when C5 lands; nothing else changes.
 
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { SignJWT, importPKCS8 } from "jose";
 import { normalizePrivateKeyPem } from "@/lib/seo/pem";
 
@@ -45,12 +46,16 @@ export async function signGruveJwt(
 ): Promise<string> {
   if (!PRIVATE_PEM) throw new GruveNotConfiguredError();
   const key = await importPKCS8(PRIVATE_PEM, "RS256");
+  // jti is REQUIRED by Gruve's wire contract (PULSE-ASK.md §1): guardPulse
+  // uses it as the rate-limit key. Without it Gruve falls back to the constant
+  // `sub`, collapsing every C5 read into one shared 60/min bucket.
   return new SignJWT({})
     .setProtectedHeader({ alg: "RS256", kid: KID, typ: "JWT" })
     .setIssuedAt()
     .setIssuer(ISS)
     .setAudience(AUD)
     .setSubject(subject)
+    .setJti(randomUUID())
     .setExpirationTime(`${ttlSeconds}s`)
     .sign(key);
 }

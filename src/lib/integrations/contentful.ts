@@ -73,6 +73,9 @@ export interface GruveBlogDraft {
   pulseId: string; // = blog_posts.id
   title: string;
   slug: string;
+  /** gruveBlog sub-heading / FAQ-style hook (REQUIRED on the content type).
+   *  Optional here — the mapper derives a fallback when not supplied. */
+  question?: string | null;
   excerpt: string | null;
   /** Contentful RichText document (already in RichText shape upstream). */
   bodyRichText: unknown;
@@ -84,6 +87,15 @@ export interface GruveBlogDraft {
   faqItems: unknown; // Object
   jsonLdOverrides: unknown; // Object
   pulseMetadata: unknown; // Object (hidden)
+  // SEO / E-E-A-T expansion (slice 2).
+  tags?: string[] | null;
+  category?: string | null;
+  authorBio?: string | null;
+  authorTitle?: string | null;
+  authorUrl?: string | null;
+  publishedDate?: string | null; // ISO date
+  updatedDate?: string | null; // ISO date
+  noindex?: boolean | null;
 }
 
 /** Asset ids already uploaded/published by the publish runner. */
@@ -108,6 +120,14 @@ export function mapToGruveBlogFields(
     content: loc(d.bodyRichText),
     pulseId: loc(d.pulseId),
   };
+  // `question` is REQUIRED on gruveBlog (verified required=true on the live
+  // model). Always emit it, falling back to the first FAQ question, then the
+  // excerpt, then the title — so publish never trips the required-field check.
+  const firstFaq =
+    Array.isArray(d.faqItems) && d.faqItems[0] && typeof d.faqItems[0] === "object"
+      ? (d.faqItems[0] as { question?: string }).question
+      : undefined;
+  fields.question = loc(d.question ?? firstFaq ?? d.excerpt ?? d.title);
   if (d.excerpt != null) fields.description = loc(d.excerpt);
   if (d.author != null) fields.author = loc(d.author);
   if (d.readMinutes != null) fields.minuteRead = loc(d.readMinutes);
@@ -119,6 +139,15 @@ export function mapToGruveBlogFields(
   if (d.faqItems != null) fields.faqItems = loc(d.faqItems);
   if (d.jsonLdOverrides != null) fields.jsonLd = loc(d.jsonLdOverrides);
   if (d.pulseMetadata != null) fields.pulseMetadata = loc(d.pulseMetadata);
+  // SEO / E-E-A-T expansion (slice 2).
+  if (d.tags != null && d.tags.length > 0) fields.tags = loc(d.tags);
+  if (d.category != null) fields.category = loc(d.category);
+  if (d.authorBio != null) fields.authorBio = loc(d.authorBio);
+  if (d.authorTitle != null) fields.authorTitle = loc(d.authorTitle);
+  if (d.authorUrl != null) fields.authorUrl = loc(d.authorUrl);
+  if (d.publishedDate != null) fields.publishedDate = loc(d.publishedDate);
+  if (d.updatedDate != null) fields.updatedDate = loc(d.updatedDate);
+  if (d.noindex != null) fields.noindex = loc(d.noindex);
 
   const banner = assetLink(assets.bannerImageId);
   if (banner) fields.bannerImage = loc(banner);

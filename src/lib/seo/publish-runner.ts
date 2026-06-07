@@ -117,7 +117,7 @@ export async function runPublish(args: {
   const { data: post, error: postErr } = await supabase
     .from("blog_posts")
     .select(
-      "id, tenant_slug, status, version, title, slug, excerpt, body_rich_text, author, author_image, read_minutes, seo_meta_title, seo_meta_description, canonical_override, faq_items, json_ld_overrides, pulse_metadata, cover_image, thumbnail, inline_images"
+      "id, tenant_slug, status, version, title, slug, question, excerpt, body_rich_text, author, author_image, read_minutes, seo_meta_title, seo_meta_description, canonical_override, faq_items, json_ld_overrides, pulse_metadata, cover_image, thumbnail, inline_images, tags, category, author_bio, author_title, author_url, published_date, updated_date, noindex"
     )
     .eq("id", blogPostId)
     .maybeSingle();
@@ -330,6 +330,7 @@ export async function runPublish(args: {
         pulseId: post.id,
         title: post.title,
         slug: post.slug,
+        question: post.question ?? null,
         excerpt: post.excerpt ?? null,
         bodyRichText: post.body_rich_text,
         author: post.author ?? null,
@@ -340,6 +341,14 @@ export async function runPublish(args: {
         faqItems: post.faq_items ?? null,
         jsonLdOverrides: post.json_ld_overrides ?? null,
         pulseMetadata: post.pulse_metadata ?? null,
+        tags: post.tags ?? null,
+        category: post.category ?? null,
+        authorBio: post.author_bio ?? null,
+        authorTitle: post.author_title ?? null,
+        authorUrl: post.author_url ?? null,
+        publishedDate: post.published_date ?? null,
+        updatedDate: post.updated_date ?? null,
+        noindex: post.noindex ?? null,
       };
       const res = await upsertGruveBlog(draft, assets);
       await supabase

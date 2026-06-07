@@ -17,6 +17,7 @@ import {
   SeoBlogGenerationError,
 } from "@/lib/ai/seo/generate-seo-blog";
 import { BudgetExceededError } from "@/lib/ai/ai-budget";
+import { heuristicMap } from "@/lib/seo/gruve-discovery";
 
 export type SeoBlogActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -46,7 +47,7 @@ function quickWordCount(markdown: string): number {
 export async function generateSeoBlogForPost(
   input: GenerateInput
 ): Promise<SeoBlogActionResult<{ postId: string; version: number }>> {
-  await requireUser();
+  const user = await requireUser();
   const tenant = await getCurrentTenant();
   if (!tenant) {
     return { success: false, error: "No active tenant", reason: "no_tenant" };
@@ -57,7 +58,7 @@ export async function generateSeoBlogForPost(
   const { data: post, error: loadErr } = await supabase
     .from("blog_posts")
     .select(
-      "id, tenant_slug, title, target_keyword, secondary_keywords, version, status"
+      "id, tenant_slug, title, target_keyword, secondary_keywords, version, status, slug, question, category, author, author_image"
     )
     .eq("id", input.postId)
     .maybeSingle();
@@ -102,6 +103,19 @@ export async function generateSeoBlogForPost(
       bullets: s.bullets.length > 0 ? s.bullets : s.h3s,
     }));
 
+    // Auto-populate the SEO fields so the editor opens pre-filled. User-set
+    // values are PRESERVED (slug/question/category/author only fill if empty);
+    // generation outputs (excerpt/tags/faq) refresh each run.
+    const tags = Array.from(
+      new Set(
+        [draft.primary_keyword, ...draft.secondary_keywords]
+          .map((t) => t.trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 10);
+    const firstFaqQuestion = draft.faq?.[0]?.question ?? null;
+    const suggestedCategory = heuristicMap(draft.primary_keyword).category;
+
     const { data: updated, error: updateErr } = await supabase
       .from("blog_posts")
       .update({
@@ -115,6 +129,16 @@ export async function generateSeoBlogForPost(
         outline: outlineJsonb,
         word_count: quickWordCount(draft.body_markdown),
         version: post.version + 1,
+        // Auto-populated SEO fields (slice 2/3).
+        excerpt: draft.excerpt,
+        slug: post.slug ?? draft.slug,
+        tags,
+        faq_items: draft.faq ?? [],
+        question: post.question ?? firstFaqQuestion,
+        category: post.category ?? suggestedCategory,
+        // Author defaults from the signed-in user's profile, then the brand.
+        author: post.author ?? user.displayName ?? tenant.name ?? null,
+        author_image: post.author_image ?? user.avatarUrl ?? null,
         // Status stays where it was — generating doesn't change approval.
         // (A 'review' or 'in_review' post that gets regenerated drops
         // back to 'draft' to force a re-review — caller can decide.)

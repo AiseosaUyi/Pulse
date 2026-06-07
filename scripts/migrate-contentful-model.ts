@@ -22,6 +22,15 @@ const NEW_FIELDS = [
   { id: 'jsonLd',         name: 'JSON-LD Overrides', type: 'Object' },
   { id: 'pulseId',        name: 'Pulse ID',        type: 'Symbol' },        // idempotency key
   { id: 'pulseMetadata',  name: 'Pulse Metadata',  type: 'Object', omitted: true }, // hidden
+  // ── SEO / E-E-A-T expansion (slice 2) ──
+  { id: 'tags',          name: 'Tags',            type: 'Array', items: { type: 'Symbol' } }, // keywords / topical clustering
+  { id: 'category',      name: 'Category',        type: 'Symbol' },        // breadcrumbs + category landing links
+  { id: 'authorBio',     name: 'Author Bio',      type: 'Text' },          // Person schema description (E-E-A-T)
+  { id: 'authorTitle',   name: 'Author Title',    type: 'Symbol' },        // Person.jobTitle
+  { id: 'authorUrl',     name: 'Author URL',      type: 'Symbol' },        // Person.url
+  { id: 'publishedDate', name: 'Published Date',  type: 'Date' },          // datePublished override
+  { id: 'updatedDate',   name: 'Updated Date',    type: 'Date' },          // dateModified override
+  { id: 'noindex',       name: 'No Index',        type: 'Boolean' },       // keep thin pages out of the index
 ] as const;
 
 async function main() {
@@ -46,6 +55,8 @@ async function main() {
       id: f.id, name: f.name, type: f.type,
       required: false, localized: false,
       omitted: 'omitted' in f ? f.omitted : false,
+      // Array fields need an `items` spec (e.g. tags = Array<Symbol>).
+      ...('items' in f ? { items: f.items } : {}),
       // pulseId should be unique-ish; enforce via app logic + a validation
       validations: f.id === 'pulseId' ? [{ unique: true }] : [],
     } as any);

@@ -14,6 +14,7 @@ import {
   isContentfulConfigured,
   type GruveBlogDraft,
 } from "@/lib/integrations/contentful";
+import { markdownToRichText, isRichTextDocument } from "@/lib/seo/markdown-to-richtext";
 
 export type SyncResult =
   | { success: true; entryId: string; version: number; skipped?: false }
@@ -35,7 +36,7 @@ export async function syncBlogDraftToContentful(
   const { data: post, error } = await supabase
     .from("blog_posts")
     .select(
-      "id, tenant_slug, slug, title, excerpt, body_rich_text, author, author_image, read_minutes, seo_meta_title, seo_meta_description, canonical_override, faq_items, json_ld_overrides, pulse_metadata"
+      "id, tenant_slug, slug, title, question, content, excerpt, body_rich_text, author, author_image, read_minutes, seo_meta_title, seo_meta_description, canonical_override, faq_items, json_ld_overrides, pulse_metadata, tags, category, author_bio, author_title, author_url, published_date, updated_date, noindex"
     )
     .eq("id", postId)
     .maybeSingle();
@@ -45,20 +46,21 @@ export async function syncBlogDraftToContentful(
     return { success: false, error: "Wrong tenant" };
   if (!post.slug)
     return { success: false, error: "Set a URL slug before previewing." };
-  if (!post.body_rich_text || typeof post.body_rich_text !== "object") {
-    return {
-      success: false,
-      error:
-        "body_rich_text missing — RichText not ready (spec §5/§8); cannot sync draft.",
-    };
-  }
+
+  // Derive RichText from the stored markdown when body_rich_text isn't set yet,
+  // so preview (and publish) work straight from the editor without a manual
+  // conversion step.
+  const bodyRichText = isRichTextDocument(post.body_rich_text)
+    ? post.body_rich_text
+    : await markdownToRichText((post.content as string) ?? "");
 
   const draft: GruveBlogDraft = {
     pulseId: post.id,
     title: post.title,
     slug: post.slug,
+    question: post.question ?? null,
     excerpt: post.excerpt ?? null,
-    bodyRichText: post.body_rich_text,
+    bodyRichText,
     author: post.author ?? null,
     readMinutes: post.read_minutes ?? null,
     seoMetaTitle: post.seo_meta_title ?? null,
@@ -67,6 +69,14 @@ export async function syncBlogDraftToContentful(
     faqItems: post.faq_items ?? null,
     jsonLdOverrides: post.json_ld_overrides ?? null,
     pulseMetadata: post.pulse_metadata ?? null,
+    tags: post.tags ?? null,
+    category: post.category ?? null,
+    authorBio: post.author_bio ?? null,
+    authorTitle: post.author_title ?? null,
+    authorUrl: post.author_url ?? null,
+    publishedDate: post.published_date ?? null,
+    updatedDate: post.updated_date ?? null,
+    noindex: post.noindex ?? null,
   };
 
   try {

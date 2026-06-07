@@ -8,12 +8,14 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { JSONContent } from "@tiptap/core";
-import { ArrowLeft, History as HistoryIcon, Share2 } from "lucide-react";
+import { ArrowLeft, History as HistoryIcon, Share2, Rocket, CheckCircle2, Circle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/Badge";
+import { ImageUploadField } from "@/components/seo/blog/ImageUploadField";
+import { publishBlogToGruve } from "@/lib/actions/publish-to-gruve";
 import { TiptapEditor, type TiptapChange } from "@/components/seo/blog/TiptapEditor";
 import { InlineFeedbackDock } from "@/components/seo/blog/InlineFeedbackDock";
 import { VersionHistory } from "@/components/seo/blog/VersionHistory";
@@ -45,18 +47,35 @@ const STATUS_OPTIONS: BlogPostStatus[] = [
   "archived",
 ];
 
+// Gruve's event categories — used for the blog `category` (drives breadcrumbs
+// and links the post to its /categories landing page on Gruve).
+const GRUVE_CATEGORIES = [
+  "business", "religious", "comedy", "tech", "food_drinks", "crypto",
+  "education", "healthcare", "sports_fitness", "music", "seminars",
+  "visual_art", "community", "fashion", "media", "travel", "politics",
+  "home", "school", "charity_fund",
+];
+
+function toDateInput(v: string | null): string {
+  if (!v) return "";
+  // ISO/timestamptz → yyyy-mm-dd for <input type=date>.
+  return v.slice(0, 10);
+}
+
 export function BlogEditorPageClient({
   post,
   tenantSlug,
   versions,
   feedback,
   distributions,
+  profileDefaults,
 }: {
   post: BlogPostRecord;
   tenantSlug: string;
   versions: BlogPostVersionRecord[];
   feedback: BlogPostFeedbackRecord[];
   distributions: ContentDistributionRecord[];
+  profileDefaults?: { author: string | null; authorImage: string | null };
 }) {
   const router = useRouter();
   const dialogs = useDialogs();
@@ -82,8 +101,33 @@ export function BlogEditorPageClient({
     contentMarkdown: post.content,
   }));
 
+  // Publish-to-Gruve fields (required by Contentful's gruveBlog content type).
+  const [question, setQuestion] = useState(post.question ?? "");
+  // Author fields fall back to the signed-in user's profile when the post
+  // hasn't set them yet, so the avatar/name start filled.
+  const [author, setAuthor] = useState(post.author ?? profileDefaults?.author ?? "");
+  const [authorImage, setAuthorImage] = useState<string | null>(
+    post.authorImage ?? profileDefaults?.authorImage ?? null
+  );
+  const [coverImage, setCoverImage] = useState<string | null>(post.coverImage?.url ?? null);
+  const [thumbnail, setThumbnail] = useState<string | null>(post.thumbnail?.url ?? null);
+
+  // SEO / E-E-A-T fields (slice 2).
+  const [tags, setTags] = useState((post.tags ?? []).join(", "));
+  const [category, setCategory] = useState(post.category ?? "");
+  const [authorBio, setAuthorBio] = useState(post.authorBio ?? "");
+  const [authorTitle, setAuthorTitle] = useState(post.authorTitle ?? "");
+  const [authorUrl, setAuthorUrl] = useState(post.authorUrl ?? "");
+  const [publishedDate, setPublishedDate] = useState(toDateInput(post.publishedDate));
+  const [updatedDate, setUpdatedDate] = useState(toDateInput(post.updatedDate));
+  const [noindex, setNoindex] = useState(Boolean(post.noindex));
+  const [detailsSaved, setDetailsSaved] = useState(false);
+
   const [isSaving, startSave] = useTransition();
   const [isDeleting, startDelete] = useTransition();
+  const [isPublishing, startPublish] = useTransition();
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishResult, setPublishResult] = useState<{ gammaUrl: string; liveUrl: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [showFeedbackHistory, setShowFeedbackHistory] = useState(false);
@@ -209,6 +253,85 @@ export function BlogEditorPageClient({
       if (!ok) return;
     }
     router.push("/seo-tracker/blog-writer");
+  };
+
+  // Image fields persist immediately (they're already uploaded to storage —
+  // we just save the resulting URL so the server has it at publish time).
+  const onCover = (url: string | null) => {
+    setCoverImage(url);
+    void updateBlogPost(post.id, tenantSlug, { coverImage: url ? { url } : null });
+  };
+  const onThumb = (url: string | null) => {
+    setThumbnail(url);
+    void updateBlogPost(post.id, tenantSlug, { thumbnail: url ? { url } : null });
+  };
+  const onAuthorImg = (url: string | null) => {
+    setAuthorImage(url);
+    void updateBlogPost(post.id, tenantSlug, { authorImage: url });
+  };
+
+  const requirements = [
+    { label: "Title", ok: title.trim().length > 0 },
+    { label: "URL slug", ok: Boolean(post.slug) },
+    { label: "Body content", ok: (current.wordCount ?? 0) > 0 },
+    { label: "Question / hook", ok: question.trim().length > 0 },
+    { label: "Banner image", ok: Boolean(coverImage) },
+    { label: "Thumbnail", ok: Boolean(thumbnail) },
+    { label: "Author name", ok: author.trim().length > 0 },
+    { label: "Author image", ok: Boolean(authorImage) },
+  ];
+  const readyToPublish = requirements.every((r) => r.ok);
+
+  // All editor-collected fields beyond title/meta/content/status, persisted
+  // together (publish reads them from the DB).
+  const detailsPatch = () => ({
+    question,
+    author,
+    // Include authorImage so a profile-defaulted avatar (never re-uploaded)
+    // still gets persisted on save/publish.
+    authorImage,
+    tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+    category: category || null,
+    authorBio: authorBio || null,
+    authorTitle: authorTitle || null,
+    authorUrl: authorUrl || null,
+    publishedDate: publishedDate || null,
+    updatedDate: updatedDate || null,
+    noindex,
+  });
+
+  const handleSaveDetails = () => {
+    setError(null);
+    setDetailsSaved(false);
+    startSave(async () => {
+      const res = await updateBlogPost(post.id, tenantSlug, detailsPatch());
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      setDetailsSaved(true);
+      router.refresh();
+    });
+  };
+
+  const handlePublish = () => {
+    setPublishError(null);
+    setPublishResult(null);
+    startPublish(async () => {
+      // Persist all editor fields first so the server sees them.
+      const saved = await updateBlogPost(post.id, tenantSlug, detailsPatch());
+      if (!saved.success) {
+        setPublishError(saved.error);
+        return;
+      }
+      const res = await publishBlogToGruve(post.id);
+      if (!res.success) {
+        setPublishError(res.error);
+        return;
+      }
+      setPublishResult({ gammaUrl: res.gammaUrl, liveUrl: res.liveUrl });
+      router.refresh();
+    });
   };
 
   const pendingFeedback = feedback.filter((f) => f.status === "pending").length;
@@ -411,6 +534,249 @@ export function BlogEditorPageClient({
 
           {/* Live preview on Gruve (SEO module §13, milestone M2). */}
           <SeoPreviewPane postId={post.id} />
+
+          {/* SEO & author details (slice 2) — Article schema, E-E-A-T,
+              internal linking. Persisted via "Save details" and on publish. */}
+          <div className="rounded-lg border border-border bg-card">
+            <div className="px-4 py-3 border-b border-border/30">
+              <h3 className="text-foreground font-semibold text-sm">SEO &amp; author details</h3>
+              <p className="text-[11px] text-text-muted mt-0.5">
+                Strengthens Article schema, E‑E‑A‑T &amp; internal linking.
+              </p>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <Label htmlFor="bp-tags">Tags / keywords (comma-separated)</Label>
+                <Input
+                  id="bp-tags"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  placeholder="lagos events, raves, nightlife"
+                  disabled={isSaving}
+                />
+              </div>
+              <div>
+                <Label htmlFor="bp-category">Category</Label>
+                <select
+                  id="bp-category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  disabled={isSaving}
+                  className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground capitalize"
+                >
+                  <option value="">— none —</option>
+                  {GRUVE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c.replace(/_/g, " ")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="bp-authortitle">Author title</Label>
+                  <Input
+                    id="bp-authortitle"
+                    value={authorTitle}
+                    onChange={(e) => setAuthorTitle(e.target.value)}
+                    placeholder="Events Editor"
+                    disabled={isSaving}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="bp-authorurl">Author URL</Label>
+                  <Input
+                    id="bp-authorurl"
+                    value={authorUrl}
+                    onChange={(e) => setAuthorUrl(e.target.value)}
+                    placeholder="https://…"
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="bp-authorbio">Author bio</Label>
+                <Textarea
+                  id="bp-authorbio"
+                  value={authorBio}
+                  onChange={(e) => setAuthorBio(e.target.value)}
+                  rows={2}
+                  placeholder="Short author bio — feeds Person schema (E‑E‑A‑T)."
+                  disabled={isSaving}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="bp-pubdate">Published</Label>
+                  <Input
+                    id="bp-pubdate"
+                    type="date"
+                    value={publishedDate}
+                    onChange={(e) => setPublishedDate(e.target.value)}
+                    disabled={isSaving}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="bp-upddate">Updated</Label>
+                  <Input
+                    id="bp-upddate"
+                    type="date"
+                    value={updatedDate}
+                    onChange={(e) => setUpdatedDate(e.target.value)}
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-[12px] text-foreground">
+                <input
+                  type="checkbox"
+                  checked={noindex}
+                  onChange={(e) => setNoindex(e.target.checked)}
+                  disabled={isSaving}
+                />
+                Hide from search engines (noindex)
+              </label>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={handleSaveDetails}
+                disabled={isSaving}
+              >
+                {isSaving ? "Saving…" : "Save details"}
+              </Button>
+              {detailsSaved && (
+                <p className="text-[11px] text-status-green">Details saved.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Publish to Gruve — collects the Contentful-required fields
+              (banner, thumbnail, author + avatar, question) and gates the
+              push until everything's present. Publishing lands on both
+              gamma.gruve.events and www.gruve.events (shared Contentful). */}
+          <div className="rounded-lg border border-border bg-card">
+            <div className="px-4 py-3 border-b border-border/30">
+              <h3 className="text-foreground font-semibold text-sm flex items-center gap-1.5">
+                <Rocket size={14} /> Publish to Gruve
+              </h3>
+              <p className="text-[11px] text-text-muted mt-0.5">
+                Goes live on gamma + www (both read the same Contentful).
+              </p>
+            </div>
+            <div className="p-4 space-y-4">
+              <ImageUploadField
+                label="Banner image"
+                required
+                kind="banner"
+                value={coverImage}
+                tenantSlug={tenantSlug}
+                postId={post.id}
+                disabled={isPublishing}
+                onChange={onCover}
+                hint="Hero / social (OG) image · 16:9."
+              />
+              <ImageUploadField
+                label="Thumbnail"
+                required
+                kind="thumbnail"
+                value={thumbnail}
+                tenantSlug={tenantSlug}
+                postId={post.id}
+                disabled={isPublishing}
+                onChange={onThumb}
+                hint="Card image on the blog index."
+              />
+              <div>
+                <Label htmlFor="bp-question">Question / hook *</Label>
+                <Input
+                  id="bp-question"
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  placeholder="The sub-heading / FAQ-style hook"
+                  disabled={isPublishing}
+                />
+              </div>
+              <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
+                <div>
+                  <Label htmlFor="bp-author">Author *</Label>
+                  <Input
+                    id="bp-author"
+                    value={author}
+                    onChange={(e) => setAuthor(e.target.value)}
+                    placeholder="Author name"
+                    disabled={isPublishing}
+                  />
+                </div>
+                <ImageUploadField
+                  label="Avatar"
+                  required
+                  kind="author"
+                  aspect="square"
+                  value={authorImage}
+                  tenantSlug={tenantSlug}
+                  postId={post.id}
+                  disabled={isPublishing}
+                  onChange={onAuthorImg}
+                />
+              </div>
+
+              <ul className="space-y-1 pt-1">
+                {requirements.map((r) => (
+                  <li key={r.label} className="flex items-center gap-2 text-[12px]">
+                    {r.ok ? (
+                      <CheckCircle2 size={13} className="text-status-green shrink-0" />
+                    ) : (
+                      <Circle size={13} className="text-text-muted shrink-0" />
+                    )}
+                    <span className={r.ok ? "text-foreground" : "text-text-muted"}>
+                      {r.label}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              <Button
+                className="w-full gap-1.5"
+                disabled={!readyToPublish || isPublishing || dirty}
+                onClick={handlePublish}
+              >
+                <Rocket size={14} />
+                {isPublishing ? "Publishing…" : "Push to Gruve"}
+              </Button>
+              {dirty && (
+                <p className="text-[11px] text-text-muted">
+                  Save your edits (top right) before publishing.
+                </p>
+              )}
+              {publishError && (
+                <p className="text-[12px] text-red-500" role="alert">
+                  {publishError}
+                </p>
+              )}
+              {publishResult && (
+                <div className="text-[12px] space-y-1">
+                  <p className="text-status-green font-medium">Published ✓</p>
+                  <a
+                    href={publishResult.liveUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 text-primary-500 hover:underline"
+                  >
+                    <ExternalLink size={12} /> View live (www)
+                  </a>
+                  <a
+                    href={publishResult.gammaUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 text-primary-500 hover:underline"
+                  >
+                    <ExternalLink size={12} /> View on gamma
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
 
           <div className="rounded-lg border border-border bg-card">
             <div className="px-4 py-3 border-b border-border/30">

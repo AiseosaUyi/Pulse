@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type {
   BlogGenerationMeta,
   BlogGooglePreview,
+  BlogImageRef,
   BlogPostRecord,
   BlogPostStatus,
   BlogPostOutlineItem,
@@ -17,6 +18,19 @@ interface Row {
   target_keyword: string | null;
   secondary_keywords: string[] | null;
   meta_description: string | null;
+  question: string | null;
+  author: string | null;
+  author_image: string | null;
+  cover_image: BlogImageRef | null;
+  thumbnail: BlogImageRef | null;
+  tags: string[] | null;
+  category: string | null;
+  author_bio: string | null;
+  author_title: string | null;
+  author_url: string | null;
+  published_date: string | null;
+  updated_date: string | null;
+  noindex: boolean | null;
   outline: BlogPostOutlineItem[] | null;
   content: string | null;
   content_json: unknown | null;
@@ -43,6 +57,19 @@ function rowTo(row: Row): BlogPostRecord {
     targetKeyword: row.target_keyword,
     secondaryKeywords: row.secondary_keywords ?? [],
     metaDescription: row.meta_description,
+    question: row.question ?? null,
+    author: row.author ?? null,
+    authorImage: row.author_image ?? null,
+    coverImage: row.cover_image ?? null,
+    thumbnail: row.thumbnail ?? null,
+    tags: row.tags ?? [],
+    category: row.category ?? null,
+    authorBio: row.author_bio ?? null,
+    authorTitle: row.author_title ?? null,
+    authorUrl: row.author_url ?? null,
+    publishedDate: row.published_date ?? null,
+    updatedDate: row.updated_date ?? null,
+    noindex: row.noindex ?? false,
     outline: row.outline ?? [],
     content: row.content ?? "",
     contentJson: row.content_json ?? null,

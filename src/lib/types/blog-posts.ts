@@ -107,6 +107,14 @@ export interface RegenerationState {
   rejected_issues?: BlogScoreIssue[];
 }
 
+/** Image reference stored in blog_posts.cover_image / thumbnail (jsonb). */
+export interface BlogImageRef {
+  url: string;
+  fileName?: string | null;
+  contentType?: string | null;
+  alt?: string | null;
+}
+
 export interface BlogPostRecord {
   id: string;
   tenantSlug: string;
@@ -115,6 +123,23 @@ export interface BlogPostRecord {
   targetKeyword: string | null;
   secondaryKeywords: string[];
   metaDescription: string | null;
+  /** gruveBlog sub-heading / FAQ-style hook (required on publish). */
+  question: string | null;
+  /** Author name + avatar URL (avatar is a required Contentful field). */
+  author: string | null;
+  authorImage: string | null;
+  /** Banner + thumbnail images (required Contentful fields). */
+  coverImage: BlogImageRef | null;
+  thumbnail: BlogImageRef | null;
+  /** SEO / E-E-A-T (slice 2). */
+  tags: string[];
+  category: string | null;
+  authorBio: string | null;
+  authorTitle: string | null;
+  authorUrl: string | null;
+  publishedDate: string | null;
+  updatedDate: string | null;
+  noindex: boolean;
   outline: BlogPostOutlineItem[];
   content: string;
   /** TipTap JSON doc. Null on pre-Phase-D rows — editor lazy-migrates

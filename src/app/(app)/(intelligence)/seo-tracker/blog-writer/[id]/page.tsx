@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
 import { getBlogPostRecord } from "@/lib/services/blog-posts";
 import { listBlogPostVersions } from "@/lib/services/blog-versions";
 import { listBlogPostFeedback } from "@/lib/services/blog-feedback";
@@ -22,10 +23,11 @@ export default async function BlogEditorPage({
   const post = await getBlogPostRecord(tenantSlug, id);
   if (!post) notFound();
 
-  const [versions, feedback, distributions] = await Promise.all([
+  const [versions, feedback, distributions, user] = await Promise.all([
     listBlogPostVersions(tenantSlug, id),
     listBlogPostFeedback(tenantSlug, id),
     listDistributionsForBlogPost(tenantSlug, id),
+    getCurrentUser(),
   ]);
 
   return (
@@ -35,6 +37,10 @@ export default async function BlogEditorPage({
       versions={versions}
       feedback={feedback}
       distributions={distributions}
+      profileDefaults={{
+        author: user?.displayName ?? null,
+        authorImage: user?.avatarUrl ?? null,
+      }}
     />
   );
 }

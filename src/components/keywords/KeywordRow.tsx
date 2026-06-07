@@ -1,18 +1,46 @@
 "use client";
 
 import { useTransition } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Pencil, Trash2, Wand2, ExternalLink } from "lucide-react";
 import {
   deleteKeywordRanking,
   updateKeywordPosition,
 } from "@/lib/actions/keywords";
+import { generateKeywordDeeplink } from "@/lib/actions/keyword-deeplink";
 import { useDialogs } from "@/components/ui/Dialog";
 import type { KeywordRanking } from "@/lib/types/seo";
 import { KEYWORD_DIFFICULTY_LABELS } from "@/lib/types/seo";
 
 export function KeywordRow({ kw }: { kw: KeywordRanking }) {
   const dialogs = useDialogs();
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  // Map the keyword → a Gruve discovery deep-link (location + closest
+  // category + time tab), save it on the row, and show the result.
+  const handleGruveLink = () => {
+    startTransition(async () => {
+      const res = await generateKeywordDeeplink(kw.keyword, {
+        keywordId: kw.id,
+        persist: true,
+      });
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't generate link",
+          subtitle: res.error,
+          tone: "destructive",
+        });
+        return;
+      }
+      const m = res.data.mapping;
+      await dialogs.alert({
+        title: `Gruve link for "${kw.keyword}"`,
+        subtitle: `Mapped to → category: ${m.category ?? "—"} · location: ${m.location ?? "any"} · when: ${m.when ?? "any"} (${m.source}).\n\n${res.data.liveUrl}`,
+      });
+      router.refresh();
+    });
+  };
 
   const handleUpdate = async () => {
     const raw = await dialogs.prompt({
@@ -78,9 +106,15 @@ export function KeywordRow({ kw }: { kw: KeywordRanking }) {
         <div className="flex flex-col">
           <span className="text-foreground text-sm">{kw.keyword}</span>
           {kw.url && (
-            <span className="text-text-muted text-xs mt-0.5 truncate max-w-[260px]">
-              {kw.url}
-            </span>
+            <a
+              href={kw.url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary-500 hover:underline text-xs mt-0.5 truncate max-w-[260px] inline-flex items-center gap-1"
+            >
+              <ExternalLink size={11} className="shrink-0" />
+              {kw.url.replace(/^https?:\/\//, "")}
+            </a>
           )}
         </div>
       </td>
@@ -121,6 +155,15 @@ export function KeywordRow({ kw }: { kw: KeywordRanking }) {
       </td>
       <td className="px-3 py-3">
         <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={handleGruveLink}
+            disabled={isPending}
+            aria-label="Generate Gruve deep-link"
+            title={kw.url ? "Regenerate Gruve link" : "Map to a Gruve link"}
+            className="p-1.5 rounded text-text-muted hover:text-primary-500 hover:bg-primary-500/10 transition-colors"
+          >
+            <Wand2 size={14} />
+          </button>
           <button
             onClick={handleUpdate}
             disabled={isPending}
