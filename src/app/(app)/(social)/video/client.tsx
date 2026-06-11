@@ -320,7 +320,7 @@ export function VideoStudioClient({
                         ) : g.status === "generation_failed" ? (
                           <span className="text-xs text-primary-500">Failed</span>
                         ) : (
-                          <span className="text-xs text-text-muted capitalize">{g.status}</span>
+                          <span className="text-xs text-text-muted capitalize">{g.status.replace(/_/g, " ")}</span>
                         )}
                       </div>
                     )}
