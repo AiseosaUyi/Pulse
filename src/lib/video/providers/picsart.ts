@@ -1,15 +1,18 @@
-// PicsArt gen-ai implementation of VideoProvider (ByteDance Seedance 2.0).
-// The ONLY file that touches the PicsArt HTTP API. Server-only — the API key
-// never reaches the client. Dormant until PICSART_API_KEY is set.
+// PicsArt GenAI implementation of VideoProvider (Seedance 2.0 + others).
+// The ONLY file that touches the PicsArt HTTP API. Server-only.
 //
-// NOTE: the endpoint paths below follow the operation surface documented in the
-// build brief (list_models, model_params, validate_params, pricing, generate,
-// upload, credits) under base https://api.picsart.com/gen-ai. Confirm the exact
-// paths + response shapes against the live account when the key is provisioned;
-// they're centralized in ENDPOINTS so any correction is a one-place change.
-// Response parsing is intentionally defensive.
+// VERIFIED LIVE (2026-06-12) against a real key:
+//   base    https://genai-api.picsart.io
+//   auth    header  X-Picsart-API-Key: <key>
+//   t2v     POST /v1/text2video   { prompt, model(URN), quality, length, audio, width, height } -> 202 { status, inference_id }
+//   i2v     POST /v1/image2video  { image_url, prompt, model(URN), quality, length, audio, width, height } -> 202 { inference_id }
+//   result  GET  /v1/video/{inference_id}  -> 202 {status:"processing"} | 200 {status:"success", data:{url}}
+// Models are URNs (text-to-video vs image-to-video variants). No dry-run
+// pricing endpoint exists, so quote() returns an offline estimate; the budget
+// gate uses that and PicsArt deducts the real credits on generate.
 
 import {
+  estimateSeedanceCredits,
   validateSeedanceParams,
   SEEDANCE_MODELS,
 } from "./seedance-constraints";
@@ -27,23 +30,31 @@ import type {
   VideoProvider,
 } from "./types";
 
-const BASE = "https://api.picsart.com/gen-ai";
+const BASE = "https://genai-api.picsart.io";
 
-const ENDPOINTS = {
-  listModels: `${BASE}/models`,
-  modelParams: (id: string) => `${BASE}/models/${id}/params`,
-  pricing: `${BASE}/pricing`, // dry-run quote
-  generate: (id: string) => `${BASE}/models/${id}/generate`,
-  poll: (jobId: string) => `${BASE}/generations/${jobId}`,
-  upload: `${BASE}/upload`,
-  credits: `${BASE}/credits`,
+// Friendly model id (used across the app/UI) → PicsArt model URN, per endpoint.
+const TEXT2VIDEO_URN: Record<string, string> = {
+  "seedance-2.0": "urn:air:seedance:model:seedance:seedance-2.0-text-to-video@1",
+  "seedance-2.0-fast": "urn:air:seedance:model:seedance:seedance-1.0-pro-fast-text-to-video@1",
+  "kling-3.0": "urn:air:kling:model:kling:kling-v3-text-to-video@1",
+};
+// image2video: Seedance 1.5 Pro is the verified image-to-video model.
+const IMAGE2VIDEO_URN = "urn:air:seedance:model:seedance:seedance-1.5-pro-image-to-video@1";
+
+const ASPECT_WH: Record<string, { width: number; height: number }> = {
+  "9:16": { width: 576, height: 1024 },
+  "16:9": { width: 1024, height: 576 },
+  "1:1": { width: 1024, height: 1024 },
+  "4:3": { width: 1024, height: 768 },
+  "3:4": { width: 768, height: 1024 },
+  "21:9": { width: 1024, height: 439 },
+  adaptive: { width: 1024, height: 1024 },
 };
 
 export function isPicsartConfigured(): boolean {
   return Boolean(process.env.PICSART_API_KEY);
 }
 
-/** Credits→USD factor for telemetry (one-time top-ups ~0.0075, volume ~0.0045). */
 export function picsartCreditUsd(): number {
   const raw = Number(process.env.PICSART_CREDIT_USD);
   return Number.isFinite(raw) && raw > 0 ? raw : 0.005;
@@ -59,166 +70,120 @@ export class PicsartError extends Error {
 class PicsartVideoProvider implements VideoProvider {
   constructor(private apiKey: string) {}
 
-  private async req<T>(
-    url: string,
-    init: RequestInit = {}
-  ): Promise<T> {
-    const res = await fetch(url, {
+  private async req<T>(path: string, init: RequestInit = {}): Promise<{ status: number; json: T }> {
+    const res = await fetch(`${BASE}${path}`, {
       ...init,
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
+        "X-Picsart-API-Key": this.apiKey,
         Accept: "application/json",
-        ...(init.body && !(init.body instanceof FormData)
-          ? { "Content-Type": "application/json" }
-          : {}),
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
         ...(init.headers ?? {}),
       },
     });
     const text = await res.text();
     let json: unknown = null;
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      // non-JSON response
-    }
-    if (!res.ok) {
-      const msg =
-        (json as { message?: string; error?: string } | null)?.message ??
-        (json as { error?: string } | null)?.error ??
-        `PicsArt API ${res.status}`;
+    try { json = text ? JSON.parse(text) : null; } catch { /* non-JSON */ }
+    if (res.status >= 400) {
+      const msg = (json as { detail?: string; message?: string } | null)?.detail
+        ?? (json as { message?: string } | null)?.message
+        ?? `PicsArt API ${res.status}`;
       throw new PicsartError(msg, res.status);
     }
-    return json as T;
+    return { status: res.status, json: json as T };
   }
 
   async listModels(filter?: { mode?: "t2v" | "v2v" }): Promise<VideoModel[]> {
-    // Catalog is stable + verified offline; the remote list is advisory.
-    const models = SEEDANCE_MODELS.map((m) => ({
-      id: m.id,
-      mode: m.mode,
-      label: m.label,
-    }));
+    const models = SEEDANCE_MODELS.map((m) => ({ id: m.id, mode: m.mode, label: m.label }));
     return filter?.mode ? models.filter((m) => m.mode === filter.mode) : models;
   }
 
-  async getModelParams(modelId: string): Promise<ParamSchema> {
-    return this.req<ParamSchema>(ENDPOINTS.modelParams(modelId));
+  async getModelParams(): Promise<ParamSchema> {
+    return { quality: ["480p", "720p", "1080p"], length: "1-20", audio: "boolean" };
   }
 
-  async validateParams(
-    modelId: string,
-    params: SeedanceGenerateParams
-  ): Promise<ValidationResult> {
-    // Local §4.2 enforcement is the source of truth; cheap + offline.
+  async validateParams(modelId: string, params: SeedanceGenerateParams): Promise<ValidationResult> {
     return validateSeedanceParams(modelId, params);
   }
 
-  async quote(
-    modelId: string,
-    params: SeedanceGenerateParams
-  ): Promise<QuoteResult> {
-    const body = JSON.stringify({ model: modelId, ...toApiParams(params) });
-    const json = await this.req<{ credits?: number; price?: number }>(
-      ENDPOINTS.pricing,
-      { method: "POST", body }
-    );
-    const credits = json.credits ?? json.price;
-    if (typeof credits !== "number") {
-      throw new PicsartError("quote() returned no credit amount");
-    }
-    return { credits };
+  // No PicsArt pricing endpoint — offline estimate (budget gate uses this).
+  async quote(modelId: string, params: SeedanceGenerateParams): Promise<QuoteResult> {
+    return { credits: estimateSeedanceCredits(modelId, params) };
   }
 
-  async generate(
-    modelId: string,
-    params: SeedanceGenerateParams
-  ): Promise<GenerateResult> {
-    const body = JSON.stringify(toApiParams(params));
-    const json = await this.req<{ id?: string; jobId?: string }>(
-      ENDPOINTS.generate(modelId),
-      { method: "POST", body }
-    );
-    const jobId = json.id ?? json.jobId;
-    if (!jobId) throw new PicsartError("generate() returned no job id");
+  async generate(modelId: string, params: SeedanceGenerateParams): Promise<GenerateResult> {
+    const imageUrl = params.startFrame ?? params.imageUrls?.[0];
+    const wh = ASPECT_WH[params.aspectRatio ?? "16:9"] ?? ASPECT_WH["16:9"];
+    const common = {
+      prompt: params.prompt ?? "",
+      quality: params.resolution ?? "720p",
+      length: params.duration ?? 10,
+      audio: params.generateAudio ?? false,
+      width: wh.width,
+      height: wh.height,
+    };
+
+    if (params.videoUrl) {
+      // PicsArt's basic GenAI video API exposes text2video + image2video only;
+      // there's no verified video-to-video (replicate) endpoint yet.
+      throw new PicsartError("Recreate (video-to-video) isn't available on the PicsArt GenAI API yet");
+    }
+
+    let path: string;
+    let body: Record<string, unknown>;
+    if (imageUrl) {
+      path = "/v1/image2video";
+      body = { ...common, image_url: imageUrl, model: IMAGE2VIDEO_URN };
+    } else {
+      path = "/v1/text2video";
+      body = { ...common, model: TEXT2VIDEO_URN[modelId] ?? TEXT2VIDEO_URN["seedance-2.0"] };
+    }
+
+    const { json } = await this.req<{ inference_id?: string; id?: string }>(path, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const jobId = json.inference_id ?? json.id;
+    if (!jobId) throw new PicsartError("generate() returned no inference_id");
     return { jobId };
   }
 
   async poll(jobId: string): Promise<PollResult> {
-    const json = await this.req<{
+    const { status, json } = await this.req<{
       status?: string;
-      state?: string;
-      result?: { url?: string; lastFrameUrl?: string };
-      url?: string;
-      error?: string;
-    }>(ENDPOINTS.poll(jobId));
-    const raw = (json.status ?? json.state ?? "").toLowerCase();
-    const status: PollStatus =
-      raw === "success" || raw === "succeeded" || raw === "done"
+      data?: { url?: string };
+    }>(`/v1/video/${jobId}`);
+    const raw = (json.status ?? "").toLowerCase();
+    const mapped: PollStatus =
+      raw === "success" || raw === "done" || raw === "completed"
         ? "succeeded"
         : raw === "failed" || raw === "error"
           ? "failed"
-          : raw === "running" || raw === "processing"
-            ? "running"
-            : "pending";
+          : status === 200 && json.data?.url
+            ? "succeeded"
+            : "running";
     return {
-      status,
-      resultUrl: json.result?.url ?? json.url,
-      lastFrameUrl: json.result?.lastFrameUrl,
-      error: json.error,
+      status: mapped,
+      resultUrl: json.data?.url,
+      error: raw === "failed" ? "generation failed" : undefined,
     };
   }
 
+  // Our assets are stored as public Supabase URLs, which image2video accepts
+  // directly via image_url — so uploads are a passthrough for URL strings.
   async uploadAsset(fileOrUrl: Blob | string): Promise<UploadResult> {
-    let json: { uid?: string; id?: string; url?: string };
-    if (typeof fileOrUrl === "string") {
-      json = await this.req(ENDPOINTS.upload, {
-        method: "POST",
-        body: JSON.stringify({ url: fileOrUrl }),
-      });
-    } else {
-      const form = new FormData();
-      form.append("file", fileOrUrl);
-      json = await this.req(ENDPOINTS.upload, { method: "POST", body: form });
-    }
-    const uid = json.uid ?? json.id;
-    if (!uid || !json.url) throw new PicsartError("upload() returned no uid/url");
-    return { uid, url: json.url };
+    if (typeof fileOrUrl === "string") return { uid: fileOrUrl, url: fileOrUrl };
+    throw new PicsartError("Provide a public asset URL; PicsArt accepts image_url directly");
   }
 
+  // No documented balance endpoint; best-effort (the budget gate degrades to
+  // the USD ceiling when this is unavailable).
   async creditBalance(): Promise<CreditBalance> {
-    const json = await this.req<{
-      balance?: number;
-      credits?: number;
-      nextResetDate?: string;
-    }>(ENDPOINTS.credits);
-    const balance = json.balance ?? json.credits ?? 0;
-    return { balance, nextResetDate: json.nextResetDate };
+    throw new PicsartError("credit balance endpoint not available");
   }
 }
 
-// Map our typed params to the provider's wire field names (§4.1 schema).
-function toApiParams(p: SeedanceGenerateParams): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  if (p.prompt !== undefined) out.prompt = p.prompt;
-  if (p.aspectRatio !== undefined) out.aspectRatio = p.aspectRatio;
-  if (p.resolution !== undefined) out.resolution = p.resolution;
-  if (p.duration !== undefined) out.duration = p.duration;
-  if (p.generateAudio !== undefined) out.generateAudio = p.generateAudio;
-  if (p.returnLastFrame !== undefined) out.returnLastFrame = p.returnLastFrame;
-  if (p.imageUrls?.length) out.imageUrls = p.imageUrls;
-  if (p.videoUrls?.length) out.videoUrls = p.videoUrls;
-  if (p.audioUrls?.length) out.audioUrls = p.audioUrls;
-  if (p.startFrame) out.startFrame = p.startFrame;
-  if (p.endFrame) out.endFrame = p.endFrame;
-  if (p.videoUrl) out.videoUrl = p.videoUrl;
-  return out;
-}
-
-/** Returns the configured provider, or throws if PICSART_API_KEY is unset. */
 export function getPicsartProvider(): VideoProvider {
   const key = process.env.PICSART_API_KEY;
-  if (!key) {
-    throw new PicsartError("PICSART_API_KEY is not configured");
-  }
+  if (!key) throw new PicsartError("PICSART_API_KEY is not configured");
   return new PicsartVideoProvider(key);
 }
