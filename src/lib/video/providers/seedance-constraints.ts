@@ -14,10 +14,15 @@ export interface SeedanceModel {
   creditsPerSecond: number; // 720p baseline; 1080p uses a multiplier
 }
 
-// §4.1 + §4.3 (verified live; runtime truth is quote()).
+// Catalog for the UI + offline credit estimate. Credit rates are approximate
+// (PicsArt has no dry-run pricing endpoint; it deducts the real amount on
+// generate). seedance-2.0 = best for people; 1.5 / Kling / Fast = cheaper,
+// good for non-human b-roll.
 export const SEEDANCE_MODELS: SeedanceModel[] = [
   { id: "seedance-2.0", mode: "t2v", label: "Seedance 2.0 (Pro)", fast: false, maxResolution: "1080p", creditsPerSecond: 10 },
-  { id: "seedance-2.0-fast", mode: "t2v", label: "Seedance 2.0 Fast", fast: true, maxResolution: "720p", creditsPerSecond: 8 },
+  { id: "seedance-1.5", mode: "t2v", label: "Seedance 1.5 Pro", fast: false, maxResolution: "1080p", creditsPerSecond: 7 },
+  { id: "kling-3.0", mode: "t2v", label: "Kling 3.0", fast: false, maxResolution: "1080p", creditsPerSecond: 6 },
+  { id: "seedance-2.0-fast", mode: "t2v", label: "Seedance Fast", fast: true, maxResolution: "720p", creditsPerSecond: 8 },
   { id: "seedance-2.0-video-edit", mode: "v2v", label: "Seedance 2.0 Video Edit (replicate)", fast: false, maxResolution: "1080p", creditsPerSecond: 10 },
   { id: "seedance-2.0-fast-video-edit", mode: "v2v", label: "Seedance 2.0 Fast Video Edit", fast: true, maxResolution: "720p", creditsPerSecond: 8 },
   { id: "seedance-2.0-video-extend", mode: "v2v", label: "Seedance 2.0 Video Extend (assemble)", fast: false, maxResolution: "1080p", creditsPerSecond: 10 },

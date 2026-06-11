@@ -253,10 +253,18 @@ export function VideoStudioClient({
             <div>
               <Label>Model</Label>
               <Segmented
-                options={[{ v: "seedance-2.0", l: "Pro" }, { v: "seedance-2.0-fast", l: "Fast" }]}
+                options={[
+                  { v: "seedance-2.0", l: "Seedance 2.0" },
+                  { v: "seedance-1.5", l: "Seedance 1.5" },
+                  { v: "kling-3.0", l: "Kling 3.0" },
+                  { v: "seedance-2.0-fast", l: "Seedance Fast" },
+                ]}
                 value={model}
                 onChange={setModel}
               />
+              <p className="text-[11px] text-text-muted mt-1">
+                Seedance 2.0 — best for people. 1.5 / Kling / Fast — cheaper, great for b-roll.
+              </p>
             </div>
             <div>
               <Label>Duration · {durationS}s</Label>

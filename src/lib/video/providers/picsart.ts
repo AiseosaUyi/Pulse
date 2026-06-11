@@ -35,8 +35,9 @@ const BASE = "https://genai-api.picsart.io";
 // Friendly model id (used across the app/UI) → PicsArt model URN, per endpoint.
 const TEXT2VIDEO_URN: Record<string, string> = {
   "seedance-2.0": "urn:air:seedance:model:seedance:seedance-2.0-text-to-video@1",
-  "seedance-2.0-fast": "urn:air:seedance:model:seedance:seedance-1.0-pro-fast-text-to-video@1",
+  "seedance-1.5": "urn:air:seedance:model:seedance:seedance-1.5-pro-text-to-video@1",
   "kling-3.0": "urn:air:kling:model:kling:kling-v3-text-to-video@1",
+  "seedance-2.0-fast": "urn:air:seedance:model:seedance:seedance-1.0-pro-fast-text-to-video@1",
 };
 // image2video: Seedance 1.5 Pro is the verified image-to-video model.
 const IMAGE2VIDEO_URN = "urn:air:seedance:model:seedance:seedance-1.5-pro-image-to-video@1";
