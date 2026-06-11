@@ -20,6 +20,7 @@ import {
   Plug,
   Radar,
   Film,
+  Activity,
   type LucideIcon,
 } from "lucide-react";
 
@@ -59,6 +60,11 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         icon: TrendingUp,
       },
       {
+        label: "Discovery sources",
+        href: "/settings/discovery",
+        icon: Radar,
+      },
+      {
         label: "Outbound filters",
         href: "/settings/outbound-filters",
         icon: Radar,
@@ -69,6 +75,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     label: "Integrations & usage",
     items: [
       { label: "Integrations", href: "/settings/integrations", icon: Plug },
+      { label: "System health", href: "/settings/system-health", icon: Activity },
       { label: "AI usage", href: "/settings/ai-usage", icon: Zap },
       { label: "Storage", href: "/settings/storage", icon: HardDrive },
     ],

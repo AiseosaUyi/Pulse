@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyFromRequest } from "@/lib/cron/auth";
+import { withCronRun } from "@/lib/cron/run-tracker";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
 import { analyzeTrend } from "@/lib/ai/analyze-trend";
 import {
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
 
+  const result = await withCronRun("scrape-trends", async () => {
   const admin = createAdminClient();
   const summary = {
     tenantsProcessed: 0,
@@ -52,10 +54,7 @@ export async function POST(req: Request) {
     .from("tenants")
     .select("slug, name, settings");
   if (tenantsErr || !tenants) {
-    return NextResponse.json(
-      { error: tenantsErr?.message ?? "Failed to list tenants" },
-      { status: 500 }
-    );
+    throw new Error(tenantsErr?.message ?? "Failed to list tenants");
   }
 
   // Phase 1: scrape all platforms all tenants in parallel.
@@ -227,5 +226,10 @@ export async function POST(req: Request) {
   }
 
   console.log("[cron/scrape-trends] complete", summary);
-  return NextResponse.json(summary);
+    const status =
+      summary.failed === 0 ? "ok" : summary.inserted > 0 ? "partial" : "failed";
+    return { status, rowsProcessed: summary.inserted, metadata: summary };
+  });
+
+  return NextResponse.json(result.metadata ?? result);
 }

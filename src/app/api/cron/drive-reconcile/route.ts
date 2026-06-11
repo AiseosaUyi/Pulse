@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyFromRequest } from "@/lib/cron/auth";
+import { withCronRun } from "@/lib/cron/run-tracker";
 import { batchGetFiles, DriveError } from "@/lib/integrations/drive";
 import { getActiveAccessToken } from "@/lib/services/drive-connections";
 
@@ -37,6 +38,7 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
 
+  const result = await withCronRun("drive-reconcile", async () => {
   const admin = createAdminClient();
   const summary = {
     tenantsProcessed: 0,
@@ -51,10 +53,10 @@ export async function POST(req: Request): Promise<Response> {
     .select("tenant_slug")
     .eq("status", "active");
   if (tErr) {
-    return NextResponse.json({ error: tErr.message }, { status: 500 });
+    throw new Error(tErr.message);
   }
   if (!tenants || tenants.length === 0) {
-    return NextResponse.json({ ok: true, summary });
+    return { status: "skipped" as const, rowsProcessed: 0, metadata: summary };
   }
 
   for (const t of tenants as TenantRow[]) {
@@ -136,5 +138,14 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
-  return NextResponse.json({ ok: true, summary });
+    const status =
+      summary.tenantsFailed === 0
+        ? "ok"
+        : summary.tenantsProcessed > 0
+          ? "partial"
+          : "failed";
+    return { status, rowsProcessed: summary.itemsChecked, metadata: summary };
+  });
+
+  return NextResponse.json({ ok: result.status !== "failed", summary: result.metadata });
 }

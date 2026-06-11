@@ -9,6 +9,8 @@ import {
   sendInstagramDM,
   commentOnLinkedInPost,
 } from "@/lib/composio/executors";
+import { getTenant } from "@/lib/services/tenants";
+import { generateEngagementReplyDraft } from "@/lib/ai/engagement-reply";
 import type { Toolkit } from "@/lib/composio/client";
 
 const TYPES = ["dm", "comment", "mention", "reply"] as const;
@@ -193,6 +195,94 @@ export async function deleteEngagementItem(itemId: string) {
   const { error } = await supabase
     .from("engagement_items")
     .delete()
+    .eq("id", itemId);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/engagement");
+  return { success: true };
+}
+
+// ── Reply approval queue ──────────────────────────────────────────────────
+// Generate an AI reply draft for an inbound item and park it as
+// pending_review. Nothing sends until a human approves.
+export async function draftEngagementReply(itemId: string) {
+  await requireUser();
+  const tenant = await getCurrentTenant();
+  if (!tenant) return { success: false, error: "No tenant selected" };
+
+  const supabase = await createClient();
+  const { data: item, error } = await supabase
+    .from("engagement_items")
+    .select("id, type, platform, content, from_handle")
+    .eq("id", itemId)
+    .single();
+  if (error || !item) {
+    return { success: false, error: error?.message ?? "Item not found" };
+  }
+
+  const t = await getTenant(tenant.slug);
+  try {
+    const draft = await generateEngagementReplyDraft({
+      tenantSlug: tenant.slug,
+      tenantName: t?.name ?? tenant.slug,
+      item: {
+        type: item.type as string,
+        platform: item.platform as string,
+        content: item.content as string,
+        fromHandle: (item.from_handle as string) ?? null,
+      },
+    });
+    await supabase
+      .from("engagement_items")
+      .update({ ai_draft: draft, approval_status: "pending_review" })
+      .eq("id", itemId);
+    revalidatePath("/engagement");
+    return { success: true, draft };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Draft failed",
+    };
+  }
+}
+
+// Approve (optionally edited) and send via the existing reply path, then mark
+// the item sent + record who approved it.
+export async function approveEngagementReply(itemId: string, editedBody?: string) {
+  const user = await requireUser();
+  const supabase = await createClient();
+
+  let body = (editedBody ?? "").trim();
+  if (!body) {
+    const { data: item } = await supabase
+      .from("engagement_items")
+      .select("ai_draft")
+      .eq("id", itemId)
+      .single();
+    body = ((item?.ai_draft as { body?: string } | null)?.body ?? "").trim();
+  }
+  if (!body) return { success: false, error: "No draft to send" };
+
+  const sent = await sendEngagementReply(itemId, body);
+  if (!sent.success) return sent;
+
+  await supabase
+    .from("engagement_items")
+    .update({
+      approval_status: "sent",
+      approved_by: user.id,
+      approved_at: new Date().toISOString(),
+    })
+    .eq("id", itemId);
+  revalidatePath("/engagement");
+  return { success: true };
+}
+
+export async function rejectEngagementDraft(itemId: string) {
+  await requireUser();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("engagement_items")
+    .update({ approval_status: "rejected" })
     .eq("id", itemId);
   if (error) return { success: false, error: error.message };
   revalidatePath("/engagement");

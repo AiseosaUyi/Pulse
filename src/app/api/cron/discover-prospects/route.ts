@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyFromRequest } from "@/lib/cron/auth";
+import { withCronRun } from "@/lib/cron/run-tracker";
 import { executeProspectSearch } from "@/lib/services/prospect-searches-runner";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
 
+  const result = await withCronRun("discover-prospects", async () => {
   const admin = createAdminClient();
 
   const summary = {
@@ -48,10 +50,7 @@ export async function POST(req: Request) {
     .from("tenants")
     .select("slug, name");
   if (tenantsErr || !tenants) {
-    return NextResponse.json(
-      { error: tenantsErr?.message ?? "Failed to list tenants" },
-      { status: 500 }
-    );
+    throw new Error(tenantsErr?.message ?? "Failed to list tenants");
   }
 
   for (const tenant of tenants as TenantRow[]) {
@@ -89,5 +88,10 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json(summary);
+    const status =
+      summary.failed === 0 ? "ok" : summary.inserted > 0 ? "partial" : "failed";
+    return { status, rowsProcessed: summary.inserted, metadata: summary };
+  });
+
+  return NextResponse.json(result.metadata ?? result);
 }

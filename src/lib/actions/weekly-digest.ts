@@ -13,6 +13,7 @@ import {
   weekOfSaturday,
 } from "@/lib/services/insights";
 import { synthesizeDigest } from "@/lib/ai/synthesize-digest";
+import { getAttributionSummary } from "@/lib/services/attribution";
 import { startOfWeekSaturday } from "@/lib/util/week-of";
 
 type ActionResult<T = unknown> =
@@ -46,14 +47,16 @@ export async function generateWeeklyDigest(
   }
 
   try {
-    const [moves, formats, own, seo, leads, voice] = await Promise.all([
-      aggregateCompetitorMoves(tenantSlug, weekStart),
-      aggregateWinningFormats(tenantSlug, weekStart),
-      aggregateOwnPerformance(tenantSlug, weekStart),
-      aggregateSeoSummary(tenantSlug),
-      aggregateLeadsSummary(tenantSlug, weekStart),
-      getBrandVoice(tenantSlug),
-    ]);
+    const [moves, formats, own, seo, leads, voice, attribution] =
+      await Promise.all([
+        aggregateCompetitorMoves(tenantSlug, weekStart),
+        aggregateWinningFormats(tenantSlug, weekStart),
+        aggregateOwnPerformance(tenantSlug, weekStart),
+        aggregateSeoSummary(tenantSlug),
+        aggregateLeadsSummary(tenantSlug, weekStart),
+        getBrandVoice(tenantSlug),
+        getAttributionSummary(tenantSlug, 7),
+      ]);
 
     const { synthesis, costUsd } = await synthesizeDigest({
       voice,
@@ -82,6 +85,7 @@ export async function generateWeeklyDigest(
           own_performance: own,
           seo_summary: seo,
           leads_summary: leads,
+          attribution_summary: attribution,
           generator_model: "openai/gpt-4.1",
           generator_cost_usd: costUsd,
           generated_at: new Date().toISOString(),

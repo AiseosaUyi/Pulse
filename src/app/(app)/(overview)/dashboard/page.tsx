@@ -12,13 +12,15 @@ import { getNotifications } from "@/lib/services/notifications";
 import { getTenant } from "@/lib/services/tenants";
 import { listActiveCoachActions } from "@/lib/services/coach";
 import { getLatestWeeklyReview } from "@/lib/services/weekly-reviews";
+import { getSetupStatus } from "@/lib/services/setup-status";
+import { SetupBanner } from "@/components/dashboard/SetupBanner";
 import { formatCurrency } from "@/lib/utils/format";
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
 
-  const [tenant, stats, platforms, suggestions, notifications, coachActions, weeklyReview] = await Promise.all([
+  const [tenant, stats, platforms, suggestions, notifications, coachActions, weeklyReview, setupStatus] = await Promise.all([
     getTenant(tenantSlug),
     getDashboardStats(tenantSlug),
     getPlatforms(tenantSlug),
@@ -26,6 +28,7 @@ export default async function DashboardPage() {
     getNotifications(tenantSlug),
     listActiveCoachActions(tenantSlug, 8),
     getLatestWeeklyReview(tenantSlug),
+    getSetupStatus(tenantSlug),
   ]);
 
   if (!tenant || !stats) {
@@ -73,6 +76,9 @@ export default async function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Launch readiness — stays until every setup task is done */}
+      <SetupBanner status={setupStatus} />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">

@@ -8,7 +8,9 @@ import {
   publishInstagramSinglePost,
   publishLinkedInTextPost,
   publishTikTokVideo,
+  getInstagramRecentMedia,
 } from "@/lib/composio/executors";
+import { applyTrackingLinks } from "@/lib/attribution/links";
 import type { ScheduledPostStatus } from "@/lib/types/scheduled-posts";
 import type { Toolkit } from "@/lib/composio/client";
 
@@ -97,7 +99,7 @@ export async function publishScheduledPost(
   const supabase = await createClient();
   const { data: sp, error: spErr } = await supabase
     .from("scheduled_posts")
-    .select("id, platform, caption, content_type, scheduled_for")
+    .select("id, platform, caption, content_type, scheduled_for, brief_id")
     .eq("id", input.scheduledPostId)
     .eq("tenant_slug", input.tenantSlug)
     .single();
@@ -123,7 +125,22 @@ export async function publishScheduledPost(
     };
   }
 
+  // Attribution: tag any link in the caption with UTMs + a /r/:code short link
+  // so a click (and any downstream order) traces back to this post/campaign.
+  const utm = {
+    utm_source: platform,
+    utm_medium: sp.content_type ?? "social",
+    utm_campaign: sp.brief_id ?? input.scheduledPostId,
+    utm_content: input.scheduledPostId,
+  };
+  const caption = await applyTrackingLinks(sp.caption, {
+    tenantSlug: input.tenantSlug,
+    scheduledPostId: input.scheduledPostId,
+    ...utm,
+  });
+
   let externalId = "";
+  let postUrl: string | null = null;
   try {
     if (platform === "instagram") {
       if (!input.mediaUrl) {
@@ -134,12 +151,19 @@ export async function publishScheduledPost(
         ct === "video" ? "video" : ct === "carousel" ? "image" : "image";
       const out = await publishInstagramSinglePost(conn, {
         mediaUrl: input.mediaUrl,
-        caption: sp.caption ?? undefined,
+        caption: caption || undefined,
         mediaType,
       });
       externalId = out.mediaId;
+      // Best-effort: resolve the live permalink so post_url is provable.
+      try {
+        const media = await getInstagramRecentMedia(conn, 25);
+        postUrl = media.find((m) => m.id === externalId)?.permalink ?? null;
+      } catch {
+        // permalink lookup is non-critical
+      }
     } else if (platform === "linkedin") {
-      const out = await publishLinkedInTextPost(conn, sp.caption ?? "");
+      const out = await publishLinkedInTextPost(conn, caption);
       externalId = out.postUrn;
     } else {
       // tiktok
@@ -148,7 +172,7 @@ export async function publishScheduledPost(
       }
       const out = await publishTikTokVideo(conn, {
         videoUrl: input.mediaUrl,
-        caption: sp.caption ?? undefined,
+        caption: caption || undefined,
       });
       externalId = out.publishId;
     }
@@ -171,6 +195,9 @@ export async function publishScheduledPost(
       platform,
       content_type: sp.content_type ?? "text",
       posted_at: new Date().toISOString().slice(0, 10),
+      external_id: externalId,
+      post_url: postUrl,
+      ...utm,
     })
     .select("id")
     .single();
@@ -178,6 +205,13 @@ export async function publishScheduledPost(
   if (postErr || !post) {
     return { success: false, error: postErr?.message ?? "Posts insert failed" };
   }
+
+  // Backfill the tracking links created above with the now-known post id.
+  await admin
+    .from("links")
+    .update({ post_id: post.id })
+    .eq("scheduled_post_id", input.scheduledPostId)
+    .is("post_id", null);
 
   await admin
     .from("scheduled_post_publications")

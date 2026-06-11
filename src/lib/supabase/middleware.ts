@@ -5,7 +5,9 @@ import { NextResponse, type NextRequest } from "next/server";
 // /api/jwks) without the auth redirect. The vercel.json rewrite runs
 // AFTER this proxy, so the original `/.well-known/jwks.json` path must
 // pass through here un-gated or it 307s to /login.
-const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/invite", "/forgot-password", "/api/cron", "/.well-known"];
+// `/r` is the public short-link redirector (trackable campaign links) — it must
+// be hittable by anyone, including logged-out customers on IG/WhatsApp.
+const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/invite", "/forgot-password", "/api/cron", "/.well-known", "/r"];
 
 // Refreshes the Supabase session and gates unauthenticated routes.
 // Called from proxy.ts on every request.

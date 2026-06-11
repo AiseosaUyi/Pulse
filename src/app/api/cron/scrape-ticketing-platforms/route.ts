@@ -1,27 +1,32 @@
-// Nightly cron: scrape Tier 1 Nigerian ticketing platforms for event
-// organizers, enrich with IG profile data, score by event cadence,
-// and upsert into the prospects table. The backlog cron handles AI
-// qualification of the newly-flagged rows (qualify_pending: true).
+// Platform-discovery lead-gen cron (formerly Gruve-only ticketing scraper).
+// Now per-tenant: every tenant with a discovery config (tenants.settings
+// .discovery) mines its own platforms. Gruve falls back to its built-in
+// ticketing sources, so its behavior is unchanged. Sippy (or any tenant) can
+// configure drinks platforms, marketplaces, etc. The backlog cron AI-qualifies
+// the newly-flagged rows (qualify_pending: true).
 //
-// Hardcoded to tenant "gruve" for MVP. Multi-tenant loop is deferred
-// until Apify cost is validated at volume.
+// Route path kept as /scrape-ticketing-platforms for vercel.json continuity.
 
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyFromRequest } from "@/lib/cron/auth";
+import { withCronRun } from "@/lib/cron/run-tracker";
+import { getDiscoveryConfig } from "@/lib/scrape/discovery-config";
 import {
-  scrapeAllPlatforms,
-  aggregateCandidates,
+  crawlSources,
+  aggregateByHandle,
   enrichHandlesWithIg,
-} from "@/lib/scrape/ticketing-scraper";
-import { scoreEventCadence } from "@/lib/outbound/ticketing-scorer";
+  scoreListingActivity,
+} from "@/lib/scrape/platform-discovery";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const TENANT_SLUG = "gruve";
-const LIMIT_PER_PLATFORM = 50;
-const MAX_TOTAL_CANDIDATES = 300;
+interface TenantRow {
+  slug: string;
+  name: string;
+  settings: Record<string, unknown> | null;
+}
 
 export async function POST(req: Request) {
   const gate = verifyFromRequest(req);
@@ -29,121 +34,127 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
 
-  const admin = createAdminClient();
-  const summary = {
-    scraped: 0,
-    withHandle: 0,
-    upserted: 0,
-    errors: [] as string[],
-  };
+  const result = await withCronRun("scrape-ticketing-platforms", async () => {
+    const admin = createAdminClient();
+    const summary = {
+      tenantsProcessed: 0,
+      tenantsConfigured: 0,
+      scraped: 0,
+      withHandle: 0,
+      upserted: 0,
+      failed: 0,
+      errors: [] as { tenant: string; message: string }[],
+    };
 
-  // Ensure a permanent search record exists for this signal type
-  const { data: existing } = await admin
-    .from("prospect_searches")
-    .select("id")
-    .eq("tenant_slug", TENANT_SLUG)
-    .eq("signal_type", "ticketing_platform")
-    .maybeSingle();
-
-  let searchId: string;
-  if (existing) {
-    searchId = existing.id as string;
-  } else {
-    const { data: created, error: createErr } = await admin
-      .from("prospect_searches")
-      .insert({
-        tenant_slug: TENANT_SLUG,
-        name: "Ticketing Platform Auto-Discovery",
-        platform: "instagram",
-        signal_type: "ticketing_platform",
-        query: "all",
-        filters: {},
-        auto_qualify: false,
-      })
-      .select("id")
-      .single();
-    if (createErr || !created) {
-      return NextResponse.json(
-        { error: createErr?.message ?? "Failed to create search record" },
-        { status: 500 }
-      );
+    const { data: tenants, error: tErr } = await admin
+      .from("tenants")
+      .select("slug, name, settings");
+    if (tErr || !tenants) {
+      throw new Error(tErr?.message ?? "Failed to list tenants");
     }
-    searchId = created.id as string;
-  }
 
-  // Step 1: Scrape all platforms
-  let candidates = await scrapeAllPlatforms({ limitPerPlatform: LIMIT_PER_PLATFORM });
-  summary.scraped = candidates.length;
+    for (const tenant of tenants as TenantRow[]) {
+      summary.tenantsProcessed += 1;
+      const config = getDiscoveryConfig(tenant);
+      if (!config) continue;
+      summary.tenantsConfigured += 1;
 
-  if (candidates.length > MAX_TOTAL_CANDIDATES) {
-    console.warn(
-      `[cron/scrape-ticketing-platforms] ${candidates.length} candidates exceeds cap ${MAX_TOTAL_CANDIDATES} — truncating`
-    );
-    candidates = candidates
-      .sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime())
-      .slice(0, MAX_TOTAL_CANDIDATES);
-  }
+      try {
+        // Ensure a permanent prospect_searches record exists for this signal.
+        const { data: existing } = await admin
+          .from("prospect_searches")
+          .select("id")
+          .eq("tenant_slug", tenant.slug)
+          .eq("signal_type", config.signalType)
+          .maybeSingle();
 
-  // Step 2: Aggregate by IG handle + compute cadence counts
-  const organizers = aggregateCandidates(candidates);
-  summary.withHandle = organizers.size;
+        let searchId = (existing as { id: string } | null)?.id;
+        if (!searchId) {
+          const { data: created, error: cErr } = await admin
+            .from("prospect_searches")
+            .insert({
+              tenant_slug: tenant.slug,
+              name: "Platform Auto-Discovery",
+              platform: "instagram",
+              signal_type: config.signalType,
+              query: "all",
+              filters: {},
+              auto_qualify: false,
+            })
+            .select("id")
+            .single();
+          if (cErr || !created) {
+            throw new Error(cErr?.message ?? "Failed to create search record");
+          }
+          searchId = created.id as string;
+        }
 
-  if (organizers.size === 0) {
-    console.log("[cron/scrape-ticketing-platforms] no handles found", summary);
-    return NextResponse.json(summary);
-  }
+        let candidates = await crawlSources(config.sources, config.limitPerSource);
+        summary.scraped += candidates.length;
+        if (candidates.length > config.maxCandidates) {
+          candidates = candidates
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, config.maxCandidates);
+        }
 
-  // Step 3: Enrich handles with IG profile data
-  const igProfiles = await enrichHandlesWithIg([...organizers.keys()]);
+        const handles = aggregateByHandle(candidates);
+        summary.withHandle += handles.size;
+        if (handles.size === 0) continue;
 
-  // Step 4: Build and upsert prospect rows
-  const rows: Array<Record<string, unknown>> = [];
-  for (const [handle, org] of organizers) {
-    const profile = igProfiles.get(handle);
-    const { cadence, reachOutTiming, priorityScore } = scoreEventCadence({
-      events90d: org.events90d,
-      events365d: org.events365d,
-      lastEventDateIso: org.lastEventDate,
-    });
+        const igProfiles = await enrichHandlesWithIg([...handles.keys()]);
 
-    rows.push({
-      tenant_slug: TENANT_SLUG,
-      search_id: searchId,
-      platform: "instagram",
-      handle,
-      display_name: profile?.fullName ?? null,
-      profile_url: org.igProfileUrl,
-      avatar_url: profile?.profilePicUrl ?? null,
-      bio: profile?.biography ?? null,
-      follower_count: profile?.followersCount ?? null,
-      signal_summary: `[ticketing] ${cadence} · ${org.events90d} events/90d · last: ${org.lastEventDate}`,
-      signal_data: {
-        source_type: "ticketing_platform",
-        platform_sources: org.platformSources,
-        event_cadence: cadence,
-        events_90d: org.events90d,
-        events_365d: org.events365d,
-        last_event_date: org.lastEventDate,
-        reach_out_timing: reachOutTiming,
-        priority_score: priorityScore,
-        qualify_pending: true,
-      },
-      status: "new",
-    });
-  }
+        const rows = [...handles.entries()].map(([handle, agg]) => {
+          const profile = igProfiles.get(handle);
+          const { tier, timing, priorityScore } = scoreListingActivity({
+            count90d: agg.count90d,
+            count365d: agg.count365d,
+            lastDateIso: agg.lastDate,
+          });
+          return {
+            tenant_slug: tenant.slug,
+            search_id: searchId,
+            platform: "instagram",
+            handle,
+            display_name: profile?.fullName ?? null,
+            profile_url: agg.igProfileUrl,
+            avatar_url: profile?.profilePicUrl ?? null,
+            bio: profile?.biography ?? null,
+            follower_count: profile?.followersCount ?? null,
+            signal_summary: `[${config.signalType}] ${tier} · ${agg.count90d} listings/90d · last ${agg.lastDate}`,
+            signal_data: {
+              source_type: config.signalType,
+              platform_sources: agg.sources,
+              activity_tier: tier,
+              listings_90d: agg.count90d,
+              listings_365d: agg.count365d,
+              last_listing_date: agg.lastDate,
+              reach_out_timing: timing,
+              priority_score: priorityScore,
+              qualify_pending: true,
+            },
+            status: "new",
+          };
+        });
 
-  const { data: upserted, error: upsertErr } = await admin
-    .from("prospects")
-    .upsert(rows, { onConflict: "tenant_slug,platform,handle" })
-    .select("id");
+        const { data: upserted, error: upErr } = await admin
+          .from("prospects")
+          .upsert(rows, { onConflict: "tenant_slug,platform,handle" })
+          .select("id");
+        if (upErr) throw new Error(upErr.message);
+        summary.upserted += upserted?.length ?? 0;
+      } catch (err) {
+        summary.failed += 1;
+        summary.errors.push({
+          tenant: tenant.slug,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
 
-  if (upsertErr) {
-    summary.errors.push(upsertErr.message);
-    console.error("[cron/scrape-ticketing-platforms] upsert failed", upsertErr);
-    return NextResponse.json(summary, { status: 500 });
-  }
+    const status =
+      summary.failed === 0 ? "ok" : summary.upserted > 0 ? "partial" : "failed";
+    return { status, rowsProcessed: summary.upserted, metadata: summary };
+  });
 
-  summary.upserted = upserted?.length ?? 0;
-  console.log("[cron/scrape-ticketing-platforms] complete", summary);
-  return NextResponse.json(summary);
+  return NextResponse.json(result.metadata ?? result);
 }

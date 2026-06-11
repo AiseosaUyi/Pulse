@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyFromRequest } from "@/lib/cron/auth";
+import { withCronRun } from "@/lib/cron/run-tracker";
 import { listActiveConnections } from "@/lib/composio/resolve-alias";
 import {
   getInstagramRecentMedia,
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
 
+  const result = await withCronRun("composio-sync-engagement", async () => {
   const admin = createAdminClient();
   const summary = {
     connectionsProcessed: 0,
@@ -56,6 +58,8 @@ export async function POST(req: Request) {
               type: "comment",
               platform: "instagram",
               external_id: c.id,
+              source: "composio",
+              from_name: c.username ?? "Instagram user",
               from_handle: c.username,
               content: c.text,
               read: false,
@@ -86,6 +90,8 @@ export async function POST(req: Request) {
               type: "dm",
               platform: "instagram",
               external_id: msg.id,
+              source: "composio",
+              from_name: msg.fromHandle ?? "Instagram user",
               from_handle: msg.fromHandle,
               content: msg.message,
               read: false,
@@ -143,5 +149,15 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json(summary);
+    const ingested = summary.commentsAdded + summary.dmsAdded;
+    const status =
+      summary.failed === 0
+        ? "ok"
+        : ingested > 0 || summary.connectionsProcessed > summary.failed
+          ? "partial"
+          : "failed";
+    return { status, rowsProcessed: ingested, metadata: summary };
+  });
+
+  return NextResponse.json(result.metadata ?? result);
 }
