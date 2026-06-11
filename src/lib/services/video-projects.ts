@@ -114,6 +114,107 @@ export async function listVideoCharacters(tenantSlug: string): Promise<VideoChar
   return (data ?? []).map(toCharacter);
 }
 
+export interface GenerationSummary {
+  id: string;
+  title: string;
+  status: string;
+  mode: string | null;
+  prompt: string | null;
+  aspectRatio: string;
+  resolution: string;
+  durationS: number | null;
+  outputUrl: string | null;
+  creditEstimate: number | null;
+  createdAt: string;
+}
+
+// History feed: recent generations with their playable output (assembled, or
+// the single clip's output for composer generations).
+export async function listGenerations(
+  tenantSlug: string,
+  limit = 40
+): Promise<GenerationSummary[]> {
+  const supabase = await createClient();
+  const { data: projects } = await supabase
+    .from("video_projects")
+    .select(
+      "id, title, status, aspect_ratio, target_resolution, credit_estimate, assembled_output_asset_id, created_at"
+    )
+    .eq("tenant_slug", tenantSlug)
+    .neq("status", "archived")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  const rows = (projects ?? []) as Array<Record<string, unknown>>;
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((p) => p.id as string);
+  const { data: clipRows } = await supabase
+    .from("video_clips")
+    .select("project_id, seq, mode, prompt, duration_s, output_asset_id")
+    .in("project_id", ids)
+    .order("seq", { ascending: true });
+  const firstClip = new Map<string, Record<string, unknown>>();
+  for (const c of (clipRows ?? []) as Array<Record<string, unknown>>) {
+    const pid = c.project_id as string;
+    if (!firstClip.has(pid)) firstClip.set(pid, c);
+  }
+
+  const assetIds = [
+    ...rows.map((p) => p.assembled_output_asset_id as string | null),
+    ...[...firstClip.values()].map((c) => c.output_asset_id as string | null),
+  ].filter(Boolean) as string[];
+  const urls = await getAssetUrls(tenantSlug, assetIds);
+
+  return rows.map((p) => {
+    const c = firstClip.get(p.id as string);
+    const outAsset =
+      (p.assembled_output_asset_id as string | null) ??
+      (c?.output_asset_id as string | null) ??
+      null;
+    return {
+      id: p.id as string,
+      title: p.title as string,
+      status: p.status as string,
+      mode: (c?.mode as string) ?? null,
+      prompt: (c?.prompt as string) ?? null,
+      aspectRatio: p.aspect_ratio as string,
+      resolution: p.target_resolution as string,
+      durationS: (c?.duration_s as number) ?? null,
+      outputUrl: outAsset ? urls[outAsset] ?? null : null,
+      creditEstimate: (p.credit_estimate as number) ?? null,
+      createdAt: p.created_at as string,
+    };
+  });
+}
+
+export interface ApprovedContentOption {
+  id: string;
+  label: string;
+  prompt: string;
+}
+
+// Approved content plans the composer can drop into the prompt.
+export async function listApprovedContentForVideo(
+  tenantSlug: string
+): Promise<ApprovedContentOption[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("content_plans")
+    .select("id, template_name, output, status, created_at")
+    .eq("tenant_slug", tenantSlug)
+    .in("status", ["approved", "used"])
+    .order("created_at", { ascending: false })
+    .limit(30);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((p) => {
+    const output = (p.output as { hook?: string; readyPrompt?: string }) ?? {};
+    return {
+      id: p.id as string,
+      label: `${(p.template_name as string) ?? "Plan"} — ${output.hook ?? ""}`.slice(0, 80),
+      prompt: output.readyPrompt || output.hook || "",
+    };
+  });
+}
+
 export async function getAssetUrls(
   tenantSlug: string,
   ids: string[]
