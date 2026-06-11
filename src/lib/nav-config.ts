@@ -32,7 +32,6 @@ export const navGroups: NavGroup[] = [
       },
       { label: "Engagement inbox", href: "/engagement", iconName: "MessageCircle" },
       { label: "Broadcasts", href: "/broadcasts", iconName: "Radio" },
-      { label: "Graphics", href: "/graphics", iconName: "Image" },
       { label: "Video studio", href: "/video", iconName: "Film" },
       { label: "Platform score", href: "/platform-score", iconName: "CircleDot" },
       { label: "Viral trends", href: "/viral-trends", iconName: "TrendingUp" },

@@ -129,8 +129,7 @@ Site: **developers.facebook.com** → your app → WhatsApp → Configuration:
 4. **Order** — place a test order on the site (or use **Growth → Orders → Log order**); it should appear under **Orders**, tied to the campaign.
 5. **Inbox** — let a real comment/DM come in; in **Engagement inbox**, generate a reply, approve it, and confirm it sends.
 6. **WhatsApp** — message the number; it should appear in the inbox. Make a broadcast list and send a weekend deal.
-7. **Graphics** — open **Graphics**, fill in a price-drop card, download the image.
-8. **Weekly review** — check **Weekly report** shows the posts → clicks → orders summary.
+7. **Weekly review** — check **Weekly report** shows the posts → clicks → orders summary.
 
 ---
 
