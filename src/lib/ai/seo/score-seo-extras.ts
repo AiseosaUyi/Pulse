@@ -24,6 +24,8 @@ export interface SeoExtras {
   internalLinks: GaugeSignal;
   externalAuthority: GaugeSignal;
   jsonLd: GaugeSignal;
+  /** GEO/AEO: how extractable the content is for AI answer engines. */
+  aiExtractability: GaugeSignal;
 }
 
 export type GaugeStatus = "good" | "warn" | "bad" | "skipped";
@@ -49,6 +51,27 @@ export interface SeoExtrasInput {
   serpAvgWordCount: number | null;
   /** When SERP context is available, top result domains for authority comparison. */
   serpTopDomains: string[];
+  /**
+   * The tenant's own site host (e.g. "gruve.events"), used to classify
+   * internal vs external links. Multi-tenant: never hardcode one tenant's
+   * domain. When absent, only relative ("/…") links count as internal.
+   */
+  siteDomain?: string | null;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Bare host without protocol/www, e.g. "https://www.gruve.events/" → "gruve.events". */
+function bareHost(domain: string | null | undefined): string | null {
+  const d = (domain ?? "").trim();
+  if (!d) return null;
+  return d
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .replace(/^www\./i, "")
+    .toLowerCase() || null;
 }
 
 const TITLE_MIN = 40;
@@ -65,12 +88,71 @@ export function scoreSeoExtras(input: SeoExtrasInput): SeoExtras {
     metaDescription: gradeMetaDescription(input.seoMetaDescription),
     lengthVsSerp: gradeLengthVsSerp(input.bodyMarkdown, input.serpAvgWordCount),
     imageAlts: gradeImageAlts(input.bodyMarkdown),
-    internalLinks: gradeInternalLinks(input.bodyMarkdown),
+    internalLinks: gradeInternalLinks(input.bodyMarkdown, input.siteDomain),
     externalAuthority: gradeExternalAuthority(
       input.bodyMarkdown,
-      input.serpTopDomains
+      input.serpTopDomains,
+      input.siteDomain
     ),
     jsonLd: gradeJsonLd(input.jsonLdBlocks),
+    aiExtractability: gradeAiExtractability(input.bodyMarkdown),
+  };
+}
+
+const QUESTION_WORDS =
+  /^(how|what|why|when|where|which|who|can|do|does|is|are|should|will)\b/i;
+
+// GEO/AEO: AI answer engines (ChatGPT, Perplexity, Google AI Overviews) lift
+// content that is structured for extraction — question-shaped headings, an
+// answer-first intro, scannable lists/tables, and an explicit FAQ. This is a
+// deterministic proxy for "how liftable is this page", not an AI call.
+function gradeAiExtractability(markdown: string): GaugeSignal {
+  const headings = Array.from(
+    markdown.matchAll(/^#{2,3}\s+(.+)$/gm)
+  ).map((m) => m[1].trim());
+  const questionHeadings = headings.filter(
+    (h) => h.endsWith("?") || QUESTION_WORDS.test(h)
+  ).length;
+
+  const hasList = /^\s*([-*]|\d+\.)\s+/m.test(markdown);
+  const hasTable = /^\s*\|.+\|\s*$/m.test(markdown);
+  const hasFaq = /(^|\n)#{1,3}\s*(faq|frequently asked)/i.test(markdown);
+
+  // Answer-first: first non-heading paragraph is short and direct (<= 60 words).
+  const firstPara =
+    markdown
+      .split(/\n{2,}/)
+      .map((p) => p.trim())
+      .find((p) => p && !p.startsWith("#") && !/^\s*([-*]|\d+\.|\|)/.test(p)) ??
+    "";
+  const answerFirst =
+    firstPara.length > 0 && firstPara.split(/\s+/).filter(Boolean).length <= 60;
+
+  const checks: { ok: boolean; miss: string }[] = [
+    { ok: questionHeadings >= 1, miss: "question-shaped headings" },
+    { ok: hasList || hasTable, miss: "lists or a comparison table" },
+    { ok: answerFirst, miss: "an answer-first intro (≤60 words)" },
+    { ok: hasFaq, miss: "an FAQ section" },
+  ];
+  const passed = checks.filter((c) => c.ok).length;
+  const missing = checks.filter((c) => !c.ok).map((c) => c.miss);
+
+  if (passed >= 3) {
+    return {
+      status: "good",
+      label: `AI-extractable (${passed}/4 signals)`,
+      detail:
+        "Structured for AI answer engines — question headings, scannable blocks, direct answers.",
+      value: passed,
+      target: { min: 3, ideal: 4 },
+    };
+  }
+  return {
+    status: passed === 0 ? "bad" : "warn",
+    label: `Low AI-extractability (${passed}/4)`,
+    detail: `Add ${missing.join(", ")} so ChatGPT / Perplexity / AI Overviews can cite this.`,
+    value: passed,
+    target: { min: 3, ideal: 4 },
   };
 }
 
@@ -226,13 +308,20 @@ function gradeImageAlts(markdown: string): GaugeSignal {
   };
 }
 
-function gradeInternalLinks(markdown: string): GaugeSignal {
-  // Count [text](url) where url is relative or matches the same domain.
+function gradeInternalLinks(
+  markdown: string,
+  siteDomain?: string | null
+): GaugeSignal {
+  const host = bareHost(siteDomain);
+  const sameHost = host
+    ? new RegExp(`^https?://(www\\.)?${escapeRegex(host)}`, "i")
+    : null;
+  // Count [text](url) where url is relative or matches the tenant's own host.
   const links = Array.from(markdown.matchAll(/\[[^\]]+\]\(([^)]+)\)/g))
     .map((m) => m[1])
     .filter((url) => !url.startsWith("#") && !url.startsWith("mailto:"));
   const internal = links.filter(
-    (url) => url.startsWith("/") || /^https?:\/\/(www\.)?gruve\.events/.test(url)
+    (url) => url.startsWith("/") || (sameHost ? sameHost.test(url) : false)
   ).length;
   if (internal >= MIN_INTERNAL_LINKS) {
     return {
@@ -253,12 +342,14 @@ function gradeInternalLinks(markdown: string): GaugeSignal {
 
 function gradeExternalAuthority(
   markdown: string,
-  serpTopDomains: string[]
+  serpTopDomains: string[],
+  siteDomain?: string | null
 ): GaugeSignal {
+  const host = bareHost(siteDomain);
   const externalUrls = Array.from(markdown.matchAll(/\[[^\]]+\]\(([^)]+)\)/g))
     .map((m) => m[1])
     .filter((url) => /^https?:\/\//.test(url))
-    .filter((url) => !/gruve\.events/.test(url));
+    .filter((url) => (host ? !url.toLowerCase().includes(host) : true));
   if (externalUrls.length === 0) {
     return {
       status: "warn",

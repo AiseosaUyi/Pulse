@@ -28,6 +28,7 @@ import {
   upsertGruveBlog,
   publishGruveBlogEntry,
   uploadGruveAsset,
+  resolveContentfulConfig,
   type GruveBlogDraft,
   type GruveBlogAssets,
 } from "@/lib/integrations/contentful";
@@ -133,6 +134,20 @@ export async function runPublish(args: {
   }
 
   let version: number = post.version;
+
+  // Resolve this tenant's Contentful config (per-tenant integration, env
+  // fallback). Fail fast if neither is set — nothing downstream can publish.
+  const cfg = await resolveContentfulConfig(post.tenant_slug);
+  if (!cfg) {
+    return {
+      runId: "",
+      status: "failed",
+      resumedFrom: null,
+      failedStep: "load_post",
+      error:
+        "Contentful is not configured for this workspace (connect a Contentful integration or set the env credentials).",
+    };
+  }
 
   // Ensure the post is in 'publishing'. seo_approved/scheduled → publishing.
   if (post.status === "seo_approved" || post.status === "scheduled") {
@@ -283,7 +298,7 @@ export async function runPublish(args: {
         assets.bannerImageId = await uploadGruveAsset({
           ...fileMeta(cover, `${post.slug}-cover`),
           title: `${post.title} — cover`,
-        });
+        }, cfg);
         out.bannerImageId = assets.bannerImageId;
       }
       const thumb = asImageRef(post.thumbnail);
@@ -291,7 +306,7 @@ export async function runPublish(args: {
         assets.thumbnailId = await uploadGruveAsset({
           ...fileMeta(thumb, `${post.slug}-thumb`),
           title: `${post.title} — thumbnail`,
-        });
+        }, cfg);
         out.thumbnailId = assets.thumbnailId;
       }
       if (typeof post.author_image === "string" && post.author_image) {
@@ -300,7 +315,7 @@ export async function runPublish(args: {
           fileName: `${post.slug}-author`,
           contentType: "image/jpeg",
           title: `${post.author ?? "Author"} portrait`,
-        });
+        }, cfg);
         out.authorImageId = assets.authorImageId;
       }
       return out;
@@ -317,7 +332,7 @@ export async function runPublish(args: {
           await uploadGruveAsset({
             ...fileMeta(ref, `${post.slug}-inline-${i}`),
             title: `${post.title} — inline ${i}`,
-          })
+          }, cfg)
         );
       }
       return { inlineAssetIds: ids };
@@ -350,7 +365,7 @@ export async function runPublish(args: {
         updatedDate: post.updated_date ?? null,
         noindex: post.noindex ?? null,
       };
-      const res = await upsertGruveBlog(draft, assets);
+      const res = await upsertGruveBlog(draft, assets, cfg);
       await supabase
         .from("blog_posts")
         .update({
@@ -365,7 +380,7 @@ export async function runPublish(args: {
     // publish_entry — Contentful publish.
     await runStep("publish_entry", async () => {
       if (!entryId) throw new Error("no entryId from upsert_entry");
-      const r = await publishGruveBlogEntry(entryId);
+      const r = await publishGruveBlogEntry(entryId, cfg);
       return { publishedVersion: r.version };
     });
 

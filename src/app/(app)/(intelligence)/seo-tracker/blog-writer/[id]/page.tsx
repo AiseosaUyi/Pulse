@@ -5,6 +5,8 @@ import { getBlogPostRecord } from "@/lib/services/blog-posts";
 import { listBlogPostVersions } from "@/lib/services/blog-versions";
 import { listBlogPostFeedback } from "@/lib/services/blog-feedback";
 import { listDistributionsForBlogPost } from "@/lib/services/content-distributions";
+import { getTenant } from "@/lib/services/tenants";
+import { listAuthors } from "@/lib/services/authors";
 import { BlogEditorPageClient } from "./client";
 
 // Regenerate + iterate-to-90 can run for up to a minute. Mirror the
@@ -23,12 +25,15 @@ export default async function BlogEditorPage({
   const post = await getBlogPostRecord(tenantSlug, id);
   if (!post) notFound();
 
-  const [versions, feedback, distributions, user] = await Promise.all([
-    listBlogPostVersions(tenantSlug, id),
-    listBlogPostFeedback(tenantSlug, id),
-    listDistributionsForBlogPost(tenantSlug, id),
-    getCurrentUser(),
-  ]);
+  const [versions, feedback, distributions, user, tenant, authors] =
+    await Promise.all([
+      listBlogPostVersions(tenantSlug, id),
+      listBlogPostFeedback(tenantSlug, id),
+      listDistributionsForBlogPost(tenantSlug, id),
+      getCurrentUser(),
+      getTenant(tenantSlug),
+      listAuthors(tenantSlug),
+    ]);
 
   return (
     <BlogEditorPageClient
@@ -37,6 +42,9 @@ export default async function BlogEditorPage({
       versions={versions}
       feedback={feedback}
       distributions={distributions}
+      authors={authors}
+      categories={tenant?.blogCategories ?? []}
+      siteDomain={tenant?.domain ?? null}
       profileDefaults={{
         author: user?.displayName ?? null,
         authorImage: user?.avatarUrl ?? null,

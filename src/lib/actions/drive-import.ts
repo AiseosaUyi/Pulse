@@ -12,6 +12,39 @@ import {
 import { parseDriveShareUrl } from "@/lib/content-pipeline/drive-url";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
+const STORAGE_BUCKET = "saved-assets";
+const MAX_THUMB_BYTES = 1 * 1024 * 1024; // 1 MB cap, mirrors the upload path
+
+/**
+ * Pull Drive's authenticated thumbnailLink and cache it to Supabase
+ * Storage so the pipeline table has a real thumbnail (parity with the
+ * file-upload path's `tryCacheThumbnail`). Best-effort — returns null
+ * on any failure and never blocks the import.
+ */
+async function cacheDriveThumbnail(args: {
+  accessToken: string;
+  tenantSlug: string;
+  driveFileId: string;
+  thumbnailLink: string;
+}): Promise<string | null> {
+  try {
+    const res = await fetch(args.thumbnailLink, {
+      headers: { Authorization: `Bearer ${args.accessToken}` },
+    });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.byteLength === 0 || buf.byteLength > MAX_THUMB_BYTES) return null;
+    const path = `pipeline-thumbs/${args.tenantSlug}/${args.driveFileId}.jpg`;
+    const admin = createAdminClient();
+    const { error } = await admin.storage
+      .from(STORAGE_BUCKET)
+      .upload(path, buf, { contentType: "image/jpeg", upsert: true });
+    if (error) return null;
+    return path;
+  } catch {
+    return null;
+  }
+}
 
 const importSchema = z.object({
   url: z.string().url(),
@@ -191,19 +224,38 @@ export async function importFromDriveUrl(
       )
     );
 
-    const rows = items
-      .filter((i) => !existingSet.has(i.id))
-      .map((i) => ({
-        tenant_slug: tenant.slug,
-        section_slug: v.sectionSlug,
-        title: i.name.replace(/\.[^/.]+$/, ""),
-        platforms: [],
-        drive_file_id: i.id,
-        drive_mime_type: i.mimeType,
-        drive_size_bytes: i.size ? parseInt(i.size, 10) : null,
-        drive_web_view_link: i.webViewLink ?? null,
-        uploaded_by: user.id,
-      }));
+    const toImport = items.filter((i) => !existingSet.has(i.id));
+
+    // Cache each file's Drive thumbnail to our own storage so the
+    // pipeline table renders a real preview instead of the generic
+    // file icon. Concurrent + best-effort — a null key just falls
+    // back to the icon, exactly like before.
+    const thumbKeys = await Promise.all(
+      toImport.map((i) =>
+        i.thumbnailLink
+          ? cacheDriveThumbnail({
+              accessToken,
+              tenantSlug: tenant.slug,
+              driveFileId: i.id,
+              thumbnailLink: i.thumbnailLink,
+            })
+          : Promise.resolve(null)
+      )
+    );
+
+    const rows = toImport.map((i, idx) => ({
+      tenant_slug: tenant.slug,
+      section_slug: v.sectionSlug,
+      title: i.name.replace(/\.[^/.]+$/, ""),
+      platforms: [],
+      drive_file_id: i.id,
+      drive_mime_type: i.mimeType,
+      drive_size_bytes: i.size ? parseInt(i.size, 10) : null,
+      drive_web_view_link: i.webViewLink ?? null,
+      uploaded_by: user.id,
+      thumbnail_storage_key: thumbKeys[idx],
+      thumbnail_cached_at: thumbKeys[idx] ? new Date().toISOString() : null,
+    }));
 
     let importedCount = 0;
     if (rows.length > 0) {

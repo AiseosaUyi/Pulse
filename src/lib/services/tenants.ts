@@ -6,6 +6,7 @@ interface TenantSettings {
   currency?: string;
   audienceConfig?: AudienceConfig;
   platforms?: PlatformConnection[];
+  blogCategories?: string[];
 }
 
 const DEFAULT_AUDIENCE: AudienceConfig = {
@@ -29,6 +30,7 @@ function hydrate(row: {
     currency: s.currency ?? "USD",
     audienceConfig: s.audienceConfig ?? DEFAULT_AUDIENCE,
     platforms: s.platforms ?? [],
+    blogCategories: s.blogCategories ?? [],
     createdAt: new Date(row.created_at),
   };
 }

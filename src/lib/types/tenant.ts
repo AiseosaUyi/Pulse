@@ -6,6 +6,9 @@ export interface Tenant {
   currency: string;
   audienceConfig: AudienceConfig;
   platforms: PlatformConnection[];
+  /** Blog category taxonomy for this workspace (drives the editor's Category
+   *  picker). Empty = no fixed list (free-text). Multi-tenant: not hardcoded. */
+  blogCategories: string[];
   createdAt: Date;
 }
 

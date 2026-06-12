@@ -1,11 +1,10 @@
 "use server";
 
-// "Push to Gruve" — the direct publish path from the blog editor. Validates
-// that every field Contentful's gruveBlog REQUIRES is present, converts the
-// markdown body to Contentful RichText, then runs the publish state machine
-// (upsert + publish). Because Gruve's gamma + www both read the same Contentful
-// `master` space, a successful publish lands on BOTH gamma.gruve.events
-// (confirm) and www.gruve.events (live) at once.
+// "Push to <tenant site>" — the direct publish path from the blog editor.
+// Validates that every field the blog content type REQUIRES is present,
+// converts the markdown body to Contentful RichText, then runs the publish
+// state machine (upsert + publish). The live URL is built from the tenant's
+// configured domain (multi-tenant: Gruve, Sippy, …).
 
 import { revalidatePath } from "next/cache";
 import { requireUser, getCurrentTenant } from "@/lib/auth";
@@ -13,7 +12,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runPublish } from "@/lib/seo/publish-runner";
 import { markdownToRichText, isRichTextDocument } from "@/lib/seo/markdown-to-richtext";
-import { isContentfulConfigured } from "@/lib/integrations/contentful";
+import { resolveContentfulConfig } from "@/lib/integrations/contentful";
+import { getTenantSeoConfig } from "@/lib/seo/tenant-seo-config";
 
 export interface PublishReadiness {
   ready: boolean;
@@ -67,11 +67,12 @@ export async function publishBlogToGruve(
   const tenant = await getCurrentTenant();
   if (!tenant) return { success: false, error: "No active tenant" };
 
-  if (!isContentfulConfigured()) {
+  const cfg = await resolveContentfulConfig(tenant.slug);
+  if (!cfg) {
     return {
       success: false,
       error:
-        "Contentful isn't configured yet (CONTENTFUL_CMA_TOKEN missing). Publishing is unavailable until the token is set.",
+        "Contentful isn't configured for this workspace. Connect a Contentful integration (or set the env credentials) before publishing.",
     };
   }
 
@@ -122,9 +123,14 @@ export async function publishBlogToGruve(
 
   revalidatePath("/seo-tracker/blog-writer");
   revalidatePath(`/seo-tracker/blog-writer/${postId}`);
+  // Live URL from the tenant's configured domain (no hardcoded host).
+  const seo = await getTenantSeoConfig(tenant.slug);
+  const liveUrl = seo.siteBaseUrl
+    ? `${seo.siteBaseUrl}/blogs/${post.slug}`
+    : `/blogs/${post.slug}`;
   return {
     success: true,
-    gammaUrl: `https://gamma.gruve.events/blogs/${post.slug}`,
-    liveUrl: `https://www.gruve.events/blogs/${post.slug}`,
+    gammaUrl: liveUrl,
+    liveUrl,
   };
 }

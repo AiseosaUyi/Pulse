@@ -11,6 +11,35 @@ import {
   slugify,
 } from "@/lib/ai/generate-programmatic-page";
 import type { TemplateVariable } from "@/lib/types/programmatic";
+import { markdownToRichText } from "@/lib/seo/markdown-to-richtext";
+import {
+  resolveContentfulConfig,
+  upsertSeoLandingPage,
+  publishSeoLandingEntry,
+} from "@/lib/integrations/contentful";
+import { getTenantSeoConfig } from "@/lib/seo/tenant-seo-config";
+
+// Derive the landing page's facet (category/location) for the live event grid
+// from the template's variable KEYS — tenant-agnostic, no hardcoded taxonomy.
+// A variable named category/topic/type → category; city/location/etc → location.
+function deriveFacet(variables: Record<string, string>): {
+  category: string | null;
+  location: string | null;
+} {
+  let category: string | null = null;
+  let location: string | null = null;
+  for (const [key, value] of Object.entries(variables)) {
+    const k = key.toLowerCase();
+    const v = value.trim();
+    if (!category && /(category|topic|type|genre|vertical)/.test(k)) {
+      category = v.toLowerCase().replace(/\s+/g, "_");
+    }
+    if (!location && /(city|location|place|town|region|state|area)/.test(k)) {
+      location = v;
+    }
+  }
+  return { category, location };
+}
 
 type ActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -249,6 +278,91 @@ export async function deleteProgrammaticPage(
   if (error) return { success: false, error: error.message };
   revalidatePath("/seo-tracker/programmatic");
   return { success: true };
+}
+
+// Publish a programmatic page to the tenant's live site as a `seoLandingPage`
+// Contentful entry (rendered at <tenant-domain>/discover/<slug>). Idempotent by
+// pulseId on the CMA side; records the entry id + live URL locally.
+export async function publishProgrammaticPage(
+  tenantSlug: string,
+  id: string
+): Promise<ActionResult<{ liveUrl: string }>> {
+  const cfg = await resolveContentfulConfig(tenantSlug);
+  if (!cfg) {
+    return {
+      success: false,
+      error:
+        "Contentful isn't configured for this workspace — connect a Contentful integration (or set the env credentials) and provision the seoLandingPage content type.",
+    };
+  }
+
+  const seo = await getTenantSeoConfig(tenantSlug);
+  if (!seo.siteBaseUrl) {
+    return {
+      success: false,
+      error:
+        "Set this workspace's site domain (Settings) before publishing — it's needed to build the canonical URL.",
+    };
+  }
+
+  const supabase = await createClient();
+  const { data: page, error } = await supabase
+    .from("programmatic_pages")
+    .select(
+      "id, slug, title, meta_description, body_md, variables"
+    )
+    .eq("id", id)
+    .eq("tenant_slug", tenantSlug)
+    .maybeSingle();
+
+  if (error || !page) return { success: false, error: "Page not found" };
+  if (!page.body_md) {
+    return { success: false, error: "Page has no content to publish" };
+  }
+
+  const { category, location } = deriveFacet(
+    (page.variables as Record<string, string>) ?? {}
+  );
+  const canonical = `${seo.siteBaseUrl}${seo.landingRoutePrefix}/${page.slug}`;
+
+  try {
+    const bodyRichText = await markdownToRichText(page.body_md);
+    const upserted = await upsertSeoLandingPage(
+      {
+        pulseId: page.id,
+        title: page.title,
+        slug: page.slug,
+        description: page.meta_description ?? null,
+        bodyRichText,
+        category,
+        location,
+        seoTitle: page.title,
+        seoDescription: page.meta_description ?? null,
+        canonicalOverride: canonical,
+      },
+      cfg
+    );
+    await publishSeoLandingEntry(upserted.entryId, cfg);
+
+    await supabase
+      .from("programmatic_pages")
+      .update({
+        status: "published",
+        contentful_entry_id: upserted.entryId,
+        live_url: canonical,
+        published_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("tenant_slug", tenantSlug);
+
+    revalidatePath("/seo-tracker/programmatic");
+    return { success: true, liveUrl: canonical };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Publish failed",
+    };
+  }
 }
 
 export async function updateProgrammaticPageStatus(

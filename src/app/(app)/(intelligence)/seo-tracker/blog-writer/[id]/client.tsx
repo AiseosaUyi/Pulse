@@ -8,13 +8,17 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { JSONContent } from "@tiptap/core";
-import { ArrowLeft, History as HistoryIcon, Share2, Rocket, CheckCircle2, Circle, ExternalLink } from "lucide-react";
+import { ArrowLeft, History as HistoryIcon, Share2, Rocket, CheckCircle2, Circle, ExternalLink, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/Badge";
 import { ImageUploadField } from "@/components/seo/blog/ImageUploadField";
+import { TagChips } from "@/components/seo/blog/TagChips";
+import { AuthorPicker } from "@/components/seo/blog/AuthorPicker";
+import { autofillBlogImageFromTopic } from "@/lib/actions/blog-images";
+import type { AuthorRecord } from "@/lib/types/authors";
 import { publishBlogToGruve } from "@/lib/actions/publish-to-gruve";
 import { TiptapEditor, type TiptapChange } from "@/components/seo/blog/TiptapEditor";
 import { InlineFeedbackDock } from "@/components/seo/blog/InlineFeedbackDock";
@@ -47,15 +51,6 @@ const STATUS_OPTIONS: BlogPostStatus[] = [
   "archived",
 ];
 
-// Gruve's event categories — used for the blog `category` (drives breadcrumbs
-// and links the post to its /categories landing page on Gruve).
-const GRUVE_CATEGORIES = [
-  "business", "religious", "comedy", "tech", "food_drinks", "crypto",
-  "education", "healthcare", "sports_fitness", "music", "seminars",
-  "visual_art", "community", "fashion", "media", "travel", "politics",
-  "home", "school", "charity_fund",
-];
-
 function toDateInput(v: string | null): string {
   if (!v) return "";
   // ISO/timestamptz → yyyy-mm-dd for <input type=date>.
@@ -69,6 +64,9 @@ export function BlogEditorPageClient({
   feedback,
   distributions,
   profileDefaults,
+  siteDomain,
+  authors,
+  categories = [],
 }: {
   post: BlogPostRecord;
   tenantSlug: string;
@@ -76,6 +74,12 @@ export function BlogEditorPageClient({
   feedback: BlogPostFeedbackRecord[];
   distributions: ContentDistributionRecord[];
   profileDefaults?: { author: string | null; authorImage: string | null };
+  /** Tenant's own site host, for internal-vs-external link scoring. */
+  siteDomain?: string | null;
+  /** Reusable authors for this tenant. */
+  authors: AuthorRecord[];
+  /** Blog category options for this workspace (empty = free-text). */
+  categories?: string[];
 }) {
   const router = useRouter();
   const dialogs = useDialogs();
@@ -113,7 +117,7 @@ export function BlogEditorPageClient({
   const [thumbnail, setThumbnail] = useState<string | null>(post.thumbnail?.url ?? null);
 
   // SEO / E-E-A-T fields (slice 2).
-  const [tags, setTags] = useState((post.tags ?? []).join(", "));
+  const [tags, setTags] = useState<string[]>(post.tags ?? []);
   const [category, setCategory] = useState(post.category ?? "");
   const [authorBio, setAuthorBio] = useState(post.authorBio ?? "");
   const [authorTitle, setAuthorTitle] = useState(post.authorTitle ?? "");
@@ -163,8 +167,9 @@ export function BlogEditorPageClient({
         jsonLdBlocks: [],
         serpAvgWordCount: null,
         serpTopDomains: [],
+        siteDomain,
       }),
-    [title, metaDescription, current.markdown]
+    [title, metaDescription, current.markdown, siteDomain]
   );
 
   const titleDirty = title !== baseline.title;
@@ -270,6 +275,36 @@ export function BlogEditorPageClient({
     void updateBlogPost(post.id, tenantSlug, { authorImage: url });
   };
 
+  // Auto-fill banner + thumbnail from a Pexels photo matched to the topic.
+  const [isAutofilling, startAutofill] = useTransition();
+  const handleAutofillImage = () => {
+    startAutofill(async () => {
+      const res = await autofillBlogImageFromTopic(post.id);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't fetch an image",
+          subtitle: res.error,
+        });
+        return;
+      }
+      onCover(res.url);
+      onThumb(res.url);
+    });
+  };
+
+  // Pick a reusable author → fills name + avatar + bio + title + url at once.
+  const handleSelectAuthor = (a: AuthorRecord | null) => {
+    if (!a) {
+      setAuthor("");
+      return;
+    }
+    setAuthor(a.name);
+    if (a.imageUrl) onAuthorImg(a.imageUrl);
+    setAuthorBio(a.bio ?? "");
+    setAuthorTitle(a.title ?? "");
+    setAuthorUrl(a.url ?? "");
+  };
+
   const requirements = [
     { label: "Title", ok: title.trim().length > 0 },
     { label: "URL slug", ok: Boolean(post.slug) },
@@ -290,7 +325,7 @@ export function BlogEditorPageClient({
     // Include authorImage so a profile-defaulted avatar (never re-uploaded)
     // still gets persisted on save/publish.
     authorImage,
-    tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+    tags,
     category: category || null,
     authorBio: authorBio || null,
     authorTitle: authorTitle || null,
@@ -546,31 +581,43 @@ export function BlogEditorPageClient({
             </div>
             <div className="p-4 space-y-3">
               <div>
-                <Label htmlFor="bp-tags">Tags / keywords (comma-separated)</Label>
-                <Input
-                  id="bp-tags"
+                <Label>Tags / keywords</Label>
+                <TagChips
                   value={tags}
-                  onChange={(e) => setTags(e.target.value)}
-                  placeholder="lagos events, raves, nightlife"
+                  onChange={setTags}
                   disabled={isSaving}
+                  placeholder="Add a tag and press Enter"
                 />
+                <p className="text-[11px] text-text-muted mt-1">
+                  AI-suggested from the post — remove any with ✕, type to add more.
+                </p>
               </div>
               <div>
                 <Label htmlFor="bp-category">Category</Label>
-                <select
-                  id="bp-category"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  disabled={isSaving}
-                  className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground capitalize"
-                >
-                  <option value="">— none —</option>
-                  {GRUVE_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c.replace(/_/g, " ")}
-                    </option>
-                  ))}
-                </select>
+                {categories.length > 0 ? (
+                  <select
+                    id="bp-category"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    disabled={isSaving}
+                    className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground capitalize"
+                  >
+                    <option value="">— none —</option>
+                    {categories.map((c) => (
+                      <option key={c} value={c}>
+                        {c.replace(/_/g, " ")}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    id="bp-category"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    placeholder="e.g. tech, music…"
+                    disabled={isSaving}
+                  />
+                )}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -665,6 +712,26 @@ export function BlogEditorPageClient({
               </p>
             </div>
             <div className="p-4 space-y-4">
+              <div className="rounded-lg border border-dashed border-primary-500/30 bg-primary-50/40 p-3 flex items-center justify-between gap-3">
+                <p className="text-[11px] text-text-muted">
+                  Skip the designer — fetch a free stock photo matched to your
+                  topic and fill both banner + thumbnail.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAutofillImage}
+                  disabled={isAutofilling || isPublishing}
+                  className="shrink-0 gap-1.5"
+                >
+                  {isAutofilling ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                  {isAutofilling ? "Finding…" : "Auto-fill image"}
+                </Button>
+              </div>
               <ImageUploadField
                 label="Banner image"
                 required
@@ -698,16 +765,14 @@ export function BlogEditorPageClient({
                 />
               </div>
               <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
-                <div>
-                  <Label htmlFor="bp-author">Author *</Label>
-                  <Input
-                    id="bp-author"
-                    value={author}
-                    onChange={(e) => setAuthor(e.target.value)}
-                    placeholder="Author name"
-                    disabled={isPublishing}
-                  />
-                </div>
+                <AuthorPicker
+                  tenantSlug={tenantSlug}
+                  postId={post.id}
+                  authors={authors}
+                  selectedName={author}
+                  disabled={isPublishing}
+                  onSelect={handleSelectAuthor}
+                />
                 <ImageUploadField
                   label="Avatar"
                   required

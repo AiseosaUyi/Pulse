@@ -1,13 +1,23 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Search, Trash2, ExternalLink } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Search,
+  Trash2,
+  ExternalLink,
+  PenLine,
+  Wrench,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   analyzeSerpForKeyword,
   deleteSerpAnalysis,
+  createDraftFromSerp,
+  createEditRecFromSerp,
 } from "@/lib/actions/serp";
 import { useDialogs } from "@/components/ui/Dialog";
 import type { SerpAnalysisRecord } from "@/lib/types/serp";
@@ -22,9 +32,11 @@ export function SerpAnalysisClient({
   trackedKeywords: string[];
 }) {
   const dialogs = useDialogs();
+  const router = useRouter();
   const [keyword, setKeyword] = useState("");
   const [region, setRegion] = useState("ng");
   const [isPending, startTransition] = useTransition();
+  const [actionPending, startAction] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(analyses[0]?.id ?? null);
 
@@ -65,6 +77,39 @@ export function SerpAnalysisClient({
           tone: "destructive",
         });
       }
+    });
+  };
+
+  const handleCreateDraft = (analysisId: string) => {
+    startAction(async () => {
+      const res = await createDraftFromSerp(tenantSlug, analysisId);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "Couldn't create draft",
+          subtitle: res.error,
+          tone: "destructive",
+        });
+        return;
+      }
+      router.push(`/seo-tracker/blog-writer/${res.postId}`);
+    });
+  };
+
+  const handleCreateEdits = (analysisId: string) => {
+    startAction(async () => {
+      const res = await createEditRecFromSerp(tenantSlug, analysisId);
+      if (!res.success) {
+        await dialogs.alert({
+          title: "No page to optimize",
+          subtitle: res.error,
+        });
+        return;
+      }
+      await dialogs.alert({
+        title: "Optimization recommendation created",
+        subtitle:
+          "Added to the review queue with the SERP gap as edit guidance. The team can review and re-publish — the 30-day impact is captured on apply.",
+      });
     });
   };
 
@@ -200,6 +245,39 @@ export function SerpAnalysisClient({
                 >
                   <Trash2 size={14} />
                 </button>
+              </div>
+
+              {/* Turn analysis into action: a new draft, or edits on the page
+                  that already targets this keyword. */}
+              <div className="bg-card rounded-2xl border border-border p-4 flex flex-wrap items-center gap-3">
+                <p className="text-xs text-text-muted flex-1 min-w-[180px]">
+                  Act on this gap — write a new post targeting the keyword, or
+                  queue optimization edits for the page that already ranks for
+                  it.
+                </p>
+                <Button
+                  onClick={() => handleCreateDraft(open.id)}
+                  disabled={actionPending}
+                >
+                  {actionPending ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <PenLine size={14} />
+                  )}
+                  Create draft from gap
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleCreateEdits(open.id)}
+                  disabled={actionPending}
+                >
+                  {actionPending ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Wrench size={14} />
+                  )}
+                  Generate optimization edits
+                </Button>
               </div>
 
               {open.aiAnalysis && (

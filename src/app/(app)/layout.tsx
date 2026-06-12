@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/sidebar/Sidebar";
 import { MobileNav } from "@/components/sidebar/MobileNav";
 import { DialogProvider } from "@/components/ui/Dialog";
 import { Toaster } from "@/components/ui/Toaster";
+import { RouteProgress } from "@/components/ui/RouteProgress";
 import { getCurrentUser, getUserTenants, getCurrentTenant } from "@/lib/auth";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
 import { getOnboardingProgress } from "@/lib/services/onboarding";
@@ -34,6 +35,7 @@ export default async function AppLayout({
 
   return (
     <DialogProvider>
+      <RouteProgress />
       <MobileNav
         tenants={tenants}
         currentTenantSlug={currentSlug}

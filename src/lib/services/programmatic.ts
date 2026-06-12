@@ -32,6 +32,8 @@ interface PageRow {
   status: string;
   generator_model: string | null;
   generator_cost_usd: string | null;
+  live_url: string | null;
+  published_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -70,6 +72,8 @@ function pageRowTo(row: PageRow): ProgrammaticPageRecord {
     variables: row.variables ?? {},
     status,
     generatorModel: row.generator_model,
+    liveUrl: row.live_url ?? null,
+    publishedAt: row.published_at ?? null,
     generatorCostUsd: row.generator_cost_usd
       ? Number(row.generator_cost_usd)
       : 0,
