@@ -12,8 +12,16 @@ import { estimateSeedanceCredits } from "@/lib/video/providers/seedance-constrai
 import { checkVideoBudget, InsufficientCreditsError } from "@/lib/video/budget";
 import { BudgetExceededError } from "@/lib/ai/ai-budget";
 import { advanceGeneration } from "@/lib/video/video-generation-runner";
-import { storeVideoAsset, type AssetRole } from "@/lib/video/assets";
+import type { AssetRole, AssetKind } from "@/lib/video/assets";
 import type { ClipMode } from "@/lib/types/video";
+import { randomUUID } from "node:crypto";
+
+const BUCKET = "generated-videos";
+const EXT: Record<string, string> = {
+  "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm",
+  "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
+  "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/wav": "wav",
+};
 
 type Result<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -153,31 +161,60 @@ export async function createGeneration(
   return { success: true, projectId: project.id };
 }
 
-// Upload a reference video, start/end frame, or source video for the composer.
-export async function uploadVideoAsset(
-  role: AssetRole,
-  formData: FormData
-): Promise<Result<{ assetId: string; url: string }>> {
+// Media uploads (reference video, start/end frame, character refs) go DIRECTLY
+// from the browser to Supabase Storage via a signed upload URL — the bytes
+// never pass through the Next/Vercel server action, which caps request bodies
+// at 1 MB (Next) / ~4.5 MB (Vercel) and was returning 400 for real videos.
+// Step 1: create a signed upload URL (tiny request).
+export async function createSignedVideoUpload(input: {
+  contentType: string;
+}): Promise<Result<{ path: string; token: string }>> {
+  await requireUser();
+  const tenant = await getCurrentTenant();
+  if (!tenant) return { success: false, error: "No tenant selected" };
+  if (!input.contentType.startsWith("video/") && !input.contentType.startsWith("image/")) {
+    return { success: false, error: "Upload an image or video" };
+  }
+  const ext = EXT[input.contentType] ?? "bin";
+  const month = new Date().toISOString().slice(0, 7).replace("-", "");
+  const path = `${tenant.slug}/${month}/${randomUUID()}.${ext}`;
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
+  if (error || !data) {
+    return { success: false, error: error?.message ?? "Could not create upload URL" };
+  }
+  return { success: true, path, token: data.token };
+}
+
+// Step 3 (after the browser uploads to the signed URL): register the asset.
+// The publicUrl is recomputed server-side from the path we issued, so the
+// client can't inject an arbitrary URL.
+export async function registerVideoAsset(input: {
+  kind: AssetKind;
+  role: AssetRole;
+  path: string;
+}): Promise<Result<{ assetId: string; url: string }>> {
   const user = await requireUser();
   const tenant = await getCurrentTenant();
   if (!tenant) return { success: false, error: "No tenant selected" };
+  if (!input.path.startsWith(`${tenant.slug}/`)) {
+    return { success: false, error: "Invalid upload path" };
+  }
 
-  const file = formData.get("file");
-  if (!(file instanceof File)) return { success: false, error: "No file provided" };
-
-  const isVideo = file.type.startsWith("video/");
-  const isImage = file.type.startsWith("image/");
-  if (!isVideo && !isImage) return { success: false, error: "Upload an image or video" };
-  const kind = isVideo ? ("video" as const) : ("image" as const);
-
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const stored = await storeVideoAsset({
-    tenantSlug: tenant.slug,
-    bytes,
-    mime: file.type,
-    kind,
-    role,
-    createdBy: user.id,
-  });
-  return { success: true, assetId: stored.id, url: stored.storageUrl };
+  const admin = createAdminClient();
+  const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(input.path);
+  const { data, error } = await admin
+    .from("video_assets")
+    .insert({
+      tenant_slug: tenant.slug,
+      kind: input.kind,
+      role: input.role,
+      storage_url: pub.publicUrl,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { success: false, error: error?.message ?? "Register failed" };
+  return { success: true, assetId: data.id, url: pub.publicUrl };
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Film, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import {
   submitForReview,
   approveProject,
@@ -88,7 +88,6 @@ export function VideoProjectDetail({
 
       <header className="flex items-start justify-between gap-4 mb-6">
         <div className="flex items-center gap-2">
-          <Film size={20} className="text-primary-500" />
           <div>
             <h1 className="text-xl md:text-2xl text-gray-1100 dark:text-foreground">{project.title}</h1>
             <p className="text-sm text-text-muted mt-0.5">

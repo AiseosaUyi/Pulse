@@ -4,13 +4,15 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Users, Plus, Upload, X } from "lucide-react";
+import { ArrowLeft, Plus, Upload, X } from "lucide-react";
 import {
   createCharacter,
-  addCharacterReference,
+  registerCharacterReference,
   removeCharacterReference,
   archiveCharacter,
 } from "@/lib/actions/video-characters";
+import { createSignedVideoUpload } from "@/lib/actions/video-generate";
+import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/ui/Toaster";
 import type { VideoCharacter } from "@/lib/types/video";
 
@@ -47,7 +49,6 @@ export function CharactersClient({
       </Link>
       <header className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
-          <Users size={20} className="text-primary-500" />
           <div>
             <h1 className="text-xl md:text-2xl text-gray-1100 dark:text-foreground">Characters</h1>
             <p className="text-sm text-text-muted mt-0.5">
@@ -93,10 +94,17 @@ function CharacterCard({
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const fd = new FormData();
-    fd.append("file", file);
+    if (!file.type.startsWith("image/")) return toast.error("Reference must be an image");
     startT(async () => {
-      const r = await addCharacterReference(character.id, fd);
+      // Signed-URL direct upload (browser → Supabase), then register.
+      const signed = await createSignedVideoUpload({ contentType: file.type });
+      if (!signed.success) return toast.error(signed.error);
+      const supabase = createClient();
+      const { error } = await supabase.storage
+        .from("generated-videos")
+        .uploadToSignedUrl(signed.path, signed.token, file, { contentType: file.type });
+      if (error) return toast.error(`Upload failed: ${error.message}`);
+      const r = await registerCharacterReference(character.id, signed.path);
       if (r.success) {
         toast.success("Reference added");
         router.refresh();
