@@ -6,8 +6,19 @@ import {
   listApprovedContentForVideo,
   getAssetUrls,
 } from "@/lib/services/video-projects";
-import { isPicsartConfigured } from "@/lib/video/providers/picsart";
+import { isPicsartConfigured, getPicsartProvider } from "@/lib/video/providers/picsart";
 import { VideoStudioClient } from "./client";
+
+// Live PicsArt credit balance — best-effort; null if the provider/endpoint is
+// unavailable so the UI degrades to showing just the estimate.
+async function fetchCreditBalance(): Promise<number | null> {
+  if (!isPicsartConfigured()) return null;
+  try {
+    return (await getPicsartProvider().creditBalance()).balance;
+  } catch {
+    return null;
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +28,11 @@ export default async function VideoStudioPage() {
   const tenant = await getCurrentTenant();
   if (!tenant) redirect("/signup?step=company");
 
-  const [characters, generations, approvedContent] = await Promise.all([
+  const [characters, generations, approvedContent, creditBalance] = await Promise.all([
     listVideoCharacters(tenant.slug),
     listGenerations(tenant.slug),
     listApprovedContentForVideo(tenant.slug),
+    fetchCreditBalance(),
   ]);
 
   // First reference image per character → avatar thumbnail.
@@ -41,6 +53,7 @@ export default async function VideoStudioPage() {
       generations={generations}
       approvedContent={approvedContent}
       providerConfigured={isPicsartConfigured()}
+      creditBalance={creditBalance}
     />
   );
 }

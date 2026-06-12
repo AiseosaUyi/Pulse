@@ -11,22 +11,28 @@ export interface SeedanceModel {
   label: string;
   fast: boolean;
   maxResolution: "720p" | "1080p";
-  creditsPerSecond: number; // 720p baseline; 1080p uses a multiplier
+  baseCredits: number; // fixed per-generation cost (dominates short clips)
+  creditsPerSecond: number; // marginal per-second on top of the base
 }
 
-// Catalog for the UI + offline credit estimate. Credit rates are approximate
-// (PicsArt has no dry-run pricing endpoint; it deducts the real amount on
-// generate). seedance-2.0 = best for people; 1.5 / Kling / Fast = cheaper,
-// good for non-human b-roll.
+// Catalog + offline credit ESTIMATE. PicsArt has no dry-run pricing endpoint
+// and deducts the real amount on generate, so these are calibrated estimates,
+// not exact prices — always defer to the live balance (provider.creditBalance).
+//
+// Calibrated 2026-06-12 against real billing: a 1s/480p Seedance 2.0 clip was
+// REJECTED for insufficient credits at a 50-credit balance, proving the real
+// cost has a large fixed base (>50cr) — our prior flat 10cr/s underestimated by
+// 5x+. Values below are deliberately conservative (lean high) so the budget
+// gate warns early; refine them with scripts/calibrate-credits.ts after top-up.
 export const SEEDANCE_MODELS: SeedanceModel[] = [
-  { id: "seedance-2.0", mode: "t2v", label: "Seedance 2.0 (Pro)", fast: false, maxResolution: "1080p", creditsPerSecond: 10 },
-  { id: "seedance-1.5", mode: "t2v", label: "Seedance 1.5 Pro", fast: false, maxResolution: "1080p", creditsPerSecond: 7 },
-  { id: "kling-3.0", mode: "t2v", label: "Kling 3.0", fast: false, maxResolution: "1080p", creditsPerSecond: 6 },
-  { id: "seedance-2.0-fast", mode: "t2v", label: "Seedance Fast", fast: true, maxResolution: "720p", creditsPerSecond: 8 },
-  { id: "seedance-2.0-video-edit", mode: "v2v", label: "Seedance 2.0 Video Edit (replicate)", fast: false, maxResolution: "1080p", creditsPerSecond: 10 },
-  { id: "seedance-2.0-fast-video-edit", mode: "v2v", label: "Seedance 2.0 Fast Video Edit", fast: true, maxResolution: "720p", creditsPerSecond: 8 },
-  { id: "seedance-2.0-video-extend", mode: "v2v", label: "Seedance 2.0 Video Extend (assemble)", fast: false, maxResolution: "1080p", creditsPerSecond: 10 },
-  { id: "seedance-2.0-fast-video-extend", mode: "v2v", label: "Seedance 2.0 Fast Video Extend", fast: true, maxResolution: "720p", creditsPerSecond: 8 },
+  { id: "seedance-2.0", mode: "t2v", label: "Seedance 2.0 (Pro)", fast: false, maxResolution: "1080p", baseCredits: 50, creditsPerSecond: 28 },
+  { id: "seedance-1.5", mode: "t2v", label: "Seedance 1.5 Pro", fast: false, maxResolution: "1080p", baseCredits: 35, creditsPerSecond: 18 },
+  { id: "kling-3.0", mode: "t2v", label: "Kling 3.0", fast: false, maxResolution: "1080p", baseCredits: 30, creditsPerSecond: 15 },
+  { id: "seedance-2.0-fast", mode: "t2v", label: "Seedance Fast", fast: true, maxResolution: "720p", baseCredits: 30, creditsPerSecond: 18 },
+  { id: "seedance-2.0-video-edit", mode: "v2v", label: "Seedance 2.0 Video Edit (replicate)", fast: false, maxResolution: "1080p", baseCredits: 50, creditsPerSecond: 28 },
+  { id: "seedance-2.0-fast-video-edit", mode: "v2v", label: "Seedance 2.0 Fast Video Edit", fast: true, maxResolution: "720p", baseCredits: 30, creditsPerSecond: 18 },
+  { id: "seedance-2.0-video-extend", mode: "v2v", label: "Seedance 2.0 Video Extend (assemble)", fast: false, maxResolution: "1080p", baseCredits: 50, creditsPerSecond: 28 },
+  { id: "seedance-2.0-fast-video-extend", mode: "v2v", label: "Seedance 2.0 Fast Video Extend", fast: true, maxResolution: "720p", baseCredits: 30, creditsPerSecond: 18 },
 ];
 
 export function getSeedanceModel(id: string): SeedanceModel | undefined {
@@ -36,6 +42,7 @@ export function getSeedanceModel(id: string): SeedanceModel | undefined {
 const RES_MULTIPLIER: Record<string, number> = { "480p": 1, "720p": 1, "1080p": 1.5 };
 
 // Offline credit estimate (UI preview / tests). Runtime uses provider.quote().
+// Real cost ≈ (base + perSec × seconds) × resolution multiplier.
 export function estimateSeedanceCredits(
   modelId: string,
   params: SeedanceGenerateParams
@@ -44,7 +51,7 @@ export function estimateSeedanceCredits(
   if (!model) return 0;
   const duration = params.duration ?? 10;
   const mult = RES_MULTIPLIER[params.resolution ?? "720p"] ?? 1;
-  return Math.round(model.creditsPerSecond * duration * mult);
+  return Math.round((model.baseCredits + model.creditsPerSecond * duration) * mult);
 }
 
 const MAX = { imageUrls: 9, videoUrls: 3, audioUrls: 3 };

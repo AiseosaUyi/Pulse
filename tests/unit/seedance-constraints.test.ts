@@ -79,15 +79,18 @@ describe("validateSeedanceParams — §4.2 constraints", () => {
   });
 });
 
-describe("estimateSeedanceCredits — offline preview", () => {
-  it("matches the §4.3 table for 720p Pro 10s", () => {
-    expect(estimateSeedanceCredits("seedance-2.0", { duration: 10, resolution: "720p" })).toBe(100);
+describe("estimateSeedanceCredits — offline preview (calibrated base + per-second)", () => {
+  it("Pro 720p 10s = base 50 + 28*10 = 330", () => {
+    expect(estimateSeedanceCredits("seedance-2.0", { duration: 10, resolution: "720p" })).toBe(330);
   });
-  it("applies the 1080p multiplier", () => {
-    expect(estimateSeedanceCredits("seedance-2.0", { duration: 10, resolution: "1080p" })).toBe(150);
+  it("applies the 1080p multiplier (330 * 1.5 = 495)", () => {
+    expect(estimateSeedanceCredits("seedance-2.0", { duration: 10, resolution: "1080p" })).toBe(495);
   });
-  it("uses the fast rate", () => {
-    expect(estimateSeedanceCredits("seedance-2.0-fast", { duration: 10, resolution: "720p" })).toBe(80);
+  it("uses the fast rate (base 30 + 18*10 = 210)", () => {
+    expect(estimateSeedanceCredits("seedance-2.0-fast", { duration: 10, resolution: "720p" })).toBe(210);
+  });
+  it("includes the fixed base on short clips (Pro 1s/480p ≈ 78, the >50 floor we measured)", () => {
+    expect(estimateSeedanceCredits("seedance-2.0", { duration: 1, resolution: "480p" })).toBe(78);
   });
   it("returns 0 for unknown models", () => {
     expect(estimateSeedanceCredits("nope", { duration: 10 })).toBe(0);
