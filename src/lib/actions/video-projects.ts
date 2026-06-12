@@ -19,7 +19,7 @@ import { checkVideoBudget, InsufficientCreditsError } from "@/lib/video/budget";
 import { BudgetExceededError } from "@/lib/ai/ai-budget";
 import { advanceGeneration } from "@/lib/video/video-generation-runner";
 import type { ContentPlanOutput } from "@/lib/types/content-engine";
-import type { VideoProjectStatus, VideoSourceKind } from "@/lib/types/video";
+import type { ClipMode, VideoProjectStatus, VideoSourceKind } from "@/lib/types/video";
 
 type Result<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -386,4 +386,187 @@ export async function exportProject(projectId: string, expectedVersion: number) 
 }
 export async function archiveProject(projectId: string, from: VideoProjectStatus, expectedVersion: number) {
   return transition(projectId, from, "archived", expectedVersion);
+}
+
+// ── Storyboard clip editing ───────────────────────────────────────────────
+// Clips are editable before/around generation, never while bytes are in flight
+// or after assembly. RLS on video_clips already scopes reads/writes to the
+// tenant; we additionally gate on the parent project's status.
+const CLIP_EDITABLE: VideoProjectStatus[] = ["draft", "in_review", "approved", "generation_failed"];
+
+async function loadEditableClip(
+  clipId: string
+): Promise<{ ok: true; projectId: string } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("video_clips")
+    .select("id, project_id, video_projects!inner(status)")
+    .eq("id", clipId)
+    .maybeSingle();
+  if (!data) return { ok: false, error: "Clip not found" };
+  const status = (data.video_projects as unknown as { status: VideoProjectStatus }).status;
+  if (!CLIP_EDITABLE.includes(status)) {
+    return { ok: false, error: `Clips can't be edited while the project is ${status}.` };
+  }
+  return { ok: true, projectId: data.project_id as string };
+}
+
+export async function updateClip(
+  clipId: string,
+  patch: {
+    prompt?: string;
+    model?: string;
+    mode?: ClipMode;
+    durationS?: number;
+    resolution?: string;
+    characterId?: string | null;
+    generateAudio?: boolean;
+  }
+): Promise<Result> {
+  await requireUser();
+  const tenant = await getCurrentTenant();
+  if (!tenant) return { success: false, error: "No tenant selected" };
+  const gate = await loadEditableClip(clipId);
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const update: Record<string, unknown> = {};
+  if (patch.prompt !== undefined) update.prompt = patch.prompt.trim();
+  if (patch.model !== undefined) update.model = patch.model;
+  if (patch.mode !== undefined) update.mode = patch.mode;
+  if (patch.durationS !== undefined) update.duration_s = patch.durationS;
+  if (patch.resolution !== undefined) update.resolution = patch.resolution;
+  if (patch.characterId !== undefined) update.character_id = patch.characterId;
+  if (patch.generateAudio !== undefined) update.generate_audio = patch.generateAudio;
+  if (Object.keys(update).length === 0) return { success: true };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("video_clips").update(update).eq("id", clipId);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/video");
+  return { success: true };
+}
+
+// Attach an uploaded asset (browser → Supabase via signed URL) to a clip.
+export async function registerClipAsset(input: {
+  clipId: string;
+  role: "source_video" | "start_frame" | "end_frame";
+  kind: "video" | "image";
+  path: string;
+}): Promise<Result<{ assetId: string }>> {
+  const user = await requireUser();
+  const tenant = await getCurrentTenant();
+  if (!tenant) return { success: false, error: "No tenant selected" };
+  if (!input.path.startsWith(`${tenant.slug}/`)) return { success: false, error: "Invalid upload path" };
+  const gate = await loadEditableClip(input.clipId);
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const admin = createAdminClient();
+  const { data: pub } = admin.storage.from("generated-videos").getPublicUrl(input.path);
+  const { data: asset, error } = await admin
+    .from("video_assets")
+    .insert({
+      tenant_slug: tenant.slug,
+      kind: input.kind,
+      role: input.role,
+      storage_url: pub.publicUrl,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (error || !asset) return { success: false, error: error?.message ?? "Register failed" };
+
+  const col =
+    input.role === "source_video"
+      ? "source_video_asset_id"
+      : input.role === "start_frame"
+        ? "start_frame_asset_id"
+        : "end_frame_asset_id";
+  await admin.from("video_clips").update({ [col]: asset.id }).eq("id", input.clipId);
+  revalidatePath("/video");
+  return { success: true, assetId: asset.id };
+}
+
+export async function clearClipAsset(
+  clipId: string,
+  role: "source_video" | "start_frame" | "end_frame"
+): Promise<Result> {
+  await requireUser();
+  const tenant = await getCurrentTenant();
+  if (!tenant) return { success: false, error: "No tenant selected" };
+  const gate = await loadEditableClip(clipId);
+  if (!gate.ok) return { success: false, error: gate.error };
+  const col =
+    role === "source_video"
+      ? "source_video_asset_id"
+      : role === "start_frame"
+        ? "start_frame_asset_id"
+        : "end_frame_asset_id";
+  const supabase = await createClient();
+  const { error } = await supabase.from("video_clips").update({ [col]: null }).eq("id", clipId);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/video");
+  return { success: true };
+}
+
+export async function addClip(projectId: string): Promise<Result<{ clipId: string }>> {
+  await requireUser();
+  const tenant = await getCurrentTenant();
+  if (!tenant) return { success: false, error: "No tenant selected" };
+  const supabase = await createClient();
+  const { data: project } = await supabase
+    .from("video_projects")
+    .select("id, status, aspect_ratio, target_resolution, default_model, generate_audio")
+    .eq("id", projectId)
+    .eq("tenant_slug", tenant.slug)
+    .maybeSingle();
+  if (!project) return { success: false, error: "Project not found" };
+  if (!CLIP_EDITABLE.includes(project.status as VideoProjectStatus)) {
+    return { success: false, error: `Can't add clips while the project is ${project.status}.` };
+  }
+  const { data: last } = await supabase
+    .from("video_clips")
+    .select("seq")
+    .eq("project_id", projectId)
+    .order("seq", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const seq = (last?.seq ?? 0) + 1;
+
+  const { data, error } = await supabase
+    .from("video_clips")
+    .insert({
+      project_id: projectId,
+      seq,
+      mode: "identity",
+      model: (project.default_model as string) ?? "seedance-2.0",
+      prompt: "",
+      duration_s: 5,
+      resolution: (project.target_resolution as string) ?? "720p",
+      aspect_ratio: (project.aspect_ratio as string) ?? "9:16",
+      generate_audio: (project.generate_audio as boolean) ?? false,
+      status: "planned",
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { success: false, error: error?.message ?? "Could not add clip" };
+  revalidatePath("/video");
+  return { success: true, clipId: data.id };
+}
+
+export async function deleteClip(clipId: string): Promise<Result> {
+  await requireUser();
+  const tenant = await getCurrentTenant();
+  if (!tenant) return { success: false, error: "No tenant selected" };
+  const gate = await loadEditableClip(clipId);
+  if (!gate.ok) return { success: false, error: gate.error };
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("video_clips")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", gate.projectId);
+  if ((count ?? 0) <= 1) return { success: false, error: "A project needs at least one clip." };
+  const { error } = await supabase.from("video_clips").delete().eq("id", clipId);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/video");
+  return { success: true };
 }
