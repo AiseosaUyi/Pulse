@@ -176,10 +176,15 @@ class PicsartVideoProvider implements VideoProvider {
     throw new PicsartError("Provide a public asset URL; PicsArt accepts image_url directly");
   }
 
-  // No documented balance endpoint; best-effort (the budget gate degrades to
-  // the USD ceiling when this is unavailable).
+  // Real remaining GenAI credits. GET /v1/balance → { "credits": <int> }.
+  // This is the live truth PicsArt bills against, so the budget gate uses it to
+  // hard-stop before a generation that would overrun the plan.
   async creditBalance(): Promise<CreditBalance> {
-    throw new PicsartError("credit balance endpoint not available");
+    const { json } = await this.req<{ credits?: number }>("/v1/balance", { method: "GET" });
+    if (typeof json.credits !== "number") {
+      throw new PicsartError("balance endpoint returned no credits");
+    }
+    return { balance: json.credits };
   }
 }
 
