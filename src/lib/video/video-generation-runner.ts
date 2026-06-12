@@ -368,28 +368,42 @@ async function transitionRunner(
   expectedVersion: number,
   reason: string
 ) {
-  // Runner-driven transition (system actor). Best-effort; version may have
-  // advanced if a human acted concurrently — re-read and retry once.
-  const { error } = await admin.rpc("transition_video_project_status", {
-    p_project_id: projectId,
-    p_from_status: from,
-    p_to_status: to,
-    p_expected_version: expectedVersion,
-    p_actor: null,
-    p_reason: reason,
-  });
-  if (error) {
-    const { data } = await admin.from("video_projects").select("status, version").eq("id", projectId).maybeSingle();
-    if (data?.status === from) {
-      await admin.rpc("transition_video_project_status", {
-        p_project_id: projectId,
-        p_from_status: from,
-        p_to_status: to,
-        p_expected_version: data.version as number,
-        p_actor: null,
-        p_reason: reason,
+  // Runner-driven transition (system actor). The runner runs as the SERVICE ROLE
+  // (cron / status endpoint), where auth.uid() is null — so it CANNOT go through
+  // transition_video_project_status(): that RPC gates on is_tenant_member(auth.uid())
+  // and always raises 'forbidden' for the service role, which would leave the
+  // project stuck in `generating` forever (no success → assembled, no failure →
+  // generation_failed). The admin client legitimately bypasses RLS for system work,
+  // so we apply the same optimistic-version update + audit insert directly here.
+  // Best-effort; version may have advanced if a human acted concurrently — re-read
+  // and retry once against the current version.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await admin
+      .from("video_projects")
+      .update({ status: to, version: expectedVersion + 1 })
+      .eq("id", projectId)
+      .eq("status", from)
+      .eq("version", expectedVersion)
+      .select("id")
+      .maybeSingle();
+    if (!error && data) {
+      await admin.from("video_project_status_audit").insert({
+        project_id: projectId,
+        from_status: from,
+        to_status: to,
+        actor: null,
+        reason,
       });
+      return;
     }
+    // No row updated: either a version race or the project already moved on.
+    const { data: cur } = await admin
+      .from("video_projects")
+      .select("status, version")
+      .eq("id", projectId)
+      .maybeSingle();
+    if (cur?.status !== from) return; // already transitioned elsewhere — nothing to do
+    expectedVersion = cur.version as number;
   }
 }
 

@@ -28,10 +28,12 @@ import type {
 } from "@/lib/services/video-projects";
 
 type Mode = ClipMode; // identity | continuity | replicate
-const MODES: { id: Mode; label: string; icon: typeof Sparkles; hint: string }[] = [
+// `soon` marks a mode the provider can't serve yet (disabled in the picker, not
+// removed — so the capability is visible and flips on the day it lands).
+const MODES: { id: Mode; label: string; icon: typeof Sparkles; hint: string; soon?: boolean }[] = [
   { id: "identity", label: "Prompt", icon: Sparkles, hint: "Describe it. Add a character for a consistent face." },
   { id: "continuity", label: "Image → Video", icon: ImageIcon, hint: "Upload a start (and optional end) frame + a prompt." },
-  { id: "replicate", label: "Recreate", icon: Clapperboard, hint: "Upload a reference video; recreate it with your character." },
+  { id: "replicate", label: "Recreate", icon: Clapperboard, hint: "Video-to-video isn't available on the PicsArt GenAI API yet — coming soon. For now, grab a frame from your reference and use Image → Video.", soon: true },
 ];
 
 const ASPECTS = ["9:16", "16:9", "1:1"] as const;
@@ -43,12 +45,14 @@ export function VideoStudioClient({
   generations,
   approvedContent,
   providerConfigured,
+  creditBalance,
 }: {
   characters: VideoCharacter[];
   characterAvatars: Record<string, string>;
   generations: GenerationSummary[];
   approvedContent: ApprovedContentOption[];
   providerConfigured: boolean;
+  creditBalance: number | null;
 }) {
   const router = useRouter();
   const [pending, startGen] = useTransition();
@@ -77,6 +81,18 @@ export function VideoStudioClient({
     () => estimateSeedanceCredits(model, { duration: durationS, resolution }),
     [model, durationS, resolution]
   );
+  // Per-model estimate at the current duration/res, so the picker shows the
+  // cost trade-off live. These are calibrated estimates — the real charge is
+  // whatever PicsArt deducts; creditBalance is the live truth.
+  const perModel = useMemo(
+    () =>
+      ["seedance-2.0", "seedance-1.5", "kling-3.0", "seedance-2.0-fast"].map((id) => ({
+        id,
+        cr: estimateSeedanceCredits(id, { duration: durationS, resolution }),
+      })),
+    [durationS, resolution]
+  );
+  const overBudget = creditBalance != null && estimate > creditBalance;
 
   async function upload(role: "source_video" | "start_frame" | "end_frame", file: File) {
     setUploading(role);
@@ -185,13 +201,20 @@ export function VideoStudioClient({
             {MODES.map((m) => (
               <button
                 key={m.id}
-                onClick={() => setMode(m.id)}
-                className={`flex flex-col items-center gap-1 rounded-lg py-2 text-xs font-medium transition-colors ${
-                  mode === m.id ? "bg-card text-primary-500 shadow-sm" : "text-text-muted hover:text-foreground"
+                onClick={() => !m.soon && setMode(m.id)}
+                disabled={m.soon}
+                title={m.soon ? "Coming soon" : undefined}
+                className={`relative flex flex-col items-center gap-1 rounded-lg py-2 text-xs font-medium transition-colors ${
+                  m.soon
+                    ? "text-text-muted/50 cursor-not-allowed"
+                    : mode === m.id
+                      ? "bg-card text-primary-500 shadow-sm"
+                      : "text-text-muted hover:text-foreground"
                 }`}
               >
                 <m.icon size={16} />
                 {m.label}
+                {m.soon && <span className="absolute top-1 right-1 text-[8px] font-semibold uppercase tracking-wide text-text-muted/60">Soon</span>}
               </button>
             ))}
           </div>
@@ -279,6 +302,13 @@ export function VideoStudioClient({
               <p className="text-[11px] text-text-muted mt-1">
                 Seedance 2.0 — best for people. 1.5 / Kling / Fast — cheaper, great for b-roll.
               </p>
+              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+                {perModel.map((m) => (
+                  <span key={m.id} className={m.id === model ? "text-primary-500 font-medium" : "text-text-muted"}>
+                    {m.id === "seedance-2.0" ? "2.0" : m.id === "seedance-1.5" ? "1.5" : m.id === "kling-3.0" ? "Kling" : "Fast"} ~{m.cr}cr
+                  </span>
+                ))}
+              </div>
             </div>
             <div>
               <Label>Duration · {durationS}s</Label>
@@ -310,12 +340,27 @@ export function VideoStudioClient({
 
           <button
             onClick={generate}
-            disabled={pending || !providerConfigured}
+            disabled={pending || !providerConfigured || overBudget}
             className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-primary-500 text-white px-4 py-3 text-sm font-medium hover:bg-primary-600 disabled:opacity-60"
           >
             {pending ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {providerConfigured ? `Generate · ~${estimate} cr` : "Connect PicsArt to generate"}
+            {!providerConfigured
+              ? "Connect PicsArt to generate"
+              : overBudget
+                ? `Need ~${estimate} cr · only ${creditBalance} left`
+                : `Generate · ~${estimate} cr`}
           </button>
+          {providerConfigured && (
+            <p className="text-[11px] text-center -mt-1">
+              {creditBalance != null ? (
+                <span className={overBudget ? "text-primary-500 font-medium" : "text-text-muted"}>
+                  {creditBalance} credits left at PicsArt · est. only — real charge may differ
+                </span>
+              ) : (
+                <span className="text-text-muted">~{estimate} cr is an estimate — PicsArt deducts the real amount</span>
+              )}
+            </p>
+          )}
         </section>
 
         {/* ── History ──────────────────────────────────────────── */}
