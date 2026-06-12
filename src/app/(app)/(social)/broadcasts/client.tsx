@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Radio, Plus, Send } from "lucide-react";
+import { Plus, Send } from "lucide-react";
 import {
   createBroadcastList,
   addBroadcastMembers,
@@ -63,7 +63,6 @@ export function BroadcastsClient({
   return (
     <div className="p-4 md:p-8 max-w-[1100px] mx-auto">
       <header className="flex items-center gap-2 mb-6">
-        <Radio size={20} className="text-primary-500" />
         <div>
           <h1 className="text-xl md:text-2xl text-gray-1100 dark:text-foreground">
             WhatsApp broadcasts

@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Film,
   Sparkles,
   Image as ImageIcon,
   Clapperboard,
@@ -18,7 +17,8 @@ import {
   ChevronRight,
   Plus,
 } from "lucide-react";
-import { createGeneration, uploadVideoAsset } from "@/lib/actions/video-generate";
+import { createGeneration, createSignedVideoUpload, registerVideoAsset } from "@/lib/actions/video-generate";
+import { createClient } from "@/lib/supabase/client";
 import { estimateSeedanceCredits } from "@/lib/video/providers/seedance-constraints";
 import { toast } from "@/components/ui/Toaster";
 import type { ClipMode, VideoCharacter } from "@/lib/types/video";
@@ -80,12 +80,27 @@ export function VideoStudioClient({
 
   async function upload(role: "source_video" | "start_frame" | "end_frame", file: File) {
     setUploading(role);
-    const fd = new FormData();
-    fd.append("file", file);
-    const res = await uploadVideoAsset(role, fd);
+    const kind = file.type.startsWith("video/") ? "video" : "image";
+    // 1. signed URL from the server (tiny request)
+    const signed = await createSignedVideoUpload({ contentType: file.type });
+    if (!signed.success) {
+      setUploading(null);
+      return toast.error(signed.error);
+    }
+    // 2. upload bytes DIRECTLY to Supabase Storage — no server-action body limit
+    const supabase = createClient();
+    const { error } = await supabase.storage
+      .from("generated-videos")
+      .uploadToSignedUrl(signed.path, signed.token, file, { contentType: file.type });
+    if (error) {
+      setUploading(null);
+      return toast.error(`Upload failed: ${error.message}`);
+    }
+    // 3. register the asset
+    const reg = await registerVideoAsset({ kind, role, path: signed.path });
     setUploading(null);
-    if (!res.success) return toast.error(res.error);
-    const a = { id: res.assetId, url: res.url };
+    if (!reg.success) return toast.error(reg.error);
+    const a = { id: reg.assetId, url: reg.url };
     if (role === "source_video") setSourceVideo(a);
     if (role === "start_frame") setStartFrame(a);
     if (role === "end_frame") setEndFrame(a);
@@ -144,7 +159,6 @@ export function VideoStudioClient({
     <div className="p-4 md:p-8 max-w-[1200px] mx-auto">
       <header className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
-          <Film size={20} className="text-primary-500" />
           <div>
             <h1 className="text-xl md:text-2xl text-gray-1100 dark:text-foreground">Video studio</h1>
             <p className="text-sm text-text-muted mt-0.5">

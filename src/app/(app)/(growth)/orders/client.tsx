@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ShoppingCart, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { createManualOrder } from "@/lib/actions/orders";
 import { toast } from "@/components/ui/Toaster";
 import type { OrderRecord, OrderStats } from "@/lib/services/orders";
@@ -36,7 +36,6 @@ export function OrdersClient({
     <div className="p-4 md:p-8 max-w-[1100px] mx-auto">
       <header className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
-          <ShoppingCart size={20} className="text-primary-500" />
           <div>
             <h1 className="text-xl md:text-2xl text-gray-1100 dark:text-foreground">
               Orders

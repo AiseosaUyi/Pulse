@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentTenant, requireUser } from "@/lib/auth";
-import { storeVideoAsset } from "@/lib/video/assets";
 
 type Result<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -76,18 +75,20 @@ export async function archiveCharacter(id: string): Promise<Result> {
   return { success: true };
 }
 
-// Upload one reference image and append it to the character (max 9).
-export async function addCharacterReference(
+// Register a reference image (already uploaded to storage via a signed URL)
+// and append it to the character (max 9). The browser uploads the bytes
+// directly to Supabase Storage — see createSignedVideoUpload — so this never
+// hits the 1 MB server-action body limit.
+export async function registerCharacterReference(
   characterId: string,
-  formData: FormData
+  path: string
 ): Promise<Result<{ assetId: string }>> {
   const user = await requireUser();
   const tenant = await getCurrentTenant();
   if (!tenant) return { success: false, error: "No tenant selected" };
-
-  const file = formData.get("file");
-  if (!(file instanceof File)) return { success: false, error: "No file provided" };
-  if (!file.type.startsWith("image/")) return { success: false, error: "Reference must be an image" };
+  if (!path.startsWith(`${tenant.slug}/`)) {
+    return { success: false, error: "Invalid upload path" };
+  }
 
   const supabase = await createClient();
   const { data: ch } = await supabase
@@ -100,23 +101,27 @@ export async function addCharacterReference(
   const current = (ch.reference_asset_ids as string[]) ?? [];
   if (current.length >= 9) return { success: false, error: "A character can have at most 9 reference images" };
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const stored = await storeVideoAsset({
-    tenantSlug: tenant.slug,
-    bytes,
-    mime: file.type,
-    kind: "image",
-    role: "character_ref",
-    createdBy: user.id,
-  });
-
   const admin = createAdminClient();
+  const { data: pub } = admin.storage.from("generated-videos").getPublicUrl(path);
+  const { data: asset, error } = await admin
+    .from("video_assets")
+    .insert({
+      tenant_slug: tenant.slug,
+      kind: "image",
+      role: "character_ref",
+      storage_url: pub.publicUrl,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (error || !asset) return { success: false, error: error?.message ?? "Register failed" };
+
   await admin
     .from("video_characters")
-    .update({ reference_asset_ids: [...current, stored.id] })
+    .update({ reference_asset_ids: [...current, asset.id] })
     .eq("id", characterId);
   revalidatePath("/video/characters");
-  return { success: true, assetId: stored.id };
+  return { success: true, assetId: asset.id };
 }
 
 export async function removeCharacterReference(
