@@ -28,10 +28,12 @@ import type {
 } from "@/lib/services/video-projects";
 
 type Mode = ClipMode; // identity | continuity | replicate
-const MODES: { id: Mode; label: string; icon: typeof Sparkles; hint: string }[] = [
+// `soon` marks a mode the provider can't serve yet (disabled in the picker, not
+// removed — so the capability is visible and flips on the day it lands).
+const MODES: { id: Mode; label: string; icon: typeof Sparkles; hint: string; soon?: boolean }[] = [
   { id: "identity", label: "Prompt", icon: Sparkles, hint: "Describe it. Add a character for a consistent face." },
   { id: "continuity", label: "Image → Video", icon: ImageIcon, hint: "Upload a start (and optional end) frame + a prompt." },
-  { id: "replicate", label: "Recreate", icon: Clapperboard, hint: "Upload a reference video; recreate it with your character." },
+  { id: "replicate", label: "Recreate", icon: Clapperboard, hint: "Video-to-video isn't available on the PicsArt GenAI API yet — coming soon. For now, grab a frame from your reference and use Image → Video.", soon: true },
 ];
 
 const ASPECTS = ["9:16", "16:9", "1:1"] as const;
@@ -185,13 +187,20 @@ export function VideoStudioClient({
             {MODES.map((m) => (
               <button
                 key={m.id}
-                onClick={() => setMode(m.id)}
-                className={`flex flex-col items-center gap-1 rounded-lg py-2 text-xs font-medium transition-colors ${
-                  mode === m.id ? "bg-card text-primary-500 shadow-sm" : "text-text-muted hover:text-foreground"
+                onClick={() => !m.soon && setMode(m.id)}
+                disabled={m.soon}
+                title={m.soon ? "Coming soon" : undefined}
+                className={`relative flex flex-col items-center gap-1 rounded-lg py-2 text-xs font-medium transition-colors ${
+                  m.soon
+                    ? "text-text-muted/50 cursor-not-allowed"
+                    : mode === m.id
+                      ? "bg-card text-primary-500 shadow-sm"
+                      : "text-text-muted hover:text-foreground"
                 }`}
               >
                 <m.icon size={16} />
                 {m.label}
+                {m.soon && <span className="absolute top-1 right-1 text-[8px] font-semibold uppercase tracking-wide text-text-muted/60">Soon</span>}
               </button>
             ))}
           </div>
