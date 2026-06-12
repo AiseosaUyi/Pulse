@@ -57,7 +57,7 @@
     },
     {
       "path": "/api/cron/video-maintenance",
-      "schedule": "0 * * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }
