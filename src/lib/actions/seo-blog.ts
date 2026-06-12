@@ -18,6 +18,7 @@ import {
 } from "@/lib/ai/seo/generate-seo-blog";
 import { BudgetExceededError } from "@/lib/ai/ai-budget";
 import { heuristicMap } from "@/lib/seo/gruve-discovery";
+import { getTenantSeoConfig } from "@/lib/seo/tenant-seo-config";
 
 export type SeoBlogActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -86,10 +87,12 @@ export async function generateSeoBlogForPost(
   }
 
   try {
+    const seo = await getTenantSeoConfig(tenant.slug);
     const draft = await generateSeoBlog({
       tenantSlug: tenant.slug,
       tenantName: tenant.name ?? tenant.slug,
       primaryKeyword,
+      region: seo.serpRegion,
       brief: {
         title: post.title,
       },
@@ -228,6 +231,67 @@ export async function generateSeoBlogFromKeyword(
 
   if (!generated.success) {
     // Clean up the empty post so we don't leave orphans on failure.
+    await supabase.from("blog_posts").delete().eq("id", post.id);
+    return generated;
+  }
+
+  return { success: true, postId: post.id };
+}
+
+// Generate from a topic/article title with a distinct target keyword.
+// Used by the topical map ("Generate draft" on a suggested article) and
+// SERP analysis ("Create draft from gap"), where the human-facing title and
+// the ranking keyword differ. Mirrors generateSeoBlogFromKeyword but lets
+// the caller set the post title separately from the primary keyword.
+export async function generateSeoBlogFromTopic(input: {
+  title: string;
+  primaryKeyword: string;
+  briefId?: string;
+}): Promise<SeoBlogActionResult<{ postId: string }>> {
+  const user = await requireUser();
+  const tenant = await getCurrentTenant();
+  if (!tenant) {
+    return { success: false, error: "No active tenant", reason: "no_tenant" };
+  }
+  const title = input.title.trim();
+  const primaryKeyword = input.primaryKeyword.trim();
+  if (!primaryKeyword) {
+    return {
+      success: false,
+      error: "Primary keyword required",
+      reason: "no_keyword",
+    };
+  }
+
+  const supabase = await createClient();
+
+  const { data: post, error: insertErr } = await supabase
+    .from("blog_posts")
+    .insert({
+      tenant_slug: tenant.slug,
+      title: title || primaryKeyword,
+      target_keyword: primaryKeyword,
+      status: "draft",
+      created_by: user.id,
+      brief_id: input.briefId ?? null,
+    })
+    .select("id")
+    .single();
+
+  if (insertErr || !post) {
+    return {
+      success: false,
+      error: insertErr?.message ?? "Could not create blog post",
+      reason: "unknown",
+    };
+  }
+
+  const generated = await generateSeoBlogForPost({
+    postId: post.id,
+    primaryKeyword,
+  });
+
+  if (!generated.success) {
     await supabase.from("blog_posts").delete().eq("id", post.id);
     return generated;
   }

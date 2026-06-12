@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { testGa4Connection } from "@/lib/integrations/ga4";
+import { testGscConnection } from "@/lib/integrations/search-console";
+import { testContentfulConnection } from "@/lib/integrations/contentful";
 import { getIntegrationSecrets } from "@/lib/services/integrations";
 import type { IntegrationProvider } from "@/lib/types/integrations";
 
@@ -119,6 +121,39 @@ async function runProviderTest(
             ? `${res.totalUsers.toLocaleString()} users in last 7 days`
             : undefined,
       };
+    }
+    case "gsc": {
+      const siteUrl = String(creds.config.site_url ?? "");
+      if (!siteUrl || !creds.secretToken) {
+        return {
+          ok: false,
+          error: "Missing property URL or service-account JSON",
+        };
+      }
+      const res = await testGscConnection({
+        siteUrl,
+        serviceAccountJson: creds.secretToken,
+      });
+      return {
+        ok: res.ok,
+        error: res.error,
+        detail:
+          res.ok && res.totalClicks != null
+            ? `${res.totalClicks.toLocaleString()} clicks in last 28 days`
+            : undefined,
+      };
+    }
+    case "contentful": {
+      const spaceId = String(creds.config.space_id ?? "");
+      if (!spaceId || !creds.secretToken) {
+        return { ok: false, error: "Missing Space ID or CMA token" };
+      }
+      const res = await testContentfulConnection({
+        spaceId,
+        cmaToken: creds.secretToken,
+        envId: String(creds.config.environment ?? "master"),
+      });
+      return { ok: res.ok, error: res.error, detail: res.detail };
     }
   }
 }

@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyFromRequest } from "@/lib/cron/auth";
+import { withCronRun } from "@/lib/cron/run-tracker";
 import { listActiveConnections } from "@/lib/composio/resolve-alias";
 import {
   getInstagramMediaInsights,
@@ -19,7 +20,7 @@ const LOOKBACK_DAYS = 30;
 
 interface PublicationRow {
   external_id: string | null;
-  posted_at: string;
+  published_at: string;
   scheduled_post: { posted_post_id: string | null } | null;
 }
 
@@ -29,6 +30,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
 
+  const result = await withCronRun("composio-sync-insights", async () => {
   const admin = createAdminClient();
   const summary = {
     postsUpdated: 0,
@@ -46,13 +48,13 @@ export async function POST(req: Request) {
       const { data: pubs } = await admin
         .from("scheduled_post_publications")
         .select(
-          "external_id, posted_at, scheduled_post:scheduled_posts(posted_post_id)"
+          "external_id, published_at, scheduled_post:scheduled_posts(posted_post_id)"
         )
         .eq("tenant_slug", conn.tenantSlug)
         .eq("provider", "composio")
         .eq("platform", "instagram")
         .eq("status", "published")
-        .gte("posted_at", sinceIso);
+        .gte("published_at", sinceIso);
 
       for (const pub of (pubs ?? []) as unknown as PublicationRow[]) {
         const postedPostId = pub.scheduled_post?.posted_post_id;
@@ -87,13 +89,13 @@ export async function POST(req: Request) {
       const { data: pubs } = await admin
         .from("scheduled_post_publications")
         .select(
-          "external_id, posted_at, scheduled_post:scheduled_posts(posted_post_id)"
+          "external_id, published_at, scheduled_post:scheduled_posts(posted_post_id)"
         )
         .eq("tenant_slug", conn.tenantSlug)
         .eq("provider", "composio")
         .eq("platform", "linkedin")
         .eq("status", "published")
-        .gte("posted_at", sinceIso);
+        .gte("published_at", sinceIso);
 
       for (const pub of (pubs ?? []) as unknown as PublicationRow[]) {
         const postedPostId = pub.scheduled_post?.posted_post_id;
@@ -130,13 +132,13 @@ export async function POST(req: Request) {
       const { data: pubs } = await admin
         .from("scheduled_post_publications")
         .select(
-          "external_id, posted_at, scheduled_post:scheduled_posts(posted_post_id)"
+          "external_id, published_at, scheduled_post:scheduled_posts(posted_post_id)"
         )
         .eq("tenant_slug", conn.tenantSlug)
         .eq("provider", "composio")
         .eq("platform", "tiktok")
         .eq("status", "published")
-        .gte("posted_at", sinceIso);
+        .gte("published_at", sinceIso);
 
       for (const pub of (pubs ?? []) as unknown as PublicationRow[]) {
         const postedPostId = pub.scheduled_post?.posted_post_id;
@@ -164,5 +166,10 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json(summary);
+    const status =
+      summary.failed === 0 ? "ok" : summary.postsUpdated > 0 ? "partial" : "failed";
+    return { status, rowsProcessed: summary.postsUpdated, metadata: summary };
+  });
+
+  return NextResponse.json(result.metadata ?? result);
 }

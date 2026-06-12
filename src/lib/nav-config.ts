@@ -31,6 +31,8 @@ export const navGroups: NavGroup[] = [
         ],
       },
       { label: "Engagement inbox", href: "/engagement", iconName: "MessageCircle" },
+      { label: "Broadcasts", href: "/broadcasts", iconName: "Radio" },
+      { label: "Video studio", href: "/video", iconName: "Film" },
       { label: "Platform score", href: "/platform-score", iconName: "CircleDot" },
       { label: "Viral trends", href: "/viral-trends", iconName: "TrendingUp" },
       { label: "Post history", href: "/post-history", iconName: "Clock" },
@@ -40,6 +42,7 @@ export const navGroups: NavGroup[] = [
     label: "GROWTH",
     items: [
       { label: "Outbound", href: "/leads", iconName: "Target" },
+      { label: "Orders", href: "/orders", iconName: "ShoppingCart" },
       { label: "Ads critic", href: "/ads-tracker", iconName: "Diamond" },
     ],
   },

@@ -30,14 +30,14 @@ const IG_SKIP = new Set([
   "accounts", "about", "privacy", "legal", "help",
 ]);
 
-function extractIgHandle(text: string): string | null {
+export function extractIgHandle(text: string): string | null {
   const m = IG_LINK_RE.exec(text);
   if (!m) return null;
   const handle = m[1].toLowerCase();
   return IG_SKIP.has(handle) ? null : handle;
 }
 
-function toIsoDate(raw: string | undefined | null): string {
+export function toIsoDate(raw: string | undefined | null): string {
   if (!raw) return new Date().toISOString().slice(0, 10);
   try {
     const d = new Date(raw);
@@ -48,7 +48,7 @@ function toIsoDate(raw: string | undefined | null): string {
   }
 }
 
-function str(v: unknown): string {
+export function str(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
 

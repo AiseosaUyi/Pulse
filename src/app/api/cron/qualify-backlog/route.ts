@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyFromRequest } from "@/lib/cron/auth";
+import { withCronRun } from "@/lib/cron/run-tracker";
 import { getBrandContext } from "@/lib/ai/brand-positioning";
 import { getOutboundFilters } from "@/lib/server/outbound-filters";
 import { getTenant } from "@/lib/services/tenants";
@@ -56,6 +57,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
 
+  const result = await withCronRun("qualify-backlog", async () => {
   const admin = createAdminClient();
   const summary = {
     tenantsProcessed: 0,
@@ -68,10 +70,7 @@ export async function POST(req: Request) {
     .from("tenants")
     .select("slug, name");
   if (tenantsErr || !tenants) {
-    return NextResponse.json(
-      { error: tenantsErr?.message ?? "Failed to list tenants" },
-      { status: 500 }
-    );
+    throw new Error(tenantsErr?.message ?? "Failed to list tenants");
   }
 
   for (const tenant of tenants as TenantRow[]) {
@@ -147,5 +146,10 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json(summary);
+    const status =
+      summary.failed === 0 ? "ok" : summary.qualified > 0 ? "partial" : "failed";
+    return { status, rowsProcessed: summary.qualified, metadata: summary };
+  });
+
+  return NextResponse.json(result.metadata ?? result);
 }

@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser, getCurrentTenant } from "@/lib/auth";
 import {
   upsertGruveBlog,
-  isContentfulConfigured,
+  resolveContentfulConfig,
   type GruveBlogDraft,
 } from "@/lib/integrations/contentful";
 import { markdownToRichText, isRichTextDocument } from "@/lib/seo/markdown-to-richtext";
@@ -28,9 +28,10 @@ export async function syncBlogDraftToContentful(
   const tenant = await getCurrentTenant();
   if (!tenant) return { success: false, error: "No active tenant" };
 
-  // Pre-cutover (no CMA token) → skip silently so the preview pane
-  // still works against whatever Gruve already has.
-  if (!isContentfulConfigured()) return { success: true, skipped: true };
+  // Pre-cutover (no Contentful config for this tenant) → skip silently so the
+  // preview pane still works against whatever the tenant already has.
+  const cfg = await resolveContentfulConfig(tenant.slug);
+  if (!cfg) return { success: true, skipped: true };
 
   const supabase = await createClient();
   const { data: post, error } = await supabase
@@ -82,7 +83,7 @@ export async function syncBlogDraftToContentful(
   try {
     // Assets are uploaded by the publish-runner at full publish; a
     // preview draft syncs text/structure (images optional for preview).
-    const res = await upsertGruveBlog(draft, {});
+    const res = await upsertGruveBlog(draft, {}, cfg);
     await supabase
       .from("blog_posts")
       .update({

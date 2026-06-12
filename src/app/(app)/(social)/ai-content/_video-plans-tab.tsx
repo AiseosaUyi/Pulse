@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   Copy,
+  Film,
   RefreshCw,
   Send,
   Sparkles,
@@ -18,6 +19,7 @@ import {
   sendPlanToScheduledPosts,
   updatePlan,
 } from "@/lib/actions/content-plans";
+import { createVideoProject } from "@/lib/actions/video-projects";
 import {
   PLAN_PLATFORMS,
   PLATFORM_LABELS,
@@ -178,6 +180,21 @@ function PlanCard({
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const onCreateVideo = () => {
+    startTransition(async () => {
+      setErr(null);
+      const res = await createVideoProject({
+        sourceKind: "content_plan",
+        sourceId: plan.id,
+      });
+      if (res.success) {
+        window.location.href = `/video/${res.projectId}`;
+      } else {
+        setErr(res.error);
+      }
+    });
+  };
 
   const onCopyPrompt = async () => {
     try {
@@ -406,6 +423,15 @@ function PlanCard({
       {err && <p className="mt-2 text-xs text-status-red">{err}</p>}
 
       <footer className="mt-4 flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onCreateVideo}
+          className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
+        >
+          <Film size={12} />
+          Create video
+        </button>
         <button
           type="button"
           disabled={pending}

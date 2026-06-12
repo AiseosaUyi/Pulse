@@ -88,6 +88,9 @@ export async function updateKeywordPosition(
     .update({
       previous_position: current.position,
       position: newPosition,
+      // A hand-entered position is an explicit override the GSC/Serper sync
+      // must not clobber on its next run.
+      position_source: "manual",
       last_checked: new Date().toISOString().slice(0, 10),
     })
     .eq("id", keywordId);

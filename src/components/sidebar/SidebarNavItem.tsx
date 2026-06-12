@@ -19,6 +19,8 @@ import {
   Eye,
   FileText,
   BarChart3,
+  ShoppingCart,
+  Film,
   ChevronRight,
   type LucideIcon,
 } from "lucide-react";
@@ -28,7 +30,7 @@ import { cn } from "@/lib/utils";
 const iconMap: Record<string, LucideIcon> = {
   LayoutDashboard, CircleDot, TrendingUp, Sparkles, Target, Diamond,
   PlusCircle, Radio, FolderOpen, Search, MessageCircle, Clock, Eye, FileText,
-  BarChart3,
+  BarChart3, ShoppingCart, Film,
 };
 
 interface SidebarNavItemProps {

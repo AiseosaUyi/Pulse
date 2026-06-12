@@ -20,11 +20,16 @@ export type Purpose =
   | "vision" // screenshot OCR / post-metrics extraction
   | "seo-longform" // SEO blog generation (Phase SEO/Phase 1)
   | "seo-scoring" // SEO recommendation scoring / title rewrites
-  | "seo-embedding"; // 1536-dim post embeddings for internal-link suggestions
+  | "seo-embedding" // 1536-dim post embeddings for internal-link suggestions
+  | "video-storyboard" // structure an approved plan/post into Seedance clips
+  | "video-generate"; // media generation (Seedance via PicsArt) — log axis only
 
 export function getModel(purpose: Purpose): LanguageModel {
   switch (purpose) {
     case "synthesis":
+    case "video-storyboard":
+      // Storyboard structuring is a synthesis task (plan/post → ordered
+      // clips); same model as other long-form synthesis.
       return openai("gpt-4.1");
     case "scoring":
       // Scoring is a rating task with structured output — the deterministic
@@ -47,10 +52,10 @@ export function getModel(purpose: Purpose): LanguageModel {
     case "embedding":
     case "seo-embedding":
     case "transcription":
+    case "video-generate":
       // These purposes don't use LanguageModel — they have their own
-      // call paths (embedText / Whisper). getModel is a no-op sentinel
-      // for them. Callers that need actual clients should use their
-      // purpose-specific helpers (embedSeoPost in src/lib/vector/embed.ts).
+      // call paths (embedText / Whisper / the VideoProvider for video-generate).
+      // getModel is a no-op sentinel for them.
       return openai("gpt-4.1");
   }
 }
@@ -59,6 +64,7 @@ export function getModelId(purpose: Purpose): string {
   switch (purpose) {
     case "synthesis":
     case "transcription":
+    case "video-storyboard":
       return "openai/gpt-4.1";
     case "scoring":
     case "seo-scoring":
@@ -71,6 +77,10 @@ export function getModelId(purpose: Purpose): string {
       return "openai/text-embedding-3-large";
     case "seo-embedding":
       return "openai/text-embedding-3-large";
+    case "video-generate":
+      // Media generation logs an explicit provider model on each call; this
+      // sentinel is unused by callers.
+      return "picsart/seedance-2.0";
   }
 }
 
@@ -120,9 +130,16 @@ export interface AiCallLogEntry {
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
   costUsd?: number;
+  /** Provider credits for media generation (video) rows. Null for LLM rows. */
+  credits?: number;
   durationMs?: number;
   success: boolean;
   errorMessage?: string;
+}
+
+/** Convert provider credits to USD for media-generation telemetry. */
+export function creditsToUsd(credits: number, creditUsd: number): number {
+  return credits * creditUsd;
 }
 
 export async function logAiCall(entry: AiCallLogEntry): Promise<void> {
@@ -137,6 +154,7 @@ export async function logAiCall(entry: AiCallLogEntry): Promise<void> {
     cache_read_tokens: entry.cacheReadTokens ?? 0,
     cache_write_tokens: entry.cacheWriteTokens ?? 0,
     cost_usd: entry.costUsd,
+    credits: entry.credits ?? null,
     duration_ms: entry.durationMs,
     success: entry.success,
     error_message: entry.errorMessage ?? null,

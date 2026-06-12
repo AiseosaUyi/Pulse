@@ -122,16 +122,32 @@ export function KeywordRow({ kw }: { kw: KeywordRanking }) {
         {pos === null ? (
           <span className="text-text-muted text-sm">—</span>
         ) : (
-          <span
-            className={`text-sm font-bold ${
-              pos <= 3
-                ? "text-status-green"
-                : pos <= 10
-                ? "text-status-yellow"
-                : "text-text-secondary"
-            }`}
-          >
-            #{pos}
+          <span className="inline-flex flex-col items-center">
+            <span
+              className={`text-sm font-bold ${
+                pos <= 3
+                  ? "text-status-green"
+                  : pos <= 10
+                  ? "text-status-yellow"
+                  : "text-text-secondary"
+              }`}
+            >
+              #{pos}
+            </span>
+            {kw.positionSource && (
+              <span
+                className="text-[9px] uppercase tracking-wide text-text-muted/70"
+                title={
+                  kw.positionSource === "gsc"
+                    ? "From Google Search Console"
+                    : kw.positionSource === "serper"
+                    ? "Live SERP rank check"
+                    : "Manually entered"
+                }
+              >
+                {kw.positionSource}
+              </span>
+            )}
           </span>
         )}
       </td>

@@ -30,6 +30,7 @@ export async function getKeywordRankings(tenantSlug: string): Promise<KeywordRan
     url: row.url ?? null,
     position: row.position ?? null,
     previousPosition: row.previous_position ?? null,
+    positionSource: row.position_source ?? null,
     volume: row.volume,
     difficulty: row.difficulty as KeywordDifficulty,
     lastChecked: row.last_checked ?? null,

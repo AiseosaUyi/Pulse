@@ -22,6 +22,7 @@ import {
   generatePagesFromTemplate,
   deleteProgrammaticPage,
   updateProgrammaticPageStatus,
+  publishProgrammaticPage,
 } from "@/lib/actions/programmatic";
 import { useDialogs } from "@/components/ui/Dialog";
 import type {
@@ -230,10 +231,27 @@ export function ProgrammaticClient({ tenantSlug, templates, pages }: Props) {
                                 />
                               </td>
                               <td className="px-5 py-2.5 text-right">
-                                <DeletePageButton
-                                  tenantSlug={tenantSlug}
-                                  pageId={p.id}
-                                />
+                                <div className="flex items-center justify-end gap-2">
+                                  {p.liveUrl && (
+                                    <a
+                                      href={p.liveUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-[11px] text-primary-500 hover:underline"
+                                    >
+                                      Live ↗
+                                    </a>
+                                  )}
+                                  <PublishToGruveButton
+                                    tenantSlug={tenantSlug}
+                                    pageId={p.id}
+                                    isLive={Boolean(p.liveUrl)}
+                                  />
+                                  <DeletePageButton
+                                    tenantSlug={tenantSlug}
+                                    pageId={p.id}
+                                  />
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -454,6 +472,44 @@ function StatusToggle({
       }`}
     >
       {status}
+    </button>
+  );
+}
+
+function PublishToGruveButton({
+  tenantSlug,
+  pageId,
+  isLive,
+}: {
+  tenantSlug: string;
+  pageId: string;
+  isLive: boolean;
+}) {
+  const dialogs = useDialogs();
+  const [isPending, startTransition] = useTransition();
+  return (
+    <button
+      onClick={() =>
+        startTransition(async () => {
+          const res = await publishProgrammaticPage(tenantSlug, pageId);
+          if (!res.success) {
+            await dialogs.alert({
+              title: "Couldn't publish",
+              subtitle: res.error,
+              tone: "destructive",
+            });
+            return;
+          }
+          await dialogs.alert({
+            title: isLive ? "Re-published to Gruve" : "Published to Gruve",
+            subtitle: `Live at ${res.liveUrl} — it'll appear in the sitemap and be indexable shortly.`,
+          });
+        })
+      }
+      disabled={isPending}
+      className="text-[11px] px-2 py-0.5 rounded-full font-medium text-primary-500 border border-primary-500/30 hover:bg-primary-50 disabled:opacity-50"
+    >
+      {isPending ? "Publishing…" : isLive ? "Re-publish" : "Publish to Gruve"}
     </button>
   );
 }

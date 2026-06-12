@@ -32,6 +32,8 @@ export interface ProgrammaticPageRecord {
   status: ProgrammaticPageStatus;
   generatorModel: string | null;
   generatorCostUsd: number;
+  liveUrl: string | null;
+  publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

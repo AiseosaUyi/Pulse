@@ -20,44 +20,125 @@
 
 import "server-only";
 import { createClient, type Environment } from "contentful-management";
+import { getIntegrationSecrets } from "@/lib/services/integrations";
 
-const SPACE = process.env.CONTENTFUL_SPACE_ID;
-const CMA_TOKEN = process.env.CONTENTFUL_CMA_TOKEN;
-const ENV_ID = process.env.CONTENTFUL_ENVIRONMENT ?? "master";
-const LOCALE = process.env.CONTENTFUL_DEFAULT_LOCALE ?? "en-US";
-const CT_ID = "gruveBlog";
+// Pulse is multi-tenant. Contentful credentials resolve PER TENANT from the
+// `contentful` integration (tenant_integrations), falling back to the global
+// env vars so Gruve keeps working unchanged while Sippy/others connect their
+// own space. Content-type ids + locale are part of the per-tenant config.
+const ENV_SPACE = process.env.CONTENTFUL_SPACE_ID;
+const ENV_CMA_TOKEN = process.env.CONTENTFUL_CMA_TOKEN;
+const ENV_ENV_ID = process.env.CONTENTFUL_ENVIRONMENT ?? "master";
+const ENV_LOCALE = process.env.CONTENTFUL_DEFAULT_LOCALE ?? "en-US";
+const DEFAULT_BLOG_CT = "gruveBlog";
+const DEFAULT_LANDING_CT = "seoLandingPage";
 
-export function isContentfulConfigured(): boolean {
-  return Boolean(SPACE && CMA_TOKEN);
+export interface ContentfulConfig {
+  spaceId: string;
+  cmaToken: string;
+  envId: string;
+  locale: string;
+  blogContentType: string;
+  landingContentType: string;
+}
+
+function envContentfulConfig(): ContentfulConfig | null {
+  if (!ENV_SPACE || !ENV_CMA_TOKEN) return null;
+  return {
+    spaceId: ENV_SPACE,
+    cmaToken: ENV_CMA_TOKEN,
+    envId: ENV_ENV_ID,
+    locale: ENV_LOCALE,
+    blogContentType: DEFAULT_BLOG_CT,
+    landingContentType: DEFAULT_LANDING_CT,
+  };
+}
+
+/**
+ * Resolve a tenant's Contentful config: per-tenant integration first
+ * (provider 'contentful'), env vars as fallback. Returns null when neither
+ * is configured.
+ */
+export async function resolveContentfulConfig(
+  tenantSlug: string
+): Promise<ContentfulConfig | null> {
+  const creds = await getIntegrationSecrets(tenantSlug, "contentful");
+  const spaceId = creds?.config?.space_id ? String(creds.config.space_id) : "";
+  if (creds?.secretToken && spaceId) {
+    return {
+      spaceId,
+      cmaToken: creds.secretToken,
+      envId: String(creds.config.environment ?? "master"),
+      locale: String(creds.config.locale ?? "en-US"),
+      blogContentType: String(creds.config.blog_content_type ?? DEFAULT_BLOG_CT),
+      landingContentType: String(
+        creds.config.landing_content_type ?? DEFAULT_LANDING_CT
+      ),
+    };
+  }
+  return envContentfulConfig();
+}
+
+/** True if Contentful is usable for this tenant (per-tenant or env fallback). */
+export async function isContentfulConfigured(
+  tenantSlug: string
+): Promise<boolean> {
+  return (await resolveContentfulConfig(tenantSlug)) !== null;
+}
+
+/** Validate raw Contentful credentials by fetching the space. */
+export async function testContentfulConnection(opts: {
+  spaceId: string;
+  cmaToken: string;
+  envId?: string;
+}): Promise<{ ok: boolean; detail?: string; error?: string }> {
+  try {
+    const client = createClient(
+      { accessToken: opts.cmaToken },
+      { type: "legacy" }
+    );
+    const space = await client.getSpace(opts.spaceId);
+    const env = await space.getEnvironment(opts.envId ?? "master");
+    return { ok: true, detail: `Connected to "${space.name}" (${env.sys.id})` };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Connection failed",
+    };
+  }
 }
 
 export class ContentfulNotConfiguredError extends Error {
   constructor() {
     super(
-      "Contentful is not configured — set CONTENTFUL_SPACE_ID and CONTENTFUL_CMA_TOKEN."
+      "Contentful is not configured — connect a Contentful integration for this workspace or set CONTENTFUL_SPACE_ID + CONTENTFUL_CMA_TOKEN."
     );
     this.name = "ContentfulNotConfiguredError";
   }
 }
 
-let envPromise: Promise<Environment> | null = null;
+// One cached Environment per (space:env) so multiple tenants don't share a
+// client. Keyed by space+env; the token is captured in the client closure.
+const envCache = new Map<string, Promise<Environment>>();
 
-function getEnv(): Promise<Environment> {
-  if (!isContentfulConfigured()) throw new ContentfulNotConfiguredError();
-  if (!envPromise) {
-    envPromise = (async () => {
+function getEnv(cfg: ContentfulConfig): Promise<Environment> {
+  const key = `${cfg.spaceId}:${cfg.envId}`;
+  let p = envCache.get(key);
+  if (!p) {
+    p = (async () => {
       const client = createClient(
-        { accessToken: CMA_TOKEN! },
+        { accessToken: cfg.cmaToken },
         { type: "legacy" }
       );
-      const space = await client.getSpace(SPACE!);
-      return space.getEnvironment(ENV_ID);
+      const space = await client.getSpace(cfg.spaceId);
+      return space.getEnvironment(cfg.envId);
     })().catch((e) => {
-      envPromise = null; // allow retry on transient auth/network failure
+      envCache.delete(key); // allow retry on transient auth/network failure
       throw e;
     });
+    envCache.set(key, p);
   }
-  return envPromise;
+  return p;
 }
 
 // ── Field map (PULSE-SEO-SPEC.md §5) ──────────────────────────────────
@@ -105,20 +186,22 @@ export interface GruveBlogAssets {
   authorImageId?: string | null;
 }
 
-function loc<T>(v: T): Record<string, T> {
-  return { [LOCALE]: v };
+function loc<T>(locale: string, v: T): Record<string, T> {
+  return { [locale]: v };
 }
 
 /** Pure mapper → Contentful entry `fields` (locale-wrapped). */
 export function mapToGruveBlogFields(
   d: GruveBlogDraft,
-  assets: GruveBlogAssets
+  assets: GruveBlogAssets,
+  cfg: ContentfulConfig
 ): Record<string, Record<string, unknown>> {
+  const L = <T>(v: T) => loc(cfg.locale, v);
   const fields: Record<string, Record<string, unknown>> = {
-    title: loc(d.title),
-    slug: loc(d.slug),
-    content: loc(d.bodyRichText),
-    pulseId: loc(d.pulseId),
+    title: L(d.title),
+    slug: L(d.slug),
+    content: L(d.bodyRichText),
+    pulseId: L(d.pulseId),
   };
   // `question` is REQUIRED on gruveBlog (verified required=true on the live
   // model). Always emit it, falling back to the first FAQ question, then the
@@ -127,34 +210,34 @@ export function mapToGruveBlogFields(
     Array.isArray(d.faqItems) && d.faqItems[0] && typeof d.faqItems[0] === "object"
       ? (d.faqItems[0] as { question?: string }).question
       : undefined;
-  fields.question = loc(d.question ?? firstFaq ?? d.excerpt ?? d.title);
-  if (d.excerpt != null) fields.description = loc(d.excerpt);
-  if (d.author != null) fields.author = loc(d.author);
-  if (d.readMinutes != null) fields.minuteRead = loc(d.readMinutes);
-  if (d.seoMetaTitle != null) fields.seoTitle = loc(d.seoMetaTitle);
+  fields.question = L(d.question ?? firstFaq ?? d.excerpt ?? d.title);
+  if (d.excerpt != null) fields.description = L(d.excerpt);
+  if (d.author != null) fields.author = L(d.author);
+  if (d.readMinutes != null) fields.minuteRead = L(d.readMinutes);
+  if (d.seoMetaTitle != null) fields.seoTitle = L(d.seoMetaTitle);
   if (d.seoMetaDescription != null)
-    fields.seoDescription = loc(d.seoMetaDescription);
+    fields.seoDescription = L(d.seoMetaDescription);
   if (d.canonicalOverride != null)
-    fields.canonicalUrl = loc(d.canonicalOverride);
-  if (d.faqItems != null) fields.faqItems = loc(d.faqItems);
-  if (d.jsonLdOverrides != null) fields.jsonLd = loc(d.jsonLdOverrides);
-  if (d.pulseMetadata != null) fields.pulseMetadata = loc(d.pulseMetadata);
+    fields.canonicalUrl = L(d.canonicalOverride);
+  if (d.faqItems != null) fields.faqItems = L(d.faqItems);
+  if (d.jsonLdOverrides != null) fields.jsonLd = L(d.jsonLdOverrides);
+  if (d.pulseMetadata != null) fields.pulseMetadata = L(d.pulseMetadata);
   // SEO / E-E-A-T expansion (slice 2).
-  if (d.tags != null && d.tags.length > 0) fields.tags = loc(d.tags);
-  if (d.category != null) fields.category = loc(d.category);
-  if (d.authorBio != null) fields.authorBio = loc(d.authorBio);
-  if (d.authorTitle != null) fields.authorTitle = loc(d.authorTitle);
-  if (d.authorUrl != null) fields.authorUrl = loc(d.authorUrl);
-  if (d.publishedDate != null) fields.publishedDate = loc(d.publishedDate);
-  if (d.updatedDate != null) fields.updatedDate = loc(d.updatedDate);
-  if (d.noindex != null) fields.noindex = loc(d.noindex);
+  if (d.tags != null && d.tags.length > 0) fields.tags = L(d.tags);
+  if (d.category != null) fields.category = L(d.category);
+  if (d.authorBio != null) fields.authorBio = L(d.authorBio);
+  if (d.authorTitle != null) fields.authorTitle = L(d.authorTitle);
+  if (d.authorUrl != null) fields.authorUrl = L(d.authorUrl);
+  if (d.publishedDate != null) fields.publishedDate = L(d.publishedDate);
+  if (d.updatedDate != null) fields.updatedDate = L(d.updatedDate);
+  if (d.noindex != null) fields.noindex = L(d.noindex);
 
   const banner = assetLink(assets.bannerImageId);
-  if (banner) fields.bannerImage = loc(banner);
+  if (banner) fields.bannerImage = L(banner);
   const thumb = assetLink(assets.thumbnailId);
-  if (thumb) fields.thumbnail = loc(thumb);
+  if (thumb) fields.thumbnail = L(thumb);
   const authorImg = assetLink(assets.authorImageId);
-  if (authorImg) fields.authorImage = loc(authorImg);
+  if (authorImg) fields.authorImage = L(authorImg);
 
   return fields;
 }
@@ -174,13 +257,15 @@ export interface UploadAssetInput {
  * the caller's concern (publish runner checkpoints the asset id).
  */
 export async function uploadGruveAsset(
-  input: UploadAssetInput
+  input: UploadAssetInput,
+  cfg: ContentfulConfig
 ): Promise<string> {
-  const env = await getEnv();
+  const env = await getEnv(cfg);
+  const L = <T>(v: T) => loc(cfg.locale, v);
   let asset = await env.createAsset({
     fields: {
-      title: loc(input.title),
-      file: loc({
+      title: L(input.title),
+      file: L({
         contentType: input.contentType,
         fileName: input.fileName,
         upload: input.url,
@@ -191,10 +276,9 @@ export async function uploadGruveAsset(
 
   // Processing is async — poll until the file URL resolves.
   const deadline = Date.now() + 30_000;
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const fileLoc = (asset.fields.file as Record<string, { url?: string }>)?.[
-      LOCALE
+      cfg.locale
     ];
     if (fileLoc?.url) break;
     if (Date.now() > deadline) {
@@ -219,10 +303,11 @@ export interface UpsertResult {
 /** CMA guard — sees drafts (see deviation note at top). */
 async function findEntryIdByPulseId(
   env: Environment,
+  contentType: string,
   pulseId: string
 ): Promise<string | null> {
   const res = await env.getEntries({
-    content_type: CT_ID,
+    content_type: contentType,
     "fields.pulseId": pulseId,
     limit: 1,
   });
@@ -235,11 +320,16 @@ async function findEntryIdByPulseId(
  */
 export async function upsertGruveBlog(
   draft: GruveBlogDraft,
-  assets: GruveBlogAssets
+  assets: GruveBlogAssets,
+  cfg: ContentfulConfig
 ): Promise<UpsertResult> {
-  const env = await getEnv();
-  const fields = mapToGruveBlogFields(draft, assets);
-  const existingId = await findEntryIdByPulseId(env, draft.pulseId);
+  const env = await getEnv(cfg);
+  const fields = mapToGruveBlogFields(draft, assets, cfg);
+  const existingId = await findEntryIdByPulseId(
+    env,
+    cfg.blogContentType,
+    draft.pulseId
+  );
 
   if (existingId) {
     const entry = await env.getEntry(existingId);
@@ -252,7 +342,7 @@ export async function upsertGruveBlog(
     };
   }
 
-  const created = await env.createEntry(CT_ID, { fields });
+  const created = await env.createEntry(cfg.blogContentType, { fields });
   return {
     entryId: created.sys.id,
     version: created.sys.version,
@@ -261,14 +351,93 @@ export async function upsertGruveBlog(
 }
 
 /**
- * Publish the entry. This IS the `notify_gruve` mechanism — Gruve's own
+ * Publish the entry. This IS the `notify_gruve` mechanism — the tenant's own
  * Contentful webhook handles revalidation; Pulse never calls
  * /api/revalidate (PULSE-SEO-SPEC.md §12).
  */
 export async function publishGruveBlogEntry(
-  entryId: string
+  entryId: string,
+  cfg: ContentfulConfig
 ): Promise<{ entryId: string; version: number }> {
-  const env = await getEnv();
+  const env = await getEnv(cfg);
+  const entry = await env.getEntry(entryId);
+  const published = await entry.publish();
+  return { entryId: published.sys.id, version: published.sys.version };
+}
+
+// ── Programmatic SEO landing pages (seoLandingPage, W5) ────────────────
+// Same idempotent upsert-by-pulseId pattern as the blog type, against the
+// tenant's landing content type (default `seoLandingPage`) which the tenant's
+// frontend renders at /discover/<slug>. The content type must be provisioned
+// in the tenant's Contentful space first (Appendix-C-style CMA migration).
+
+export interface SeoLandingDraft {
+  pulseId: string; // = programmatic_pages.id
+  title: string;
+  slug: string;
+  description: string | null; // meta/intro summary
+  bodyRichText: unknown; // Contentful RichText document
+  category: string | null; // drives the live event grid
+  location: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  canonicalOverride: string | null;
+  faqItems?: unknown;
+  jsonLdOverrides?: unknown;
+  noindex?: boolean | null;
+}
+
+export function mapToSeoLandingFields(
+  d: SeoLandingDraft,
+  cfg: ContentfulConfig
+): Record<string, Record<string, unknown>> {
+  const L = <T>(v: T) => loc(cfg.locale, v);
+  const fields: Record<string, Record<string, unknown>> = {
+    title: L(d.title),
+    slug: L(d.slug),
+    content: L(d.bodyRichText),
+    pulseId: L(d.pulseId),
+  };
+  if (d.description != null) fields.description = L(d.description);
+  if (d.category != null) fields.category = L(d.category);
+  if (d.location != null) fields.location = L(d.location);
+  if (d.seoTitle != null) fields.seoTitle = L(d.seoTitle);
+  if (d.seoDescription != null) fields.seoDescription = L(d.seoDescription);
+  if (d.canonicalOverride != null) fields.canonicalUrl = L(d.canonicalOverride);
+  if (d.faqItems != null) fields.faqItems = L(d.faqItems);
+  if (d.jsonLdOverrides != null) fields.jsonLd = L(d.jsonLdOverrides);
+  if (d.noindex != null) fields.noindex = L(d.noindex);
+  return fields;
+}
+
+export async function upsertSeoLandingPage(
+  draft: SeoLandingDraft,
+  cfg: ContentfulConfig
+): Promise<UpsertResult> {
+  const env = await getEnv(cfg);
+  const fields = mapToSeoLandingFields(draft, cfg);
+  const existingId = await findEntryIdByPulseId(
+    env,
+    cfg.landingContentType,
+    draft.pulseId
+  );
+
+  if (existingId) {
+    const entry = await env.getEntry(existingId);
+    entry.fields = { ...entry.fields, ...fields };
+    const updated = await entry.update();
+    return { entryId: updated.sys.id, version: updated.sys.version, created: false };
+  }
+
+  const created = await env.createEntry(cfg.landingContentType, { fields });
+  return { entryId: created.sys.id, version: created.sys.version, created: true };
+}
+
+export async function publishSeoLandingEntry(
+  entryId: string,
+  cfg: ContentfulConfig
+): Promise<{ entryId: string; version: number }> {
+  const env = await getEnv(cfg);
   const entry = await env.getEntry(entryId);
   const published = await entry.publish();
   return { entryId: published.sys.id, version: published.sys.version };

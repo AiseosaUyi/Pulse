@@ -38,6 +38,7 @@ const ROW_ORDER: Array<{ key: keyof SeoExtras; label: string }> = [
   { key: "externalAuthority", label: "External authority" },
   { key: "imageAlts", label: "Image alt text" },
   { key: "jsonLd", label: "Structured data" },
+  { key: "aiExtractability", label: "AI extractability" },
 ];
 
 export function SeoPanel({ extras }: { extras: SeoExtras | null }) {

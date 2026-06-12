@@ -16,6 +16,7 @@ export interface KeywordRanking {
   url: string | null;
   position: number | null;
   previousPosition: number | null;
+  positionSource: "gsc" | "serper" | "manual" | null;
   volume: number;
   difficulty: KeywordDifficulty;
   lastChecked: string | null;

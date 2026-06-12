@@ -306,8 +306,16 @@ function escapeHtml(s: string): string {
 }
 
 export function getAppBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  // Used for links embedded in outgoing emails — must always be publicly reachable.
+  // Priority: explicit override → canonical prod URL on Vercel → NEXT_PUBLIC_APP_URL
+  // → current Vercel deployment → localhost. NEXT_PUBLIC_APP_URL is intentionally
+  // ranked below VERCEL_PROJECT_PRODUCTION_URL so local dev (where the public URL
+  // is localhost for OAuth callbacks) still produces production links in emails.
+  if (process.env.EMAIL_BASE_URL) return process.env.EMAIL_BASE_URL.replace(/\/$/, "");
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost")) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  }
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return "http://localhost:3000";
 }
