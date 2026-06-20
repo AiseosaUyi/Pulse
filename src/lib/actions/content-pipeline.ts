@@ -28,7 +28,7 @@ const createSchema = z.object({
   contentTypeSlug: z.string().nullable().optional(),
   platforms: z.array(platformSchema).default([]),
   // Storage: exactly one of the two blocks must be provided.
-  storageProvider: z.enum(["drive", "r2"]).default("r2"),
+  storageProvider: z.enum(["drive", "r2"]).default("drive"),
   // R2 upload fields
   storageKey: z.string().nullable().optional(),
   storageUrl: z.string().nullable().optional(),
