@@ -26,7 +26,10 @@ interface ItemRow {
   posted_url: string | null;
   assigned_to: string | null;
   uploaded_by: string | null;
-  drive_file_id: string;
+  storage_provider: ContentItem["storageProvider"];
+  storage_key: string | null;
+  storage_url: string | null;
+  drive_file_id: string | null;
   drive_mime_type: string | null;
   drive_size_bytes: number | null;
   drive_web_view_link: string | null;
@@ -51,6 +54,9 @@ function rowToItem(row: ItemRow): ContentItem {
     postedUrl: row.posted_url,
     assignedTo: row.assigned_to,
     uploadedBy: row.uploaded_by,
+    storageProvider: row.storage_provider ?? "drive",
+    storageKey: row.storage_key,
+    storageUrl: row.storage_url,
     driveFileId: row.drive_file_id,
     driveMimeType: row.drive_mime_type,
     driveSizeBytes: row.drive_size_bytes,

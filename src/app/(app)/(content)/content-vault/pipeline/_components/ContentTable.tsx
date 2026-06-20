@@ -373,21 +373,33 @@ export function ContentTable({
                     </Td>
                     <Td>
                       <div className="flex items-center justify-end gap-0.5">
-                        <Link
-                          href={
-                            item.driveWebViewLink ??
-                            `https://drive.google.com/file/d/${item.driveFileId}/view`
-                          }
-                          target="_blank"
-                          className="p-1.5 rounded-md text-text-muted hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-800"
-                          title="Open in Drive"
-                        >
-                          <ExternalLink size={14} />
-                        </Link>
-                        <DownloadButton
+                        {item.storageProvider === "drive" && item.driveFileId && (
+                          <Link
+                            href={
+                              item.driveWebViewLink ??
+                              `https://drive.google.com/file/d/${item.driveFileId}/view`
+                            }
+                            target="_blank"
+                            className="p-1.5 rounded-md text-text-muted hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-800"
+                            title="Open in Drive"
+                          >
+                            <ExternalLink size={14} />
+                          </Link>
+                        )}
+                        {item.storageProvider === "r2" && item.storageUrl && (
+                          <Link
+                            href={item.storageUrl}
+                            target="_blank"
+                            className="p-1.5 rounded-md text-text-muted hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-800"
+                            title="View file"
+                          >
+                            <ExternalLink size={14} />
+                          </Link>
+                        )}
+                        {item.driveFileId && <DownloadButton
                           fileId={item.driveFileId}
                           filename={item.title}
-                        />
+                        />}
                         <RowActionsMenu
                           isPosted={item.status === "posted"}
                           onEdit={() => setEditingItem(item)}

@@ -73,6 +73,8 @@ export interface ContentType {
   createdBy: string | null;
 }
 
+export type ContentItemStorageProvider = "drive" | "r2";
+
 export interface ContentItem {
   id: string;
   tenantSlug: string;
@@ -86,10 +88,14 @@ export interface ContentItem {
   postedUrl: string | null;
   assignedTo: string | null;
   uploadedBy: string | null;
-  driveFileId: string;
+  // Storage: 'r2' for new uploads, 'drive' for legacy items.
+  storageProvider: ContentItemStorageProvider;
+  storageKey: string | null;       // R2 object key (r2 items)
+  storageUrl: string | null;       // R2 public URL (r2 items)
+  driveFileId: string | null;      // Google Drive file ID (drive items)
   driveMimeType: string | null;
   driveSizeBytes: number | null;
-  driveWebViewLink: string | null;
+  driveWebViewLink: string | null; // Direct link to view in Drive (drive items)
   driveStatus: ContentItemDriveStatus;
   thumbnailStorageKey: string | null;
   thumbnailCachedAt: string | null;
@@ -143,7 +149,9 @@ export interface ContentUploadSession {
   id: string;
   tenantSlug: string;
   userId: string;
-  driveResumableUri: string;
+  storageProvider: ContentItemStorageProvider;
+  driveResumableUri: string | null; // Drive sessions only
+  r2Key: string | null;             // R2 sessions only
   filename: string;
   sizeBytes: number;
   sectionSlug: string;

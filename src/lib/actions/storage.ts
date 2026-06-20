@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { STORAGE_BUCKET, deleteAsset } from "@/lib/storage/save-asset";
+import { deleteAsset } from "@/lib/storage/save-asset";
+import { deleteFromR2 } from "@/lib/storage/r2";
 
 type ActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -18,7 +19,11 @@ export async function deleteStorageFile(
   tenantSlug: string,
   path: string
 ): Promise<ActionResult> {
-  if (!path.startsWith(`${tenantSlug}/`)) {
+  // R2 paths use prefixed form: assets/{slug}/... or legacy: {slug}/...
+  const tenantPrefix = path.startsWith("assets/")
+    ? `assets/${tenantSlug}/`
+    : `${tenantSlug}/`;
+  if (!path.startsWith(tenantPrefix)) {
     return { success: false, error: "Refusing to delete cross-tenant file" };
   }
 
@@ -26,9 +31,7 @@ export async function deleteStorageFile(
     throw new Error(`Storage delete failed: ${e?.message ?? String(e)}`);
   });
 
-  // Clear row pointers. A file can be referenced as stored_path OR
-  // thumbnail_path — null whichever matches so the row survives with
-  // an "extraction lost" state.
+  // Clear row pointers.
   const supabase = await createClient();
   await supabase
     .from("saved_content")
@@ -47,39 +50,63 @@ export async function deleteStorageFile(
 }
 
 /**
- * Bulk purge: delete every file whose path matches the caller's tenant
- * prefix. Dangerous — only use from the "Prune all my files" button.
+ * Bulk purge: delete every R2 object under the caller's tenant prefix.
+ * Also walks legacy Supabase Storage if any un-migrated files remain.
  */
 export async function purgeTenantStorage(
   tenantSlug: string
 ): Promise<ActionResult<{ deleted: number }>> {
-  const admin = createAdminClient();
-  const { data, error } = await admin.storage
-    .from(STORAGE_BUCKET)
-    .list(tenantSlug, { limit: 1000 });
-  if (error) return { success: false, error: error.message };
-  if (!data || data.length === 0) return { success: true, deleted: 0 };
-
-  // list() returns folders (monthly partitions) — walk each one.
   let deleted = 0;
-  for (const entry of data) {
-    if (entry.metadata?.size != null) {
-      // unexpected top-level file; delete directly
-      await admin.storage.from(STORAGE_BUCKET).remove([`${tenantSlug}/${entry.name}`]);
-      deleted += 1;
-      continue;
+
+  // ── R2: list and delete all objects under assets/{tenant}/ ──────────
+  // R2 doesn't have a native list API in the S3 SDK without paginating
+  // via ListObjectsV2. For now we use the DB as the authoritative list —
+  // every stored path is recorded in saved_content.stored_path.
+  const supabase = await createClient();
+  const { data: rows } = await supabase
+    .from("saved_content")
+    .select("stored_path, thumbnail_path")
+    .eq("tenant_slug", tenantSlug)
+    .not("stored_path", "is", null);
+
+  if (rows) {
+    const keys = new Set<string>();
+    for (const row of rows) {
+      if (row.stored_path) keys.add(row.stored_path);
+      if (row.thumbnail_path) keys.add(row.thumbnail_path);
     }
-    const { data: children } = await admin.storage
-      .from(STORAGE_BUCKET)
-      .list(`${tenantSlug}/${entry.name}`, { limit: 1000 });
-    if (!children || children.length === 0) continue;
-    const paths = children.map((c) => `${tenantSlug}/${entry.name}/${c.name}`);
-    await admin.storage.from(STORAGE_BUCKET).remove(paths);
-    deleted += paths.length;
+    for (const key of keys) {
+      try {
+        await deleteFromR2(key);
+        deleted += 1;
+      } catch {
+        // Best-effort — don't block the purge
+      }
+    }
+  }
+
+  // ── Legacy Supabase Storage fallback ────────────────────────────────
+  const STORAGE_BUCKET = "saved-assets";
+  const admin = createAdminClient();
+  const { data } = await admin.storage.from(STORAGE_BUCKET).list(tenantSlug, { limit: 1000 });
+  if (data && data.length > 0) {
+    for (const entry of data) {
+      if (entry.metadata?.size != null) {
+        await admin.storage.from(STORAGE_BUCKET).remove([`${tenantSlug}/${entry.name}`]);
+        deleted += 1;
+        continue;
+      }
+      const { data: children } = await admin.storage
+        .from(STORAGE_BUCKET)
+        .list(`${tenantSlug}/${entry.name}`, { limit: 1000 });
+      if (!children || children.length === 0) continue;
+      const paths = children.map((c) => `${tenantSlug}/${entry.name}/${c.name}`);
+      await admin.storage.from(STORAGE_BUCKET).remove(paths);
+      deleted += paths.length;
+    }
   }
 
   // Clear all row pointers for this tenant.
-  const supabase = await createClient();
   await supabase
     .from("saved_content")
     .update({

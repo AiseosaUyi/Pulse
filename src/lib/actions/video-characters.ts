@@ -77,17 +77,17 @@ export async function archiveCharacter(id: string): Promise<Result> {
 
 // Register a reference image (already uploaded to storage via a signed URL)
 // and append it to the character (max 9). The browser uploads the bytes
-// directly to Supabase Storage — see createSignedVideoUpload — so this never
+// directly to R2 via presigned PUT — see createSignedVideoUpload — so this never
 // hits the 1 MB server-action body limit.
 export async function registerCharacterReference(
   characterId: string,
-  path: string
+  key: string
 ): Promise<Result<{ assetId: string }>> {
   const user = await requireUser();
   const tenant = await getCurrentTenant();
   if (!tenant) return { success: false, error: "No tenant selected" };
-  if (!path.startsWith(`${tenant.slug}/`)) {
-    return { success: false, error: "Invalid upload path" };
+  if (!key.startsWith(`videos/${tenant.slug}/`)) {
+    return { success: false, error: "Invalid upload key" };
   }
 
   const supabase = await createClient();
@@ -101,15 +101,16 @@ export async function registerCharacterReference(
   const current = (ch.reference_asset_ids as string[]) ?? [];
   if (current.length >= 9) return { success: false, error: "A character can have at most 9 reference images" };
 
+  const { r2PublicUrl } = await import("@/lib/storage/r2");
+  const storageUrl = r2PublicUrl(key);
   const admin = createAdminClient();
-  const { data: pub } = admin.storage.from("generated-videos").getPublicUrl(path);
   const { data: asset, error } = await admin
     .from("video_assets")
     .insert({
       tenant_slug: tenant.slug,
       kind: "image",
       role: "character_ref",
-      storage_url: pub.publicUrl,
+      storage_url: storageUrl,
       created_by: user.id,
     })
     .select("id")
