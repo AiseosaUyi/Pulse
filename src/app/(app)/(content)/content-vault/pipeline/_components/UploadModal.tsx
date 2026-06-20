@@ -18,14 +18,11 @@ import { Label } from "@/components/ui/label";
 import { useDialogs } from "@/components/ui/Dialog";
 import {
   abandonUploadSession,
-  finalizeUpload,
-  mintUploadSession,
+  finalizeR2Upload,
+  mintR2UploadSession,
 } from "@/lib/actions/content-pipeline-upload";
 import { createCustomContentType } from "@/lib/actions/content-pipeline";
-import {
-  generateLocalPreview,
-  runResumableUpload,
-} from "@/lib/upload/resumable-put";
+import { generateLocalPreview } from "@/lib/upload/resumable-put";
 import {
   CONTENT_PLATFORMS,
   type ContentPlatform,
@@ -51,11 +48,7 @@ interface ItemDraft {
   progress: number;
   error?: string;
   sessionId?: string;
-  driveFileId?: string;
-  driveMimeType?: string;
-  driveSizeBytes?: number;
-  driveWebViewLink?: string;
-  thumbnailLink?: string;
+  r2Key?: string;
 }
 
 interface Props {
@@ -222,11 +215,7 @@ export function UploadModal({
     "progress",
     "error",
     "sessionId",
-    "driveFileId",
-    "driveMimeType",
-    "driveSizeBytes",
-    "driveWebViewLink",
-    "thumbnailLink",
+    "r2Key",
   ];
 
   const updateDraft = (idx: number, patch: Partial<ItemDraft>) => {
@@ -318,16 +307,13 @@ export function UploadModal({
 
   const startUploads = async () => {
     setPhase("uploading");
-    // Run uploads sequentially to keep Drive's per-user quota happy
-    // and to give a clean progress UX. Could parallelize 2-at-a-time
-    // later if it becomes a bottleneck.
     for (let i = 0; i < drafts.length; i++) {
       const d = drafts[i];
       if (d.uploadState === "uploaded") continue;
 
       updateDraft(i, { uploadState: "uploading", progress: 0, error: undefined });
 
-      const minted = await mintUploadSession({
+      const minted = await mintR2UploadSession({
         filename: d.file.name,
         mimeType: d.file.type || "application/octet-stream",
         sizeBytes: d.file.size,
@@ -339,25 +325,24 @@ export function UploadModal({
       }
 
       try {
-        const result = await runResumableUpload({
-          uri: minted.uri,
-          file: d.file,
-          sessionId: minted.sessionId,
-          onProgress: (uploaded, total) => {
-            updateDraft(i, { progress: Math.round((uploaded / total) * 100) });
-          },
+        updateDraft(i, { progress: 10 });
+        const putRes = await fetch(minted.url, {
+          method: "PUT",
+          body: d.file,
+          headers: { "Content-Type": d.file.type || "application/octet-stream" },
         });
+        if (!putRes.ok) {
+          await abandonUploadSession(minted.sessionId);
+          updateDraft(i, { uploadState: "failed", error: `Upload failed: ${putRes.status}` });
+          continue;
+        }
+        updateDraft(i, { progress: 80 });
 
-        const finalized = await finalizeUpload({
+        const finalized = await finalizeR2Upload({
           sessionId: minted.sessionId,
-          driveFileId: result.driveFileId,
-          driveMimeType: result.driveMimeType,
-          driveSizeBytes: result.driveSizeBytes,
-          driveWebViewLink: result.driveWebViewLink ?? null,
-          thumbnailLink: result.thumbnailLink ?? null,
-          // Browser-extracted preview — image OR video frame. Becomes
-          // the table thumbnail. Falls back to Drive's thumbnailLink
-          // server-side if null.
+          key: minted.key,
+          mimeType: d.file.type || null,
+          sizeBytes: d.file.size,
           localThumbnailDataUrl: d.preview ?? null,
           title: d.title,
           contentTypeSlug: d.contentTypeSlug,
@@ -368,20 +353,13 @@ export function UploadModal({
           assignedTo: d.assignedTo,
         });
         if (!finalized.ok) {
-          updateDraft(i, {
-            uploadState: "failed",
-            error: finalized.error,
-          });
+          updateDraft(i, { uploadState: "failed", error: finalized.error });
         } else {
           updateDraft(i, {
             uploadState: "uploaded",
             progress: 100,
             sessionId: minted.sessionId,
-            driveFileId: result.driveFileId,
-            driveMimeType: result.driveMimeType,
-            driveSizeBytes: result.driveSizeBytes,
-            driveWebViewLink: result.driveWebViewLink,
-            thumbnailLink: result.thumbnailLink,
+            r2Key: minted.key,
           });
         }
       } catch (err) {
@@ -399,7 +377,7 @@ export function UploadModal({
       const ok = await dialogs.confirm({
         title: "Cancel uploads?",
         subtitle:
-          "In-progress files will stop. Files already uploaded to Drive will remain.",
+          "In-progress files will stop. Files already uploaded will remain.",
         confirmLabel: "Stop",
         tone: "destructive",
       });
@@ -635,8 +613,8 @@ function DropZone({
         Drop files here, or click to browse
       </p>
       <p className="text-text-muted text-sm">
-        Images and videos up to 2 GB. Goes straight to your Drive — Pulse
-        tracks the metadata.
+        Images and videos up to 2 GB. Stored in Pulse cloud — metadata
+        tracked automatically.
       </p>
       <input
         ref={fileInputRef}
