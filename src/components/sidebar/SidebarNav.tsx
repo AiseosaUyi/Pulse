@@ -1,10 +1,11 @@
 import { SidebarNavGroup } from "./SidebarNavGroup";
-import { navGroups } from "@/lib/nav-config";
+import { navGroupsForAccountType, type NavAccountType } from "@/lib/nav-config";
 
-export function SidebarNav() {
+export function SidebarNav({ accountType }: { accountType: NavAccountType }) {
+  const groups = navGroupsForAccountType(accountType);
   return (
     <nav aria-label="Main navigation" className="flex-1 overflow-y-auto px-3">
-      {navGroups.map((group) => (
+      {groups.map((group) => (
         <SidebarNavGroup key={group.label} group={group} />
       ))}
     </nav>

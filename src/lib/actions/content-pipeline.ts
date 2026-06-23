@@ -27,7 +27,13 @@ const createSchema = z.object({
   title: z.string().min(1).max(200),
   contentTypeSlug: z.string().nullable().optional(),
   platforms: z.array(platformSchema).default([]),
-  driveFileId: z.string().min(1),
+  // Storage: exactly one of the two blocks must be provided.
+  storageProvider: z.enum(["drive", "r2"]).default("drive"),
+  // R2 upload fields
+  storageKey: z.string().nullable().optional(),
+  storageUrl: z.string().nullable().optional(),
+  // Drive upload fields (legacy)
+  driveFileId: z.string().nullable().optional(),
   driveMimeType: z.string().nullable().optional(),
   driveSizeBytes: z.number().int().nonnegative().nullable().optional(),
   driveWebViewLink: z.string().url().nullable().optional(),
@@ -80,7 +86,10 @@ export async function createContentItem(
       title: v.title,
       content_type_slug: v.contentTypeSlug ?? null,
       platforms: v.platforms,
-      drive_file_id: v.driveFileId,
+      storage_provider: v.storageProvider,
+      storage_key: v.storageKey ?? null,
+      storage_url: v.storageUrl ?? null,
+      drive_file_id: v.driveFileId ?? null,
       drive_mime_type: v.driveMimeType ?? null,
       drive_size_bytes: v.driveSizeBytes ?? null,
       drive_web_view_link: v.driveWebViewLink ?? null,

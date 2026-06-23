@@ -1,12 +1,23 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut, Settings, Check } from "lucide-react";
+import { ChevronDown, LogOut, Settings, Check, Plus, Building2, User, Loader2 } from "lucide-react";
 import type { TenantMembership } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/Toaster";
+import { createWorkspace } from "@/app/(auth)/signup/actions";
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 interface TenantSwitcherProps {
   tenants: TenantMembership[];
@@ -15,8 +26,24 @@ interface TenantSwitcherProps {
 
 export function TenantSwitcher({ tenants, currentSlug }: TenantSwitcherProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newType, setNewType] = useState<"startup" | "individual">("startup");
+  const [newName, setNewName] = useState("");
+  const [newSlug, setNewSlug] = useState("");
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [creating, startCreate] = useTransition();
   const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
+
+  function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newName.trim() || !newSlug.trim()) return;
+    startCreate(async () => {
+      const res = await createWorkspace({ name: newName, slug: newSlug, accountType: newType });
+      // On success the action redirects; we only reach here on error.
+      if (res?.error) toast.error(res.error);
+    });
+  }
 
   const current = tenants.find((t) => t.slug === currentSlug) ?? tenants[0];
 
@@ -106,6 +133,16 @@ export function TenantSwitcher({ tenants, currentSlug }: TenantSwitcherProps) {
           ))}
 
           <div className="border-t border-white-200 mt-1 pt-1">
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                setShowCreate(true);
+              }}
+              className="flex items-center gap-3 w-full px-3 py-2 text-sm text-gray-1200 hover:bg-gray-50 transition-colors duration-150 cursor-pointer"
+            >
+              <Plus size={14} className="text-gray-500" />
+              <span>Create workspace</span>
+            </button>
             <Link
               href="/settings"
               onClick={() => setIsOpen(false)}
@@ -122,6 +159,103 @@ export function TenantSwitcher({ tenants, currentSlug }: TenantSwitcherProps) {
               <span>Sign out</span>
             </button>
           </div>
+        </div>
+      )}
+
+      {showCreate && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#000000B3] backdrop-blur-sm p-4"
+          onClick={() => setShowCreate(false)}
+        >
+          <form
+            onSubmit={handleCreate}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border border-white-200 bg-card p-6 shadow-custom-100"
+          >
+            <h2 className="text-lg font-bold text-gray-1100 [font-family:'Satoshi-700',var(--font-sans)]">
+              Create a workspace
+            </h2>
+            <p className="mt-1 text-sm text-gray-1000">
+              Pick the kind of account — it tailors your setup and tools.
+            </p>
+
+            {/* Account type */}
+            <input type="hidden" name="accountType" value={newType} />
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {([
+                { key: "startup", Icon: Building2, title: "Startup", blurb: "Full marketing OS — SEO, content, ads, outbound." },
+                { key: "individual", Icon: User, title: "Individual", blurb: "Personal posting cadence — draft, post, keep your streak." },
+              ] as const).map(({ key, Icon, title, blurb }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setNewType(key)}
+                  aria-pressed={newType === key}
+                  className={cn(
+                    "rounded-xl border p-3 text-left transition",
+                    newType === key
+                      ? "border-primary-500 bg-primary-50"
+                      : "border-white-200 hover:border-gray-400"
+                  )}
+                >
+                  <Icon className={cn("size-5", newType === key ? "text-primary-500" : "text-gray-1000")} />
+                  <span className="mt-2 block text-sm font-bold text-gray-1100">{title}</span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-gray-1000">{blurb}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3">
+              <div>
+                <label htmlFor="ws-name" className="mb-1 block text-sm text-gray-1000">
+                  {newType === "individual" ? "Your name" : "Workspace name"}
+                </label>
+                <input
+                  id="ws-name"
+                  name="name"
+                  value={newName}
+                  onChange={(e) => {
+                    setNewName(e.target.value);
+                    if (!slugEdited) setNewSlug(slugify(e.target.value));
+                  }}
+                  required
+                  className="w-full rounded-lg border border-white-200 bg-card px-3 py-2 text-base text-gray-1200 outline-none focus-visible:ring-[3px] focus-visible:ring-blue-500/30"
+                />
+              </div>
+              <div>
+                <label htmlFor="ws-slug" className="mb-1 block text-sm text-gray-1000">
+                  Handle
+                </label>
+                <input
+                  id="ws-slug"
+                  name="slug"
+                  value={newSlug}
+                  onChange={(e) => {
+                    setSlugEdited(true);
+                    setNewSlug(slugify(e.target.value));
+                  }}
+                  required
+                  placeholder="acme"
+                  className="w-full rounded-lg border border-white-200 bg-card px-3 py-2 text-base text-gray-1200 outline-none focus-visible:ring-[3px] focus-visible:ring-blue-500/30"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button type="button" size="sm" variant="tertiary" disabled={creating} onClick={() => setShowCreate(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={creating || !newName || !newSlug}>
+                {creating ? (
+                  <>
+                    <Loader2 className="animate-spin" /> Creating…
+                  </>
+                ) : (
+                  "Create & set up"
+                )}
+              </Button>
+            </div>
+          </form>
         </div>
       )}
     </div>

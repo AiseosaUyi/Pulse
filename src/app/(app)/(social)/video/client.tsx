@@ -18,7 +18,6 @@ import {
   Plus,
 } from "lucide-react";
 import { createGeneration, createSignedVideoUpload, registerVideoAsset } from "@/lib/actions/video-generate";
-import { createClient } from "@/lib/supabase/client";
 import { estimateSeedanceCredits } from "@/lib/video/providers/seedance-constraints";
 import { toast } from "@/components/ui/Toaster";
 import type { ClipMode, VideoCharacter } from "@/lib/types/video";
@@ -97,23 +96,24 @@ export function VideoStudioClient({
   async function upload(role: "source_video" | "start_frame" | "end_frame", file: File) {
     setUploading(role);
     const kind = file.type.startsWith("video/") ? "video" : "image";
-    // 1. signed URL from the server (tiny request)
+    // 1. R2 presigned PUT URL from server (tiny request)
     const signed = await createSignedVideoUpload({ contentType: file.type });
     if (!signed.success) {
       setUploading(null);
       return toast.error(signed.error);
     }
-    // 2. upload bytes DIRECTLY to Supabase Storage — no server-action body limit
-    const supabase = createClient();
-    const { error } = await supabase.storage
-      .from("generated-videos")
-      .uploadToSignedUrl(signed.path, signed.token, file, { contentType: file.type });
-    if (error) {
+    // 2. upload bytes DIRECTLY to R2 — no server-action body limit
+    const putRes = await fetch(signed.url, {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": file.type },
+    });
+    if (!putRes.ok) {
       setUploading(null);
-      return toast.error(`Upload failed: ${error.message}`);
+      return toast.error(`Upload failed: ${putRes.status}`);
     }
     // 3. register the asset
-    const reg = await registerVideoAsset({ kind, role, path: signed.path });
+    const reg = await registerVideoAsset({ kind, role, key: signed.key });
     setUploading(null);
     if (!reg.success) return toast.error(reg.error);
     const a = { id: reg.assetId, url: reg.url };

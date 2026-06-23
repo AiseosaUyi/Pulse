@@ -2,13 +2,14 @@ import { SidebarNav } from "./SidebarNav";
 import { TenantSwitcher } from "./TenantSwitcher";
 import { OnboardingChecklist } from "./OnboardingChecklist";
 import { Logo } from "@/components/ui/Logo";
-import type { TenantMembership } from "@/lib/auth";
+import type { AccountType, TenantMembership } from "@/lib/auth";
 import type { OnboardingProgress } from "@/lib/services/onboarding";
 
 interface SidebarProps {
   tenants: TenantMembership[];
   currentTenantSlug: string;
   currentTenantName: string;
+  currentAccountType: AccountType;
   onboardingProgress: OnboardingProgress;
 }
 
@@ -16,6 +17,7 @@ export function Sidebar({
   tenants,
   currentTenantSlug,
   currentTenantName,
+  currentAccountType,
   onboardingProgress,
 }: SidebarProps) {
   return (
@@ -24,13 +26,15 @@ export function Sidebar({
         <Logo size="md" />
       </div>
 
-      <OnboardingChecklist
-        progress={onboardingProgress}
-        tenantSlug={currentTenantSlug}
-        tenantName={currentTenantName}
-      />
+      {currentAccountType === "startup" && (
+        <OnboardingChecklist
+          progress={onboardingProgress}
+          tenantSlug={currentTenantSlug}
+          tenantName={currentTenantName}
+        />
+      )}
 
-      <SidebarNav />
+      <SidebarNav accountType={currentAccountType} />
 
       <TenantSwitcher tenants={tenants} currentSlug={currentTenantSlug} />
     </aside>

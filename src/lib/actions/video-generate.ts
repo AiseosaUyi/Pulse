@@ -15,8 +15,8 @@ import { advanceGeneration } from "@/lib/video/video-generation-runner";
 import type { AssetRole, AssetKind } from "@/lib/video/assets";
 import type { ClipMode } from "@/lib/types/video";
 import { randomUUID } from "node:crypto";
+import { createR2PresignedPut, r2PublicUrl } from "@/lib/storage/r2";
 
-const BUCKET = "generated-videos";
 const EXT: Record<string, string> = {
   "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm",
   "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
@@ -162,13 +162,11 @@ export async function createGeneration(
 }
 
 // Media uploads (reference video, start/end frame, character refs) go DIRECTLY
-// from the browser to Supabase Storage via a signed upload URL — the bytes
-// never pass through the Next/Vercel server action, which caps request bodies
-// at 1 MB (Next) / ~4.5 MB (Vercel) and was returning 400 for real videos.
-// Step 1: create a signed upload URL (tiny request).
+// Bytes never pass through the Next/Vercel server action (1 MB / 4.5 MB cap).
+// Step 1: create an R2 presigned PUT URL (tiny request). Browser uploads directly.
 export async function createSignedVideoUpload(input: {
   contentType: string;
-}): Promise<Result<{ path: string; token: string }>> {
+}): Promise<Result<{ key: string; url: string }>> {
   await requireUser();
   const tenant = await getCurrentTenant();
   if (!tenant) return { success: false, error: "No tenant selected" };
@@ -177,44 +175,43 @@ export async function createSignedVideoUpload(input: {
   }
   const ext = EXT[input.contentType] ?? "bin";
   const month = new Date().toISOString().slice(0, 7).replace("-", "");
-  const path = `${tenant.slug}/${month}/${randomUUID()}.${ext}`;
+  const key = `videos/${tenant.slug}/${month}/${randomUUID()}.${ext}`;
 
-  const admin = createAdminClient();
-  const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
-  if (error || !data) {
-    return { success: false, error: error?.message ?? "Could not create upload URL" };
+  try {
+    const url = await createR2PresignedPut(key, input.contentType);
+    return { success: true, key, url };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Could not create upload URL" };
   }
-  return { success: true, path, token: data.token };
 }
 
-// Step 3 (after the browser uploads to the signed URL): register the asset.
-// The publicUrl is recomputed server-side from the path we issued, so the
-// client can't inject an arbitrary URL.
+// Step 3 (after the browser PUT to the presigned URL): register the asset.
+// The publicUrl is recomputed server-side from the key we issued.
 export async function registerVideoAsset(input: {
   kind: AssetKind;
   role: AssetRole;
-  path: string;
+  key: string;
 }): Promise<Result<{ assetId: string; url: string }>> {
   const user = await requireUser();
   const tenant = await getCurrentTenant();
   if (!tenant) return { success: false, error: "No tenant selected" };
-  if (!input.path.startsWith(`${tenant.slug}/`)) {
-    return { success: false, error: "Invalid upload path" };
+  if (!input.key.startsWith(`videos/${tenant.slug}/`)) {
+    return { success: false, error: "Invalid upload key" };
   }
 
+  const storageUrl = r2PublicUrl(input.key);
   const admin = createAdminClient();
-  const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(input.path);
   const { data, error } = await admin
     .from("video_assets")
     .insert({
       tenant_slug: tenant.slug,
       kind: input.kind,
       role: input.role,
-      storage_url: pub.publicUrl,
+      storage_url: storageUrl,
       created_by: user.id,
     })
     .select("id")
     .single();
   if (error || !data) return { success: false, error: error?.message ?? "Register failed" };
-  return { success: true, assetId: data.id, url: pub.publicUrl };
+  return { success: true, assetId: data.id, url: storageUrl };
 }

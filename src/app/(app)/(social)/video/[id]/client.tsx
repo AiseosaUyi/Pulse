@@ -435,12 +435,13 @@ function ClipAssetSlot({
       try {
         const signed = await createSignedVideoUpload({ contentType: file.type });
         if (!signed.success) return toast.error(signed.error);
-        const supabase = createClient();
-        const { error } = await supabase.storage
-          .from("generated-videos")
-          .uploadToSignedUrl(signed.path, signed.token, file, { contentType: file.type });
-        if (error) return toast.error(`Upload failed: ${error.message}`);
-        const r = await registerClipAsset({ clipId, role, kind, path: signed.path });
+        const putRes = await fetch(signed.url, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": file.type },
+        });
+        if (!putRes.ok) return toast.error(`Upload failed: ${putRes.status}`);
+        const r = await registerClipAsset({ clipId, role, kind, key: signed.key });
         if (r.success) {
           toast.success(`${label} uploaded`);
           onChanged();

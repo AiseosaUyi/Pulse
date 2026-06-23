@@ -22,14 +22,19 @@ export default async function AppLayout({
   const currentTenant = await getCurrentTenant();
   const currentSlug = currentTenant?.slug ?? tenants[0].slug;
   const currentName = currentTenant?.name ?? tenants[0].name;
+  const currentAccountType = currentTenant?.accountType ?? tenants[0].accountType;
 
-  // Onboarding gate: a tenant without brand voice hasn't run the audit
-  // yet. Route them to the wizard so every AI feature in the app has
-  // real brand context from the first click. Once voice is set (or
-  // the user clicked Skip), they land in the app and the sidebar's
-  // OnboardingChecklist guides them through the remaining steps.
+  // Onboarding gate: a tenant without brand voice hasn't been set up yet.
+  // Both personas need brand voice (the composer/AI calls depend on it), so
+  // we gate on the same check — but route to the persona's own setup flow.
+  // Startups get the brand-audit wizard; individuals get the lighter personal
+  // setup. Once voice is set (or skipped), they land in the app.
   const voice = await getBrandVoice(currentSlug);
-  if (!voice) redirect("/onboarding/audit");
+  if (!voice) {
+    redirect(
+      currentAccountType === "individual" ? "/onboarding/personal" : "/onboarding/audit"
+    );
+  }
 
   const onboardingProgress = await getOnboardingProgress(currentSlug);
 
@@ -40,6 +45,7 @@ export default async function AppLayout({
         tenants={tenants}
         currentTenantSlug={currentSlug}
         currentTenantName={currentName}
+        currentAccountType={currentAccountType}
         onboardingProgress={onboardingProgress}
       />
       <div className="flex h-full">
@@ -48,6 +54,7 @@ export default async function AppLayout({
             tenants={tenants}
             currentTenantSlug={currentSlug}
             currentTenantName={currentName}
+            currentAccountType={currentAccountType}
             onboardingProgress={onboardingProgress}
           />
         </div>

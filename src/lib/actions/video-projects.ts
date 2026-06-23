@@ -446,29 +446,29 @@ export async function updateClip(
   return { success: true };
 }
 
-// Attach an uploaded asset (browser → Supabase via signed URL) to a clip.
+// Attach an uploaded asset (browser → R2 via presigned PUT) to a clip.
 export async function registerClipAsset(input: {
   clipId: string;
   role: "source_video" | "start_frame" | "end_frame";
   kind: "video" | "image";
-  path: string;
+  key: string;
 }): Promise<Result<{ assetId: string }>> {
   const user = await requireUser();
   const tenant = await getCurrentTenant();
   if (!tenant) return { success: false, error: "No tenant selected" };
-  if (!input.path.startsWith(`${tenant.slug}/`)) return { success: false, error: "Invalid upload path" };
+  if (!input.key.startsWith(`videos/${tenant.slug}/`)) return { success: false, error: "Invalid upload key" };
   const gate = await loadEditableClip(input.clipId);
   if (!gate.ok) return { success: false, error: gate.error };
 
+  const { r2PublicUrl } = await import("@/lib/storage/r2");
   const admin = createAdminClient();
-  const { data: pub } = admin.storage.from("generated-videos").getPublicUrl(input.path);
   const { data: asset, error } = await admin
     .from("video_assets")
     .insert({
       tenant_slug: tenant.slug,
       kind: input.kind,
       role: input.role,
-      storage_url: pub.publicUrl,
+      storage_url: r2PublicUrl(input.key),
       created_by: user.id,
     })
     .select("id")

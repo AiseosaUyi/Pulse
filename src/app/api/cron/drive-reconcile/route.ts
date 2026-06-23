@@ -26,7 +26,7 @@ interface TenantRow {
 
 interface ItemRow {
   id: string;
-  drive_file_id: string;
+  drive_file_id: string | null;
   drive_status: string;
   drive_web_view_link: string | null;
   title: string;
@@ -75,18 +75,20 @@ export async function POST(req: Request): Promise<Response> {
       const { data: items } = await admin
         .from("content_items")
         .select("id, drive_file_id, drive_status, drive_web_view_link, title")
-        .eq("tenant_slug", t.tenant_slug);
+        .eq("tenant_slug", t.tenant_slug)
+        .eq("storage_provider", "drive");
       if (!items || items.length === 0) {
         summary.tenantsProcessed++;
         continue;
       }
 
-      const driveIds = (items as ItemRow[]).map((r) => r.drive_file_id);
+      const driveRows = (items as ItemRow[]).filter((r) => r.drive_file_id != null);
+      const driveIds = driveRows.map((r) => r.drive_file_id as string);
       const meta = await batchGetFiles(accessToken, driveIds);
       summary.itemsChecked += driveIds.length;
 
-      for (const row of items as ItemRow[]) {
-        const m = meta.get(row.drive_file_id);
+      for (const row of driveRows) {
+        const m = meta.get(row.drive_file_id as string);
         // batchGetFiles maps auth_revoked errors out (those throw),
         // and returns null for 404 / permission_denied alike — we
         // surface 'missing' for either since the user-visible

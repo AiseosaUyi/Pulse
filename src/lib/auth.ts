@@ -10,10 +10,13 @@ export interface UserProfile {
   avatarUrl: string | null;
 }
 
+export type AccountType = "startup" | "individual";
+
 export interface TenantMembership {
   slug: string;
   name: string;
   role: "owner" | "admin" | "member";
+  accountType: AccountType;
 }
 
 // Returns the logged-in user + profile, or null. Does not redirect.
@@ -56,7 +59,7 @@ export async function getUserTenants(): Promise<TenantMembership[]> {
   // owner row to a user who's only a member of the same tenant.
   const { data, error } = await supabase
     .from("memberships")
-    .select("role, tenant_slug, tenants (slug, name)")
+    .select("role, tenant_slug, tenants (slug, name, account_type)")
     .eq("user_id", user.id)
     .order("created_at", { ascending: true });
 
@@ -70,6 +73,7 @@ export async function getUserTenants(): Promise<TenantMembership[]> {
         slug: t.slug,
         name: t.name,
         role: row.role as TenantMembership["role"],
+        accountType: (t.account_type as AccountType) ?? "startup",
       };
     })
     .filter((x): x is TenantMembership => x !== null);

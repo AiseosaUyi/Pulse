@@ -1,13 +1,11 @@
-// Video asset storage. Uploads reference inputs + generated clips into the
-// public `generated-videos` bucket (Pulse-owned, so PicsArt can fetch them by
-// URL) and registers a video_assets row. Mirrors save-asset.ts but for the
-// video bucket — kept separate so the shared util is untouched.
+// Video asset storage. Uploads reference inputs + generated clips into
+// Cloudflare R2 (videos/{tenant}/{yyyymm}/{sha256}.{ext}) and registers
+// a video_assets row. Mirrors save-asset.ts but for video assets.
 
 import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { uploadToR2, r2PublicUrl } from "@/lib/storage/r2";
 import type { VideoAsset } from "@/lib/types/video";
-
-const BUCKET = "generated-videos";
 
 const EXT: Record<string, string> = {
   "video/mp4": "mp4",
@@ -51,16 +49,10 @@ export async function storeVideoAsset(
   const sha = createHash("sha256").update(input.bytes).digest("hex");
   const month = new Date().toISOString().slice(0, 7).replace("-", "");
   const ext = EXT[input.mime] ?? "bin";
-  const path = `${input.tenantSlug}/${month}/${sha}.${ext}`;
+  const key = `videos/${input.tenantSlug}/${month}/${sha}.${ext}`;
 
-  const { error: upErr } = await admin.storage.from(BUCKET).upload(path, input.bytes, {
-    contentType: input.mime,
-    upsert: true,
-  });
-  if (upErr) throw new Error(`Video upload failed: ${upErr.message}`);
-
-  const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(path);
-  const storageUrl = pub.publicUrl;
+  await uploadToR2(key, input.bytes, input.mime);
+  const storageUrl = r2PublicUrl(key);
 
   // Dedupe row by (tenant, content_hash).
   const { data: existing } = await admin

@@ -12,7 +12,6 @@ import {
   archiveCharacter,
 } from "@/lib/actions/video-characters";
 import { createSignedVideoUpload } from "@/lib/actions/video-generate";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "@/components/ui/Toaster";
 import type { VideoCharacter } from "@/lib/types/video";
 
@@ -96,15 +95,16 @@ function CharacterCard({
     if (!file) return;
     if (!file.type.startsWith("image/")) return toast.error("Reference must be an image");
     startT(async () => {
-      // Signed-URL direct upload (browser → Supabase), then register.
+      // R2 presigned PUT upload (browser → R2 directly), then register.
       const signed = await createSignedVideoUpload({ contentType: file.type });
       if (!signed.success) return toast.error(signed.error);
-      const supabase = createClient();
-      const { error } = await supabase.storage
-        .from("generated-videos")
-        .uploadToSignedUrl(signed.path, signed.token, file, { contentType: file.type });
-      if (error) return toast.error(`Upload failed: ${error.message}`);
-      const r = await registerCharacterReference(character.id, signed.path);
+      const putRes = await fetch(signed.url, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+      if (!putRes.ok) return toast.error(`Upload failed: ${putRes.status}`);
+      const r = await registerCharacterReference(character.id, signed.key);
       if (r.success) {
         toast.success("Reference added");
         router.refresh();

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PasswordInput } from "@/components/ui/PasswordInput";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signup, completeCompany } from "./actions";
+import { AccountFields } from "./AccountFields";
+import { SubmitButton } from "./SubmitButton";
 
 interface InviteContext {
   email: string;
@@ -48,10 +49,10 @@ export default async function SignupPage({
           className="text-xl text-gray-1100 mb-1"
           style={{ fontFamily: "'Satoshi-900', var(--font-sans)" }}
         >
-          Create a company
+          Set up your workspace
         </h2>
         <p className="text-sm text-gray-1000 mb-6">
-          Your account isn&apos;t attached to a company yet.
+          Your account isn&apos;t attached to a workspace yet.
         </p>
 
         {params.error && (
@@ -61,25 +62,8 @@ export default async function SignupPage({
         )}
 
         <form action={completeCompany} className="space-y-5">
-          <div>
-            <Label htmlFor="sc-name">Company name</Label>
-            <Input id="sc-name" type="text" name="companyName" required placeholder="Acme Co." />
-          </div>
-          <div>
-            <Label htmlFor="sc-slug">Company handle</Label>
-            <Input
-              id="sc-slug"
-              type="text"
-              name="companySlug"
-              required
-              pattern="[a-z0-9-]+"
-              placeholder="acme-co"
-            />
-            <p className="mt-1 text-xs text-gray-500">Lowercase letters, numbers, and hyphens.</p>
-          </div>
-          <Button type="submit" size="xl" className="w-full">
-            Create company
-          </Button>
+          <AccountFields />
+          <SubmitButton>Create &amp; set up</SubmitButton>
         </form>
       </div>
     );
@@ -139,28 +123,11 @@ export default async function SignupPage({
         {!invite && (
           <>
             <div className="pt-2 border-t border-white-200" />
-            <div>
-              <Label htmlFor="su-cname">Company name</Label>
-              <Input id="su-cname" type="text" name="companyName" required placeholder="Acme Co." />
-            </div>
-            <div>
-              <Label htmlFor="su-cslug">Company handle</Label>
-              <Input
-                id="su-cslug"
-                type="text"
-                name="companySlug"
-                required
-                pattern="[a-z0-9-]+"
-                placeholder="acme-co"
-              />
-              <p className="mt-1 text-xs text-gray-500">Lowercase letters, numbers, and hyphens.</p>
-            </div>
+            <AccountFields />
           </>
         )}
 
-        <Button type="submit" size="xl" className="w-full">
-          {invite ? "Join company" : "Create account"}
-        </Button>
+        <SubmitButton>{invite ? "Join company" : "Create account"}</SubmitButton>
       </form>
 
       <p className="mt-6 text-sm text-gray-1000 text-center">

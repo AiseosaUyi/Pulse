@@ -13,6 +13,8 @@ import {
 import { getActiveAccessToken } from "@/lib/services/drive-connections";
 import { createContentItem } from "@/lib/actions/content-pipeline";
 import { DEFAULT_CONTENT_SECTIONS } from "@/lib/types/content-pipeline";
+import { createR2PresignedPut, uploadToR2, r2PublicUrl } from "@/lib/storage/r2";
+import { randomUUID } from "node:crypto";
 
 const STORAGE_BUCKET = "saved-assets";
 const MAX_THUMB_BYTES = 1 * 1024 * 1024; // 1 MB cap for jpeg thumbs
@@ -270,6 +272,7 @@ export async function finalizeUpload(
     title: v.title,
     contentTypeSlug: v.contentTypeSlug ?? null,
     platforms: v.platforms as never,
+    storageProvider: "drive",
     driveFileId: v.driveFileId,
     driveMimeType: v.driveMimeType ?? null,
     driveSizeBytes: v.driveSizeBytes ?? null,
@@ -300,9 +303,8 @@ export async function finalizeUpload(
 }
 
 /**
- * Decode a `data:image/jpeg;base64,...` URL coming from the browser
- * preview, validate size, and write to Supabase Storage. Returns
- * the storage key on success or null on any failure.
+ * Decode a `data:image/jpeg;base64,...` URL and upload to R2.
+ * Used by the Drive finalize path for legacy Drive uploads.
  */
 async function tryCacheLocalThumbnail(args: {
   tenantSlug: string;
@@ -310,30 +312,22 @@ async function tryCacheLocalThumbnail(args: {
   dataUrl: string;
 }): Promise<string | null> {
   try {
-    const match = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(
-      args.dataUrl
-    );
+    const match = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(args.dataUrl);
     if (!match) return null;
     const [, mime, b64] = match;
     const buf = Buffer.from(b64, "base64");
     if (buf.byteLength === 0 || buf.byteLength > MAX_THUMB_BYTES) return null;
     const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
-    const path = `pipeline-thumbs/${args.tenantSlug}/${args.driveFileId}.${ext}`;
-    const admin = createAdminClient();
-    const { error } = await admin.storage
-      .from(STORAGE_BUCKET)
-      .upload(path, buf, { contentType: mime, upsert: true });
-    if (error) return null;
-    return path;
+    const key = `thumbs/${args.tenantSlug}/drive-${args.driveFileId}.${ext}`;
+    await uploadToR2(key, buf, mime);
+    return key;
   } catch {
     return null;
   }
 }
 
 /**
- * Best-effort fallback when the browser couldn't extract a frame
- * (rare — exotic codecs, very long videos). Pulls Drive's
- * thumbnailLink and caches it to the same bucket.
+ * Best-effort fallback — pull Drive's thumbnailLink and cache to R2.
  */
 async function tryCacheThumbnail(args: {
   tenantSlug: string;
@@ -347,16 +341,9 @@ async function tryCacheThumbnail(args: {
     });
     if (!res.ok) return null;
     const buf = Buffer.from(await res.arrayBuffer());
-    const path = `pipeline-thumbs/${args.tenantSlug}/${args.driveFileId}.jpg`;
-    const admin = createAdminClient();
-    const { error } = await admin.storage
-      .from(STORAGE_BUCKET)
-      .upload(path, buf, {
-        contentType: "image/jpeg",
-        upsert: true,
-      });
-    if (error) return null;
-    return path;
+    const key = `thumbs/${args.tenantSlug}/drive-${args.driveFileId}.jpg`;
+    await uploadToR2(key, buf, "image/jpeg");
+    return key;
   } catch {
     return null;
   }
@@ -392,7 +379,7 @@ export async function listMyPendingUploads(): Promise<
     filename: string;
     sizeBytes: number;
     sectionSlug: string;
-    driveResumableUri: string;
+    driveResumableUri: string | null;
     createdAt: string;
   }>
 > {
@@ -415,7 +402,7 @@ export async function listMyPendingUploads(): Promise<
       filename: string;
       size_bytes: number;
       section_slug: string;
-      drive_resumable_uri: string;
+      drive_resumable_uri: string | null;
       created_at: string;
     }>
   ).map((r) => ({
@@ -426,4 +413,181 @@ export async function listMyPendingUploads(): Promise<
     driveResumableUri: r.drive_resumable_uri,
     createdAt: r.created_at,
   }));
+}
+
+// ── R2 upload path ────────────────────────────────────────────────────
+// Simpler than Drive: no OAuth, no resumable session, no folder mgmt.
+// Server mints a presigned PUT URL → browser PUTs file directly to R2
+// → server registers the content_item row.
+
+const mintR2Schema = z.object({
+  filename: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(255),
+  sizeBytes: z.number().int().positive().max(MAX_UPLOAD_BYTES),
+  sectionSlug: z.string().min(1),
+});
+
+export interface MintR2SessionResult {
+  ok: true;
+  sessionId: string;
+  key: string;  // R2 object key — browser uses this in finalizeR2Upload
+  url: string;  // Presigned PUT URL — browser uploads file bytes here
+}
+
+/** Mint an R2 presigned PUT URL for the browser to upload directly. */
+export async function mintR2UploadSession(
+  input: z.infer<typeof mintR2Schema>
+): Promise<MintR2SessionResult | { ok: false; error: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not authenticated" };
+  const tenant = await getCurrentTenant();
+  if (!tenant) return { ok: false, error: "No tenant" };
+
+  const parsed = mintR2Schema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const v = parsed.data;
+
+  const ext = v.filename.split(".").pop()?.toLowerCase() ?? "bin";
+  const key = `pipeline/${tenant.slug}/${v.sectionSlug}/${randomUUID()}.${ext}`;
+
+  let url: string;
+  try {
+    url = await createR2PresignedPut(key, v.mimeType);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not create upload URL" };
+  }
+
+  const admin = createAdminClient();
+  const { data: row, error: insErr } = await admin
+    .from("content_upload_sessions")
+    .insert({
+      tenant_slug: tenant.slug,
+      user_id: user.id,
+      storage_provider: "r2",
+      r2_key: key,
+      filename: v.filename,
+      size_bytes: v.sizeBytes,
+      section_slug: v.sectionSlug,
+    })
+    .select("id")
+    .single();
+  if (insErr || !row) {
+    return { ok: false, error: `Couldn't persist upload session: ${insErr?.message ?? "unknown"}` };
+  }
+
+  return { ok: true, sessionId: row.id as string, key, url };
+}
+
+const finalizeR2Schema = z.object({
+  sessionId: z.string().uuid(),
+  key: z.string().min(1),
+  mimeType: z.string().nullable().optional(),
+  sizeBytes: z.number().int().nonnegative().nullable().optional(),
+  localThumbnailDataUrl: z.string().nullable().optional(),
+  title: z.string().min(1).max(200),
+  contentTypeSlug: z.string().nullable().optional(),
+  platforms: z.array(z.string()).default([]),
+  scheduledAt: z.string().datetime().nullable().optional(),
+  assignedTo: z.string().uuid().nullable().optional(),
+});
+
+/**
+ * Called after the browser PUT to R2 completes. Registers the
+ * content_items row and marks the session complete.
+ */
+export async function finalizeR2Upload(
+  input: z.infer<typeof finalizeR2Schema>
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not authenticated" };
+  const tenant = await getCurrentTenant();
+  if (!tenant) return { ok: false, error: "No tenant" };
+
+  const parsed = finalizeR2Schema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const v = parsed.data;
+
+  if (!v.key.startsWith(`pipeline/${tenant.slug}/`)) {
+    return { ok: false, error: "Invalid upload key" };
+  }
+
+  const admin = createAdminClient();
+  const { data: session } = await admin
+    .from("content_upload_sessions")
+    .select("id, section_slug, status, r2_key")
+    .eq("id", v.sessionId)
+    .eq("user_id", user.id)
+    .eq("storage_provider", "r2")
+    .maybeSingle();
+  if (!session) return { ok: false, error: "Upload session not found" };
+  if ((session as { r2_key: string }).r2_key !== v.key) {
+    return { ok: false, error: "Key mismatch — upload session does not match this key" };
+  }
+
+  // Cache thumbnail to R2 if the browser captured a preview frame.
+  let thumbnailStorageKey: string | null = null;
+  if (v.localThumbnailDataUrl) {
+    thumbnailStorageKey = await tryCacheR2Thumbnail({
+      tenantSlug: tenant.slug,
+      sourceKey: v.key,
+      dataUrl: v.localThumbnailDataUrl,
+    });
+  }
+
+  const storageUrl = r2PublicUrl(v.key);
+  const created = await createContentItem({
+    sectionSlug: (session as { section_slug: string }).section_slug,
+    title: v.title,
+    contentTypeSlug: v.contentTypeSlug ?? null,
+    platforms: v.platforms as never,
+    storageProvider: "r2",
+    storageKey: v.key,
+    storageUrl,
+    thumbnailStorageKey,
+  });
+  if (!created.ok) return created;
+
+  if (v.scheduledAt || v.assignedTo) {
+    await admin
+      .from("content_items")
+      .update({
+        scheduled_at: v.scheduledAt ?? null,
+        assigned_to: v.assignedTo ?? null,
+      })
+      .eq("id", created.data.id);
+  }
+
+  await admin
+    .from("content_upload_sessions")
+    .update({ status: "complete", finalized_at: new Date().toISOString() })
+    .eq("id", v.sessionId);
+
+  revalidatePath("/content-vault/pipeline");
+  return { ok: true, id: created.data.id };
+}
+
+async function tryCacheR2Thumbnail(args: {
+  tenantSlug: string;
+  sourceKey: string;
+  dataUrl: string;
+}): Promise<string | null> {
+  try {
+    const match = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(args.dataUrl);
+    if (!match) return null;
+    const [, mime, b64] = match;
+    const buf = Buffer.from(b64, "base64");
+    if (buf.byteLength === 0 || buf.byteLength > MAX_THUMB_BYTES) return null;
+    const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
+    // Derive thumb key from the source key's UUID segment.
+    const uuid = args.sourceKey.split("/").pop()?.split(".")[0] ?? randomUUID();
+    const thumbKey = `thumbs/${args.tenantSlug}/${uuid}.${ext}`;
+    await uploadToR2(thumbKey, buf, mime);
+    return thumbKey;
+  } catch {
+    return null;
+  }
 }

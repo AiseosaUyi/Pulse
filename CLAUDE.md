@@ -17,7 +17,7 @@ pnpm db:seed      # One-time founder + Gruve/Sippy seed (reads SEED_* + SUPABASE
 
 Single test: `pnpm test tests/unit/foo.test.ts`. Tests live under `tests/unit`, `tests/integration`, `tests/smoke`, `tests/e2e`. Playwright config at `playwright.config.ts`, Vitest at `vitest.config.ts`.
 
-DB migrations live in `supabase/migrations/`, named `NNN_*.sql` — currently through 042. Apply via Supabase SQL Editor (paste + run) or `supabase db push` after `supabase login --token <pat>` and `supabase link --project-ref <ref>`.
+DB migrations live in `supabase/migrations/`, named `NNN_*.sql` — currently through 067 (063 = cadence_loop, 064 = account_type, 065 = engage_candidates, 066 = platform_connections, 067 = scheduled_posts). Apply via Supabase SQL Editor (paste + run) or `supabase db push` after `supabase login --token <pat>` and `supabase link --project-ref <ref>`. The user typically runs migrations by hand in the SQL Editor, so the migration *number* (not the SQL) is what they need from you.
 
 When modifying a table, **grep prior migrations first** — retrofits later in the chain can change column shapes/RLS for tables defined earlier (e.g. 002 retrofit affected 009).
 
@@ -34,7 +34,7 @@ One-off tenant cleanup scripts live in `supabase/cleanups/` (e.g. `wipe-tenant-m
 - Lucide React for icons
 - Vercel deployment (push to `main` triggers deploy)
 
-Required env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`. Cron + local-only: `CRON_SECRET`, `SEED_*`.
+Required env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`. Storage (Cloudflare R2): `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL`. Cron + local-only: `CRON_SECRET`, `SEED_*`. Social publishing: `SOCIAL_API_KEY` (SocialAPI.ai unified publisher — covers Instagram/LinkedIn/TikTok/YouTube, no per-platform reviews, $29/mo Side Hustle plan at social-api.ai), `PLATFORM_TOKEN_KEY` (32-byte base64 AES key), `NEXT_PUBLIC_APP_URL`. X OAuth (optional, paid only): `X_CLIENT_ID`, `X_CLIENT_SECRET`. YouTube direct OAuth (optional fallback): `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`. Scheduling: `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY`.
 
 ## Authentication & multi-tenancy
 
@@ -75,8 +75,8 @@ src/app/
     ├── settings/         ← has own layout.tsx with inner nav; sections are sub-routes
     ├── (overview)/       (dashboard, own-analytics, weekly-report)
     ├── (content)/        (content-vault)
-    ├── (social)/         (engagement, platform-score, viral-trends, ai-content, post-history)
-    ├── (growth)/         (leads → Outbound rebuild, ads-tracker → Ads Critic)
+    ├── (social)/         (engagement, platform-score, viral-trends, ai-content, post-history, video, broadcasts, composer, engage, today, schedule)
+    ├── (growth)/         (leads → Outbound rebuild, ads-tracker → Ads Critic, orders)
     └── (intelligence)/   (intel-feed, content-briefs (redirect), seo-tracker/*, competition)
 ```
 
@@ -84,7 +84,7 @@ Route groups don't appear in URLs. The `(app)` group exists so the auth pages do
 
 ## Settings
 
-`/settings` has its own `layout.tsx` with an inner nav (`src/components/settings/SettingsNav.tsx`) — left sidebar on desktop, sticky horizontal chip row on mobile. Each section is its own route (`/settings/profile`, `/settings/team`, `/settings/security`, `/settings/appearance`, `/settings/notifications`, `/settings/brand-voice`, `/settings/brand-positioning`, `/settings/trend-scouts`, `/settings/integrations`, `/settings/ai-usage`, `/settings/storage`). `/settings` redirects to `/settings/profile`. Sub-routes use `SettingsPageHeading` from `./_shared.tsx` for consistency.
+`/settings` has its own `layout.tsx` with an inner nav (`src/components/settings/SettingsNav.tsx`) — left sidebar on desktop, sticky horizontal chip row on mobile. Each section is its own route (`/settings/profile`, `/settings/team`, `/settings/security`, `/settings/appearance`, `/settings/notifications`, `/settings/brand-voice`, `/settings/brand-positioning`, `/settings/trend-scouts`, `/settings/integrations`, `/settings/ai-usage`, `/settings/storage`, `/settings/social-publishing`, `/settings/cadence`). `/settings` redirects to `/settings/profile`. Sub-routes use `SettingsPageHeading` from `./_shared.tsx` for consistency.
 
 ## Data layer pattern
 
@@ -97,6 +97,10 @@ lib/integrations/[module].ts → External API wrappers (server-only, e.g. GA4)
 ```
 
 Components call services, never mock data or Supabase directly. Cross-tenant aggregations (`cross-brand.ts`, cron jobs, `/api/ext/*`) use the admin client.
+
+**Two cross-cutting gotchas (each cost real debugging time):**
+1. **Service-role callers fail membership-gated RPCs.** `is_tenant_member(slug)` / `tenant_role(slug)` resolve via `auth.uid()`, which is **null** for the admin/service-role client. So any SECURITY DEFINER RPC that checks `is_tenant_member` (e.g. the `transition_*_status` RPCs) raises `forbidden` when called from cron / a runner / the admin client. System-actor code must apply the same optimistic-version UPDATE + audit INSERT **directly via admin** (which legitimately bypasses RLS), not through the RPC. The video runner's `transitionRunner` is the reference; human-driven actions still use the RPC (real `auth.uid()`).
+2. **Server Actions cap request bodies at ~1 MB** (Next) / ~4.5 MB (Vercel) — uploading a real image/video through a Server Action returns 400. The pattern is a **signed upload URL**: a tiny action returns `{path, token}` from `admin.storage.from(bucket).createSignedUploadUrl(path)`, the browser does `supabase.storage.from(bucket).uploadToSignedUrl(path, token, file)` (bytes go straight to Supabase), then a second action registers the asset (recomputing the public URL server-side). See `createSignedVideoUpload` / `registerVideoAsset` in `lib/actions/video-generate.ts`.
 
 **Most modules are now Supabase-backed.** The `src/lib/data/mock-*.ts` files still exist but are largely orphaned after the Slice 6/7 rebuild. Real tables now back: blog posts + versions + feedback + regeneration, content distributions, competitors + intel cards + content briefs, trend scouts, own post metrics, weekly digests + reviews, programmatic SEO, coach actions, prospects + outbound DMs + inbound messages + prospect searches, tenant integrations (GA4), tenant API tokens, web analytics daily.
 
@@ -122,8 +126,26 @@ All AI calls go through `src/lib/ai/gateway.ts`:
 - **GA4 analytics** (Slice 7a): `src/lib/integrations/ga4.ts` — service-account JWT auth, no extra deps. `web_analytics_daily` table. Feeds the Weekly Business Review.
 - **Weekly Business Review** (Slice 7a): `src/lib/ai/weekly-review.ts` — synthesizes module counts into a narrative. Dashboard banner, stored on extended `weekly_digests`.
 - **Content Pipeline** (P8): `/content-vault/pipeline` — Drive-backed media library with metadata + status + scheduling. Resumable PUT to `/api/integrations/drive/upload-chunk` streams files straight to the user's connected Drive; `content_items` (041) holds the metadata; `042` adds the status enum. Daily `drive-reconcile` cron flags missing/permission-lost files. Drive OAuth lives at `/api/integrations/drive/{connect,callback}`. Tabs: `Extracts` (legacy Saved) + `Pipeline`. The `Saved` directory still exists at `/content-vault/saved` — only the label was renamed.
+- **SEO engine**: large module under `seo-tracker/*` (blog-writer, topical-map, serp-analysis, programmatic). Durable publish pipeline `src/lib/seo/publish-runner.ts` (checkpoint steps in a runs/steps table, resume from first non-ok step — the canonical durable-run pattern), optimistic-version status RPC `transition_blog_post_status` (mig 044), a fleet of `seo-*` crons, and a `/.well-known` JWKS path for signing previews that `src/proxy.ts` exempts from auth.
+- **Order/attribution spine** (PRD): `/api/orders/webhook` ingests orders; short links `/app/r/[code]` + `keyword-deeplink.ts` attribute traffic; per-tenant scrape config (`src/lib/scrape/discovery-config.ts`, `/settings/discovery`) so each tenant scrapes its own platforms (Gruve = ticketing, Sippy = drinks, etc.) via `scrape-ticketing-platforms` cron; `/settings/system-health` surfaces cron/observability; dashboard `SetupBanner` tracks launch-checklist steps.
+- **WhatsApp broadcasts**: `src/lib/integrations/whatsapp.ts` + `/api/integrations/whatsapp` + `lib/actions/broadcasts.ts`, surfaced at `/broadcasts`.
+- **Social Publishing Engine** (feat/ai-seo-os): multi-platform post scheduling. `platform_connections` table (mig 066) stores SocialAPI.ai account IDs (not OAuth tokens) per `tenant_slug + platform`. `scheduled_posts` table (mig 067) holds drafts; QStash delivers them at the right time via `/api/webhooks/qstash-publish`. YouTube uses direct OAuth (`YOUTUBE_CLIENT_ID/SECRET`); Instagram/LinkedIn/TikTok route through SocialAPI.ai (`SOCIAL_API_KEY`). The `/api/webhooks/qstash-ig-publish` endpoint (Instagram two-step container flow) is now unused — SocialAPI.ai handles Instagram internally. Settings UI at `/settings/social-publishing`. Scheduling actions at `src/lib/actions/schedule.ts`. `platform_connections.access_token_enc = 'socialapi-managed'` is the sentinel for SocialAPI-backed rows (no real token stored).
+- **Composer**: `/composer` — AI-assisted post drafting per platform. `src/lib/actions/compose.ts` + `src/lib/ai/compose-take.ts`. Drafts can be scheduled directly from the Composer via `schedulePost()` / `publishNow()`.
+- **Engage**: `/engage` — discover and reply to conversations. `src/lib/services/engage.ts` + `src/lib/ai/engage.ts`. `engage_candidates` table (mig 065).
+- **Today**: `/today` — daily cadence dashboard showing today's posting windows and what's behind.
+- **Cadence loop**: posting-rhythm engine. Config stored in `tenants.settings.cadence` (JSONB, same `jsonb_set` pattern as `platforms`). `src/lib/cadence/` — `types.ts` (Zod schemas), `config.ts` (reader), `compute.ts` (tracker math), `digest.ts` (daily digest email). `cadence_log` table (mig 063). Settings UI at `/settings/cadence` (`CadenceEditor` component). Daily digest cron at `/api/cron/cadence-digest`. Cadence currently targets X and LinkedIn only (see `cadencePlatforms` in `types.ts`).
+- **Video Generation Engine** (see its own section below).
 
 The 100x product roadmap is `docs/pulse-100x-roadmap.md`. Long-form context for the most recent roadmap items lives in `TODOS.md` under `## P8`.
+
+## Video Generation Engine
+
+Turns approved content (or a free-text prompt) into short-form video on ByteDance **Seedance** via the **PicsArt GenAI API**. Lives under `/video` (composer + history), `/video/[id]` (project detail + editable storyboard), `/video/characters` (reusable character registry — the moat). Migrations **060–062**; tables `video_projects / video_clips / video_characters / video_assets / video_generation_runs(+_steps) / video_render_jobs`, plus `ai_call_log.credits`.
+
+- **Provider boundary.** `src/lib/video/providers/types.ts` defines `VideoProvider`; `picsart.ts` is the ONLY file touching the PicsArt API (`https://genai-api.picsart.io`, header `X-Picsart-API-Key`). A provider swap = one new file. The module is dormant until `PICSART_API_KEY` is set (`isPicsartConfigured()` graceful-degrades).
+- **PicsArt API surface is small and fixed:** only `POST /v1/text2video` and `POST /v1/image2video` (→ `202 {inference_id}`, poll `GET /v1/video/{id}`), plus `GET /v1/balance` → `{credits}`. There is **no video-to-video / "recreate" endpoint and no per-job cost/history** — `image2video` takes an image only, never a source video. The composer's "Recreate" mode is therefore disabled ("Soon"); true v2v would require a different provider (e.g. fal reference-to-video).
+- **Durable runner.** `src/lib/video/video-generation-runner.ts` clones the SEO publish-runner pattern. Driven by `GET /api/video/projects/[id]/status` (client polls ~5s) + the `video-maintenance` cron backstop.
+- **Credits are estimates, not truth.** `estimateSeedanceCredits()` in `providers/seedance-constraints.ts` is `(baseCredits + creditsPerSecond·s)·resMult` — calibrated, NOT exact. PicsArt deducts the real amount on generate and exposes no dry-run price. The budget gate (`src/lib/video/budget.ts`) enforces the live `/v1/balance` AND the USD ceiling; `scripts/calibrate-credits.ts` (balance before/after one clip) refines the rates after a top-up. Real Seedance cost is high (a 1s/480p Pro clip already exceeds 50 credits).
 
 ## Theming
 

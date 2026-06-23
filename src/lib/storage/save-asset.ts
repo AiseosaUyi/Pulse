@@ -1,13 +1,15 @@
 // Asset download + upload pipeline. Used by the vault extractor and
 // anything else that needs to pull a remote media URL into our own
-// Supabase Storage bucket. Guards against SSRF (only known CDN hosts
+// Cloudflare R2 bucket. Guards against SSRF (only known CDN hosts
 // allowed), caps file size at 50 MB, and returns a content hash so the
 // caller can dedup.
 
 import { createHash } from "node:crypto";
+import { uploadToR2, r2PublicUrl, deleteFromR2, isR2Configured } from "@/lib/storage/r2";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const MAX_ASSET_BYTES = 50 * 1024 * 1024; // 50 MB
+/** @deprecated bucket name kept for backward compat during migration */
 export const STORAGE_BUCKET = "saved-assets";
 const FETCH_TIMEOUT_MS = 30_000;
 
@@ -214,31 +216,24 @@ export async function uploadAsset(
   asset: FetchedAsset,
   options: { suffix?: string } = {}
 ): Promise<UploadedAsset> {
-  const admin = createAdminClient();
   const month = new Date().toISOString().slice(0, 7).replace("-", ""); // yyyymm
   const suffix = options.suffix ? `-${options.suffix}` : "";
   const filename = `${asset.sha256}${suffix}.${asset.extension}`;
-  const path = `${tenantSlug}/${month}/${filename}`;
+  const key = `assets/${tenantSlug}/${month}/${filename}`;
 
-  const { error } = await admin.storage
-    .from(STORAGE_BUCKET)
-    .upload(path, asset.bytes, {
-      contentType: asset.mime,
-      upsert: true, // hash-based path means same bytes = same path; upsert is safe
-    });
-
-  if (error) {
+  try {
+    await uploadToR2(key, asset.bytes, asset.mime);
+  } catch (err) {
     throw new SaveAssetError(
-      `Storage upload failed: ${error.message}`,
+      `R2 upload failed: ${err instanceof Error ? err.message : String(err)}`,
       "upload_failed",
-      error
+      err
     );
   }
 
-  const { data } = admin.storage.from(STORAGE_BUCKET).getPublicUrl(path);
   return {
-    storagePath: path,
-    publicUrl: data.publicUrl,
+    storagePath: key,
+    publicUrl: r2PublicUrl(key),
     mime: asset.mime,
     sizeBytes: asset.bytes.length,
     sha256: asset.sha256,
@@ -246,13 +241,32 @@ export async function uploadAsset(
 }
 
 export async function deleteAsset(storagePath: string): Promise<void> {
-  const admin = createAdminClient();
-  await admin.storage.from(STORAGE_BUCKET).remove([storagePath]);
+  if (isLegacySupabasePath(storagePath)) {
+    const admin = createAdminClient();
+    await admin.storage.from(STORAGE_BUCKET).remove([storagePath]);
+    return;
+  }
+  await deleteFromR2(storagePath);
 }
 
 export function publicUrlFor(storagePath: string | null): string | null {
   if (!storagePath) return null;
-  const admin = createAdminClient();
-  const { data } = admin.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
-  return data.publicUrl;
+  if (isLegacySupabasePath(storagePath)) {
+    // Legacy path written before R2 migration — serve from Supabase Storage.
+    const admin = createAdminClient();
+    const { data } = admin.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
+    return data.publicUrl;
+  }
+  if (!isR2Configured()) return null;
+  return r2PublicUrl(storagePath);
+}
+
+/** Paths without a prefix segment (e.g. "tenant/yyyymm/hash.ext") are Supabase-era. */
+function isLegacySupabasePath(p: string): boolean {
+  return (
+    !p.startsWith("assets/") &&
+    !p.startsWith("videos/") &&
+    !p.startsWith("pipeline/") &&
+    !p.startsWith("thumbs/")
+  );
 }
