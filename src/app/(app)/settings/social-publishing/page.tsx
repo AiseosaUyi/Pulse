@@ -163,6 +163,7 @@ export default async function SocialPublishingSettingsPage({
                 </div>
               ) : (
                 <AccountLinker
+                  key={tenant?.slug}
                   availableAccounts={availableAccounts}
                   linkedMappings={linkedMappings}
                 />
