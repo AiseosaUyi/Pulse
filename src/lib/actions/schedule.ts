@@ -28,6 +28,10 @@ export async function schedulePost(
   const tenant = await getCurrentTenant();
   if (!tenant) return { error: "No tenant" };
 
+  if (params.platform === "x") {
+    return { error: "X publishing requires a paid developer plan. Copy your draft from the Composer and post manually." };
+  }
+
   const limit = PLATFORM_LIMITS[params.platform];
   if (params.content.length > limit) {
     return { error: `Content exceeds ${params.platform} limit (${params.content.length}/${limit})` };

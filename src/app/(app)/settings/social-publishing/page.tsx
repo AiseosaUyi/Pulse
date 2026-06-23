@@ -21,10 +21,11 @@ const PLATFORM_META = {
     label: "X (Twitter)",
     icon: XIcon,
     brandColor: "#000000",
-    note: "Requires X API Basic ($100/mo). Free tier does not allow write access.",
+    note: "X API requires a paid developer plan ($100/mo) for write access. Use the Composer to copy your X draft and post manually.",
     connectPath: "/api/integrations/x/connect",
     pendingReview: false,
     reviewWait: null,
+    paidGate: true,
   },
   linkedin: {
     label: "LinkedIn",
@@ -112,7 +113,8 @@ export default async function SocialPublishingSettingsPage({
           const isConnected = connectedSet.has(id);
           const conn = connections.find((c) => c.platform === id);
           const isConfigured = CONFIGURED[id]();
-          const canConnect = isConfigured && !meta.pendingReview;
+          const isPaidGate = "paidGate" in meta && meta.paidGate === true;
+          const canConnect = isConfigured && !meta.pendingReview && !isPaidGate;
 
           return (
             <div
@@ -151,6 +153,10 @@ export default async function SocialPublishingSettingsPage({
               <div className="shrink-0 flex gap-2">
                 {isConnected ? (
                   <DisconnectButton platform={id} />
+                ) : isPaidGate ? (
+                  <span className="inline-flex items-center rounded-full border border-border px-3 py-1.5 text-xs font-medium text-text-muted opacity-60">
+                    Paid API required
+                  </span>
                 ) : (
                   <a
                     href={canConnect ? meta.connectPath : undefined}

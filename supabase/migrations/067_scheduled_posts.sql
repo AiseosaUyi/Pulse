@@ -36,6 +36,7 @@ create index if not exists idx_scheduled_posts_tenant
 
 alter table scheduled_posts enable row level security;
 
+drop policy if exists "members access scheduled_posts" on scheduled_posts;
 create policy "members access scheduled_posts"
   on scheduled_posts for all
   using (public.is_tenant_member(tenant_slug))

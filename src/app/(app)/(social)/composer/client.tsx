@@ -430,16 +430,18 @@ export function Composer({ tenantSlug }: { tenantSlug: string }) {
             <div className="mt-3 flex items-center justify-between border-t border-white-200 pt-3">
               <CharCount text={variants[mobilePlatform]} limit={PLATFORM_LIMIT[mobilePlatform]} />
               <div className="flex items-center gap-2">
-                <Button type="button" size="sm" variant="tertiary" onClick={() => openScheduler(mobilePlatform)}>
-                  <CalendarClock size={13} /> Schedule
-                </Button>
+                {mobilePlatform !== "x" && (
+                  <Button type="button" size="sm" variant="tertiary" onClick={() => openScheduler(mobilePlatform)}>
+                    <CalendarClock size={13} /> Schedule
+                  </Button>
+                )}
                 <Button type="button" size="sm" onClick={() => handleCopy(mobilePlatform)}>
                   <Copy /> Copy
                 </Button>
               </div>
             </div>
             {/* Inline scheduler */}
-            {schedulingPlatform === mobilePlatform && (
+            {schedulingPlatform === mobilePlatform && mobilePlatform !== "x" && (
               <div className="mt-3 flex flex-col gap-2 border-t border-white-200 pt-3">
                 <label className="text-xs text-gray-1000">Schedule for</label>
                 <input
@@ -501,38 +503,12 @@ export function Composer({ tenantSlug }: { tenantSlug: string }) {
                 </div>
               )}
               {/* Footer */}
-              <div className="mt-3 flex items-center justify-end gap-2 border-t border-white-200 pt-3">
-                <Button type="button" size="sm" variant="tertiary" onClick={() => openScheduler("x")}>
-                  <CalendarClock size={13} /> Schedule
-                </Button>
+              <div className="mt-3 flex items-center justify-between border-t border-white-200 pt-3">
+                <span className="text-xs text-gray-1000">Copy and post manually on X</span>
                 <Button type="button" size="sm" onClick={() => handleCopy("x")}>
                   <Copy /> Copy
                 </Button>
               </div>
-              {schedulingPlatform === "x" && (
-                <div className="mt-3 flex flex-col gap-2 border-t border-white-200 pt-3">
-                  <label className="text-xs text-gray-1000">Schedule for</label>
-                  <input
-                    type="datetime-local"
-                    min={minScheduleTime()}
-                    value={scheduleTime}
-                    onChange={(e) => setScheduleTime(e.target.value)}
-                    className="rounded-xl border border-white-200 bg-card px-3 py-2 text-sm text-gray-1200 outline-none focus-visible:ring-[3px] focus-visible:ring-blue-500/30"
-                  />
-                  <div className="flex gap-2">
-                    <Button type="button" size="sm" onClick={() => handleSchedule("x")} disabled={scheduleLoading}>
-                      {scheduleLoading ? <Loader2 size={13} className="animate-spin" /> : <CalendarClock size={13} />}
-                      {scheduleLoading ? "Scheduling…" : "Schedule"}
-                    </Button>
-                    <Button type="button" size="sm" variant="tertiary" onClick={() => handlePostNow("x")} disabled={scheduleLoading}>
-                      <Send size={13} /> Post now
-                    </Button>
-                    <button type="button" onClick={() => setSchedulingPlatform(null)} className="ml-auto text-xs text-gray-1000 hover:text-gray-1200">
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Other platforms accordion */}
