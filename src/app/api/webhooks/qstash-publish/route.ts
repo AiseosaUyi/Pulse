@@ -32,7 +32,12 @@ export async function POST(req: Request): Promise<Response> {
     .single();
 
   if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
-  if (post.status !== "scheduled") return NextResponse.json({ ok: true });
+  // Allow retry if stuck in 'publishing' with no posted_at (mid-flight crash).
+  // Skip if already published or explicitly failed.
+  if (post.status === "published" || post.status === "failed") return NextResponse.json({ ok: true });
+  if (post.status !== "scheduled" && !(post.status === "publishing" && !post.posted_at)) {
+    return NextResponse.json({ ok: true });
+  }
 
   await admin
     .from("scheduled_posts")

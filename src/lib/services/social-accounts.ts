@@ -8,16 +8,6 @@ import type { SocialPlatform } from "@/lib/integrations/socialapi";
 
 export type { SocialPlatform };
 
-// Platform names as SocialAPI returns them
-const PLATFORM_MAP: Record<string, SocialPlatform> = {
-  instagram: "instagram",
-  linkedin: "linkedin",
-  tiktok: "tiktok",
-  youtube: "youtube",
-  facebook: "facebook",
-  threads: "threads",
-};
-
 export interface ConnectedSocialAccount {
   id: string;           // SocialAPI account id
   platform: string;

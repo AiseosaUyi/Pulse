@@ -71,12 +71,12 @@ export async function publishPost(params: PublishParams): Promise<PublishResult>
     (err as Error & { status: number }).status = res.status;
     throw err;
   }
-  return res.json() as Promise<PublishResult>;
+  return (await res.json()) as PublishResult;
 }
 
 /** Get post status/metrics by SocialAPI post ID */
 export async function getPostStatus(postId: string): Promise<PublishResult> {
   const res = await fetch(`${BASE}/posts/${postId}`, { headers: headers() });
   if (!res.ok) throw new Error(`SocialAPI getPost failed: ${await res.text()}`);
-  return res.json() as Promise<PublishResult>;
+  return (await res.json()) as PublishResult;
 }
