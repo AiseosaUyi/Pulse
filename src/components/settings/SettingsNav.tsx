@@ -21,12 +21,22 @@ import {
   Radar,
   Film,
   Activity,
+  CalendarCheck,
+  Share2,
   type LucideIcon,
 } from "lucide-react";
 
+type SettingsAccountType = "startup" | "individual";
+
 export interface SettingsNavGroup {
   label: string;
-  items: Array<{ label: string; href: string; icon: LucideIcon }>;
+  items: Array<{
+    label: string;
+    href: string;
+    icon: LucideIcon;
+    // Omitted = shown to all account types.
+    surfaces?: SettingsAccountType[];
+  }>;
 }
 
 export const SETTINGS_NAV: SettingsNavGroup[] = [
@@ -50,24 +60,45 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
       },
       { label: "Brand voice", href: "/settings/brand-voice", icon: Sparkles },
       {
+        label: "Posting cadence",
+        href: "/settings/cadence",
+        icon: CalendarCheck,
+        surfaces: ["individual"],
+      },
+      {
         label: "Content engine",
         href: "/settings/content-engine",
         icon: Film,
+        surfaces: ["startup"],
       },
       {
         label: "Trend scouts",
         href: "/settings/trend-scouts",
         icon: TrendingUp,
+        surfaces: ["startup"],
       },
       {
         label: "Discovery sources",
         href: "/settings/discovery",
         icon: Radar,
+        surfaces: ["startup"],
       },
       {
         label: "Outbound filters",
         href: "/settings/outbound-filters",
         icon: Radar,
+        surfaces: ["startup"],
+      },
+    ],
+  },
+  {
+    label: "Publishing",
+    items: [
+      {
+        label: "Social publishing",
+        href: "/settings/social-publishing",
+        icon: Share2,
+        surfaces: ["individual"] as SettingsAccountType[],
       },
     ],
   },
@@ -89,15 +120,20 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function SettingsNav() {
+export function SettingsNav({ accountType = "startup" }: { accountType?: SettingsAccountType }) {
   const pathname = usePathname();
+
+  const nav = SETTINGS_NAV.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.surfaces || item.surfaces.includes(accountType)),
+  })).filter((group) => group.items.length > 0);
 
   return (
     <>
       {/* Mobile: horizontal-scrolling chip row pinned below the app header */}
       <nav className="md:hidden sticky top-0 z-10 -mx-4 px-4 py-2 bg-background/90 backdrop-blur border-b border-border/40 overflow-x-auto">
         <ul className="flex items-center gap-1 min-w-max">
-          {SETTINGS_NAV.flatMap((g) => g.items).map((item) => {
+          {nav.flatMap((g) => g.items).map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <li key={item.href}>
@@ -121,7 +157,7 @@ export function SettingsNav() {
       {/* Desktop: left sidebar */}
       <nav className="hidden md:block w-56 shrink-0">
         <div className="sticky top-6 space-y-6">
-          {SETTINGS_NAV.map((group) => (
+          {nav.map((group) => (
             <div key={group.label}>
               <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold mb-2 px-3">
                 {group.label}
