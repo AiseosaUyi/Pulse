@@ -17,7 +17,7 @@ pnpm db:seed      # One-time founder + Gruve/Sippy seed (reads SEED_* + SUPABASE
 
 Single test: `pnpm test tests/unit/foo.test.ts`. Tests live under `tests/unit`, `tests/integration`, `tests/smoke`, `tests/e2e`. Playwright config at `playwright.config.ts`, Vitest at `vitest.config.ts`.
 
-DB migrations live in `supabase/migrations/`, named `NNN_*.sql` — currently through 062. Apply via Supabase SQL Editor (paste + run) or `supabase db push` after `supabase login --token <pat>` and `supabase link --project-ref <ref>`. The user typically runs migrations by hand in the SQL Editor, so the migration *number* (not the SQL) is what they need from you.
+DB migrations live in `supabase/migrations/`, named `NNN_*.sql` — currently through 067 (066 = platform_connections, 067 = scheduled_posts). Apply via Supabase SQL Editor (paste + run) or `supabase db push` after `supabase login --token <pat>` and `supabase link --project-ref <ref>`. The user typically runs migrations by hand in the SQL Editor, so the migration *number* (not the SQL) is what they need from you.
 
 When modifying a table, **grep prior migrations first** — retrofits later in the chain can change column shapes/RLS for tables defined earlier (e.g. 002 retrofit affected 009).
 
@@ -34,7 +34,7 @@ One-off tenant cleanup scripts live in `supabase/cleanups/` (e.g. `wipe-tenant-m
 - Lucide React for icons
 - Vercel deployment (push to `main` triggers deploy)
 
-Required env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`. Storage (Cloudflare R2): `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL`. Cron + local-only: `CRON_SECRET`, `SEED_*`.
+Required env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`. Storage (Cloudflare R2): `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL`. Cron + local-only: `CRON_SECRET`, `SEED_*`. Social publishing: `PLATFORM_TOKEN_KEY` (32-byte base64 AES key), `NEXT_PUBLIC_APP_URL`. Platform OAuth: `X_CLIENT_ID`, `X_CLIENT_SECRET`, `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`. Scheduling: `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY`.
 
 ## Authentication & multi-tenancy
 

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
-import { ChevronDown, Copy, Loader2, Mic } from "lucide-react";
+import { CalendarClock, ChevronDown, Copy, Loader2, Mic, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
 import { generateDraft } from "@/lib/actions/compose";
+import { schedulePost, publishNow } from "@/lib/actions/schedule";
 import type { ComposeMode } from "@/lib/ai/compose-take";
 import {
   XIcon,
@@ -101,6 +102,12 @@ function CharCount({ text, limit }: { text: string; limit: number }) {
   );
 }
 
+// Minimum datetime-local value: now + 5 min
+function minScheduleTime(): string {
+  const d = new Date(Date.now() + 5 * 60 * 1000);
+  return d.toISOString().slice(0, 16);
+}
+
 export function Composer({ tenantSlug }: { tenantSlug: string }) {
   const [mode, setMode] = useState<ComposeMode>("original");
   const [input, setInput] = useState("");
@@ -112,6 +119,10 @@ export function Composer({ tenantSlug }: { tenantSlug: string }) {
   const [otherOpen, setOtherOpen] = useState(false);
   // Mobile: which platform tab is active
   const [mobilePlatform, setMobilePlatform] = useState<Platform>("x");
+  // Schedule picker: which platform has the picker open
+  const [schedulingPlatform, setSchedulingPlatform] = useState<Platform | null>(null);
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   const xTextareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
@@ -206,6 +217,39 @@ export function Composer({ tenantSlug }: { tenantSlug: string }) {
     const rest = match ? text.slice(match[0].length).trimStart() : "";
     updateVariant("x", rest ? `${hook} ${rest}` : hook);
     requestAnimationFrame(() => xTextareaRef.current?.focus());
+  }
+
+  function openScheduler(platform: Platform) {
+    setSchedulingPlatform(platform);
+    setScheduleTime(minScheduleTime());
+  }
+
+  async function handleSchedule(platform: Platform) {
+    if (!variants) return;
+    const content = variants[platform];
+    if (!content) { toast.error("No content to schedule."); return; }
+    if (!scheduleTime) { toast.error("Pick a time first."); return; }
+    setScheduleLoading(true);
+    const res = await schedulePost({
+      platform,
+      content,
+      scheduledFor: new Date(scheduleTime).toISOString(),
+    });
+    setScheduleLoading(false);
+    if (res.error) { toast.error(res.error); return; }
+    toast.success("Post scheduled! View it in Schedule.");
+    setSchedulingPlatform(null);
+  }
+
+  async function handlePostNow(platform: Platform) {
+    if (!variants) return;
+    const content = variants[platform];
+    if (!content) { toast.error("No content to post."); return; }
+    setScheduleLoading(true);
+    const res = await publishNow({ platform, content });
+    setScheduleLoading(false);
+    if (res.error) { toast.error(res.error); return; }
+    toast.success("Post queued for immediate publishing.");
   }
 
   async function handleCopy(platform: Platform) {
@@ -385,10 +429,40 @@ export function Composer({ tenantSlug }: { tenantSlug: string }) {
             {/* Footer */}
             <div className="mt-3 flex items-center justify-between border-t border-white-200 pt-3">
               <CharCount text={variants[mobilePlatform]} limit={PLATFORM_LIMIT[mobilePlatform]} />
-              <Button type="button" size="sm" onClick={() => handleCopy(mobilePlatform)}>
-                <Copy /> Copy
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button type="button" size="sm" variant="tertiary" onClick={() => openScheduler(mobilePlatform)}>
+                  <CalendarClock size={13} /> Schedule
+                </Button>
+                <Button type="button" size="sm" onClick={() => handleCopy(mobilePlatform)}>
+                  <Copy /> Copy
+                </Button>
+              </div>
             </div>
+            {/* Inline scheduler */}
+            {schedulingPlatform === mobilePlatform && (
+              <div className="mt-3 flex flex-col gap-2 border-t border-white-200 pt-3">
+                <label className="text-xs text-gray-1000">Schedule for</label>
+                <input
+                  type="datetime-local"
+                  min={minScheduleTime()}
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  className="rounded-xl border border-white-200 bg-card px-3 py-2 text-sm text-gray-1200 outline-none focus-visible:ring-[3px] focus-visible:ring-blue-500/30"
+                />
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" onClick={() => handleSchedule(mobilePlatform)} disabled={scheduleLoading}>
+                    {scheduleLoading ? <Loader2 size={13} className="animate-spin" /> : <CalendarClock size={13} />}
+                    {scheduleLoading ? "Scheduling…" : "Schedule"}
+                  </Button>
+                  <Button type="button" size="sm" variant="tertiary" onClick={() => handlePostNow(mobilePlatform)} disabled={scheduleLoading}>
+                    <Send size={13} /> Post now
+                  </Button>
+                  <button type="button" onClick={() => setSchedulingPlatform(null)} className="ml-auto text-xs text-gray-1000 hover:text-gray-1200">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── DESKTOP: X primary + "Other platforms" accordion ── */}
@@ -427,11 +501,38 @@ export function Composer({ tenantSlug }: { tenantSlug: string }) {
                 </div>
               )}
               {/* Footer */}
-              <div className="mt-3 flex items-center justify-end border-t border-white-200 pt-3">
+              <div className="mt-3 flex items-center justify-end gap-2 border-t border-white-200 pt-3">
+                <Button type="button" size="sm" variant="tertiary" onClick={() => openScheduler("x")}>
+                  <CalendarClock size={13} /> Schedule
+                </Button>
                 <Button type="button" size="sm" onClick={() => handleCopy("x")}>
                   <Copy /> Copy
                 </Button>
               </div>
+              {schedulingPlatform === "x" && (
+                <div className="mt-3 flex flex-col gap-2 border-t border-white-200 pt-3">
+                  <label className="text-xs text-gray-1000">Schedule for</label>
+                  <input
+                    type="datetime-local"
+                    min={minScheduleTime()}
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                    className="rounded-xl border border-white-200 bg-card px-3 py-2 text-sm text-gray-1200 outline-none focus-visible:ring-[3px] focus-visible:ring-blue-500/30"
+                  />
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" onClick={() => handleSchedule("x")} disabled={scheduleLoading}>
+                      {scheduleLoading ? <Loader2 size={13} className="animate-spin" /> : <CalendarClock size={13} />}
+                      {scheduleLoading ? "Scheduling…" : "Schedule"}
+                    </Button>
+                    <Button type="button" size="sm" variant="tertiary" onClick={() => handlePostNow("x")} disabled={scheduleLoading}>
+                      <Send size={13} /> Post now
+                    </Button>
+                    <button type="button" onClick={() => setSchedulingPlatform(null)} className="ml-auto text-xs text-gray-1000 hover:text-gray-1200">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Other platforms accordion */}
@@ -495,11 +596,38 @@ export function Composer({ tenantSlug }: { tenantSlug: string }) {
                           className="w-full resize-y bg-transparent text-base leading-relaxed text-gray-1200 outline-none"
                           aria-label={`${PLATFORM_LABEL[p]} draft`}
                         />
-                        <div className="mt-3 flex items-center justify-end border-t border-white-200 pt-3">
+                        <div className="mt-3 flex items-center justify-end gap-2 border-t border-white-200 pt-3">
+                          <Button type="button" size="sm" variant="tertiary" onClick={() => openScheduler(p)}>
+                            <CalendarClock size={13} /> Schedule
+                          </Button>
                           <Button type="button" size="sm" onClick={() => handleCopy(p)}>
                             <Copy /> Copy
                           </Button>
                         </div>
+                        {schedulingPlatform === p && (
+                          <div className="mt-3 flex flex-col gap-2 border-t border-white-200 pt-3">
+                            <label className="text-xs text-gray-1000">Schedule for</label>
+                            <input
+                              type="datetime-local"
+                              min={minScheduleTime()}
+                              value={scheduleTime}
+                              onChange={(e) => setScheduleTime(e.target.value)}
+                              className="rounded-xl border border-white-200 bg-card px-3 py-2 text-sm text-gray-1200 outline-none focus-visible:ring-[3px] focus-visible:ring-blue-500/30"
+                            />
+                            <div className="flex gap-2">
+                              <Button type="button" size="sm" onClick={() => handleSchedule(p)} disabled={scheduleLoading}>
+                                {scheduleLoading ? <Loader2 size={13} className="animate-spin" /> : <CalendarClock size={13} />}
+                                {scheduleLoading ? "Scheduling…" : "Schedule"}
+                              </Button>
+                              <Button type="button" size="sm" variant="tertiary" onClick={() => handlePostNow(p)} disabled={scheduleLoading}>
+                                <Send size={13} /> Post now
+                              </Button>
+                              <button type="button" onClick={() => setSchedulingPlatform(null)} className="ml-auto text-xs text-gray-1000 hover:text-gray-1200">
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
