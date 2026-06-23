@@ -6,7 +6,7 @@ import { SidebarNav } from "./SidebarNav";
 import { TenantSwitcher } from "./TenantSwitcher";
 import { OnboardingChecklist } from "./OnboardingChecklist";
 import { Logo } from "@/components/ui/Logo";
-import type { TenantMembership } from "@/lib/auth";
+import type { AccountType, TenantMembership } from "@/lib/auth";
 import type { OnboardingProgress } from "@/lib/services/onboarding";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +14,7 @@ interface MobileNavProps {
   tenants: TenantMembership[];
   currentTenantSlug: string;
   currentTenantName: string;
+  currentAccountType: AccountType;
   onboardingProgress: OnboardingProgress;
 }
 
@@ -21,6 +22,7 @@ export function MobileNav({
   tenants,
   currentTenantSlug,
   currentTenantName,
+  currentAccountType,
   onboardingProgress,
 }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -62,14 +64,16 @@ export function MobileNav({
           </button>
         </div>
 
-        <OnboardingChecklist
-          progress={onboardingProgress}
-          tenantSlug={currentTenantSlug}
-          tenantName={currentTenantName}
-        />
+        {currentAccountType === "startup" && (
+          <OnboardingChecklist
+            progress={onboardingProgress}
+            tenantSlug={currentTenantSlug}
+            tenantName={currentTenantName}
+          />
+        )}
 
         <div className="flex-1 min-h-0 flex flex-col" onClick={() => setIsOpen(false)}>
-          <SidebarNav />
+          <SidebarNav accountType={currentAccountType} />
         </div>
 
         <div className="shrink-0">

@@ -1,79 +1,16 @@
-import { Share2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Share2, ExternalLink, AlertCircle, CheckCircle2 } from "lucide-react";
 import { SettingsPageHeading } from "../_shared";
-import {
-  XIcon,
-  LinkedInIcon,
-  InstagramIcon,
-  TikTokIcon,
-  YouTubeIcon,
-} from "@/components/icons/social";
+import { YouTubeIcon } from "@/components/icons/social";
 import { getCurrentTenant } from "@/lib/auth";
-import { getAllPlatformConnections } from "@/lib/services/platform-connections";
-import { isXConfigured } from "@/lib/integrations/platforms/x";
+import {
+  fetchAllSocialApiAccounts,
+  getTenantSocialMappings,
+} from "@/lib/services/social-accounts";
+import { isSocialApiConfigured } from "@/lib/integrations/socialapi";
 import { isYouTubeConfigured } from "@/lib/integrations/platforms/youtube";
-import { isLinkedInConfigured } from "@/lib/integrations/platforms/linkedin";
-import { isInstagramConfigured } from "@/lib/integrations/platforms/instagram";
-import { isTikTokConfigured } from "@/lib/integrations/platforms/tiktok";
+import { getAllPlatformConnections } from "@/lib/services/platform-connections";
+import AccountLinker from "./AccountLinker";
 import DisconnectButton from "./DisconnectButton";
-
-const PLATFORM_META = {
-  x: {
-    label: "X (Twitter)",
-    icon: XIcon,
-    brandColor: "#000000",
-    note: "X API requires a paid developer plan ($100/mo) for write access. Use the Composer to copy your X draft and post manually.",
-    connectPath: "/api/integrations/x/connect",
-    pendingReview: false,
-    reviewWait: null,
-    paidGate: true,
-  },
-  linkedin: {
-    label: "LinkedIn",
-    icon: LinkedInIcon,
-    brandColor: "#0A66C2",
-    note: "App review in progress. Connect button unlocks when approved.",
-    connectPath: "/api/integrations/linkedin/connect",
-    pendingReview: true,
-    reviewWait: "4–6 weeks",
-  },
-  instagram: {
-    label: "Instagram",
-    icon: InstagramIcon,
-    brandColor: "#E1306C",
-    note: "Meta app review in progress. Requires a Business or Creator account.",
-    connectPath: "/api/integrations/instagram/connect",
-    pendingReview: true,
-    reviewWait: "4–8 weeks",
-  },
-  tiktok: {
-    label: "TikTok",
-    icon: TikTokIcon,
-    brandColor: "#010101",
-    note: "TikTok app review in progress. Caption-only posts for now.",
-    connectPath: "/api/integrations/tiktok/connect",
-    pendingReview: true,
-    reviewWait: "2–4 weeks",
-  },
-  youtube: {
-    label: "YouTube",
-    icon: YouTubeIcon,
-    brandColor: "#FF0000",
-    note: "Community posts require 500+ subscribers.",
-    connectPath: "/api/integrations/youtube/connect",
-    pendingReview: false,
-    reviewWait: null,
-  },
-} as const;
-
-type PlatformId = keyof typeof PLATFORM_META;
-
-const CONFIGURED: Record<PlatformId, () => boolean> = {
-  x: isXConfigured,
-  linkedin: isLinkedInConfigured,
-  instagram: isInstagramConfigured,
-  tiktok: isTikTokConfigured,
-  youtube: isYouTubeConfigured,
-};
 
 export default async function SocialPublishingSettingsPage({
   searchParams,
@@ -82,21 +19,42 @@ export default async function SocialPublishingSettingsPage({
 }) {
   const params = await searchParams;
   const tenant = await getCurrentTenant();
-  const connections = tenant ? await getAllPlatformConnections(tenant.slug) : [];
-  const connectedSet = new Set(connections.map((c) => c.platform));
+  const socialApiConfigured = isSocialApiConfigured();
+  const youtubeConfigured = isYouTubeConfigured();
+
+  let availableAccounts: Awaited<ReturnType<typeof fetchAllSocialApiAccounts>> = [];
+  let linkedMappings: Awaited<ReturnType<typeof getTenantSocialMappings>> = [];
+  let connections: Awaited<ReturnType<typeof getAllPlatformConnections>> = [];
+  let fetchError: string | null = null;
+
+  if (tenant) {
+    connections = await getAllPlatformConnections(tenant.slug);
+    if (socialApiConfigured) {
+      try {
+        [availableAccounts, linkedMappings] = await Promise.all([
+          fetchAllSocialApiAccounts(),
+          getTenantSocialMappings(tenant.slug),
+        ]);
+      } catch (err) {
+        fetchError = err instanceof Error ? err.message : "Failed to load accounts";
+      }
+    }
+  }
+
+  const youtubeConn = connections.find((c) => c.platform === "youtube");
 
   return (
     <div>
       <SettingsPageHeading
         icon={Share2}
         title="Social publishing"
-        subtitle="Connect your social accounts to schedule and publish posts directly from Pulse."
+        subtitle="Link your social accounts to schedule and publish posts directly from Pulse."
       />
 
-      {params.connected && (
+      {params.connected === "youtube" && (
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-700 dark:bg-green-950/40 dark:text-green-300">
           <CheckCircle2 size={15} />
-          {PLATFORM_META[params.connected as PlatformId]?.label ?? params.connected} connected successfully.
+          YouTube connected successfully.
         </div>
       )}
       {params.error && (
@@ -106,76 +64,118 @@ export default async function SocialPublishingSettingsPage({
         </div>
       )}
 
-      <section className="flex flex-col gap-3">
-        {(Object.keys(PLATFORM_META) as PlatformId[]).map((id) => {
-          const meta = PLATFORM_META[id];
-          const Icon = meta.icon;
-          const isConnected = connectedSet.has(id);
-          const conn = connections.find((c) => c.platform === id);
-          const isConfigured = CONFIGURED[id]();
-          const isPaidGate = "paidGate" in meta && meta.paidGate === true;
-          const canConnect = isConfigured && !meta.pendingReview && !isPaidGate;
+      <div className="space-y-6">
+        {/* YouTube — direct OAuth, free */}
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">YouTube</p>
+          <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-4">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: "#FF000015" }}>
+              <span style={{ color: "#FF0000" }}><YouTubeIcon size={20} /></span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm text-foreground">YouTube</span>
+                {youtubeConn && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-green-300 bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-950/40 dark:border-green-700 dark:text-green-400">
+                    <CheckCircle2 size={9} />
+                    {youtubeConn.platformHandle ?? "Connected"}
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs text-text-muted">
+                Direct OAuth — free. Community posts require 500+ subscribers.
+              </p>
+            </div>
+            <div className="shrink-0">
+              {youtubeConn ? (
+                <DisconnectButton platform="youtube" />
+              ) : (
+                <a
+                  href={youtubeConfigured ? "/api/integrations/youtube/connect" : undefined}
+                  aria-disabled={!youtubeConfigured}
+                  className={[
+                    "inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                    youtubeConfigured
+                      ? "border-primary bg-primary text-white hover:opacity-90"
+                      : "border-border text-text-muted cursor-not-allowed opacity-50 pointer-events-none",
+                  ].join(" ")}
+                >
+                  Connect
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
 
-          return (
-            <div
-              key={id}
-              className="bg-card border border-border rounded-2xl p-5 flex items-start gap-4"
-            >
-              <div
-                className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl"
-                style={{ backgroundColor: `${meta.brandColor}15` }}
+        {/* Instagram / LinkedIn / TikTok — via SocialAPI.ai */}
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+            Instagram · LinkedIn · TikTok
+          </p>
+
+          {!socialApiConfigured ? (
+            <div className="rounded-2xl border border-dashed border-border p-6 space-y-3">
+              <p className="text-sm text-text-muted">
+                These platforms connect via{" "}
+                <a href="https://social-api.ai" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
+                  SocialAPI.ai
+                </a>
+                {" "}— no platform app reviews needed.
+              </p>
+              <ol className="space-y-1.5 text-sm text-text-muted list-decimal list-inside">
+                <li>Sign up at social-api.ai (free Hobby plan or $29/mo Side Hustle)</li>
+                <li>Copy your API key from their dashboard</li>
+                <li>
+                  Add <code className="rounded bg-muted px-1 py-0.5 text-xs">SOCIAL_API_KEY</code> to Vercel and redeploy
+                </li>
+                <li>Come back here to link accounts</li>
+              </ol>
+              <a
+                href="https://social-api.ai/dashboard"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full border border-primary bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
               >
-                <span style={{ color: meta.brandColor }}>
-                  <Icon size={20} />
+                Open SocialAPI.ai <ExternalLink size={13} />
+              </a>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-text-muted flex items-center justify-between gap-4">
+                <span>
+                  Connect accounts in your{" "}
+                  <a
+                    href="https://social-api.ai/dashboard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary inline-flex items-center gap-0.5"
+                  >
+                    SocialAPI.ai dashboard <ExternalLink size={11} />
+                  </a>
+                  , then link them below.
                 </span>
               </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium text-sm text-foreground">{meta.label}</span>
-                  {isConnected && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-green-300 bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-950/40 dark:border-green-700 dark:text-green-400">
-                      <CheckCircle2 size={9} />
-                      {conn?.platformHandle ?? "Connected"}
-                    </span>
-                  )}
-                  {meta.pendingReview && !isConnected && (
-                    <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:border-amber-700 dark:text-amber-400">
-                      Review pending · {meta.reviewWait}
-                    </span>
-                  )}
+              {fetchError ? (
+                <div className="flex items-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-700 dark:bg-red-950/40 dark:text-red-300">
+                  <AlertCircle size={15} />
+                  {fetchError}
                 </div>
-                {meta.note && (
-                  <p className="mt-0.5 text-xs text-text-muted">{meta.note}</p>
-                )}
-              </div>
-
-              <div className="shrink-0 flex gap-2">
-                {isConnected ? (
-                  <DisconnectButton platform={id} />
-                ) : isPaidGate ? (
-                  <span className="inline-flex items-center rounded-full border border-border px-3 py-1.5 text-xs font-medium text-text-muted opacity-60">
-                    Paid API required
-                  </span>
-                ) : (
-                  <a
-                    href={canConnect ? meta.connectPath : undefined}
-                    aria-disabled={!canConnect}
-                    className={[
-                      "inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                      canConnect
-                        ? "border-primary bg-primary text-white hover:opacity-90"
-                        : "border-border text-text-muted cursor-not-allowed opacity-50 pointer-events-none",
-                    ].join(" ")}
-                  >
-                    {meta.pendingReview ? "Connect when approved" : "Connect"}
-                  </a>
-                )}
-              </div>
+              ) : (
+                <AccountLinker
+                  availableAccounts={availableAccounts}
+                  linkedMappings={linkedMappings}
+                />
+              )}
             </div>
-          );
-        })}
-      </section>
+          )}
+        </div>
+
+        {/* X note */}
+        <p className="text-xs text-text-muted">
+          X (Twitter) requires a paid developer plan ($100/mo). Use the Composer to copy X drafts and post manually.
+        </p>
+      </div>
     </div>
   );
 }

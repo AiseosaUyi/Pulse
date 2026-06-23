@@ -2,29 +2,37 @@ import { describe, it, expect } from "vitest";
 import { groupPatterns } from "@/lib/ai/group-patterns";
 import type { IntelCard } from "@/lib/types/intelligence";
 
+// platform/contentType are accepted as plain strings (cast inside) so callers
+// can pass loop variables; the rest stays a Partial of the remaining fields.
+// We destructure them out so the trailing spread can't re-declare them.
 function card(
-  overrides: Partial<IntelCard> & { platform: string; contentType: string }
+  overrides: {
+    platform: string;
+    contentType: string;
+    metrics?: Partial<IntelCard["metrics"]>;
+  } & Partial<Omit<IntelCard, "platform" | "contentType" | "metrics">>
 ): IntelCard {
+  const { platform, contentType, metrics, ...rest } = overrides;
   return {
     id: crypto.randomUUID(),
     tenantId: "gruve",
     competitorId: "c1",
     competitorName: "Test",
     competitorType: "direct",
-    platform: overrides.platform as IntelCard["platform"],
-    contentType: overrides.contentType as IntelCard["contentType"],
+    platform: platform as IntelCard["platform"],
+    contentType: contentType as IntelCard["contentType"],
     summary: "test",
     metrics: {
       engagement: 100,
       engagementRate: 3.0,
       vsAverage: 1.0,
-      ...overrides.metrics,
+      ...metrics,
     },
     aiRecommendation: null,
     detectedAt: new Date().toISOString(),
     source: "manual",
-    ...overrides,
-  } as IntelCard;
+    ...rest,
+  };
 }
 
 describe("groupPatterns", () => {

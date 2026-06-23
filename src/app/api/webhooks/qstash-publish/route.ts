@@ -1,21 +1,18 @@
-// QStash publish webhook — dispatches a scheduled post to the platform.
+// QStash publish webhook — dispatches scheduled posts to the right publisher.
+// YouTube → direct OAuth (free). Instagram/LinkedIn/TikTok → SocialAPI.ai.
 // ALL DB reads/writes use createAdminClient() — auth.uid() is null in QStash.
 
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyQStashSignature, enqueueNow } from "@/lib/qstash";
-import { publishToX } from "@/lib/publishers/x";
+import { verifyQStashSignature } from "@/lib/qstash";
+import { publishPost } from "@/lib/integrations/socialapi";
+import { getSocialAccountId } from "@/lib/services/social-accounts";
 import { publishToYouTube } from "@/lib/publishers/youtube";
-import { publishToLinkedIn } from "@/lib/publishers/linkedin";
-import { publishToTikTok } from "@/lib/publishers/tiktok";
-import { initInstagramPost } from "@/lib/publishers/instagram";
-import { appUrl } from "@/lib/integrations/platform-oauth";
-import type { OAuthPlatform } from "@/lib/services/platform-connections";
 
 interface QStashPayload {
   scheduledPostId: string;
   tenantSlug: string;
-  platform: OAuthPlatform;
+  platform: string;
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -28,7 +25,6 @@ export async function POST(req: Request): Promise<Response> {
   const { scheduledPostId, tenantSlug, platform } = payload;
   const admin = createAdminClient();
 
-  // Fetch the post
   const { data: post } = await admin
     .from("scheduled_posts")
     .select("*")
@@ -36,12 +32,8 @@ export async function POST(req: Request): Promise<Response> {
     .single();
 
   if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
-  if (post.status !== "scheduled") {
-    // Already published or failed — idempotent OK
-    return NextResponse.json({ ok: true });
-  }
+  if (post.status !== "scheduled") return NextResponse.json({ ok: true });
 
-  // Mark as publishing
   await admin
     .from("scheduled_posts")
     .update({ status: "publishing" })
@@ -49,47 +41,22 @@ export async function POST(req: Request): Promise<Response> {
 
   try {
     let postId: string;
-    let postUrl: string;
+    let postUrl: string | null = null;
 
-    switch (platform) {
-      case "x": {
-        ({ postId, postUrl } = await publishToX(tenantSlug, post.content));
-        break;
-      }
-      case "youtube": {
-        ({ postId, postUrl } = await publishToYouTube(tenantSlug, post.content));
-        break;
-      }
-      case "linkedin": {
-        ({ postId, postUrl } = await publishToLinkedIn(tenantSlug, post.content));
-        break;
-      }
-      case "tiktok": {
-        ({ postId, postUrl } = await publishToTikTok(tenantSlug, post.content));
-        break;
-      }
-      case "instagram": {
-        // Instagram is a two-step flow — initiate here, poll in qstash-ig-publish
-        const { creationId, igUserId } = await initInstagramPost({
-          tenantSlug,
-          content: post.content,
-          scheduledPostId,
-        });
-        // Enqueue the poll webhook (90s delay)
-        await enqueueNow(appUrl("/api/webhooks/qstash-ig-publish"), {
-          scheduledPostId,
-          tenantSlug,
-          creationId,
-          igUserId,
-          attempts: 0,
-        });
-        return NextResponse.json({ ok: true, step: "ig-container-created" });
-      }
-      default:
-        throw new Error(`Unsupported platform: ${platform}`);
+    if (platform === "youtube") {
+      // Direct YouTube OAuth — free, no third party
+      ({ postId, postUrl } = await publishToYouTube(tenantSlug, post.content));
+    } else {
+      // SocialAPI.ai — covers Instagram, LinkedIn, TikTok
+      const accountId = await getSocialAccountId(tenantSlug, platform);
+      if (!accountId) throw new Error(`No ${platform} account linked for ${tenantSlug}`);
+
+      const result = await publishPost({ accountIds: [accountId], text: post.content });
+      const target = result.targets?.[0];
+      postId = target?.post_id ?? result.id;
+      postUrl = target?.url ?? null;
     }
 
-    // Mark published + write to post_log
     await admin
       .from("scheduled_posts")
       .update({
@@ -100,23 +67,14 @@ export async function POST(req: Request): Promise<Response> {
       })
       .eq("id", scheduledPostId);
 
-    await admin.from("post_log").insert({
-      tenant_slug: tenantSlug,
-      platform,
-      content: post.content,
-      posted_at: new Date().toISOString(),
-      platform_post_id: postId,
-      source: "scheduled",
-    });
-
-    return NextResponse.json({ ok: true, postId, postUrl });
+    return NextResponse.json({ ok: true, postId });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.error("[qstash-publish] failed", { scheduledPostId, tenantSlug, platform, msg });
     await admin
       .from("scheduled_posts")
       .update({ status: "failed", error_message: msg })
       .eq("id", scheduledPostId);
-    // Return 500 so QStash retries
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

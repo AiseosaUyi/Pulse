@@ -65,11 +65,7 @@ export async function schedulePost(
   // Posts beyond that are picked up by the schedule-flush cron.
   const daysUntil = (scheduledFor.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
   if (isQStashConfigured() && daysUntil <= QSTASH_MAX_DELAY_DAYS) {
-    const webhookUrl = appUrl(
-      params.platform === "instagram"
-        ? "/api/webhooks/qstash-ig-publish"
-        : "/api/webhooks/qstash-publish"
-    );
+    const webhookUrl = appUrl("/api/webhooks/qstash-publish");
 
     const msgId = await enqueueAt({
       url: webhookUrl,
@@ -121,11 +117,7 @@ export async function publishNow(
   if (insertErr || !post) return { error: insertErr?.message ?? "Insert failed" };
 
   if (isQStashConfigured()) {
-    const webhookUrl = appUrl(
-      params.platform === "instagram"
-        ? "/api/webhooks/qstash-ig-publish"
-        : "/api/webhooks/qstash-publish"
-    );
+    const webhookUrl = appUrl("/api/webhooks/qstash-publish");
     const msgId = await enqueueNow(webhookUrl, {
       scheduledPostId: post.id,
       tenantSlug: tenant.slug,

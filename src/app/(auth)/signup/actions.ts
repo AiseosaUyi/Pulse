@@ -9,6 +9,12 @@ function fail(path: string, message: string): never {
   redirect(`${path}?error=${encodeURIComponent(message)}`);
 }
 
+function parseAccountType(formData: FormData): "startup" | "individual" {
+  return String(formData.get("accountType") ?? "") === "individual"
+    ? "individual"
+    : "startup";
+}
+
 async function setTenantCookie(slug: string) {
   const cookieStore = await cookies();
   cookieStore.set("tenant", slug, {
@@ -25,6 +31,7 @@ export async function signup(formData: FormData) {
   const inviteToken = String(formData.get("invite") ?? "").trim() || null;
   const companyName = String(formData.get("companyName") ?? "").trim();
   const companySlug = String(formData.get("companySlug") ?? "").trim().toLowerCase();
+  const accountType = parseAccountType(formData);
 
   if (!email || !password || !displayName) {
     fail("/signup", "Email, password, and display name are required");
@@ -104,11 +111,20 @@ export async function signup(formData: FormData) {
       .update({ accepted_at: new Date().toISOString(), accepted_by: userId })
       .eq("token", inviteToken);
   } else {
-    await admin.from("tenants").insert({
+    const { error: tErr } = await admin.from("tenants").insert({
       slug: tenantSlug,
       name: companyName,
       created_by: userId,
+      account_type: accountType,
     });
+    if (tErr) {
+      fail(
+        "/signup",
+        tErr.message.includes("account_type")
+          ? "Database isn't migrated — apply migration 064 (account_type)."
+          : tErr.message
+      );
+    }
     await admin.from("memberships").insert({
       user_id: userId,
       tenant_slug: tenantSlug,
@@ -129,6 +145,7 @@ export async function signup(formData: FormData) {
 export async function completeCompany(formData: FormData) {
   const companyName = String(formData.get("companyName") ?? "").trim();
   const companySlug = String(formData.get("companySlug") ?? "").trim().toLowerCase();
+  const accountType = parseAccountType(formData);
 
   if (!companyName || !companySlug) {
     fail("/signup?step=company", "Both fields are required");
@@ -149,11 +166,20 @@ export async function completeCompany(formData: FormData) {
     .maybeSingle();
   if (existing) fail("/signup?step=company", "That handle is taken");
 
-  await admin.from("tenants").insert({
+  const { error: tErr } = await admin.from("tenants").insert({
     slug: companySlug,
     name: companyName,
     created_by: user.id,
+    account_type: accountType,
   });
+  if (tErr) {
+    fail(
+      "/signup?step=company",
+      tErr.message.includes("account_type")
+        ? "Database isn't migrated — apply migration 064 (account_type)."
+        : tErr.message
+    );
+  }
   await admin.from("memberships").insert({
     user_id: user.id,
     tenant_slug: companySlug,
@@ -161,5 +187,72 @@ export async function completeCompany(formData: FormData) {
   });
 
   await setTenantCookie(companySlug);
+  redirect("/dashboard");
+}
+
+// ──────────────────────────────────────────────────────────
+// In-app "Create workspace" — add another tenant (startup or individual)
+// from the tenant switcher, without going back through signup.
+// ──────────────────────────────────────────────────────────
+
+export interface CreateWorkspaceInput {
+  name: string;
+  slug: string;
+  accountType: "startup" | "individual";
+}
+
+/**
+ * Create another workspace from the in-app switcher. Returns an error object on
+ * failure (so the modal can show it); on success it sets the cookie and
+ * redirects — the (app) layout then routes to the right setup flow.
+ */
+export async function createWorkspace(
+  input: CreateWorkspaceInput
+): Promise<{ error: string } | void> {
+  const name = input.name.trim();
+  const slug = input.slug.trim().toLowerCase();
+  const accountType = input.accountType === "individual" ? "individual" : "startup";
+
+  if (!name || !slug) return { error: "Name and handle are required" };
+  if (!/^[a-z0-9-]+$/.test(slug)) {
+    return { error: "Handle may only contain lowercase letters, numbers, and hyphens" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("tenants")
+    .select("slug")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (existing) return { error: "That handle is already taken" };
+
+  const { error: tenantErr } = await admin.from("tenants").insert({
+    slug,
+    name,
+    created_by: user.id,
+    account_type: accountType,
+  });
+  if (tenantErr) {
+    return {
+      error: tenantErr.message.includes("account_type")
+        ? "Database isn't migrated yet — apply migration 064 (account_type), then retry."
+        : `Couldn't create workspace: ${tenantErr.message}`,
+    };
+  }
+
+  const { error: memberErr } = await admin.from("memberships").insert({
+    user_id: user.id,
+    tenant_slug: slug,
+    role: "owner",
+  });
+  if (memberErr) return { error: `Couldn't add you to the workspace: ${memberErr.message}` };
+
+  await setTenantCookie(slug);
+  // New workspace has no brand voice yet → the (app) layout gate routes to the
+  // right setup flow (audit for startup, personal for individual).
   redirect("/dashboard");
 }
