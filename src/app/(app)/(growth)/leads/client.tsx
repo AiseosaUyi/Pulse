@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { formatDateTime } from "@/lib/utils/format";
 import { useSearchParams } from "next/navigation";
 import {
   Plus,
@@ -1145,7 +1146,7 @@ function InboxView({
                   {message.platform}
                 </span>
                 <span className="text-[10px] text-text-muted ml-auto">
-                  {new Date(message.receivedAt).toLocaleString()}
+                  {formatDateTime(message.receivedAt)}
                 </span>
               </div>
               <p className="text-sm text-text-secondary mt-1 line-clamp-2">
@@ -1359,7 +1360,7 @@ function DiscoveryView({
                     <p className="text-[10px] text-text-muted mt-1">
                       Last run{" "}
                       {s.lastRunAt
-                        ? `${new Date(s.lastRunAt).toLocaleString()} · added ${s.lastResultCount}`
+                        ? `${formatDateTime(s.lastRunAt)} · added ${s.lastResultCount}`
                         : "never"}
                     </p>
                   </div>

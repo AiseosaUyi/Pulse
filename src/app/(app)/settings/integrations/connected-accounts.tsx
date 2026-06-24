@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { formatDateTime } from "@/lib/utils/format";
 import {
   initiateComposioConnection,
   confirmComposioConnection,
@@ -202,7 +203,7 @@ export function ConnectedAccountsSection({
                   {r.lastSyncedAt && (
                     <>
                       <span className="text-text-muted">·</span> last synced{" "}
-                      {new Date(r.lastSyncedAt).toLocaleString()}
+                      {formatDateTime(r.lastSyncedAt)}
                     </>
                   )}
                 </p>

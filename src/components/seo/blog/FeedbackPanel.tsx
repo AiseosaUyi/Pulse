@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { formatDateTime } from "@/lib/utils/format";
 import { Mic, Square, Loader2, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -351,7 +352,7 @@ function FeedbackItem({
             </span>
           )}
           <span>
-            {new Date(feedback.createdAt).toLocaleString("en-US", {
+            {formatDateTime(feedback.createdAt, {
               month: "short",
               day: "numeric",
               hour: "numeric",

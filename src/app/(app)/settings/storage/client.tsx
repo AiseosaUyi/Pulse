@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { formatDate } from "@/lib/utils/format";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -136,7 +137,7 @@ export function StoragePruneClient({
               </td>
               <td className="px-3 py-2.5 text-xs text-text-muted text-right">
                 {f.updatedAt
-                  ? new Date(f.updatedAt).toLocaleDateString("en-US", {
+                  ? formatDate(f.updatedAt, {
                       month: "short",
                       day: "numeric",
                     })

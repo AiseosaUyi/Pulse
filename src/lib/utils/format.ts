@@ -16,3 +16,46 @@ export function formatNumber(value: number): string {
   }
   return value.toString();
 }
+
+// Deterministic date/time/number formatting for the UI.
+//
+// In a client component the same render runs on the server (for the SSR HTML)
+// and again on the client (for hydration). `toLocaleDateString()` /
+// `toLocaleString()` without an explicit locale + timeZone use the runtime's
+// own locale and zone, so the server (UTC / Node default locale) and the
+// browser (the user's locale + zone) produce DIFFERENT strings — React then
+// throws hydration error #418 and re-renders the whole subtree. Pinning both
+// the locale and the timeZone makes the output identical everywhere.
+//
+// Africa/Lagos matches the product's market (and the en-NG currency above);
+// it has a fixed UTC+1 offset with no DST, so dates/times stay stable.
+export const APP_TIME_ZONE = "Africa/Lagos";
+
+export function formatDate(
+  value: string | number | Date,
+  opts: Intl.DateTimeFormatOptions = {}
+): string {
+  return new Date(value).toLocaleDateString("en-US", {
+    timeZone: APP_TIME_ZONE,
+    ...opts,
+  });
+}
+
+export function formatDateTime(
+  value: string | number | Date,
+  opts: Intl.DateTimeFormatOptions = {}
+): string {
+  return new Date(value).toLocaleString("en-US", {
+    timeZone: APP_TIME_ZONE,
+    ...opts,
+  });
+}
+
+// Thousands-separated count (e.g. "1,020"). Pins en-US so the separator is
+// identical on server and client.
+export function formatCount(
+  value: number,
+  opts: Intl.NumberFormatOptions = {}
+): string {
+  return value.toLocaleString("en-US", opts);
+}

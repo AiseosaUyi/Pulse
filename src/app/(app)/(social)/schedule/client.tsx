@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { APP_TIME_ZONE } from "@/lib/utils/format";
 import { useRouter } from "next/navigation";
 import { CalendarClock, Clock, CheckCircle2, AlertCircle, Loader2, ExternalLink, X } from "lucide-react";
 import { XIcon, LinkedInIcon, InstagramIcon, TikTokIcon, YouTubeIcon } from "@/components/icons/social";
@@ -41,7 +42,8 @@ const STATUS_CONFIG = {
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
+  return new Date(iso).toLocaleString("en-US", {
+    timeZone: APP_TIME_ZONE,
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   });
 }

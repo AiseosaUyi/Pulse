@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { formatDateTime } from "@/lib/utils/format";
 import Link from "next/link";
 import { Sparkles, Loader2, PenLine, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -89,7 +90,7 @@ export function TopicalMapClient({
           {generatedAt && (
             <p className="text-text-muted/70 text-xs mt-1">
               Last generated{" "}
-              {new Date(generatedAt).toLocaleString(undefined, {
+              {formatDateTime(generatedAt, {
                 dateStyle: "medium",
                 timeStyle: "short",
               })}

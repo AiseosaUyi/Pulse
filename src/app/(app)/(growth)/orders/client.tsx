@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { formatCount, APP_TIME_ZONE } from "@/lib/utils/format";
 import { Plus } from "lucide-react";
 import { createManualOrder } from "@/lib/actions/orders";
 import { toast } from "@/components/ui/Toaster";
 import type { OrderRecord, OrderStats } from "@/lib/services/orders";
 
 function money(amount: number, currency: string): string {
-  return `${currency} ${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  return `${currency} ${formatCount(amount, { maximumFractionDigits: 0 })}`;
 }
 
 export function OrdersClient({
@@ -156,6 +157,7 @@ export function OrdersClient({
                 <tr key={o.id} className="border-b border-border/50 last:border-0">
                   <td className="px-4 py-3 text-text-secondary">
                     {new Date(o.createdAt).toLocaleString("en-GB", {
+                      timeZone: APP_TIME_ZONE,
                       day: "2-digit",
                       month: "short",
                       hour: "2-digit",

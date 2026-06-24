@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { formatCount, formatDateTime } from "@/lib/utils/format";
 import { History, Undo2, GitCompare, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DiffViewer } from "./DiffViewer";
@@ -92,7 +93,7 @@ export function VersionHistory({
                   {v.diffSummary ?? "(saved)"}
                 </span>
                 <span className="text-text-muted shrink-0">
-                  {v.wordCount.toLocaleString()}w
+                  {formatCount(v.wordCount)}w
                 </span>
                 {v.contentScore != null && (
                   <span
@@ -106,7 +107,7 @@ export function VersionHistory({
                   </span>
                 )}
                 <span className="text-text-muted shrink-0">
-                  {new Date(v.createdAt).toLocaleString("en-US", {
+                  {formatDateTime(v.createdAt, {
                     month: "short",
                     day: "numeric",
                     hour: "numeric",

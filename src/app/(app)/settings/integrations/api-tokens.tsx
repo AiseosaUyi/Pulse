@@ -5,6 +5,7 @@
 // shown ONCE at create — after that only the prefix + last 4 remain.
 
 import { useState, useTransition } from "react";
+import { formatDate, formatDateTime } from "@/lib/utils/format";
 import {
   Plus,
   Copy,
@@ -213,9 +214,9 @@ export function ApiTokensSection({
                   {t.tokenPrefix}…{t.tokenLast4}
                 </p>
                 <p className="text-[10px] text-text-muted mt-0.5">
-                  Created {new Date(t.createdAt).toLocaleDateString()}
+                  Created {formatDate(t.createdAt)}
                   {t.lastUsedAt
-                    ? ` · last used ${new Date(t.lastUsedAt).toLocaleString()}`
+                    ? ` · last used ${formatDateTime(t.lastUsedAt)}`
                     : " · never used"}
                 </p>
               </div>

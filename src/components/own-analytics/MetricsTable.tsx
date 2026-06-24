@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { formatDate } from "@/lib/utils/format";
 import { Trash2 } from "lucide-react";
 import { deleteOwnMetric } from "@/lib/actions/own-metrics";
 import { useDialogs } from "@/components/ui/Dialog";
@@ -141,7 +142,7 @@ export function MetricsTable({
                       : "—"}
                   </td>
                   <td className="px-4 py-3 text-right text-text-muted text-xs whitespace-nowrap">
-                    {new Date(m.capturedAt).toLocaleDateString("en-US", {
+                    {formatDate(m.capturedAt, {
                       month: "short",
                       day: "numeric",
                       year: "2-digit",
