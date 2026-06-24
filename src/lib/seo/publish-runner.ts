@@ -31,6 +31,7 @@ import {
   resolveContentfulConfig,
   type GruveBlogDraft,
   type GruveBlogAssets,
+  type PublishTarget,
 } from "@/lib/integrations/contentful";
 import { embedSeoPost } from "@/lib/vector/embed";
 
@@ -110,9 +111,12 @@ export async function sweepDuePublishes(): Promise<{
 export async function runPublish(args: {
   blogPostId: string;
   triggeredBy?: string | null;
+  /** Which Contentful environment to publish into. Default "live" (master/www). */
+  target?: PublishTarget;
 }): Promise<PublishOutcome> {
   const supabase = createAdminClient();
   const { blogPostId } = args;
+  const target: PublishTarget = args.target ?? "live";
 
   // ── Load post ──────────────────────────────────────────────────────
   const { data: post, error: postErr } = await supabase
@@ -135,9 +139,10 @@ export async function runPublish(args: {
 
   let version: number = post.version;
 
-  // Resolve this tenant's Contentful config (per-tenant integration, env
-  // fallback). Fail fast if neither is set — nothing downstream can publish.
-  const cfg = await resolveContentfulConfig(post.tenant_slug);
+  // Resolve this tenant's Contentful config for the requested target
+  // (per-tenant integration, env fallback). Fail fast if neither is set —
+  // nothing downstream can publish.
+  const cfg = await resolveContentfulConfig(post.tenant_slug, target);
   if (!cfg) {
     return {
       runId: "",
@@ -183,12 +188,24 @@ export async function runPublish(args: {
   // ── Reuse or create the run ────────────────────────────────────────
   const { data: openRun } = await supabase
     .from("seo_publish_runs")
-    .select("id")
+    .select("id, target")
     .eq("blog_post_id", blogPostId)
     .eq("status", "running")
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  // Never let a resume/retry flip an in-flight run between live and test —
+  // that would publish a half-done run into the wrong Contentful environment.
+  if (openRun?.id && openRun.target && openRun.target !== target) {
+    return {
+      runId: openRun.id,
+      status: "failed",
+      resumedFrom: null,
+      failedStep: "load_post",
+      error: `a '${openRun.target}' publish is already in progress for this post; finish or cancel it before publishing to '${target}'`,
+    };
+  }
 
   let runId: string;
   if (openRun?.id) {
@@ -202,6 +219,7 @@ export async function runPublish(args: {
         status: "running",
         workflow_run_id: `${blogPostId}:${version}`,
         triggered_by: args.triggeredBy ?? null,
+        target,
       })
       .select("id")
       .single();

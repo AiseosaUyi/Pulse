@@ -12,7 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runPublish } from "@/lib/seo/publish-runner";
 import { markdownToRichText, isRichTextDocument } from "@/lib/seo/markdown-to-richtext";
-import { resolveContentfulConfig } from "@/lib/integrations/contentful";
+import { resolveContentfulConfig, type PublishTarget } from "@/lib/integrations/contentful";
 import { getTenantSeoConfig } from "@/lib/seo/tenant-seo-config";
 
 export interface PublishReadiness {
@@ -61,13 +61,14 @@ export type PublishResult =
   | { success: false; error: string; missing?: string[] };
 
 export async function publishBlogToGruve(
-  postId: string
+  postId: string,
+  target: PublishTarget = "live"
 ): Promise<PublishResult> {
   await requireUser();
   const tenant = await getCurrentTenant();
   if (!tenant) return { success: false, error: "No active tenant" };
 
-  const cfg = await resolveContentfulConfig(tenant.slug);
+  const cfg = await resolveContentfulConfig(tenant.slug, target);
   if (!cfg) {
     return {
       success: false,
@@ -113,7 +114,7 @@ export async function publishBlogToGruve(
     .eq("id", postId);
   if (upErr) return { success: false, error: `Could not stage publish: ${upErr.message}` };
 
-  const outcome = await runPublish({ blogPostId: postId });
+  const outcome = await runPublish({ blogPostId: postId, target });
   if (outcome.status !== "succeeded") {
     return {
       success: false,
@@ -123,14 +124,18 @@ export async function publishBlogToGruve(
 
   revalidatePath("/seo-tracker/blog-writer");
   revalidatePath(`/seo-tracker/blog-writer/${postId}`);
-  // Live URL from the tenant's configured domain (no hardcoded host).
+  // Build both view links from real hosts (no hardcoded tenant domain):
+  //  - liveUrl  → the tenant's production site (www), from tenant settings
+  //  - gammaUrl → the staging site, from GRUVE_STAGING_BASE_URL when set
+  // The returned link the user clicks matches the target they published to.
   const seo = await getTenantSeoConfig(tenant.slug);
-  const liveUrl = seo.siteBaseUrl
-    ? `${seo.siteBaseUrl}/blogs/${post.slug}`
-    : `/blogs/${post.slug}`;
+  const path = `/blogs/${post.slug}`;
+  const liveUrl = seo.siteBaseUrl ? `${seo.siteBaseUrl}${path}` : path;
+  const stagingBase = process.env.GRUVE_STAGING_BASE_URL?.trim();
+  const gammaUrl = stagingBase ? `${stagingBase}${path}` : liveUrl;
   return {
     success: true,
-    gammaUrl: liveUrl,
+    gammaUrl,
     liveUrl,
   };
 }

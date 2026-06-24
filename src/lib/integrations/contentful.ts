@@ -29,9 +29,20 @@ import { getIntegrationSecrets } from "@/lib/services/integrations";
 const ENV_SPACE = process.env.CONTENTFUL_SPACE_ID;
 const ENV_CMA_TOKEN = process.env.CONTENTFUL_CMA_TOKEN;
 const ENV_ENV_ID = process.env.CONTENTFUL_ENVIRONMENT ?? "master";
+// Test/staging Contentful environment (e.g. Gruve's `Production` env, which the
+// gamma site reads). Used when publishing with target 'test' so a single Pulse
+// deployment can publish to either environment without redeploying.
+const ENV_TEST_ENV_ID = process.env.CONTENTFUL_TEST_ENVIRONMENT ?? "Production";
 const ENV_LOCALE = process.env.CONTENTFUL_DEFAULT_LOCALE ?? "en-US";
 const DEFAULT_BLOG_CT = "gruveBlog";
 const DEFAULT_LANDING_CT = "seoLandingPage";
+
+/**
+ * Which environment a publish targets:
+ * - "live" → the production Contentful environment (master → www)
+ * - "test" → the staging Contentful environment (Production → gamma)
+ */
+export type PublishTarget = "live" | "test";
 
 export interface ContentfulConfig {
   spaceId: string;
@@ -42,12 +53,12 @@ export interface ContentfulConfig {
   landingContentType: string;
 }
 
-function envContentfulConfig(): ContentfulConfig | null {
+function envContentfulConfig(target: PublishTarget): ContentfulConfig | null {
   if (!ENV_SPACE || !ENV_CMA_TOKEN) return null;
   return {
     spaceId: ENV_SPACE,
     cmaToken: ENV_CMA_TOKEN,
-    envId: ENV_ENV_ID,
+    envId: target === "test" ? ENV_TEST_ENV_ID : ENV_ENV_ID,
     locale: ENV_LOCALE,
     blogContentType: DEFAULT_BLOG_CT,
     landingContentType: DEFAULT_LANDING_CT,
@@ -58,17 +69,24 @@ function envContentfulConfig(): ContentfulConfig | null {
  * Resolve a tenant's Contentful config: per-tenant integration first
  * (provider 'contentful'), env vars as fallback. Returns null when neither
  * is configured.
+ *
+ * `target` selects the environment: "live" → production env (master), "test" →
+ * staging env (Production). The CMA token and space are the same for both — only
+ * the environment id changes — so one set of credentials drives both targets.
  */
 export async function resolveContentfulConfig(
-  tenantSlug: string
+  tenantSlug: string,
+  target: PublishTarget = "live"
 ): Promise<ContentfulConfig | null> {
   const creds = await getIntegrationSecrets(tenantSlug, "contentful");
   const spaceId = creds?.config?.space_id ? String(creds.config.space_id) : "";
   if (creds?.secretToken && spaceId) {
+    const liveEnv = String(creds.config.environment ?? "master");
+    const testEnv = String(creds.config.test_environment ?? "Production");
     return {
       spaceId,
       cmaToken: creds.secretToken,
-      envId: String(creds.config.environment ?? "master"),
+      envId: target === "test" ? testEnv : liveEnv,
       locale: String(creds.config.locale ?? "en-US"),
       blogContentType: String(creds.config.blog_content_type ?? DEFAULT_BLOG_CT),
       landingContentType: String(
@@ -76,7 +94,7 @@ export async function resolveContentfulConfig(
       ),
     };
   }
-  return envContentfulConfig();
+  return envContentfulConfig(target);
 }
 
 /** True if Contentful is usable for this tenant (per-tenant or env fallback). */
