@@ -46,6 +46,9 @@ export function ProgrammaticClient({ tenantSlug, templates, pages }: Props) {
   const [previewPage, setPreviewPage] = useState<ProgrammaticPageRecord | null>(
     null
   );
+  // Publish target for ALL pages on this screen. Defaults to Test (gamma) so a
+  // bulk-generated set never lands on live www without an explicit switch.
+  const [publishTarget, setPublishTarget] = useState<"test" | "live">("test");
 
   const pagesByTemplate = useMemo(() => {
     const map = new Map<string, ProgrammaticPageRecord[]>();
@@ -64,16 +67,43 @@ export function ProgrammaticClient({ tenantSlug, templates, pages }: Props) {
           {templates.length} template{templates.length === 1 ? "" : "s"} ·{" "}
           {pages.length} page{pages.length === 1 ? "" : "s"} generated
         </p>
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditing(null);
-            setShowEditor(true);
-          }}
-        >
-          <Plus size={14} />
-          New template
-        </Button>
+        <div className="flex items-center gap-3">
+          {/* Publish target for every "Publish to Gruve" button below. */}
+          <div
+            className="flex items-center gap-1 rounded-lg border border-border bg-sidebar p-0.5"
+            role="group"
+            aria-label="Publish target"
+          >
+            {([
+              { value: "test", label: "Test (gamma)" },
+              { value: "live", label: "Live (www)" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setPublishTarget(opt.value)}
+                aria-pressed={publishTarget === opt.value}
+                className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                  publishTarget === opt.value
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-text-muted hover:text-foreground"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditing(null);
+              setShowEditor(true);
+            }}
+          >
+            <Plus size={14} />
+            New template
+          </Button>
+        </div>
       </div>
 
       {templates.length === 0 ? (
@@ -246,6 +276,7 @@ export function ProgrammaticClient({ tenantSlug, templates, pages }: Props) {
                                     tenantSlug={tenantSlug}
                                     pageId={p.id}
                                     isLive={Boolean(p.liveUrl)}
+                                    target={publishTarget}
                                   />
                                   <DeletePageButton
                                     tenantSlug={tenantSlug}
@@ -480,18 +511,21 @@ function PublishToGruveButton({
   tenantSlug,
   pageId,
   isLive,
+  target,
 }: {
   tenantSlug: string;
   pageId: string;
   isLive: boolean;
+  target: "test" | "live";
 }) {
   const dialogs = useDialogs();
   const [isPending, startTransition] = useTransition();
+  const dest = target === "test" ? "gamma" : "www";
   return (
     <button
       onClick={() =>
         startTransition(async () => {
-          const res = await publishProgrammaticPage(tenantSlug, pageId);
+          const res = await publishProgrammaticPage(tenantSlug, pageId, target);
           if (!res.success) {
             await dialogs.alert({
               title: "Couldn't publish",
@@ -501,7 +535,10 @@ function PublishToGruveButton({
             return;
           }
           await dialogs.alert({
-            title: isLive ? "Re-published to Gruve" : "Published to Gruve",
+            title:
+              target === "test"
+                ? "Published to gamma (test)"
+                : "Published to Gruve (live)",
             subtitle: `Live at ${res.liveUrl} — it'll appear in the sitemap and be indexable shortly.`,
           });
         })
@@ -509,7 +546,11 @@ function PublishToGruveButton({
       disabled={isPending}
       className="text-[11px] px-2 py-0.5 rounded-full font-medium text-primary-500 border border-primary-500/30 hover:bg-primary-50 disabled:opacity-50"
     >
-      {isPending ? "Publishing…" : isLive ? "Re-publish" : "Publish to Gruve"}
+      {isPending
+        ? "Publishing…"
+        : isLive
+          ? `Re-publish → ${dest}`
+          : `Publish → ${dest}`}
     </button>
   );
 }
