@@ -130,6 +130,8 @@ export function BlogEditorPageClient({
   const [isSaving, startSave] = useTransition();
   const [isDeleting, startDelete] = useTransition();
   const [isPublishing, startPublish] = useTransition();
+  // Default to the safe target: test (gamma), not live (www).
+  const [publishTarget, setPublishTarget] = useState<"test" | "live">("test");
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<{ gammaUrl: string; liveUrl: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -359,7 +361,7 @@ export function BlogEditorPageClient({
         setPublishError(saved.error);
         return;
       }
-      const res = await publishBlogToGruve(post.id);
+      const res = await publishBlogToGruve(post.id, publishTarget);
       if (!res.success) {
         setPublishError(res.error);
         return;
@@ -801,13 +803,45 @@ export function BlogEditorPageClient({
                 ))}
               </ul>
 
+              {/* Publish target: default Test (gamma) so a normal click never
+                  touches live content. Switch to Live to publish to www. */}
+              <div
+                className="flex items-center gap-1 rounded-lg border border-border bg-sidebar p-1"
+                role="group"
+                aria-label="Publish target"
+              >
+                {([
+                  { value: "test", label: "Test (gamma)" },
+                  { value: "live", label: "Live (www)" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPublishTarget(opt.value)}
+                    disabled={isPublishing}
+                    aria-pressed={publishTarget === opt.value}
+                    className={`flex-1 rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors ${
+                      publishTarget === opt.value
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
               <Button
                 className="w-full gap-1.5"
                 disabled={!readyToPublish || isPublishing || dirty}
                 onClick={handlePublish}
               >
                 <Rocket size={14} />
-                {isPublishing ? "Publishing…" : "Push to Gruve"}
+                {isPublishing
+                  ? "Publishing…"
+                  : publishTarget === "test"
+                    ? "Push to gamma (test)"
+                    : "Push to Gruve (live)"}
               </Button>
               {dirty && (
                 <p className="text-[11px] text-text-muted">
