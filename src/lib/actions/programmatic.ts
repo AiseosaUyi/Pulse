@@ -16,6 +16,7 @@ import {
   resolveContentfulConfig,
   upsertSeoLandingPage,
   publishSeoLandingEntry,
+  type PublishTarget,
 } from "@/lib/integrations/contentful";
 import { getTenantSeoConfig } from "@/lib/seo/tenant-seo-config";
 
@@ -285,9 +286,10 @@ export async function deleteProgrammaticPage(
 // pulseId on the CMA side; records the entry id + live URL locally.
 export async function publishProgrammaticPage(
   tenantSlug: string,
-  id: string
+  id: string,
+  target: PublishTarget = "live"
 ): Promise<ActionResult<{ liveUrl: string }>> {
-  const cfg = await resolveContentfulConfig(tenantSlug);
+  const cfg = await resolveContentfulConfig(tenantSlug, target);
   if (!cfg) {
     return {
       success: false,
@@ -304,6 +306,12 @@ export async function publishProgrammaticPage(
         "Set this workspace's site domain (Settings) before publishing — it's needed to build the canonical URL.",
     };
   }
+
+  // Test publishes go to the staging site (gamma) when configured; live → www.
+  // The Contentful environment is already chosen by `target` via cfg.envId.
+  const stagingBase = process.env.GRUVE_STAGING_BASE_URL?.trim();
+  const siteBase =
+    target === "test" && stagingBase ? stagingBase : seo.siteBaseUrl;
 
   const supabase = await createClient();
   const { data: page, error } = await supabase
@@ -323,7 +331,7 @@ export async function publishProgrammaticPage(
   const { category, location } = deriveFacet(
     (page.variables as Record<string, string>) ?? {}
   );
-  const canonical = `${seo.siteBaseUrl}${seo.landingRoutePrefix}/${page.slug}`;
+  const canonical = `${siteBase}${seo.landingRoutePrefix}/${page.slug}`;
 
   try {
     const bodyRichText = await markdownToRichText(page.body_md);
