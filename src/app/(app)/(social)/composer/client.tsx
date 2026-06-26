@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { CalendarClock, ChevronDown, Copy, Loader2, Send } from "lucide-react";
 import { VoiceMicButton } from "@/components/ui/VoiceMicButton";
 import { Button } from "@/components/ui/button";
@@ -87,7 +87,17 @@ function minScheduleTime(): string {
   return d.toISOString().slice(0, 16);
 }
 
-export function Composer({ tenantSlug, initialAngle }: { tenantSlug: string; initialAngle?: string }) {
+export function Composer({
+  tenantSlug,
+  initialAngle,
+  initialDate: initialDateProp,
+  hasConnections = true,
+}: {
+  tenantSlug: string;
+  initialAngle?: string;
+  initialDate?: string;
+  hasConnections?: boolean;
+}) {
   const [mode, setMode] = useState<ComposeMode>("original");
   const [input, setInput] = useState(initialAngle ?? "");
   const [variants, setVariants] = useState<DraftVariants | null>(null);
@@ -102,6 +112,14 @@ export function Composer({ tenantSlug, initialAngle }: { tenantSlug: string; ini
   const [scheduleTime, setScheduleTime] = useState("");
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const xTextareaRef = useRef<HTMLTextAreaElement>(null);
+  // Date chip: YYYY-MM-DD from calendar "Draft for this day" link
+  const [activeDate, setActiveDate] = useState<string | undefined>(initialDateProp);
+
+  useEffect(() => {
+    if (initialDateProp) {
+      setScheduleTime(initialDateProp + "T09:00");
+    }
+  }, [initialDateProp]);
 
   function splitInput(raw: string): { sourceUrl?: string; angle?: string } {
     const trimmed = raw.trim();
@@ -242,6 +260,27 @@ export function Composer({ tenantSlug, initialAngle }: { tenantSlug: string; ini
           </Button>
         ))}
       </div>
+
+      {/* Date chip — shown when arriving from calendar */}
+      {activeDate && (
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-xs text-primary-500">
+            Drafting for{" "}
+            {new Date(activeDate + "T00:00:00").toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            })}
+            <button
+              type="button"
+              onClick={() => setActiveDate(undefined)}
+              className="text-primary-400 hover:text-primary-600 leading-none"
+              aria-label="Clear date"
+            >
+              ✕
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* Input area */}
       <div className="flex flex-col gap-3">
@@ -459,7 +498,21 @@ export function Composer({ tenantSlug, initialAngle }: { tenantSlug: string; ini
 
               {otherOpen && (
                 <div className="mt-3 flex flex-col gap-2">
-                  {/* Platform chip toggles */}
+                  {!hasConnections && (
+                    <div className="rounded-xl border border-border bg-card p-4 text-center">
+                      <p className="text-sm font-medium text-foreground mb-1">Connect your accounts to schedule</p>
+                      <p className="text-xs text-text-muted mb-3">Link LinkedIn, Instagram, TikTok, or YouTube to start posting.</p>
+                      <a
+                        href="/settings/social-publishing"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-primary-500 px-4 py-2 text-xs font-medium text-white hover:bg-primary-600 transition-colors"
+                      >
+                        Connect accounts →
+                      </a>
+                    </div>
+                  )}
+                  {/* Platform chip toggles + cards (only when accounts connected) */}
+                  {hasConnections && (
+                    <>
                   <div className="flex gap-2">
                     {SECONDARY_PLATFORMS.map((p) => {
                       const Icon = PLATFORM_ICON[p];
@@ -540,6 +593,8 @@ export function Composer({ tenantSlug, initialAngle }: { tenantSlug: string; ini
                       </div>
                     );
                   })}
+                    </>
+                  )}
                 </div>
               )}
             </div>

@@ -63,7 +63,9 @@ export async function getPlatformScore(
   const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
   // Recent posts (last 30 days) + previous window (30-60 days ago) for trend.
-  const [recentPostsRes, priorPostsRes] = await Promise.all([
+  // Also pull from scheduled_posts (Pulse-published) for frequency — these
+  // have no engagement data so they only boost the frequency dimension.
+  const [recentPostsRes, priorPostsRes, recentPulseRes, priorPulseRes] = await Promise.all([
     supabase
       .from("posts")
       .select("platform, reach, likes, comments, shares, saves, posted_at")
@@ -75,10 +77,30 @@ export async function getPlatformScore(
       .eq("tenant_slug", tenantSlug)
       .gte("posted_at", sixtyDaysAgo)
       .lt("posted_at", thirtyDaysAgo),
+    supabase
+      .from("scheduled_posts")
+      .select("platform, posted_at")
+      .eq("tenant_slug", tenantSlug)
+      .eq("status", "published")
+      .gte("posted_at", thirtyDaysAgo),
+    supabase
+      .from("scheduled_posts")
+      .select("platform, posted_at")
+      .eq("tenant_slug", tenantSlug)
+      .eq("status", "published")
+      .gte("posted_at", sixtyDaysAgo)
+      .lt("posted_at", thirtyDaysAgo),
   ]);
 
   const recentPosts = recentPostsRes.data ?? [];
   const priorPosts = priorPostsRes.data ?? [];
+  const recentPulse = recentPulseRes.data ?? [];
+  const priorPulse = priorPulseRes.data ?? [];
+
+  // scheduled_posts uses "x"; score map uses "twitter". youtube is not scored.
+  function normalizePlatform(p: string): string {
+    return p === "x" ? "twitter" : p;
+  }
 
   function erForPlatform(rows: { platform: string; reach: number; likes: number; comments: number; shares: number; saves: number }[], platform: string): number {
     const plat = rows.filter((r) => r.platform === platform);
@@ -94,7 +116,8 @@ export async function getPlatformScore(
   const platforms: PlatformScore[] = (["instagram", "tiktok", "twitter", "linkedin"] as const).map((slug) => {
     const config = platformConfigs.find((p) => p.platform === slug);
     const recentForPlat = recentPosts.filter((r) => r.platform === slug);
-    const postCount = recentForPlat.length;
+    const pulseForPlat = recentPulse.filter((r) => normalizePlatform(r.platform) === slug);
+    const postCount = recentForPlat.length + pulseForPlat.length;
 
     const freqScore = Math.round(clamp((postCount / FREQUENCY_BENCHMARK) * 10, 0, 10));
 

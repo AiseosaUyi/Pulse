@@ -132,7 +132,7 @@ export function CalendarView({
               >
                 {day.posts.length === 0 ? (
                   <Link
-                    href={`/composer`}
+                    href={`/composer?date=${day.iso}`}
                     className="flex flex-1 items-center justify-center opacity-0 hover:opacity-100 transition-opacity group"
                     title="Draft a post for this day"
                   >
