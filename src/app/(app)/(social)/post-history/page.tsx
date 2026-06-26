@@ -1,5 +1,8 @@
+import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { getCurrentTenant } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getPosts, summarize } from "@/lib/services/posts";
 import {
   POST_CONTENT_TYPE_LABELS,
@@ -8,6 +11,14 @@ import {
   type PostPlatform,
 } from "@/lib/types/posts";
 import { AddPostButton } from "./client";
+
+const PULSE_PLATFORM_COLORS: Record<string, string> = {
+  linkedin: "text-blue-500",
+  instagram: "text-primary-500",
+  tiktok: "text-foreground",
+  youtube: "text-red-500",
+  x: "text-foreground",
+};
 
 const platformColors: Record<PostPlatform, string> = {
   instagram: "text-primary-500",
@@ -42,6 +53,18 @@ export default async function PostHistoryPage() {
   const posts = tenant ? await getPosts(tenant.slug) : [];
   const summary = summarize(posts);
 
+  const admin = createAdminClient();
+  const { data: pulsePosts } = tenant
+    ? await admin
+        .from("scheduled_posts")
+        .select("id, platform, content, scheduled_for, posted_at, platform_post_url, status")
+        .eq("tenant_slug", tenant.slug)
+        .eq("status", "published")
+        .order("posted_at", { ascending: false })
+        .limit(50)
+    : { data: [] };
+  const publishedViaPulse = pulsePosts ?? [];
+
   return (
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="flex items-start justify-between mb-8">
@@ -73,25 +96,57 @@ export default async function PostHistoryPage() {
         </div>
       </div>
 
-      {posts.length === 0 ? (
-        <div className="bg-card rounded-xl border border-border/50 p-8 max-w-[720px] mx-auto">
-          <p className="text-sm text-foreground font-semibold mb-2">
-            No posts logged yet
-          </p>
-          <p className="text-text-secondary text-xs leading-relaxed">
-            Post History tracks what you ship and how it performs. Pulse
-            can&apos;t auto-pull metrics from IG / TikTok / X / LinkedIn
-            yet — that needs platform API integrations (Meta Graph, TikTok
-            Business, both free but need app review).
-          </p>
-          <p className="text-text-secondary text-xs leading-relaxed mt-2">
-            Until then, after you post something, click{" "}
-            <span className="font-medium text-foreground">Log Post</span> top-right
-            and fill in the metrics from the native analytics view. The Platform
-            Score page + Dashboard breakdown both compute from these entries.
-          </p>
+      {publishedViaPulse.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-base font-semibold text-foreground mb-3">Published via Pulse</h2>
+          <div className="flex flex-col gap-2">
+            {publishedViaPulse.map((post) => {
+              const postedDate = post.posted_at
+                ? new Date(post.posted_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                : new Date(post.scheduled_for).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+              const platformColor = PULSE_PLATFORM_COLORS[post.platform] ?? "text-text-muted";
+              return (
+                <div key={post.id} className="bg-card rounded-xl border border-border/50 px-4 py-3 flex items-start gap-3">
+                  <span className={`text-xs font-semibold uppercase tracking-wide shrink-0 mt-0.5 w-16 ${platformColor}`}>
+                    {post.platform}
+                  </span>
+                  <p className="text-sm text-foreground flex-1 line-clamp-2 min-w-0">
+                    {(post.content as string)?.slice(0, 120) ?? "—"}
+                  </p>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs text-text-muted">{postedDate}</span>
+                    {post.platform_post_url && (
+                      <a
+                        href={post.platform_post_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs text-primary-500 hover:underline"
+                      >
+                        View <ExternalLink size={10} />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      ) : (
+      )}
+
+      {posts.length === 0 && publishedViaPulse.length === 0 ? (
+        <div className="bg-card rounded-xl border border-border/50 p-10 text-center max-w-lg mx-auto">
+          <p className="text-sm font-semibold text-foreground mb-2">No posts logged yet</p>
+          <p className="text-text-secondary text-xs leading-relaxed mb-5">
+            Once you start posting via Pulse, your history appears here automatically.
+          </p>
+          <Link
+            href="/composer"
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 transition-colors"
+          >
+            Compose a post →
+          </Link>
+        </div>
+      ) : posts.length === 0 ? null : (
         <div className="overflow-x-auto -mx-4 md:mx-0">
           <div className="bg-card rounded-xl border border-border/50 overflow-hidden min-w-[900px] md:min-w-0">
             <table className="w-full">

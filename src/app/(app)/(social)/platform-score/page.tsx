@@ -18,24 +18,23 @@ export default async function PlatformScorePage() {
       </div>
 
       {!hasAnyData ? (
-        <div className="bg-card rounded-2xl border border-border/50 p-8 max-w-[720px] mx-auto">
-          <p className="text-foreground font-semibold mb-2">No data yet</p>
-          <p className="text-text-muted text-sm leading-relaxed">
-            Platform Score is a real rubric — 40% post frequency + 30%
-            engagement rate + 20% audience + 10% connection health — but it
-            needs data to score against.
+        <div className="bg-card rounded-2xl border border-border/50 p-10 text-center max-w-lg mx-auto">
+          <p className="text-lg font-semibold text-foreground mb-2">No score yet</p>
+          <p className="text-text-muted text-sm leading-relaxed mb-6">
+            Your score builds as you post. Start publishing via Pulse and it populates automatically.
           </p>
-          <p className="text-text-muted text-sm leading-relaxed mt-2">
-            Fastest path: go to{" "}
+          <Link
+            href="/composer"
+            className="inline-flex items-center gap-2 rounded-full bg-primary-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-600 transition-colors"
+          >
+            Compose a post →
+          </Link>
+          <p className="mt-4 text-xs text-text-muted">
+            Or{" "}
             <Link href="/post-history" className="text-primary-500 hover:underline">
-              Post History
+              log a past post
             </Link>{" "}
-            and log your recent 30 days of posts with reach / likes /
-            comments. Scores populate within a minute.
-          </p>
-          <p className="text-text-muted text-sm leading-relaxed mt-2">
-            Automatic sync from Meta Graph + TikTok Business API is on the
-            roadmap — both are free but require platform app review.
+            to seed your score.
           </p>
         </div>
       ) : (
