@@ -2,15 +2,13 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { listBriefs } from "@/lib/services/briefs";
-import {
-  listScheduledPosts,
-  buildCalendarWeek,
-} from "@/lib/services/scheduled-posts";
+import { listScheduledPosts } from "@/lib/services/scheduled-posts";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
 import { listForTenant as listContentPlans } from "@/lib/services/content-plans";
 import { AIContentClient } from "./client";
 import { ContentBriefsClient } from "@/app/(app)/(intelligence)/content-briefs/client";
 import { VideoPlansTab } from "./_video-plans-tab";
+import { CalendarView } from "./CalendarView";
 
 type Tab = "calendar" | "briefs" | "videos";
 
@@ -19,6 +17,15 @@ function normalizeTab(raw: string | string[] | undefined): Tab {
   if (value === "briefs") return "briefs";
   if (value === "videos") return "videos";
   return "calendar";
+}
+
+function getMondayOf(d: Date): Date {
+  const copy = new Date(d);
+  copy.setHours(0, 0, 0, 0);
+  const day = copy.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  copy.setDate(copy.getDate() + diff);
+  return copy;
 }
 
 export default async function ContentPage({
@@ -32,29 +39,22 @@ export default async function ContentPage({
   const tab = normalizeTab(tabParam);
 
   const now = new Date();
-  const weekStart = new Date(now);
-  weekStart.setHours(0, 0, 0, 0);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 7);
+  const weekStart = getMondayOf(now);
+  // Fetch 4-week range: 2 weeks back + 2 weeks ahead for instant client navigation
+  const rangeFrom = new Date(weekStart);
+  rangeFrom.setDate(rangeFrom.getDate() - 14);
+  const rangeTo = new Date(weekStart);
+  rangeTo.setDate(rangeTo.getDate() + 21);
 
   const [allBriefs, scheduled, voice, videoPlans] = await Promise.all([
     listBriefs(tenantSlug, { includeDismissed: true }),
     listScheduledPosts(tenantSlug, {
-      from: weekStart.toISOString(),
-      to: weekEnd.toISOString(),
+      from: rangeFrom.toISOString(),
+      to: rangeTo.toISOString(),
     }),
     getBrandVoice(tenantSlug),
     listContentPlans(tenantSlug, { limit: 30 }),
   ]);
-
-  const calendar = buildCalendarWeek(scheduled, weekStart);
-
-  const statusColors: Record<string, string> = {
-    draft: "bg-status-yellow",
-    scheduled: "bg-status-green",
-    posted: "bg-primary-500",
-    dismissed: "bg-text-muted",
-  };
 
   const approvedBriefs = allBriefs.filter((b) => b.status === "approved");
   const draftBriefs = allBriefs.filter((b) => b.status === "draft");
@@ -106,65 +106,10 @@ export default async function ContentPage({
 
       {tab === "calendar" && (
         <>
-          {/* Content Calendar */}
-          <div className="bg-card rounded-xl p-6 border border-border/50 mb-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-4">
-              This week
-            </h2>
-            <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 sm:gap-2">
-              {calendar.map((day) => (
-                <div key={day.date} className="text-center">
-                  <p className="text-text-muted text-xs mb-1">{day.dayLabel}</p>
-                  <div
-                    className={`rounded-lg p-3 min-h-[80px] ${
-                      day.posts.length > 0
-                        ? "bg-background border border-border/50"
-                        : "bg-background/50"
-                    }`}
-                  >
-                    <p className="text-text-secondary text-xs mb-2">
-                      {day.date.split(" ")[1]}
-                    </p>
-                    {day.posts.length === 0 ? (
-                      <p className="text-text-muted text-[10px]">—</p>
-                    ) : (
-                      <div className="space-y-1">
-                        {day.posts.map((post) => (
-                          <div
-                            key={post.id}
-                            className="flex items-center gap-1.5 justify-center"
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                statusColors[post.status] ?? "bg-text-muted"
-                              }`}
-                            />
-                            <span className="text-text-secondary text-[10px] capitalize">
-                              {post.platform}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center gap-4 mt-4 pt-3 border-t border-border/30">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-status-yellow" />
-                <span className="text-text-muted text-xs">Draft</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-status-green" />
-                <span className="text-text-muted text-xs">Scheduled</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-primary-500" />
-                <span className="text-text-muted text-xs">Posted</span>
-              </div>
-            </div>
-          </div>
+          <CalendarView
+            initialPosts={scheduled}
+            initialWeekStart={weekStart.toISOString()}
+          />
 
           {/* Brief suggestions */}
           <div className="bg-card rounded-xl p-6 border border-border/50">
@@ -214,13 +159,13 @@ export default async function ContentPage({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
               <StatCard label="Briefs waiting" value={approvedBriefs.length} tone="default" />
               <StatCard
-                label="Posts this week"
+                label="Posts scheduled"
                 value={scheduled.filter((s) => s.status === "scheduled").length}
                 tone="green"
               />
               <StatCard
-                label="Posted"
-                value={scheduled.filter((s) => s.status === "posted").length}
+                label="Published"
+                value={scheduled.filter((s) => s.status === "published").length}
                 tone="primary"
               />
               <StatCard label="Drafts" value={draftBriefs.length} tone="yellow" />

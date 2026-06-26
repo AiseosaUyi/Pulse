@@ -139,7 +139,7 @@ export function Composer({ tenantSlug, initialAngle }: { tenantSlug: string; ini
         hooks: d.hooks ?? [],
       });
       setMobilePlatform("x");
-      setOtherOpen(false);
+      setOtherOpen(true);
       setExpandedPlatforms(new Set());
       requestAnimationFrame(() => xTextareaRef.current?.focus());
     });
@@ -432,10 +432,12 @@ export function Composer({ tenantSlug, initialAngle }: { tenantSlug: string; ini
               )}
               {/* Footer */}
               <div className="mt-3 flex items-center justify-between border-t border-white-200 pt-3">
-                <span className="text-xs text-gray-1000">Copy and post manually on X</span>
-                <Button type="button" size="sm" onClick={() => handleCopy("x")}>
-                  <Copy /> Copy
-                </Button>
+                <span className="text-xs text-gray-1000">Direct X publishing coming soon</span>
+                <div className="flex items-center gap-2">
+                  <Button type="button" size="sm" variant="tertiary" onClick={() => handleCopy("x")}>
+                    <Copy size={13} /> Copy for X
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -452,7 +454,7 @@ export function Composer({ tenantSlug, initialAngle }: { tenantSlug: string; ini
                     otherOpen && "rotate-180"
                   )}
                 />
-                Other platforms
+                Schedule to other platforms
               </button>
 
               {otherOpen && (
@@ -503,6 +505,9 @@ export function Composer({ tenantSlug, initialAngle }: { tenantSlug: string; ini
                         <div className="mt-3 flex items-center justify-end gap-2 border-t border-white-200 pt-3">
                           <Button type="button" size="sm" variant="tertiary" onClick={() => openScheduler(p)}>
                             <CalendarClock size={13} /> Schedule
+                          </Button>
+                          <Button type="button" size="sm" variant="tertiary" onClick={() => handlePostNow(p)} disabled={scheduleLoading}>
+                            <Send size={13} /> Post now
                           </Button>
                           <Button type="button" size="sm" onClick={() => handleCopy(p)}>
                             <Copy /> Copy

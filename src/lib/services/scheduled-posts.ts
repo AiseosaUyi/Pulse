@@ -4,40 +4,37 @@ import type { ScheduledPost, ScheduledPostStatus } from "@/lib/types/scheduled-p
 interface Row {
   id: string;
   tenant_slug: string;
-  brief_id: string | null;
   platform: string;
-  content_type: string | null;
-  caption: string | null;
-  best_time: string | null;
+  content: string;
   scheduled_for: string;
+  posted_at: string | null;
+  platform_post_url: string | null;
   status: string;
-  posted_post_id: string | null;
-  notes: string | null;
+  error_message: string | null;
+  source: string;
   created_at: string;
-  updated_at: string;
-  content_briefs?: { title: string } | null;
 }
 
 function rowTo(row: Row): ScheduledPost {
   const status: ScheduledPostStatus =
-    row.status === "scheduled" || row.status === "posted" || row.status === "dismissed"
+    row.status === "scheduled" ||
+    row.status === "publishing" ||
+    row.status === "published" ||
+    row.status === "failed"
       ? row.status
       : "draft";
   return {
     id: row.id,
     tenantSlug: row.tenant_slug,
-    briefId: row.brief_id,
     platform: row.platform,
-    contentType: row.content_type,
-    caption: row.caption,
-    bestTime: row.best_time,
+    content: row.content,
     scheduledFor: row.scheduled_for,
+    postedAt: row.posted_at,
+    platformPostUrl: row.platform_post_url,
     status,
-    postedPostId: row.posted_post_id,
-    notes: row.notes,
+    errorMessage: row.error_message,
+    source: row.source ?? "composer",
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    briefTitle: row.content_briefs?.title ?? null,
   };
 }
 
@@ -48,7 +45,7 @@ export async function listScheduledPosts(
   const supabase = await createClient();
   let query = supabase
     .from("scheduled_posts")
-    .select("*, content_briefs(title)")
+    .select("id, tenant_slug, platform, content, scheduled_for, posted_at, platform_post_url, status, error_message, source, created_at")
     .eq("tenant_slug", tenantSlug)
     .order("scheduled_for", { ascending: true })
     .limit(options.limit ?? 200);
@@ -62,7 +59,8 @@ export async function listScheduledPosts(
 export interface CalendarDay {
   date: string;
   dayLabel: string;
-  posts: { id: string; platform: string; status: ScheduledPostStatus }[];
+  isoDate: string;
+  posts: { id: string; platform: string; status: ScheduledPostStatus; content: string }[];
 }
 
 export function buildCalendarWeek(
@@ -80,8 +78,13 @@ export function buildCalendarWeek(
     const date = day.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     const postsForDay = posts
       .filter((p) => p.scheduledFor.slice(0, 10) === iso)
-      .map((p) => ({ id: p.id, platform: p.platform, status: p.status }));
-    days.push({ date, dayLabel, posts: postsForDay });
+      .map((p) => ({
+        id: p.id,
+        platform: p.platform,
+        status: p.status,
+        content: p.content.slice(0, 60),
+      }));
+    days.push({ date, dayLabel, isoDate: iso, posts: postsForDay });
   }
   return days;
 }

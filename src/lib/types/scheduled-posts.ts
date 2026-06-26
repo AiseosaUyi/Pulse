@@ -1,18 +1,15 @@
-export type ScheduledPostStatus = "draft" | "scheduled" | "posted" | "dismissed";
+export type ScheduledPostStatus = "draft" | "scheduled" | "publishing" | "published" | "failed";
 
 export interface ScheduledPost {
   id: string;
   tenantSlug: string;
-  briefId: string | null;
   platform: string;
-  contentType: string | null;
-  caption: string | null;
-  bestTime: string | null;
+  content: string;
   scheduledFor: string;
+  postedAt: string | null;
+  platformPostUrl: string | null;
   status: ScheduledPostStatus;
-  postedPostId: string | null;
-  notes: string | null;
+  errorMessage: string | null;
+  source: string;
   createdAt: string;
-  updatedAt: string;
-  briefTitle?: string | null;
 }

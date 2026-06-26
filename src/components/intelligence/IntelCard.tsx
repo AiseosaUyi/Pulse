@@ -1,10 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { type IntelCard as IntelCardType } from "@/lib/types/intelligence";
 import { Badge } from "@/components/ui/Badge";
-import { useState, useTransition } from "react";
-import { generateBriefFromCard } from "@/lib/actions/briefs";
-import { useDialogs } from "@/components/ui/Dialog";
 
 interface IntelCardProps {
   card: IntelCardType;
@@ -48,24 +46,16 @@ function timeAgo(dateStr: string): string {
 }
 
 export function IntelCard({ card, tenantSlug }: IntelCardProps) {
-  const dialogs = useDialogs();
-  const [isPending, startTransition] = useTransition();
-  const [briefGenerated, setBriefGenerated] = useState(false);
-
-  const handleStealThis = () => {
-    startTransition(async () => {
-      const result = await generateBriefFromCard(card.id, tenantSlug);
-      if (result.success) {
-        setBriefGenerated(true);
-      } else {
-        await dialogs.alert({
-          title: "Couldn't generate brief",
-          subtitle: result.error,
-          tone: "destructive",
-        });
-      }
-    });
-  };
+  const composerAngle = encodeURIComponent(
+    [
+      `Intel: ${card.competitorName}`,
+      card.summary,
+      card.aiRecommendation?.action ?? "",
+    ]
+      .filter(Boolean)
+      .join(" — ")
+      .slice(0, 300)
+  );
 
   const initials = card.competitorName
     .split(" ")
@@ -176,17 +166,12 @@ export function IntelCard({ card, tenantSlug }: IntelCardProps) {
           </p>
           {card.aiRecommendation.contentBriefReady && (
             <div className="mt-3">
-              <button
-                onClick={handleStealThis}
-                disabled={isPending || briefGenerated}
-                className="px-3.5 py-1.5 rounded-md text-xs font-medium border border-primary-500/30 bg-primary-500/15 text-primary-500 hover:bg-primary-500/25 transition-colors disabled:opacity-50"
+              <Link
+                href={`/composer?angle=${composerAngle}`}
+                className="inline-flex items-center px-3.5 py-1.5 rounded-md text-xs font-medium border border-primary-500/30 bg-primary-500/15 text-primary-500 hover:bg-primary-500/25 transition-colors"
               >
-                {isPending
-                  ? "Generating..."
-                  : briefGenerated
-                    ? "Brief Generated ✓"
-                    : "Steal This →"}
-              </button>
+                Steal This →
+              </Link>
             </div>
           )}
         </div>
