@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
-import { Mic, Plus, X } from "lucide-react";
+import { useTransition, useState } from "react";
+import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
 import { savePersonalOnboarding } from "@/lib/actions/personal-onboarding";
 import { analyzeHandle } from "@/lib/actions/analyze-handle";
+import { VoiceMicButton } from "@/components/ui/VoiceMicButton";
 
 // A wide starter set — pick what fits, add your own.
 const TOPIC_OPTIONS = [
@@ -26,28 +27,6 @@ const TOPIC_OPTIONS = [
   "Hot takes",
 ];
 
-interface SpeechRecognitionLike {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  start: () => void;
-  stop: () => void;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-}
-
-function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as {
-    SpeechRecognition?: new () => SpeechRecognitionLike;
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-  };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-}
-
-const emptySubscribe = () => () => {};
-
 export function PersonalOnboardingClient({ tenantSlug }: { tenantSlug: string }) {
   const [vibe, setVibe] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -57,8 +36,6 @@ export function PersonalOnboardingClient({ tenantSlug }: { tenantSlug: string })
   const [handle, setHandle] = useState("");
   const [pending, startTransition] = useTransition();
   const [analyzing, startAnalyze] = useTransition();
-  const [listening, setListening] = useState(false);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   function browserTz() {
     return typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC";
@@ -80,13 +57,6 @@ export function PersonalOnboardingClient({ tenantSlug }: { tenantSlug: string })
     });
   }
 
-  const voiceSupported = useSyncExternalStore(
-    emptySubscribe,
-    () => getSpeechRecognition() !== null,
-    () => false
-  );
-  useEffect(() => () => recognitionRef.current?.stop(), []);
-
   function toggleTopic(topic: string) {
     setSelected((prev) =>
       prev.includes(topic) ? prev.filter((t) => t !== topic) : [...prev, topic]
@@ -97,34 +67,6 @@ export function PersonalOnboardingClient({ tenantSlug }: { tenantSlug: string })
     if (!t) return;
     if (!selected.includes(t)) setSelected((prev) => [...prev, t]);
     setCustomTopic("");
-  }
-
-  function toggleVoice() {
-    const Recognition = getSpeechRecognition();
-    if (!Recognition) {
-      toast.error("Voice input isn't supported in this browser — type instead.");
-      return;
-    }
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
-    const rec = new Recognition();
-    rec.lang = "en-US";
-    rec.interimResults = false;
-    rec.continuous = false;
-    rec.onresult = (e) => {
-      const transcript = Array.from({ length: e.results.length }, (_, i) => e.results[i][0].transcript).join(" ");
-      setVibe((prev) => (prev ? `${prev} ${transcript}` : transcript));
-    };
-    rec.onerror = () => {
-      toast.error("Mic blocked or unavailable — type instead.");
-      setListening(false);
-    };
-    rec.onend = () => setListening(false);
-    recognitionRef.current = rec;
-    setListening(true);
-    rec.start();
   }
 
   function submit() {
@@ -160,33 +102,20 @@ export function PersonalOnboardingClient({ tenantSlug }: { tenantSlug: string })
           <label htmlFor="vibe" className="mb-1 block text-sm font-medium text-gray-1200">
             Your voice in a sentence
           </label>
-          <div className="relative">
-            <textarea
-              id="vibe"
-              value={vibe}
-              onChange={(e) => setVibe(e.target.value)}
-              rows={2}
-              placeholder="Talk or type — e.g. dry, direct, a little contrarian. Short sentences, no fluff."
-              className="w-full resize-y rounded-lg border border-white-200 bg-card px-3 py-2 pr-12 text-base text-gray-1200 outline-none focus-visible:ring-[3px] focus-visible:ring-blue-500/30"
+          <textarea
+            id="vibe"
+            value={vibe}
+            onChange={(e) => setVibe(e.target.value)}
+            rows={2}
+            placeholder="Talk or type — e.g. dry, direct, a little contrarian. Short sentences, no fluff."
+            className="w-full resize-y rounded-lg border border-white-200 bg-card px-3 py-2 text-base text-gray-1200 outline-none focus-visible:ring-[3px] focus-visible:ring-blue-500/30"
+          />
+          <div className="mt-1 flex items-center justify-between">
+            <p className="text-xs text-gray-1000">Tap the mic to talk — it transcribes, then edit freely.</p>
+            <VoiceMicButton
+              onTranscript={(t) => setVibe((prev) => (prev ? `${prev} ${t}` : t))}
             />
-            {voiceSupported && (
-              <button
-                type="button"
-                onClick={toggleVoice}
-                aria-label={listening ? "Stop voice input" : "Talk to describe your voice"}
-                aria-pressed={listening}
-                className={cn(
-                  "absolute right-2 top-2 grid size-9 place-items-center rounded-full transition",
-                  listening ? "bg-primary-500 text-white" : "text-gray-1000 hover:bg-gray-50 hover:text-gray-1200"
-                )}
-              >
-                <Mic className={cn("size-4", listening && "animate-pulse")} />
-              </button>
-            )}
           </div>
-          {voiceSupported && (
-            <p className="mt-1 text-xs text-gray-1000">Tap the mic to talk — it transcribes, then edit freely.</p>
-          )}
         </div>
 
         {/* Topics — pick from a wide set + add your own */}
