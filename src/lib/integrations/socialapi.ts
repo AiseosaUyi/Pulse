@@ -74,9 +74,35 @@ export async function publishPost(params: PublishParams): Promise<PublishResult>
   return (await res.json()) as PublishResult;
 }
 
-/** Get post status/metrics by SocialAPI post ID */
+/** Get post status by SocialAPI post ID */
 export async function getPostStatus(postId: string): Promise<PublishResult> {
   const res = await fetch(`${BASE}/posts/${postId}`, { headers: headers() });
   if (!res.ok) throw new Error(`SocialAPI getPost failed: ${await res.text()}`);
   return (await res.json()) as PublishResult;
+}
+
+export interface PostMetricsTarget {
+  account_id: string;
+  platform: string;
+  platform_post_id: string;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  extra: Record<string, unknown>;
+  permalink: string | null;
+  published_at: string | null;
+  metrics_synced_at: string | null;
+}
+
+export interface PostMetrics {
+  post_id: string;
+  targets: PostMetricsTarget[];
+}
+
+/** Fetch engagement metrics for a published post by SocialAPI post ID */
+export async function getPostMetrics(postId: string): Promise<PostMetrics> {
+  const res = await fetch(`${BASE}/posts/${postId}/metrics`, { headers: headers() });
+  if (!res.ok) throw new Error(`SocialAPI getPostMetrics failed (${res.status}): ${await res.text()}`);
+  return (await res.json()) as PostMetrics;
 }

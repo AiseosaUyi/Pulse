@@ -60,6 +60,8 @@ export async function POST(req: Request): Promise<Response> {
       const target = result.targets?.[0];
       postId = target?.post_id ?? result.id;
       postUrl = target?.url ?? null;
+      // Store the SocialAPI post ID separately so the metrics cron can call /posts/{id}/metrics
+      await admin.from("scheduled_posts").update({ source_api_post_id: result.id }).eq("id", scheduledPostId);
     }
 
     await admin
