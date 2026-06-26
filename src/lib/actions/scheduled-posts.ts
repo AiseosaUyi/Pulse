@@ -19,14 +19,10 @@ type ActionResult<T = unknown> =
   | { success: false; error: string };
 
 interface ScheduleInput {
-  briefId?: string | null;
   platform: string;
-  contentType?: string | null;
-  caption?: string | null;
-  bestTime?: string | null;
+  content?: string | null;
   scheduledFor: string;
   status?: ScheduledPostStatus;
-  notes?: string | null;
 }
 
 export async function scheduleBriefPost(
@@ -41,14 +37,11 @@ export async function scheduleBriefPost(
     .from("scheduled_posts")
     .insert({
       tenant_slug: tenantSlug,
-      brief_id: input.briefId ?? null,
       platform: input.platform,
-      content_type: input.contentType ?? null,
-      caption: input.caption ?? null,
-      best_time: input.bestTime ?? null,
+      content: input.content ?? "",
       scheduled_for: input.scheduledFor,
       status: input.status ?? "scheduled",
-      notes: input.notes ?? null,
+      source: "ai-content",
     })
     .select("id")
     .single();
@@ -99,7 +92,7 @@ export async function publishScheduledPost(
   const supabase = await createClient();
   const { data: sp, error: spErr } = await supabase
     .from("scheduled_posts")
-    .select("id, platform, caption, content_type, scheduled_for, brief_id")
+    .select("id, platform, content, scheduled_for")
     .eq("id", input.scheduledPostId)
     .eq("tenant_slug", input.tenantSlug)
     .single();
@@ -129,11 +122,11 @@ export async function publishScheduledPost(
   // so a click (and any downstream order) traces back to this post/campaign.
   const utm = {
     utm_source: platform,
-    utm_medium: sp.content_type ?? "social",
-    utm_campaign: sp.brief_id ?? input.scheduledPostId,
+    utm_medium: "social",
+    utm_campaign: input.scheduledPostId,
     utm_content: input.scheduledPostId,
   };
-  const caption = await applyTrackingLinks(sp.caption, {
+  const caption = await applyTrackingLinks(sp.content, {
     tenantSlug: input.tenantSlug,
     scheduledPostId: input.scheduledPostId,
     ...utm,
@@ -146,9 +139,7 @@ export async function publishScheduledPost(
       if (!input.mediaUrl) {
         return { success: false, error: "Instagram publish requires mediaUrl" };
       }
-      const ct = sp.content_type ?? "image";
-      const mediaType =
-        ct === "video" ? "video" : ct === "carousel" ? "image" : "image";
+      const mediaType = "image";
       const out = await publishInstagramSinglePost(conn, {
         mediaUrl: input.mediaUrl,
         caption: caption || undefined,
@@ -191,9 +182,9 @@ export async function publishScheduledPost(
     .from("posts")
     .insert({
       tenant_slug: input.tenantSlug,
-      title: (sp.caption ?? "").slice(0, 120) || "Untitled",
+      title: sp.content.slice(0, 120) || "Untitled",
       platform,
-      content_type: sp.content_type ?? "text",
+      content_type: "text",
       posted_at: new Date().toISOString().slice(0, 10),
       external_id: externalId,
       post_url: postUrl,
@@ -226,7 +217,7 @@ export async function publishScheduledPost(
 
   await admin
     .from("scheduled_posts")
-    .update({ status: "posted", posted_post_id: post.id })
+    .update({ status: "published", platform_post_id: externalId, platform_post_url: postUrl })
     .eq("id", input.scheduledPostId);
 
   revalidatePath("/ai-content");

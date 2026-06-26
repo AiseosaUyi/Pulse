@@ -124,11 +124,8 @@ function ScheduleModal({
     const scheduledFor = new Date(`${date}T${time}:00`).toISOString();
     startTransition(async () => {
       const res = await scheduleBriefPost(tenantSlug, {
-        briefId: brief.id,
         platform: brief.platform,
-        contentType: brief.contentType,
-        caption,
-        bestTime: time,
+        content: caption,
         scheduledFor,
         status: "scheduled",
       });
