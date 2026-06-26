@@ -87,6 +87,7 @@ export interface ComposeTakeInput {
   positioning: BrandPositioning | null;
   sourceUrl?: string | null;
   angle?: string | null;
+  primaryPlatform?: string | null;
 }
 
 export async function composeTakeAi(
@@ -172,6 +173,37 @@ function buildComposeSystem(input: ComposeTakeInput): string {
     "- Sound like a real person with a point of view, not a brand account or an AI.",
     "- Return content for all 5 platforms. Only return null if the platform is truly inappropriate for this take.",
   ];
+
+  if (input.primaryPlatform) {
+    const platformFocus: Record<string, string[]> = {
+      x: [
+        "PRIMARY PLATFORM IS X: Make the X variant the anchor. Aim for the tightest, most punch-per-word version possible.",
+        "Spend extra care on the hook — it must work in the first 10 words. The other platforms can derive from this energy.",
+      ],
+      linkedin: [
+        "PRIMARY PLATFORM IS LINKEDIN: Write the LinkedIn variant as the anchor, with full depth and storytelling.",
+        "Aim for 800-2000 chars. Open with a hook sentence on its own line. Follow with a personal story, lesson, or insight in 2-4 short paragraphs.",
+        "End with a clear takeaway or question. Use line breaks generously. Professional but human — not a brand account.",
+        "Derive the other platforms from this depth, adapted to their formats.",
+      ],
+      instagram: [
+        "PRIMARY PLATFORM IS INSTAGRAM: Write the Instagram caption as the anchor.",
+        "Warm, visual, conversational. Strong first line that stops the scroll. 3-5 tight paragraphs max. 5 relevant hashtags at the end. Close with a question or CTA.",
+      ],
+      tiktok: [
+        "PRIMARY PLATFORM IS TIKTOK: Write the TikTok caption as the anchor.",
+        "Short, punchy, youth-culture aware. Hook in the first line. 3-5 trending hashtags. Sounds like a real creator, not a brand.",
+      ],
+      youtube: [
+        "PRIMARY PLATFORM IS YOUTUBE: Write the YouTube community post as the anchor.",
+        "Informative, keyword-rich, can be longer (aim for 400-1000 chars). Great for driving traffic or sharing a lesson from a video.",
+      ],
+    };
+    const focusLines = platformFocus[input.primaryPlatform];
+    if (focusLines) {
+      lines.push("", ...focusLines);
+    }
+  }
 
   if (voice) {
     lines.push(

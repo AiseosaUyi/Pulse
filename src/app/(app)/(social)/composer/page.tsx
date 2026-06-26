@@ -7,6 +7,7 @@ import Link from "next/link";
 import { getCurrentTenant } from "@/lib/auth";
 import { getTracker } from "@/lib/services/cadence";
 import { getAllPlatformConnections } from "@/lib/services/platform-connections";
+import { listSocialDrafts } from "@/lib/actions/compose";
 import { Composer } from "./client";
 import { CadenceRail } from "./CadenceRail";
 
@@ -19,10 +20,11 @@ export default async function ComposerPage({
 }) {
   const tenant = await getCurrentTenant();
   if (!tenant) return null; // (app)/layout already guarantees a membership
-  const [tracker, params, connections] = await Promise.all([
+  const [tracker, params, connections, initialDrafts] = await Promise.all([
     getTracker(tenant.slug),
     searchParams,
     getAllPlatformConnections(tenant.slug),
+    listSocialDrafts(tenant.slug),
   ]);
   const initialAngle = params.angle ? decodeURIComponent(params.angle) : undefined;
   const initialDate = params.date ?? undefined;
@@ -48,7 +50,7 @@ export default async function ComposerPage({
 
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
         <div className="lg:flex-1">
-          <Composer tenantSlug={tenant.slug} initialAngle={initialAngle} initialDate={initialDate} hasConnections={hasConnections} />
+          <Composer tenantSlug={tenant.slug} initialAngle={initialAngle} initialDate={initialDate} hasConnections={hasConnections} initialDrafts={initialDrafts} />
         </div>
         <div className="hidden w-80 shrink-0 lg:block lg:sticky lg:top-8">
           <CadenceRail tracker={tracker} tenantSlug={tenant.slug} />

@@ -18,6 +18,46 @@ export interface GenerateDraftInput {
   mode: ComposeMode;
   sourceUrl?: string;
   angle?: string;
+  primaryPlatform?: string;
+}
+
+export interface SocialDraft {
+  id: string;
+  mode: string;
+  primary_platform: string | null;
+  angle: string | null;
+  original_text: string;
+  x_text: string | null;
+  linkedin_text: string | null;
+  instagram_text: string | null;
+  tiktok_text: string | null;
+  youtube_text: string | null;
+  hooks_json: string[] | null;
+  created_at: string;
+}
+
+export async function listSocialDrafts(tenantSlug: string): Promise<SocialDraft[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("social_drafts")
+    .select("id, mode, primary_platform, angle, original_text, x_text, linkedin_text, instagram_text, tiktok_text, youtube_text, hooks_json, created_at")
+    .eq("tenant_slug", tenantSlug)
+    .order("created_at", { ascending: false })
+    .limit(30);
+  return (data ?? []) as SocialDraft[];
+}
+
+export async function deleteDraft(draftId: string): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Not authenticated" };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("social_drafts")
+    .delete()
+    .eq("id", draftId)
+    .eq("created_by", user.id);
+  if (error) return { success: false, error: error.message };
+  return { success: true };
 }
 
 export interface GeneratedDraft {
@@ -65,6 +105,7 @@ export async function generateDraft(
       positioning,
       sourceUrl,
       angle,
+      primaryPlatform: input.primaryPlatform ?? null,
     });
   } catch (err) {
     if (err instanceof ComposeAiError) {
@@ -89,8 +130,16 @@ export async function generateDraft(
     .insert({
       tenant_slug: tenantSlug,
       mode: input.mode,
+      primary_platform: input.primaryPlatform ?? null,
+      angle: (input.angle?.trim() || input.sourceUrl || originalText).slice(0, 200),
       original_text: originalText,
       source_url: sourceUrl ?? null,
+      x_text: r.x ?? null,
+      linkedin_text: r.linkedin ?? null,
+      instagram_text: r.instagram ?? null,
+      tiktok_text: r.tiktok ?? null,
+      youtube_text: r.youtube ?? null,
+      hooks_json: r.hooks ?? null,
       generator_model: generated.model,
       generator_cost_usd: generated.costUsd,
       created_by: user.id,
