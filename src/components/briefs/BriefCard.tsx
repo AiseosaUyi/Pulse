@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { formatDate } from "@/lib/utils/format";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/button";
 import { BriefEditor } from "@/components/briefs/BriefEditor";
@@ -159,7 +160,7 @@ export function BriefCard({
               {brief.contentType}
               {brief.competitorName && ` · from ${brief.competitorName}`}
               {" · "}
-              {new Date(brief.generatedAt).toLocaleDateString("en-US", {
+              {formatDate(brief.generatedAt, {
                 month: "short",
                 day: "numeric",
               })}

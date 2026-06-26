@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { formatDate, formatDateTime } from "@/lib/utils/format";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -214,7 +215,7 @@ export function SerpAnalysisClient({
                     <p className="text-xs text-text-muted mt-0.5">
                       {(a.region ?? "").toUpperCase() || "—"} ·{" "}
                       {a.topResults.length} results ·{" "}
-                      {new Date(a.updatedAt).toLocaleDateString("en-US", {
+                      {formatDate(a.updatedAt, {
                         month: "short",
                         day: "numeric",
                       })}
@@ -235,7 +236,7 @@ export function SerpAnalysisClient({
                   </h3>
                   <p className="text-text-muted text-xs mt-1">
                     {(open.region ?? "").toUpperCase()} · Analyzed{" "}
-                    {new Date(open.updatedAt).toLocaleString()}
+                    {formatDateTime(open.updatedAt)}
                   </p>
                 </div>
                 <button

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { formatCount } from "@/lib/utils/format";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Wand2, ExternalLink } from "lucide-react";
 import {
@@ -164,7 +165,7 @@ export function KeywordRow({ kw }: { kw: KeywordRanking }) {
         {KEYWORD_DIFFICULTY_LABELS[kw.difficulty]}
       </td>
       <td className="px-3 py-3 text-sm text-text-secondary text-right">
-        {kw.volume.toLocaleString()}
+        {formatCount(kw.volume)}
       </td>
       <td className="px-3 py-3 text-xs text-text-muted text-right whitespace-nowrap">
         {kw.lastChecked ?? "—"}

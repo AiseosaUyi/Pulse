@@ -5,6 +5,7 @@
 // drags / next-week focus.
 
 import { useState, useTransition } from "react";
+import { formatDate } from "@/lib/utils/format";
 import {
   ChevronDown,
   ChevronUp,
@@ -120,9 +121,9 @@ export function WeeklyReviewBanner({
               Weekly business review
             </h2>
             <p className="text-[11px] text-text-muted mt-0.5">
-              Week of {new Date(latest.weekOf).toLocaleDateString()}
+              Week of {formatDate(latest.weekOf)}
               {" · generated "}
-              {new Date(latest.generatedAt).toLocaleDateString()}
+              {formatDate(latest.generatedAt)}
               {review?.confidence && (
                 <span
                   className={`ml-2 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${

@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element, jsx-a11y/media-has-caption */
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { APP_TIME_ZONE } from "@/lib/utils/format";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -403,7 +404,7 @@ export function VideoStudioClient({
                     </div>
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-[11px] text-text-muted">
-                        {new Date(g.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(g.createdAt).toLocaleString("en-GB", { timeZone: APP_TIME_ZONE, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                       </span>
                       <ChevronRight size={14} className="text-text-muted group-hover:text-primary-500" />
                     </div>

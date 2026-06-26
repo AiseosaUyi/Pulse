@@ -40,6 +40,42 @@ export interface TiptapChange {
   wordCount: number;
 }
 
+// A link mark with a null/empty href crashes the markdown serializer
+// (prosemirror-markdown calls `href.replace(...)`), which previously
+// corrupted posts whose stored content_json contained such marks. Harden
+// the href attribute so it can never be null — absent/empty resolves to ""
+// and we omit the attribute entirely when rendering an empty href.
+const SafeLink = Link.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      href: {
+        default: "",
+        parseHTML: (el: HTMLElement) => el.getAttribute("href") || "",
+        renderHTML: (attrs: { href?: string | null }) =>
+          attrs.href ? { href: attrs.href } : {},
+      },
+    };
+  },
+});
+
+// Recursively drop link marks that have no usable href before the doc ever
+// reaches the editor. Keeps the text, removes only the bogus mark.
+function sanitizeLinkMarks(node: JSONContent): JSONContent {
+  const cleaned: JSONContent = { ...node };
+  if (Array.isArray(node.marks)) {
+    cleaned.marks = node.marks.filter(
+      (m) =>
+        m.type !== "link" ||
+        (typeof m.attrs?.href === "string" && m.attrs.href.trim() !== "")
+    );
+  }
+  if (Array.isArray(node.content)) {
+    cleaned.content = node.content.map(sanitizeLinkMarks);
+  }
+  return cleaned;
+}
+
 interface Props {
   /** TipTap JSON doc, preferred when present. */
   initialJson: JSONContent | null;
@@ -78,7 +114,7 @@ export function TiptapEditor({
   // Decide once what to seed the editor with. If we have JSON, use it.
   // Otherwise let tiptap-markdown parse the markdown string.
   const initialContent = useMemo<JSONContent | string>(() => {
-    if (initialJson) return initialJson;
+    if (initialJson) return sanitizeLinkMarks(initialJson);
     return initialMarkdown ?? "";
   }, [initialJson, initialMarkdown]);
 
@@ -88,7 +124,7 @@ export function TiptapEditor({
         heading: { levels: [2, 3, 4] },
         link: false,
       }),
-      Link.configure({
+      SafeLink.configure({
         openOnClick: false,
         HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
       }),

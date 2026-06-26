@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { formatDate } from "@/lib/utils/format";
 import { CheckCircle2, FolderOpen, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/Dialog";
@@ -105,7 +106,7 @@ export function DriveSection({
             <span className="text-xs text-text-muted">
               Connected{" "}
               {localStatus.connectedAt
-                ? new Date(localStatus.connectedAt).toLocaleDateString()
+                ? formatDate(localStatus.connectedAt)
                 : ""}
             </span>
             <Button

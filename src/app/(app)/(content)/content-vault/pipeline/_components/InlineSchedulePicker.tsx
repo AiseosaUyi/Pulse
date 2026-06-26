@@ -12,6 +12,7 @@ import {
   useTransition,
 } from "react";
 import { createPortal } from "react-dom";
+import { APP_TIME_ZONE } from "@/lib/utils/format";
 import { CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,8 @@ function isoToLocalInput(iso: string | null): string {
 
 function formatDate(iso: string | null): string {
   if (!iso) return "";
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleDateString("en-US", {
+    timeZone: APP_TIME_ZONE,
     month: "short",
     day: "numeric",
   });

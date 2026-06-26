@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { formatDateTime } from "@/lib/utils/format";
 import {
   CheckCircle2,
   Loader2,
@@ -379,7 +380,7 @@ export function IntegrationsClient({
               </Button>
               {record?.lastTestedAt && (
                 <span className="text-[11px] text-text-muted">
-                  Last tested {new Date(record.lastTestedAt).toLocaleString()}
+                  Last tested {formatDateTime(record.lastTestedAt)}
                 </span>
               )}
             </div>

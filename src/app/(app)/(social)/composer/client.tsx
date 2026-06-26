@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
-import { CalendarClock, ChevronDown, Copy, Loader2, Mic, Send } from "lucide-react";
+import { useRef, useState, useTransition } from "react";
+import { CalendarClock, ChevronDown, Copy, Loader2, Send } from "lucide-react";
+import { VoiceMicButton } from "@/components/ui/VoiceMicButton";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
@@ -67,28 +68,6 @@ interface DraftVariants {
   hooks: string[];
 }
 
-interface SpeechRecognitionLike {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  start: () => void;
-  stop: () => void;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-}
-
-function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as {
-    SpeechRecognition?: new () => SpeechRecognitionLike;
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-  };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-}
-
-const emptySubscribe = () => () => {};
-
 function CharCount({ text, limit }: { text: string; limit: number }) {
   return (
     <span
@@ -113,7 +92,6 @@ export function Composer({ tenantSlug }: { tenantSlug: string }) {
   const [input, setInput] = useState("");
   const [variants, setVariants] = useState<DraftVariants | null>(null);
   const [pending, startTransition] = useTransition();
-  const [listening, setListening] = useState(false);
   // Desktop: which secondary platforms have their card expanded
   const [expandedPlatforms, setExpandedPlatforms] = useState<Set<Platform>>(new Set());
   const [otherOpen, setOtherOpen] = useState(false);
@@ -124,15 +102,6 @@ export function Composer({ tenantSlug }: { tenantSlug: string }) {
   const [scheduleTime, setScheduleTime] = useState("");
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const xTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-
-  const voiceSupported = useSyncExternalStore(
-    emptySubscribe,
-    () => getSpeechRecognition() !== null,
-    () => false
-  );
-
-  useEffect(() => () => recognitionRef.current?.stop(), []);
 
   function splitInput(raw: string): { sourceUrl?: string; angle?: string } {
     const trimmed = raw.trim();
@@ -147,36 +116,6 @@ export function Composer({ tenantSlug }: { tenantSlug: string }) {
     return { angle: trimmed };
   }
 
-  function toggleVoice() {
-    const Recognition = getSpeechRecognition();
-    if (!Recognition) {
-      toast.error("Voice input isn't supported in this browser — type instead.");
-      return;
-    }
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
-    const rec = new Recognition();
-    rec.lang = "en-US";
-    rec.interimResults = false;
-    rec.continuous = false;
-    rec.onresult = (e) => {
-      const transcript = Array.from(
-        { length: e.results.length },
-        (_, i) => e.results[i][0].transcript
-      ).join(" ");
-      setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
-    };
-    rec.onerror = () => {
-      toast.error("Mic blocked or unavailable — type instead.");
-      setListening(false);
-    };
-    rec.onend = () => setListening(false);
-    recognitionRef.current = rec;
-    setListening(true);
-    rec.start();
-  }
 
   function handleGenerate() {
     const { sourceUrl, angle } = splitInput(input);
@@ -309,31 +248,20 @@ export function Composer({ tenantSlug }: { tenantSlug: string }) {
         <label htmlFor="composer-input" className="sr-only">
           Link or your take
         </label>
-        <div className="relative">
+        <div className="flex flex-col gap-1">
           <textarea
             id="composer-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             rows={3}
             placeholder="Drop a link or type your take…"
-            className="w-full resize-y rounded-2xl border border-white-200 bg-card px-4 py-3 pr-12 text-base text-gray-1200 outline-none placeholder:text-gray-400 focus-visible:ring-[3px] focus-visible:ring-blue-500/30"
+            className="w-full resize-y rounded-2xl border border-white-200 bg-card px-4 py-3 text-base text-gray-1200 outline-none placeholder:text-gray-400 focus-visible:ring-[3px] focus-visible:ring-blue-500/30"
           />
-          {voiceSupported && (
-            <button
-              type="button"
-              onClick={toggleVoice}
-              aria-label={listening ? "Stop voice input" : "Start voice input"}
-              aria-pressed={listening}
-              className={cn(
-                "absolute right-3 top-3 grid size-9 place-items-center rounded-full transition",
-                listening
-                  ? "bg-primary-500 text-white"
-                  : "text-gray-1000 hover:bg-gray-50 hover:text-gray-1200"
-              )}
-            >
-              <Mic className={cn("size-4", listening && "animate-pulse")} />
-            </button>
-          )}
+          <div className="flex justify-end pr-1">
+            <VoiceMicButton
+              onTranscript={(t) => setInput((prev) => (prev ? `${prev} ${t}` : t))}
+            />
+          </div>
         </div>
 
         {!variants && (

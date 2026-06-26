@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { formatDate, formatCount } from "@/lib/utils/format";
 import { Trash2, ExternalLink, Bookmark, Download } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import {
@@ -249,7 +250,7 @@ function SavedRow({
                   </span>
                 )}
                 <span className="text-text-muted text-xs">
-                  {new Date(content.updatedAt).toLocaleDateString("en-US", {
+                  {formatDate(content.updatedAt, {
                     month: "short",
                     day: "numeric",
                   })}
@@ -387,7 +388,7 @@ function TrendRow({
               <>
                 <span className="text-text-muted text-xs">·</span>
                 <span className="text-text-muted text-xs">
-                  {trend.views.toLocaleString()} views
+                  {formatCount(trend.views)} views
                 </span>
               </>
             )}
