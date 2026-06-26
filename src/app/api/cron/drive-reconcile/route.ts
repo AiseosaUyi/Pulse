@@ -151,3 +151,7 @@ export async function POST(req: Request): Promise<Response> {
 
   return NextResponse.json({ ok: result.status !== "failed", summary: result.metadata });
 }
+
+// Vercel Cron invokes scheduled endpoints with GET; alias the handler so
+// the scheduler reaches it (previously 405ed, so these crons never ran).
+export const GET = POST;

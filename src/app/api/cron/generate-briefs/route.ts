@@ -160,3 +160,7 @@ function patternHash(slug: string, clusterKey: string, weekOf: string): string {
 
 // Export for reuse in tests.
 export const _internal = { patternHash };
+
+// Vercel Cron invokes scheduled endpoints with GET; alias the handler so
+// the scheduler reaches it (previously 405ed, so these crons never ran).
+export const GET = POST;
