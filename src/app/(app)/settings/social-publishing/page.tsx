@@ -96,7 +96,7 @@ export default async function SocialPublishingSettingsPage({
                   className={[
                     "inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                     youtubeConfigured
-                      ? "border-primary bg-primary text-white hover:opacity-90"
+                      ? "border-primary-500 bg-primary-500 text-white hover:opacity-90"
                       : "border-border text-text-muted cursor-not-allowed opacity-50 pointer-events-none",
                   ].join(" ")}
                 >
@@ -134,7 +134,7 @@ export default async function SocialPublishingSettingsPage({
                 href="https://social-api.ai/dashboard"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-primary bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+                className="inline-flex items-center gap-1.5 rounded-full border border-primary-500 bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
               >
                 Open SocialAPI.ai <ExternalLink size={13} />
               </a>

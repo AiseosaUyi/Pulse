@@ -156,7 +156,7 @@ export default function AccountLinker({
                 <button
                   onClick={() => handleLink(account)}
                   disabled={pending}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-primary bg-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-primary-500 bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
                   <Link2 size={11} />
                   {alreadyHasPlatform ? "Switch" : "Link"}

@@ -61,7 +61,7 @@ export function SeoPreviewPane({ postId }: { postId: string }) {
             type="button"
             onClick={load}
             disabled={pending}
-            className="w-full rounded-full bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            className="w-full rounded-full bg-primary-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
             {pending ? "Minting preview…" : "Open live preview"}
           </button>

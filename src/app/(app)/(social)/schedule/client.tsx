@@ -83,8 +83,8 @@ export default function ScheduleClient({ initialPosts }: { initialPosts: Post[] 
             className={[
               "rounded-full border px-3 py-1 text-xs font-medium transition-colors capitalize",
               filter === f
-                ? "border-primary bg-primary text-white"
-                : "border-border text-text-muted hover:border-primary/50",
+                ? "border-primary-500 bg-primary-500 text-white"
+                : "border-border text-text-muted hover:border-primary-500/50",
             ].join(" ")}
           >
             {f}

@@ -96,7 +96,7 @@ export function BriefEditor({
             </h2>
             {dirty && (
               <span
-                className="w-2 h-2 rounded-full bg-primary shrink-0"
+                className="w-2 h-2 rounded-full bg-primary-500 shrink-0"
                 aria-label="Unsaved changes"
                 title="Unsaved changes"
               />
