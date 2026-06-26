@@ -68,7 +68,14 @@ export async function generateDraft(
     });
   } catch (err) {
     if (err instanceof ComposeAiError) {
-      return { success: false, error: "Couldn't draft — try again." };
+      const msg = err.message ?? "";
+      if (msg.includes("insufficient_quota") || msg.includes("quota")) {
+        return { success: false, error: "AI credits exhausted — top up your OpenAI account at platform.openai.com/settings/billing." };
+      }
+      if (msg.includes("rate_limit") || msg.includes("429")) {
+        return { success: false, error: "AI rate limit hit — wait a moment and try again." };
+      }
+      return { success: false, error: `Couldn't draft — ${msg || "try again."}` };
     }
     return { success: false, error: "Something went wrong drafting that." };
   }

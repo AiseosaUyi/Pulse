@@ -45,7 +45,7 @@ export const navGroups: NavGroup[] = [
       },
       { label: "Engagement inbox", href: "/engagement", iconName: "MessageCircle", surfaces: ["startup"] },
       { label: "Broadcasts", href: "/broadcasts", iconName: "Radio", surfaces: ["startup"] },
-      { label: "Video studio", href: "/video", iconName: "Film" },
+      { label: "Video studio", href: "/video", iconName: "Film", surfaces: ["startup"] },
       { label: "Platform score", href: "/platform-score", iconName: "CircleDot" },
       { label: "Viral trends", href: "/viral-trends", iconName: "TrendingUp" },
       { label: "Post history", href: "/post-history", iconName: "Clock" },

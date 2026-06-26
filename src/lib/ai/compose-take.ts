@@ -124,6 +124,7 @@ export async function composeTakeAi(
     });
     return { result: result.output, model: modelId, costUsd: cost };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     await logAiCall({
       tenantSlug: input.tenantSlug,
       purpose: "synthesis",
@@ -131,9 +132,9 @@ export async function composeTakeAi(
       model: modelId,
       durationMs: Date.now() - started,
       success: false,
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: msg,
     });
-    throw new ComposeAiError("Failed to compose take", err);
+    throw new ComposeAiError(msg, err);
   }
 }
 
