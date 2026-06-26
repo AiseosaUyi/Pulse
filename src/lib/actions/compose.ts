@@ -18,7 +18,7 @@ export interface GenerateDraftInput {
   mode: ComposeMode;
   sourceUrl?: string;
   angle?: string;
-  primaryPlatform?: string;
+  focusPlatforms?: string[];
 }
 
 export interface SocialDraft {
@@ -105,7 +105,7 @@ export async function generateDraft(
       positioning,
       sourceUrl,
       angle,
-      primaryPlatform: input.primaryPlatform ?? null,
+      focusPlatforms: input.focusPlatforms ?? null,
     });
   } catch (err) {
     if (err instanceof ComposeAiError) {
@@ -130,7 +130,7 @@ export async function generateDraft(
     .insert({
       tenant_slug: tenantSlug,
       mode: input.mode,
-      primary_platform: input.primaryPlatform ?? null,
+      primary_platform: input.focusPlatforms?.[0] ?? null,
       angle: (input.angle?.trim() || input.sourceUrl || originalText).slice(0, 200),
       original_text: originalText,
       source_url: sourceUrl ?? null,

@@ -161,7 +161,7 @@ export function Composer({
 }) {
   const [mode, setMode] = useState<ComposeMode>("original");
   const [input, setInput] = useState(initialAngle ?? "");
-  const [primaryPlatform, setPrimaryPlatform] = useState<Platform | null>(null);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([]);
   const [variants, setVariants] = useState<DraftVariants | null>(null);
   const [pending, startTransition] = useTransition();
   const [expandedPlatforms, setExpandedPlatforms] = useState<Set<Platform>>(new Set());
@@ -205,7 +205,7 @@ export function Composer({
         mode,
         sourceUrl,
         angle,
-        primaryPlatform: primaryPlatform ?? undefined,
+        focusPlatforms: selectedPlatforms.length > 0 ? selectedPlatforms : undefined,
       });
       if (!res.success) {
         toast.error(res.error);
@@ -221,14 +221,20 @@ export function Composer({
         hooks: d.hooks ?? [],
       };
       setVariants(newVariants);
-      setMobilePlatform(primaryPlatform ?? "x");
+      // Auto-open to the first selected platform (or x if none selected)
+      const firstSelected = selectedPlatforms[0] ?? "x";
+      setMobilePlatform(firstSelected);
       setOtherOpen(true);
-      setExpandedPlatforms(new Set());
+      // Auto-expand all selected secondary platforms
+      const selectedSecondary = selectedPlatforms.filter((p) =>
+        (SECONDARY_PLATFORMS as string[]).includes(p)
+      ) as Platform[];
+      setExpandedPlatforms(new Set(selectedSecondary));
       // Prepend to local drafts list
       const newDraft: SocialDraft = {
         id: d.id,
         mode,
-        primary_platform: primaryPlatform,
+        primary_platform: selectedPlatforms[0] ?? null,
         angle: (angle ?? sourceUrl ?? newVariants.x).slice(0, 200),
         original_text: newVariants.x || newVariants.linkedin || "",
         x_text: d.x,
@@ -241,8 +247,8 @@ export function Composer({
       };
       setDrafts((prev) => [newDraft, ...prev]);
       requestAnimationFrame(() => {
-        if (primaryPlatform === "linkedin") {
-          setExpandedPlatforms(new Set(["linkedin"]));
+        if (!selectedPlatforms.includes("x") && selectedPlatforms.length > 0) {
+          // X not selected — don't focus X textarea
         } else {
           xTextareaRef.current?.focus();
         }
@@ -260,7 +266,7 @@ export function Composer({
       hooks: (draft.hooks_json as string[] | null) ?? [],
     });
     if (draft.primary_platform) {
-      setPrimaryPlatform(draft.primary_platform as Platform);
+      setSelectedPlatforms([draft.primary_platform as Platform]);
       setMobilePlatform(draft.primary_platform as Platform);
       if ((SECONDARY_PLATFORMS as string[]).includes(draft.primary_platform)) {
         setExpandedPlatforms(new Set([draft.primary_platform as Platform]));
@@ -378,27 +384,35 @@ export function Composer({
 
       {/* Platform selector */}
       <div className="flex flex-col gap-2">
-        <p className="text-xs text-gray-1000">
-          Drafting for
-          {primaryPlatform && (
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-gray-1000">
+            {selectedPlatforms.length === 0
+              ? "Drafting for all platforms"
+              : `Drafting for ${selectedPlatforms.map((p) => PLATFORM_LABEL[p]).join(", ")}`}
+          </p>
+          {selectedPlatforms.length > 0 && (
             <button
               type="button"
-              onClick={() => setPrimaryPlatform(null)}
-              className="ml-2 text-gray-900 hover:text-gray-1100 transition-colors"
+              onClick={() => setSelectedPlatforms([])}
+              className="text-xs text-gray-900 hover:text-gray-1100 transition-colors"
             >
               (clear)
             </button>
           )}
-        </p>
+        </div>
         <div className="flex flex-wrap gap-2">
           {ALL_PLATFORMS.map((p) => {
             const Icon = PLATFORM_ICON[p];
-            const selected = primaryPlatform === p;
+            const selected = selectedPlatforms.includes(p);
             return (
               <button
                 key={p}
                 type="button"
-                onClick={() => setPrimaryPlatform(selected ? null : p)}
+                onClick={() =>
+                  setSelectedPlatforms((prev) =>
+                    prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
+                  )
+                }
                 title={PLATFORM_HINT[p]}
                 className={cn(
                   "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition",
@@ -409,15 +423,15 @@ export function Composer({
               >
                 <Icon size={12} />
                 {PLATFORM_LABEL[p]}
-                {selected && (
-                  <span className="text-[10px] text-primary-400 font-normal">
-                    · {PLATFORM_HINT[p]}
-                  </span>
-                )}
               </button>
             );
           })}
         </div>
+        {selectedPlatforms.length > 0 && (
+          <p className="text-[11px] text-gray-1000">
+            AI will optimise depth and style for {selectedPlatforms.map((p) => PLATFORM_HINT[p]).join(" · ")}
+          </p>
+        )}
       </div>
 
       {/* Date chip */}
@@ -629,8 +643,8 @@ export function Composer({
                 <div className="flex items-center gap-2 text-sm font-medium text-gray-1100">
                   <XIcon size={14} />
                   X (Twitter)
-                  {primaryPlatform === "x" && (
-                    <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] text-primary-500">Primary</span>
+                  {selectedPlatforms.includes("x") && (
+                    <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] text-primary-500">Selected</span>
                   )}
                 </div>
                 <CharCount text={variants.x} limit={280} />
@@ -702,7 +716,7 @@ export function Composer({
                         {SECONDARY_PLATFORMS.map((p) => {
                           const Icon = PLATFORM_ICON[p];
                           const expanded = expandedPlatforms.has(p);
-                          const isPrimary = primaryPlatform === p;
+                          const isSelected = selectedPlatforms.includes(p);
                           return (
                             <button
                               key={p}
@@ -712,15 +726,15 @@ export function Composer({
                                 "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition",
                                 expanded
                                   ? "border-primary-500 bg-primary-50 text-primary-600"
-                                  : isPrimary
+                                  : isSelected
                                   ? "border-primary-200 text-primary-500 hover:border-primary-400"
                                   : "border-white-200 text-gray-1100 hover:border-gray-400"
                               )}
                             >
                               <Icon size={12} />
                               {PLATFORM_LABEL[p]}
-                              {isPrimary && (
-                                <span className="text-[10px] text-primary-400">· primary</span>
+                              {isSelected && !expanded && (
+                                <span className="text-[10px] text-primary-400">· selected</span>
                               )}
                             </button>
                           );
@@ -735,8 +749,8 @@ export function Composer({
                               <div className="flex items-center gap-2 text-sm font-medium text-gray-1100">
                                 <Icon size={14} />
                                 {PLATFORM_LABEL[p]}
-                                {primaryPlatform === p && (
-                                  <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] text-primary-500">Primary</span>
+                                {selectedPlatforms.includes(p) && (
+                                  <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] text-primary-500">Selected</span>
                                 )}
                               </div>
                               <CharCount text={variants[p]} limit={PLATFORM_LIMIT[p]} />
