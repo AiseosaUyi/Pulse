@@ -11,10 +11,15 @@ import { CadenceRail } from "./CadenceRail";
 
 export const metadata = { title: "Composer" };
 
-export default async function ComposerPage() {
+export default async function ComposerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ angle?: string }>;
+}) {
   const tenant = await getCurrentTenant();
   if (!tenant) return null; // (app)/layout already guarantees a membership
-  const tracker = await getTracker(tenant.slug);
+  const [tracker, params] = await Promise.all([getTracker(tenant.slug), searchParams]);
+  const initialAngle = params.angle ? decodeURIComponent(params.angle) : undefined;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 md:py-12">
@@ -36,7 +41,7 @@ export default async function ComposerPage() {
 
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
         <div className="lg:flex-1">
-          <Composer tenantSlug={tenant.slug} />
+          <Composer tenantSlug={tenant.slug} initialAngle={initialAngle} />
         </div>
         <div className="hidden w-80 shrink-0 lg:block lg:sticky lg:top-8">
           <CadenceRail tracker={tracker} tenantSlug={tenant.slug} />

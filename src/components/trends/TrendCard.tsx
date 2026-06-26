@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
+import { PenLine } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/button";
 import { dismissTrend, restoreTrend } from "@/lib/actions/trends";
@@ -152,6 +154,25 @@ export function TrendCard({
         </div>
 
         <div className="flex gap-2 shrink-0">
+          {!isDismissed && (
+            <Button variant="outline" size="sm" asChild>
+              <Link
+                href={`/composer?angle=${encodeURIComponent(
+                  [
+                    trend.hashtag ? `Trend: ${trend.hashtag}` : "",
+                    trend.title ?? "",
+                    trend.summary ?? "",
+                  ]
+                    .filter(Boolean)
+                    .join(" — ")
+                    .slice(0, 300)
+                )}`}
+              >
+                <PenLine size={12} />
+                Draft
+              </Link>
+            </Button>
+          )}
           {isDismissed ? (
             <Button
               variant="outline"

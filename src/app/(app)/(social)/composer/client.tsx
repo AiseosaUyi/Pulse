@@ -87,9 +87,9 @@ function minScheduleTime(): string {
   return d.toISOString().slice(0, 16);
 }
 
-export function Composer({ tenantSlug }: { tenantSlug: string }) {
+export function Composer({ tenantSlug, initialAngle }: { tenantSlug: string; initialAngle?: string }) {
   const [mode, setMode] = useState<ComposeMode>("original");
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialAngle ?? "");
   const [variants, setVariants] = useState<DraftVariants | null>(null);
   const [pending, startTransition] = useTransition();
   // Desktop: which secondary platforms have their card expanded

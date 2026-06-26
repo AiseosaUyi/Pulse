@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { APP_TIME_ZONE } from "@/lib/utils/format";
 import { useRouter } from "next/navigation";
-import { CalendarClock, Clock, CheckCircle2, AlertCircle, Loader2, ExternalLink, X } from "lucide-react";
+import { CalendarClock, Clock, CheckCircle2, AlertCircle, Loader2, ExternalLink, X, PenLine } from "lucide-react";
 import { XIcon, LinkedInIcon, InstagramIcon, TikTokIcon, YouTubeIcon } from "@/components/icons/social";
 import { cancelScheduledPost } from "@/lib/actions/schedule";
 
@@ -94,10 +95,17 @@ export default function ScheduleClient({ initialPosts }: { initialPosts: Post[] 
       {filtered.length === 0 ? (
         <div className="rounded-2xl border border-border bg-card p-10 text-center">
           <CalendarClock size={32} className="mx-auto mb-3 text-text-muted opacity-40" />
-          <p className="text-sm text-text-muted">No {filter === "all" ? "" : filter} posts yet.</p>
+          <p className="text-sm font-medium text-foreground">No {filter === "all" ? "" : filter} posts yet.</p>
           <p className="mt-1 text-xs text-text-muted opacity-70">
-            Schedule a post from the Composer to see it here.
+            Draft something and schedule it from the Composer.
           </p>
+          <Link
+            href="/composer"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 transition-colors"
+          >
+            <PenLine size={14} />
+            Compose a post
+          </Link>
         </div>
       ) : (
         <div className="flex flex-col gap-3">

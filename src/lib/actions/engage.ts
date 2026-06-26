@@ -68,7 +68,7 @@ export async function discoverEngageCandidates(
   if (found.length === 0) {
     return {
       success: false,
-      error: "Auto-discovery isn't connected yet — set APIFY_X_ACTOR_ID / APIFY_LINKEDIN_SEARCH_ACTOR_ID to find posts. You can still paste a post below.",
+      error: "Post discovery isn't set up yet — paste a post below to draft a reply in your voice.",
     };
   }
 
