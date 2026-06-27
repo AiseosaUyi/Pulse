@@ -24,9 +24,9 @@ export default async function BrandAuditPage() {
       .select("id", { count: "exact", head: true })
       .eq("tenant_id", tenantSlug),
     admin
-      .from("tracked_keywords")
+      .from("keyword_rankings")
       .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantSlug),
+      .eq("tenant_slug", tenantSlug),
     admin
       .from("content_briefs")
       .select("id", { count: "exact", head: true })

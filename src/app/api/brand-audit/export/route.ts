@@ -40,9 +40,9 @@ export async function GET(req: NextRequest) {
         .eq("tenant_id", tenantSlug)
         .order("created_at"),
       admin
-        .from("tracked_keywords")
-        .select("keyword,category,search_volume,difficulty")
-        .eq("tenant_id", tenantSlug)
+        .from("keyword_rankings")
+        .select("keyword,difficulty,volume,position")
+        .eq("tenant_slug", tenantSlug)
         .order("created_at")
         .limit(30),
       admin
@@ -175,11 +175,11 @@ export async function GET(req: NextRequest) {
   // Keywords
   lines.push(`## Tracked Keywords`);
   if (keywords?.length) {
-    lines.push(``, `| Keyword | Category | Volume | Difficulty |`);
-    lines.push(`|---------|----------|--------|------------|`);
+    lines.push(``, `| Keyword | Difficulty | Volume | Position |`);
+    lines.push(`|---------|------------|--------|----------|`);
     keywords.forEach((k) => {
       lines.push(
-        `| ${k.keyword} | ${k.category ?? "—"} | ${k.search_volume ?? "—"} | ${k.difficulty ?? "—"} |`
+        `| ${k.keyword} | ${k.difficulty ?? "—"} | ${k.volume ?? "—"} | ${k.position != null ? `#${k.position}` : "—"} |`
       );
     });
   } else {
