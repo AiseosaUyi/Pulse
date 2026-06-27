@@ -48,8 +48,14 @@ async function runActor(input: Record<string, unknown>): Promise<ApifyTweet[]> {
     throw new Error(`Apify run failed: ${res.status} — ${text.slice(0, 200)}`);
   }
 
-  const items = (await res.json()) as ApifyTweet[];
-  return Array.isArray(items) ? items : [];
+  const raw = (await res.json()) as (ApifyTweet | { noResults: true })[];
+  // Filter out {noResults: true} sentinel objects the actor returns when
+  // Twitter blocks the request or yields no matches.
+  return Array.isArray(raw)
+    ? (raw.filter(
+        (item): item is ApifyTweet => "id" in item && !!item.id
+      ) as ApifyTweet[])
+    : [];
 }
 
 export async function searchTweets(
