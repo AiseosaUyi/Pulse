@@ -8,6 +8,7 @@ export async function getXSignalCards(tenantSlug: string): Promise<XSignalCard[]
     .select("*")
     .eq("tenant_slug", tenantSlug)
     .is("dismissed_at", null)
+    .order("likes", { ascending: false })
     .order("detected_at", { ascending: false })
     .limit(60);
 
