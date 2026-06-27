@@ -1,4 +1,4 @@
--- Phase C: blog rows get a URL slug + cached Google SERP preview so
+  -- Phase C: blog rows get a URL slug + cached Google SERP preview so
 -- the list page can render the SERP-style preview card without
 -- recomputing on every render.
 --

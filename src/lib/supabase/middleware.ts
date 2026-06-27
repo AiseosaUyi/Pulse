@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // pass through here un-gated or it 307s to /login.
 // `/r` is the public short-link redirector (trackable campaign links) — it must
 // be hittable by anyone, including logged-out customers on IG/WhatsApp.
-const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/invite", "/forgot-password", "/api/cron", "/.well-known", "/r"];
+const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/invite", "/forgot-password", "/api/cron", "/.well-known", "/r", "/pricing"];
 
 // Refreshes the Supabase session and gates unauthenticated routes.
 // Called from proxy.ts on every request.
@@ -41,7 +41,9 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  const isPublic =
+    pathname === "/" ||
+    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   // API routes own their own auth (Bearer token for /api/ext/*, getCurrentUser
   // for /api/vault/*, cron secret for /api/cron/*) and return JSON 401. A
   // redirect-to-login HTML response breaks JSON fetches and cross-origin
