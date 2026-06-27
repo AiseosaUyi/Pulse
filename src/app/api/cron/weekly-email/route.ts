@@ -4,7 +4,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyFromRequest } from "@/lib/cron/auth";
-import { sgMail } from "@/lib/email/sendgrid";
+import { brevo } from "@/lib/email/brevo";
 import { weeklyDigestHtml } from "@/lib/email/weekly-digest-email";
 import type { WeeklyReview } from "@/lib/ai/weekly-review";
 
@@ -81,11 +81,11 @@ export async function POST(req: Request) {
       if (!email) continue;
 
       try {
-        await sgMail.send({
-          from: { name: "Pulse", email: process.env.SENDGRID_FROM_EMAIL ?? "digest@pulse.gruve.events" },
-          to: email,
+        await brevo.transactionalEmails.sendTransacEmail({
+          sender: { name: "Pulse", email: process.env.BREVO_FROM_EMAIL ?? "digest@pulse.gruve.events" },
+          to: [{ email }],
           subject: `Your Pulse Weekly Review — ${digest.week_of}`,
-          html,
+          htmlContent: html,
         });
         tenantSent = true;
       } catch (err) {
