@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import Link from "next/link";
+import { Menu, X, PenLine } from "lucide-react";
 import { SidebarNav } from "./SidebarNav";
 import { TenantSwitcher } from "./TenantSwitcher";
 import { OnboardingChecklist } from "./OnboardingChecklist";
@@ -62,6 +63,17 @@ export function MobileNav({
           >
             <X size={16} className="text-text-muted" />
           </button>
+        </div>
+
+        <div className="px-3 pb-3">
+          <Link
+            href="/composer"
+            onClick={() => setIsOpen(false)}
+            className="flex items-center gap-2.5 w-full px-4 py-2.5 rounded-full bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
+          >
+            <PenLine size={15} />
+            New post
+          </Link>
         </div>
 
         {currentAccountType === "startup" && (
