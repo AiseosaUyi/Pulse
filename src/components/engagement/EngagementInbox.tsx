@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { formatDate } from "@/lib/utils/format";
 import { Trash2 } from "lucide-react";
 import {
@@ -217,6 +218,15 @@ export function EngagementInbox({ items }: { items: EngagementItem[] }) {
                     >
                       Reply
                     </button>
+                  )}
+
+                  {!canReplyVia(item.platform, item.type) && !item.replied && (
+                    <Link
+                      href={`/composer?angle=${encodeURIComponent(`Reply to ${item.fromName} on ${ENGAGEMENT_PLATFORM_LABELS[item.platform]}: "${item.content.slice(0, 120)}"`)}`}
+                      className="text-[10px] px-2 py-1 rounded bg-primary-500/10 text-primary-500 hover:bg-primary-500/20 transition-colors font-medium"
+                    >
+                      ✨ Draft in voice
+                    </Link>
                   )}
 
                   {item.replied ? (

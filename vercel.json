@@ -82,6 +82,14 @@
     {
       "path": "/api/cron/weekly-email",
       "schedule": "0 8 * * 0"
+    },
+    {
+      "path": "/api/cron/daily-email",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/spike-alert-email",
+      "schedule": "0 * * * *"
     }
   ]
 }

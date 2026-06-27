@@ -3,6 +3,8 @@ export interface DashboardStats {
   profileScore: StatCardData;
   activeLeads: StatCardData;
   adSpend: StatCardData;
+  postsThisWeek?: StatCardData;
+  avgEngagement?: StatCardData;
 }
 
 export interface StatCardData {

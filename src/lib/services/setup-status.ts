@@ -34,7 +34,13 @@ async function exists(
   return (count ?? 0) > 0;
 }
 
-export async function getSetupStatus(tenantSlug: string): Promise<SetupStatus> {
+// Startup-only keys — hidden for individual accounts.
+const STARTUP_ONLY_KEYS = new Set(["whatsapp", "storefront_token", "discovery"]);
+
+export async function getSetupStatus(
+  tenantSlug: string,
+  accountType: "startup" | "individual" = "startup"
+): Promise<SetupStatus> {
   const admin = createAdminClient();
 
   const [
@@ -125,11 +131,15 @@ export async function getSetupStatus(tenantSlug: string): Promise<SetupStatus> {
     },
   ];
 
-  const doneCount = items.filter((i) => i.done).length;
+  const filtered = accountType === "individual"
+    ? items.filter((i) => !STARTUP_ONLY_KEYS.has(i.key))
+    : items;
+
+  const doneCount = filtered.filter((i) => i.done).length;
   return {
-    items,
+    items: filtered,
     doneCount,
-    total: items.length,
-    allDone: doneCount === items.length,
+    total: filtered.length,
+    allDone: doneCount === filtered.length,
   };
 }

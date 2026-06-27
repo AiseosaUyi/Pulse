@@ -326,11 +326,18 @@ export function OutboundClient({
             {filtered.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border p-10 text-center">
                 <p className="text-foreground font-semibold">
-                  No prospects in this view.
+                  No prospects yet.
                 </p>
-                <p className="text-xs text-text-muted mt-1">
-                  Add one via the form above, or save a search under Discovery.
+                <p className="text-xs text-text-muted mt-2 mb-4">
+                  Search your niche on Discovery, or add one manually above.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => setTab("discovery")}
+                  className="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                >
+                  → Go to Discovery
+                </button>
               </div>
             ) : (
               <ul className="divide-y divide-border/30 rounded-xl border border-border bg-card overflow-hidden">

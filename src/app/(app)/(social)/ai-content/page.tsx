@@ -5,10 +5,12 @@ import { listBriefs } from "@/lib/services/briefs";
 import { listScheduledPosts } from "@/lib/services/scheduled-posts";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
 import { listForTenant as listContentPlans } from "@/lib/services/content-plans";
+import { getCurrentTenant } from "@/lib/auth";
 import { AIContentClient } from "./client";
 import { ContentBriefsClient } from "@/app/(app)/(intelligence)/content-briefs/client";
 import { VideoPlansTab } from "./_video-plans-tab";
 import { CalendarView } from "./CalendarView";
+import { GenerateFromIntelButton } from "./_generate-from-intel-button";
 
 type Tab = "calendar" | "briefs" | "videos";
 
@@ -37,6 +39,8 @@ export default async function ContentPage({
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
   const { tab: tabParam } = await searchParams;
   const tab = normalizeTab(tabParam);
+  const currentTenant = await getCurrentTenant();
+  const accountType = currentTenant?.accountType ?? "startup";
 
   const now = new Date();
   const weekStart = getMondayOf(now);
@@ -71,6 +75,9 @@ export default async function ContentPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {accountType === "startup" && (
+            <GenerateFromIntelButton tenantSlug={tenantSlug} />
+          )}
           <Link
             href="/settings/brand-voice"
             className="inline-flex items-center gap-1.5 px-3 md:px-4 py-2 border border-border rounded-lg text-xs md:text-sm text-foreground hover:bg-card-hover transition-colors duration-150"

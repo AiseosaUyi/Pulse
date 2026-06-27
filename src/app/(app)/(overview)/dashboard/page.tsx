@@ -17,10 +17,13 @@ import { SetupBanner } from "@/components/dashboard/SetupBanner";
 import { CadenceRail } from "@/app/(app)/(social)/composer/CadenceRail";
 import { getTracker } from "@/lib/services/cadence";
 import { formatCurrency } from "@/lib/utils/format";
+import { getCurrentTenant } from "@/lib/auth";
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const currentTenant = await getCurrentTenant();
+  const accountType = currentTenant?.accountType ?? "startup";
 
   const [tenant, stats, platforms, suggestions, notifications, coachActions, weeklyReview, setupStatus, tracker] = await Promise.all([
     getTenant(tenantSlug),
@@ -30,7 +33,7 @@ export default async function DashboardPage() {
     getNotifications(tenantSlug),
     listActiveCoachActions(tenantSlug, 8),
     getLatestWeeklyReview(tenantSlug),
-    getSetupStatus(tenantSlug),
+    getSetupStatus(tenantSlug, accountType),
     getTracker(tenantSlug),
   ]);
 
@@ -83,12 +86,21 @@ export default async function DashboardPage() {
       {/* Launch readiness — stays until every setup task is done */}
       <SetupBanner status={setupStatus} />
 
-      {/* Stat Cards */}
+      {/* Stat Cards — startup sees prospects + ad spend; individual sees posts + engagement */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <StatCard data={stats.socialReach} />
         <StatCard data={stats.profileScore} scoreMax={100} />
-        <StatCard data={stats.activeLeads} />
-        <StatCard data={adSpendFormatted} />
+        {accountType === "individual" ? (
+          <>
+            <StatCard data={stats.postsThisWeek ?? { label: "Posts this week", value: "0", subtitle: "Schedule via Composer" }} />
+            <StatCard data={stats.avgEngagement ?? { label: "Avg. engagement", value: "—", subtitle: "Connect platforms to see" }} />
+          </>
+        ) : (
+          <>
+            <StatCard data={stats.activeLeads} />
+            <StatCard data={adSpendFormatted} />
+          </>
+        )}
       </div>
 
       {/* Weekly business review — synthesis of what Pulse shipped this week */}

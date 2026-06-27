@@ -142,6 +142,27 @@ export async function getDashboardStats(
           ? `${activeCampaigns} campaign${activeCampaigns === 1 ? "" : "s"} active`
           : "No active campaigns",
     },
+    // Individual-account cards — aggregate engagement rate across own_post_metrics
+    postsThisWeek: {
+      label: "Posts this week",
+      value: String(postsThisWeek),
+      subtitle: postsThisWeek > 0 ? "last 7 days" : "Schedule via Composer",
+    },
+    avgEngagement: (() => {
+      const rows = (ownThisWeek.data ?? []).map((r) => {
+        const m = r.metrics as OwnMetricsPayload;
+        const likes = m?.likes ?? 0;
+        const comments = m?.comments ?? 0;
+        const reach = reachFromMetrics(m);
+        return reach > 0 ? ((likes + comments) / reach) * 100 : null;
+      }).filter((v): v is number => v !== null);
+      const avg = rows.length > 0 ? rows.reduce((a, b) => a + b, 0) / rows.length : null;
+      return {
+        label: "Avg. engagement",
+        value: avg !== null ? `${avg.toFixed(1)}%` : "—",
+        subtitle: avg !== null ? "likes + comments / reach" : "Connect platforms to see",
+      };
+    })(),
   };
 }
 

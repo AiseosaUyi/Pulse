@@ -18,6 +18,7 @@ export default async function PlatformScorePage() {
       </div>
 
       {!hasAnyData ? (
+        <>
         <div className="bg-card rounded-2xl border border-border/50 p-10 text-center max-w-lg mx-auto">
           <p className="text-lg font-semibold text-foreground mb-2">No score yet</p>
           <p className="text-text-muted text-sm leading-relaxed mb-6">
@@ -37,6 +38,43 @@ export default async function PlatformScorePage() {
             to seed your score.
           </p>
         </div>
+
+        {/* Improvement tips — always visible when score is absent */}
+        <div className="mt-6 bg-card rounded-2xl border border-border/50 p-6 max-w-lg mx-auto">
+          <p className="text-xs font-semibold uppercase tracking-widest text-text-muted mb-4">
+            How to build your score
+          </p>
+          <ul className="space-y-3">
+            <li className="flex items-start gap-3">
+              <span className="text-primary-500 font-bold mt-0.5 shrink-0">→</span>
+              <div className="flex-1 min-w-0">
+                <span className="text-sm text-foreground">Post consistently — aim for 3× per week</span>
+              </div>
+              <Link href="/composer" className="text-xs text-primary-500 hover:underline shrink-0">
+                Draft a post →
+              </Link>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="text-primary-500 font-bold mt-0.5 shrink-0">→</span>
+              <div className="flex-1 min-w-0">
+                <span className="text-sm text-foreground">Connect all your platforms for a cross-platform score</span>
+              </div>
+              <Link href="/settings/social-publishing" className="text-xs text-primary-500 hover:underline shrink-0">
+                Settings →
+              </Link>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="text-primary-500 font-bold mt-0.5 shrink-0">→</span>
+              <div className="flex-1 min-w-0">
+                <span className="text-sm text-foreground">Engage with replies to boost your engagement rate</span>
+              </div>
+              <Link href="/conversations" className="text-xs text-primary-500 hover:underline shrink-0">
+                Open inbox →
+              </Link>
+            </li>
+          </ul>
+        </div>
+        </>
       ) : (
         <>
           <div className="bg-card rounded-xl p-6 border border-border/50 mb-6">
@@ -120,6 +158,32 @@ export default async function PlatformScorePage() {
               </div>
             ))}
           </div>
+
+          {/* Improvement tips — shown when there is room to grow */}
+          {data.overall < 80 && (
+            <div className="mt-6 bg-card rounded-2xl border border-border/50 p-6">
+              <p className="text-xs font-semibold uppercase tracking-widest text-text-muted mb-4">
+                Improve your score
+              </p>
+              <ul className="space-y-3">
+                <li className="flex items-start gap-3">
+                  <span className="text-primary-500 font-bold mt-0.5 shrink-0">→</span>
+                  <span className="text-sm text-foreground flex-1">Post consistently — aim for 3× per week</span>
+                  <Link href="/composer" className="text-xs text-primary-500 hover:underline shrink-0">Draft a post →</Link>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-primary-500 font-bold mt-0.5 shrink-0">→</span>
+                  <span className="text-sm text-foreground flex-1">Connect all platforms for a complete cross-platform score</span>
+                  <Link href="/settings/social-publishing" className="text-xs text-primary-500 hover:underline shrink-0">Settings →</Link>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-primary-500 font-bold mt-0.5 shrink-0">→</span>
+                  <span className="text-sm text-foreground flex-1">Reply to comments to lift your engagement rate</span>
+                  <Link href="/conversations" className="text-xs text-primary-500 hover:underline shrink-0">Open inbox →</Link>
+                </li>
+              </ul>
+            </div>
+          )}
         </>
       )}
     </div>

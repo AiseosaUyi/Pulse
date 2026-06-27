@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { X } from "lucide-react";
 import type { AnomalyAlert } from "@/lib/services/cross-brand";
 
@@ -53,6 +54,12 @@ export function AnomalyAlerts({ alerts: initialAlerts }: AnomalyAlertsProps) {
               {alert.message}
             </p>
           </div>
+          <Link
+            href={`/composer?angle=${encodeURIComponent(`${alert.competitorName} got ${alert.multiplier}x engagement on ${alert.platform}: ${alert.message}`)}`}
+            className="shrink-0 text-[11px] font-medium text-primary-500 hover:underline whitespace-nowrap"
+          >
+            Draft about this →
+          </Link>
           <button
             onClick={() => dismiss(alert.id)}
             className="p-1 rounded hover:bg-card-hover transition-colors shrink-0"
