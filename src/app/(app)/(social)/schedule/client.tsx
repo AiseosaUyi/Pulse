@@ -65,13 +65,10 @@ export default function ScheduleClient({ initialPosts }: { initialPosts: Post[] 
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <CalendarClock size={20} className="text-primary" />
-          <h1 className="text-lg font-semibold text-foreground">Schedule</h1>
-        </div>
-        <p className="text-sm text-text-muted">Upcoming and recent scheduled posts across all platforms.</p>
+    <div className="p-4 md:p-8 max-w-[1200px]">
+      <div className="mb-6">
+        <h1 className="text-xl md:text-2xl font-bold text-foreground">Schedule</h1>
+        <p className="text-sm text-text-secondary mt-1">Upcoming and recent scheduled posts across all platforms.</p>
       </div>
 
       {/* Filter chips */}

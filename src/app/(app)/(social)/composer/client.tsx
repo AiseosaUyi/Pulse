@@ -357,10 +357,10 @@ export function Composer({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-1100 [font-family:'Satoshi-700',var(--font-sans)]">
+        <h1 className="text-xl md:text-2xl font-bold text-foreground">
           Composer
         </h1>
-        <p className="mt-1 text-sm text-gray-1000">
+        <p className="mt-1 text-sm text-text-secondary">
           Drop a link or type your take. Get platform-native drafts in your voice — edit, copy, post.
         </p>
       </div>

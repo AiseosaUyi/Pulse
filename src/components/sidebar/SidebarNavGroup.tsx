@@ -7,10 +7,12 @@ interface SidebarNavGroupProps {
 
 export function SidebarNavGroup({ group }: SidebarNavGroupProps) {
   return (
-    <div className="mt-5 first:mt-0">
-      <p className="px-3 text-[10px] font-medium uppercase tracking-[0.14em] text-gray-400 mb-2">
-        {group.label}
-      </p>
+    <div className="mt-4 first:mt-0">
+      {group.label && (
+        <p className="px-3 text-[10px] font-medium uppercase tracking-[0.14em] text-gray-400 mb-1.5">
+          {group.label}
+        </p>
+      )}
       <div className="flex flex-col gap-0.5">
         {group.items.map((item) => (
           <SidebarNavItem

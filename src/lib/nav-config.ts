@@ -21,26 +21,21 @@ export interface NavGroup {
 // Every item answers: "What am I doing right now?"
 export const navGroups: NavGroup[] = [
   {
-    // The daily starting point: AI coaching + at-a-glance health.
-    label: "Home",
+    label: "",
     items: [
       { label: "Dashboard", href: "/dashboard", iconName: "LayoutDashboard" },
       { label: "Analytics", href: "/own-analytics", iconName: "BarChart3", surfaces: ["startup"] },
     ],
   },
   {
-    // What's happening in the market? Find angles before writing.
-    // Signals = Intel feed + Viral trends merged. Manual "Add a trend" lives inside Signals.
-    label: "Discover",
+    label: "",
     items: [
       { label: "Signals", href: "/intel-feed", iconName: "Zap" },
       { label: "SEO", href: "/seo-tracker", iconName: "Search", surfaces: ["startup"] },
     ],
   },
   {
-    // Draft, plan, and generate content.
-    // Composer is available to ALL — startup users write quick posts too.
-    label: "Create",
+    label: "",
     items: [
       { label: "Composer", href: "/composer", iconName: "PenLine" },
       {
@@ -57,8 +52,7 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    // Get it out the door.
-    label: "Publish",
+    label: "",
     items: [
       { label: "Schedule", href: "/schedule", iconName: "CalendarClock", surfaces: ["individual"] },
       { label: "Broadcasts", href: "/broadcasts", iconName: "Radio", surfaces: ["startup"] },
@@ -66,18 +60,14 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    // How is it working? Scores, rankings, engagement numbers.
-    label: "Measure",
+    label: "",
     items: [
       { label: "Platform score", href: "/platform-score", iconName: "CircleDot" },
       { label: "Ads critic", href: "/ads-tracker", iconName: "Diamond", surfaces: ["startup"] },
-      { label: "Orders", href: "/orders", iconName: "ShoppingCart", surfaces: ["startup"] },
     ],
   },
   {
-    // Two-way: respond, reach out.
-    // Conversations merges Engage (individual) + Engagement Inbox (startup) into one surface.
-    label: "Connect",
+    label: "",
     items: [
       { label: "Conversations", href: "/conversations", iconName: "MessagesSquare" },
       { label: "Outbound", href: "/leads", iconName: "Target", surfaces: ["startup"] },

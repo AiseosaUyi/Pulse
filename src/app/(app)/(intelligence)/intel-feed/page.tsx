@@ -35,10 +35,7 @@ export default async function IntelFeedPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1
-              className="text-2xl text-gray-1100 dark:text-foreground tracking-tight"
-              style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
-            >
+            <h1 className="text-xl md:text-2xl font-bold text-foreground">
               Signals
             </h1>
             <p className="text-gray-1000 dark:text-text-secondary text-sm mt-0.5">

@@ -31,7 +31,7 @@ export default async function ComposerPage({
   const hasConnections = connections.length > 0;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8 md:py-12">
+    <div className="mx-auto w-full max-w-6xl px-4 py-4 md:py-8">
       {tracker && (
         <Link
           href="/today"
