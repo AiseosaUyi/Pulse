@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Copy, Loader2, Search, X } from "lucide-react";
+import { Copy, Loader2, Search, TrendingUp, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/Toaster";
 import { draftEngagement, discoverEngageCandidates, dismissCandidate } from "@/lib/actions/engage";
@@ -178,8 +179,20 @@ export function EngageClient({
         </div>
       )}
 
-      {/* Manual paste */}
+      {/* Shortcut: react to a tracked trend */}
       <div className="mt-8 border-t border-white-200 pt-6">
+        <Link
+          href="/viral-trends"
+          className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-foreground transition-colors"
+        >
+          <TrendingUp size={14} className="text-primary-500" />
+          Or react to a trend you&apos;re tracking
+          <span className="text-primary-500">→</span>
+        </Link>
+      </div>
+
+      {/* Manual paste */}
+      <div className="mt-6 border-t border-white-200 pt-6">
         <h2 className="text-sm font-bold text-gray-1100">Or paste a post</h2>
         <div className="mt-3 flex flex-col gap-3">
           <textarea

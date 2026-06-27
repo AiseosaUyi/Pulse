@@ -14,13 +14,15 @@ import { listActiveCoachActions } from "@/lib/services/coach";
 import { getLatestWeeklyReview } from "@/lib/services/weekly-reviews";
 import { getSetupStatus } from "@/lib/services/setup-status";
 import { SetupBanner } from "@/components/dashboard/SetupBanner";
+import { CadenceRail } from "@/app/(app)/(social)/composer/CadenceRail";
+import { getTracker } from "@/lib/services/cadence";
 import { formatCurrency } from "@/lib/utils/format";
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
 
-  const [tenant, stats, platforms, suggestions, notifications, coachActions, weeklyReview, setupStatus] = await Promise.all([
+  const [tenant, stats, platforms, suggestions, notifications, coachActions, weeklyReview, setupStatus, tracker] = await Promise.all([
     getTenant(tenantSlug),
     getDashboardStats(tenantSlug),
     getPlatforms(tenantSlug),
@@ -29,6 +31,7 @@ export default async function DashboardPage() {
     listActiveCoachActions(tenantSlug, 8),
     getLatestWeeklyReview(tenantSlug),
     getSetupStatus(tenantSlug),
+    getTracker(tenantSlug),
   ]);
 
   if (!tenant || !stats) {
@@ -100,6 +103,19 @@ export default async function DashboardPage() {
       <div className="mb-4">
         <CoachFeed tenantSlug={tenantSlug} initial={coachActions} />
       </div>
+
+      {/* Today's posting windows */}
+      {tracker && (
+        <div className="mb-4 rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-foreground">Today&apos;s schedule</h2>
+            <Link href="/today" className="text-xs text-primary-500 hover:underline">
+              Full view →
+            </Link>
+          </div>
+          <CadenceRail tracker={tracker} tenantSlug={tenantSlug} />
+        </div>
+      )}
 
       {/* Two-column bottom */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
