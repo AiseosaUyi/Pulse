@@ -40,8 +40,9 @@ export async function generateEngagementSuggestion(input: {
   voice: BrandVoice | null;
   positioning: BrandPositioning | null;
 }): Promise<XEngagementSuggestion> {
-  const model = getModel("synthesis");
-  const modelId = getModelId("synthesis");
+  // gpt-4o-mini: structured short-form copy, 13× cheaper than gpt-4.1 with same quality
+  const model = getModel("scoring");
+  const modelId = getModelId("scoring");
   const started = Date.now();
 
   const voiceDesc = input.voice
@@ -118,8 +119,9 @@ export async function generatePostIdeas(input: {
   voice: BrandVoice | null;
   positioning: BrandPositioning | null;
 }): Promise<XPostIdea[]> {
-  const model = getModel("synthesis");
-  const modelId = getModelId("synthesis");
+  // gpt-4o-mini: creative short-form tweet ideas, 13× cheaper than gpt-4.1
+  const model = getModel("scoring");
+  const modelId = getModelId("scoring");
   const started = Date.now();
 
   const voiceDesc = input.voice
