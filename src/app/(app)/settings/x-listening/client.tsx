@@ -87,7 +87,7 @@ export function XListeningEditor({ tenantSlug, initialConfig }: Props) {
       {/* Keywords */}
       <div className="space-y-2">
         <div className="flex items-baseline justify-between">
-          <Label htmlFor="x-keywords">Keywords to monitor</Label>
+          <Label htmlFor="x-keywords">Social topics to monitor</Label>
           <span
             className={`text-xs ${keywordCount > 20 ? "text-red-500" : "text-text-muted"}`}
           >
@@ -106,8 +106,9 @@ export function XListeningEditor({ tenantSlug, initialConfig }: Props) {
           className="font-mono text-sm"
         />
         <p className="text-xs text-text-muted">
-          One keyword or phrase per line. Tweets matching any keyword with at
-          least your minimum engagement threshold surface in Intel Feed.
+          One topic or phrase per line. Tweets matching these surface in Intel
+          Feed → X Signals. Not the same as SEO keywords (those live in SEO
+          Command Center → Keywords).
         </p>
       </div>
 

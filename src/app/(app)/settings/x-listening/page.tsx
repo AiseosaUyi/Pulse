@@ -15,7 +15,7 @@ export default async function XListeningPage() {
     <div className="max-w-[760px] space-y-6">
       <SettingsPageHeading
         title="X listening"
-        subtitle={`Keywords, accounts, and engagement thresholds Pulse monitors on X for ${tenant.name}. Results appear in Intel Feed → X Signals.`}
+        subtitle={`Social topics and accounts Pulse monitors on X for ${tenant.name}. These are separate from SEO keywords — they surface tweets in Intel Feed → X Signals.`}
       />
 
       <section className="bg-card border border-border rounded-2xl p-6">

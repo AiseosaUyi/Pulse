@@ -93,9 +93,9 @@ export async function getOnboardingProgress(
     },
     {
       id: "keywords",
-      label: `Track ${KEYWORD_TARGET} keywords`,
+      label: `Track ${KEYWORD_TARGET} SEO keywords`,
       description:
-        "The SEO queries you care about most. We rank and score content against them.",
+        "The search queries you care about most. We track Google rankings and score content against them.",
       done: keywordCount >= KEYWORD_TARGET,
       progress:
         keywordCount < KEYWORD_TARGET

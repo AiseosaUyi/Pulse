@@ -52,7 +52,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     ],
   },
   {
-    label: "Workspace",
+    label: "Brand",
     items: [
       { label: "Team", href: "/settings/team", icon: Users },
       {
@@ -66,17 +66,16 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         href: "/settings/brand-audit",
         icon: ScanSearch,
       },
+    ],
+  },
+  {
+    // Controls what appears in Intel Feed → X Signals + Growth tools
+    label: "Social signals",
+    items: [
       {
-        label: "Posting cadence",
-        href: "/settings/cadence",
-        icon: CalendarCheck,
-        surfaces: ["individual"],
-      },
-      {
-        label: "Content engine",
-        href: "/settings/content-engine",
-        icon: Film,
-        surfaces: ["startup"],
+        label: "X listening",
+        href: "/settings/x-listening",
+        icon: Radio,
       },
       {
         label: "Trend scouts",
@@ -96,21 +95,28 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         icon: Radar,
         surfaces: ["startup"],
       },
-      {
-        label: "X listening",
-        href: "/settings/x-listening",
-        icon: Radio,
-      },
     ],
   },
   {
     label: "Publishing",
     items: [
       {
+        label: "Content engine",
+        href: "/settings/content-engine",
+        icon: Film,
+        surfaces: ["startup"],
+      },
+      {
         label: "Social publishing",
         href: "/settings/social-publishing",
         icon: Share2,
         surfaces: ["individual"] as SettingsAccountType[],
+      },
+      {
+        label: "Posting cadence",
+        href: "/settings/cadence",
+        icon: CalendarCheck,
+        surfaces: ["individual"],
       },
     ],
   },

@@ -79,7 +79,7 @@ export function IntelFeedTabs({ feed, xSignals, competitors, tenantSlug }: Props
                 onClick={() => setShowModal(true)}
                 className="px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-primary-500 hover:bg-primary-600 transition-colors"
               >
-                + Add post
+                + Log competitor post
               </button>
             )}
             {tab === "x_signals" && (

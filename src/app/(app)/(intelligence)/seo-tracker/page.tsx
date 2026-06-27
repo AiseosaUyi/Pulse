@@ -90,7 +90,7 @@ export default async function SEODashboardPage() {
         <div className="bg-card rounded-xl border border-border/50">
           <div className="p-5 border-b border-border/50 flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
-              Tracked Keywords
+              SEO Keywords
             </h2>
             <Link href="/seo-tracker/keywords" className="text-xs text-primary-500 hover:underline">
               View all
