@@ -31,6 +31,11 @@ export async function getXSignalCards(tenantSlug: string): Promise<XSignalCard[]
     replies: row.replies,
     postedAt: row.posted_at,
     detectedAt: row.detected_at,
+    aiReply: row.ai_reply ?? null,
+    aiQuoteTweet: row.ai_quote_tweet ?? null,
+    aiAction: (row.ai_action as XSignalCard["aiAction"]) ?? null,
+    aiScore: row.ai_score ?? null,
+    aiReasoning: row.ai_reasoning ?? null,
   }));
 }
 

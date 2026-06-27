@@ -59,7 +59,18 @@ function CopyButton({ text }: { text: string }) {
 
 export function XSignalCard({ card }: Props) {
   const [dismissed, setDismissed] = useState(false);
-  const [suggestion, setSuggestion] = useState<XEngagementSuggestion | null>(null);
+  // Initialise from DB cache so already-generated suggestions render immediately
+  const [suggestion, setSuggestion] = useState<XEngagementSuggestion | null>(
+    card.aiAction
+      ? {
+          reply: card.aiReply ?? "",
+          quoteTweet: card.aiQuoteTweet ?? "",
+          action: card.aiAction,
+          reasoning: card.aiReasoning ?? "",
+          opportunityScore: card.aiScore ?? 5,
+        }
+      : null
+  );
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 

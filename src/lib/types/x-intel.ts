@@ -22,4 +22,10 @@ export interface XSignalCard {
   replies: number;
   postedAt: string;
   detectedAt: string;
+  // Cached AI engagement suggestion (null = not yet generated)
+  aiReply: string | null;
+  aiQuoteTweet: string | null;
+  aiAction: "reply" | "quote" | "both" | "skip" | null;
+  aiScore: number | null;
+  aiReasoning: string | null;
 }

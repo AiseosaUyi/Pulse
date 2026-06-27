@@ -45,6 +45,7 @@ interface Props {
 
 export function XPostIdeasPanel({ tenantSlug, topSignalIds }: Props) {
   const [ideas, setIdeas] = useState<XPostIdea[] | null>(null);
+  const [fromCache, setFromCache] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +55,7 @@ export function XPostIdeasPanel({ tenantSlug, topSignalIds }: Props) {
       const result = await suggestXPostIdeas(tenantSlug, topSignalIds);
       if (result.success) {
         setIdeas(result.ideas);
+        setFromCache(result.cached);
       } else {
         setError(result.error);
       }
@@ -67,6 +69,9 @@ export function XPostIdeasPanel({ tenantSlug, topSignalIds }: Props) {
           <Lightbulb size={14} className="text-primary-500" />
           <span className="text-sm font-semibold text-foreground">Post ideas</span>
           <span className="text-[11px] text-text-muted">— inspired by what&apos;s working in your niche</span>
+          {fromCache && ideas && (
+            <span className="text-[10px] font-medium text-text-muted/60 ml-1">· cached</span>
+          )}
         </div>
         <button
           onClick={generate}
@@ -74,7 +79,7 @@ export function XPostIdeasPanel({ tenantSlug, topSignalIds }: Props) {
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 transition-colors"
         >
           <RefreshCw size={11} className={isPending ? "animate-spin" : ""} />
-          {isPending ? "Generating…" : ideas ? "Refresh ideas" : "Generate ideas"}
+          {isPending ? "Generating…" : ideas ? (fromCache ? "Refresh ideas" : "Regenerate") : "Generate ideas"}
         </button>
       </div>
 
