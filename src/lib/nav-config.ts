@@ -30,11 +30,10 @@ export const navGroups: NavGroup[] = [
   },
   {
     // What's happening in the market? Find angles before writing.
-    // Intel flow: signal here → "Steal This →" goes straight to Composer.
+    // Signals = Intel feed + Viral trends merged. Manual "Add a trend" lives inside Signals.
     label: "Discover",
     items: [
-      { label: "Intel feed", href: "/intel-feed", iconName: "Eye" },
-      { label: "Viral trends", href: "/viral-trends", iconName: "TrendingUp" },
+      { label: "Signals", href: "/intel-feed", iconName: "Zap" },
       { label: "SEO", href: "/seo-tracker", iconName: "Search", surfaces: ["startup"] },
     ],
   },
@@ -61,7 +60,6 @@ export const navGroups: NavGroup[] = [
     // Get it out the door.
     label: "Publish",
     items: [
-      { label: "Today", href: "/today", iconName: "CalendarCheck", surfaces: ["individual"] },
       { label: "Schedule", href: "/schedule", iconName: "CalendarClock", surfaces: ["individual"] },
       { label: "Broadcasts", href: "/broadcasts", iconName: "Radio", surfaces: ["startup"] },
       { label: "Post history", href: "/post-history", iconName: "Clock" },
@@ -77,11 +75,11 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    // Two-way: respond, reach out, broadcast.
+    // Two-way: respond, reach out.
+    // Conversations merges Engage (individual) + Engagement Inbox (startup) into one surface.
     label: "Connect",
     items: [
-      { label: "Engage", href: "/engage", iconName: "MessagesSquare", surfaces: ["individual"] },
-      { label: "Inbox", href: "/engagement", iconName: "MessageCircle", surfaces: ["startup"] },
+      { label: "Conversations", href: "/conversations", iconName: "MessagesSquare" },
       { label: "Outbound", href: "/leads", iconName: "Target", surfaces: ["startup"] },
     ],
   },

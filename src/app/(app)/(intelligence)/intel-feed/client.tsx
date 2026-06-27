@@ -8,33 +8,43 @@ import { IntelCard } from "@/components/intelligence/IntelCard";
 import { XSignalCard } from "@/components/intelligence/XSignalCard";
 import { XPostIdeasPanel } from "@/components/intelligence/XPostIdeasPanel";
 import { GrowthGuide } from "@/components/intelligence/GrowthGuide";
+import { ViralTrendsClient } from "@/app/(app)/(social)/viral-trends/client";
 import type { Competitor, IntelCard as IntelCardType } from "@/lib/types/intelligence";
 import type { XSignalCard as XSignalCardType } from "@/lib/types/x-intel";
+import type { TrendScout } from "@/lib/types/trends";
 
-type Tab = "competitors" | "x_signals";
+type Tab = "competitors" | "x_signals" | "trends";
 
 interface Props {
   feed: IntelCardType[];
   xSignals: XSignalCardType[];
   competitors: Competitor[];
   tenantSlug: string;
+  trends: TrendScout[];
 }
 
-export function IntelFeedTabs({ feed, xSignals, competitors, tenantSlug }: Props) {
-  const [tab, setTab] = useState<Tab>("competitors");
+export function IntelFeedTabs({ feed, xSignals, competitors, tenantSlug, trends }: Props) {
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const t = params.get("tab");
+      if (t === "trends" || t === "x_signals" || t === "competitors") return t;
+    }
+    return "competitors";
+  });
   const [showModal, setShowModal] = useState(false);
   const [visibleXSignals, setVisibleXSignals] = useState(xSignals);
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "competitors", label: "Competitor intel", count: feed.length || undefined },
     { id: "x_signals", label: "X signals", count: visibleXSignals.length || undefined },
+    { id: "trends", label: "Trends", count: trends.length || undefined },
   ];
 
   // Top signal IDs for post idea generation (prefer account_monitor, then keyword)
   const topSignalIds = visibleXSignals
     .slice()
     .sort((a, b) => {
-      // Prioritise account_monitor for post ideas (they're real niche accounts)
       if (a.signalType === "account_monitor" && b.signalType !== "account_monitor") return -1;
       if (b.signalType === "account_monitor" && a.signalType !== "account_monitor") return 1;
       return b.likes - a.likes;
@@ -158,15 +168,10 @@ export function IntelFeedTabs({ feed, xSignals, competitors, tenantSlug }: Props
             </div>
           ) : (
             <>
-              {/* Growth playbook */}
               <GrowthGuide />
-
-              {/* Post ideas — inspired by monitored accounts */}
               {topSignalIds.length > 0 && (
                 <XPostIdeasPanel tenantSlug={tenantSlug} topSignalIds={topSignalIds} />
               )}
-
-              {/* Source legend */}
               <div className="flex items-center gap-3 mb-4 flex-wrap">
                 <span className="text-[11px] text-text-muted font-medium uppercase tracking-wide">
                   Sources:
@@ -181,8 +186,6 @@ export function IntelFeedTabs({ feed, xSignals, competitors, tenantSlug }: Props
                   trending
                 </span>
               </div>
-
-              {/* Signal cards */}
               <div className="space-y-4">
                 {visibleXSignals.map((card) => (
                   <XSignalCard key={card.id} card={card} />
@@ -191,6 +194,11 @@ export function IntelFeedTabs({ feed, xSignals, competitors, tenantSlug }: Props
             </>
           )}
         </>
+      )}
+
+      {/* Trends (merged from Viral Trends) */}
+      {tab === "trends" && (
+        <ViralTrendsClient trends={trends} tenantSlug={tenantSlug} />
       )}
     </>
   );

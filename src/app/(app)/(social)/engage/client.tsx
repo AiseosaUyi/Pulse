@@ -182,7 +182,7 @@ export function EngageClient({
       {/* Shortcut: react to a tracked trend */}
       <div className="mt-8 border-t border-white-200 pt-6">
         <Link
-          href="/viral-trends"
+          href="/intel-feed?tab=trends"
           className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-foreground transition-colors"
         >
           <TrendingUp size={14} className="text-primary-500" />
