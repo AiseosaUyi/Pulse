@@ -24,6 +24,7 @@ import {
   CalendarCheck,
   Share2,
   Radio,
+  ScanSearch,
   type LucideIcon,
 } from "lucide-react";
 
@@ -60,6 +61,11 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         icon: Target,
       },
       { label: "Brand voice", href: "/settings/brand-voice", icon: Sparkles },
+      {
+        label: "Brand audit",
+        href: "/settings/brand-audit",
+        icon: ScanSearch,
+      },
       {
         label: "Posting cadence",
         href: "/settings/cadence",
