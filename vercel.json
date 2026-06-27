@@ -74,6 +74,10 @@
     {
       "path": "/api/cron/sync-post-metrics",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/apify-x-sync",
+      "schedule": "0 6,12,18,22 * * *"
     }
   ]
 }

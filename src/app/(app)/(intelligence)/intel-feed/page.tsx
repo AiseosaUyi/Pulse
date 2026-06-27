@@ -1,20 +1,20 @@
 import { cookies } from "next/headers";
 import { getIntelFeed, getMorningBrief, getWeeklyDigest, getCompetitors } from "@/lib/services/intelligence";
+import { getXSignalCards } from "@/lib/services/x-intel";
 import { listBriefs } from "@/lib/services/briefs";
 import { detectCrossBrandPatterns, detectAnomalies } from "@/lib/services/cross-brand";
 import { MorningBriefing } from "@/components/intelligence/MorningBriefing";
-import { IntelCard } from "@/components/intelligence/IntelCard";
 import { WeeklyDigest } from "@/components/intelligence/WeeklyDigest";
 import { CrossBrandInsights } from "@/components/intelligence/CrossBrandInsights";
 import { AnomalyAlerts } from "@/components/intelligence/AnomalyAlerts";
-import { IntelFeedClient } from "./client";
+import { IntelFeedTabs } from "./client";
 
 export default async function IntelFeedPage() {
   const cookieStore = await cookies();
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
   const tenantName = tenantSlug === "gruve" ? "Gruve" : "Sippy";
 
-  const [feed, morningBrief, digest, briefs, competitors, patterns, anomalies] =
+  const [feed, morningBrief, digest, briefs, competitors, patterns, anomalies, xSignals] =
     await Promise.all([
       getIntelFeed(tenantSlug),
       getMorningBrief(tenantSlug),
@@ -23,6 +23,7 @@ export default async function IntelFeedPage() {
       getCompetitors(tenantSlug),
       detectCrossBrandPatterns(),
       detectAnomalies(tenantSlug),
+      getXSignalCards(tenantSlug),
     ]);
 
   return (
@@ -32,12 +33,16 @@ export default async function IntelFeedPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Intelligence Feed</h1>
-            <p className="text-text-secondary text-sm mt-0.5">
-              Competitor activity across {tenantName}&apos;s landscape
+            <h1
+              className="text-2xl text-gray-1100 dark:text-foreground tracking-tight"
+              style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
+            >
+              Intelligence Feed
+            </h1>
+            <p className="text-gray-1000 dark:text-text-secondary text-sm mt-0.5">
+              Competitor activity and X signals for {tenantName}
             </p>
           </div>
-          <IntelFeedClient competitors={competitors} tenantSlug={tenantSlug} />
         </div>
 
         {/* Anomaly Alerts */}
@@ -49,24 +54,13 @@ export default async function IntelFeedPage() {
         {/* Cross-Brand Insights */}
         <CrossBrandInsights patterns={patterns} />
 
-        {/* Feed */}
-        {feed.length === 0 ? (
-          <div className="rounded-xl border-2 border-dashed border-border p-12 text-center">
-            <div className="text-2xl mb-3">📡</div>
-            <h3 className="text-foreground font-semibold mb-1">
-              Add your first competitor to start tracking
-            </h3>
-            <p className="text-text-muted text-sm">
-              Set up your competitor roster and paste their latest posts to get AI-powered intelligence.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {feed.map((card) => (
-              <IntelCard key={card.id} card={card} tenantSlug={tenantSlug} />
-            ))}
-          </div>
-        )}
+        {/* Tabbed feed: Competitor Intel + X Signals */}
+        <IntelFeedTabs
+          feed={feed}
+          xSignals={xSignals}
+          competitors={competitors}
+          tenantSlug={tenantSlug}
+        />
       </div>
 
       {/* Right: Weekly Digest (hidden on mobile/tablet, visible on lg+) */}

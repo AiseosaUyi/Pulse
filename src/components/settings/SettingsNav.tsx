@@ -23,6 +23,7 @@ import {
   Activity,
   CalendarCheck,
   Share2,
+  Radio,
   type LucideIcon,
 } from "lucide-react";
 
@@ -88,6 +89,11 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         href: "/settings/outbound-filters",
         icon: Radar,
         surfaces: ["startup"],
+      },
+      {
+        label: "X listening",
+        href: "/settings/x-listening",
+        icon: Radio,
       },
     ],
   },
