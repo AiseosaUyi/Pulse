@@ -4,7 +4,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyFromRequest } from "@/lib/cron/auth";
-import { resend } from "@/lib/email/resend";
+import { sgMail } from "@/lib/email/sendgrid";
 import { weeklyDigestHtml } from "@/lib/email/weekly-digest-email";
 import type { WeeklyReview } from "@/lib/ai/weekly-review";
 
@@ -80,17 +80,17 @@ export async function POST(req: Request) {
       const email = authUser?.user?.email;
       if (!email) continue;
 
-      const { error: sendErr } = await resend.emails.send({
-        from: "Pulse <digest@pulse.gruve.events>",
-        to: email,
-        subject: `Your Pulse Weekly Review — ${digest.week_of}`,
-        html,
-      });
-
-      if (sendErr) {
-        errors.push(`${digest.tenant_slug}/${email}: ${sendErr.message}`);
-      } else {
+      try {
+        await sgMail.send({
+          from: { name: "Pulse", email: process.env.SENDGRID_FROM_EMAIL ?? "digest@pulse.gruve.events" },
+          to: email,
+          subject: `Your Pulse Weekly Review — ${digest.week_of}`,
+          html,
+        });
         tenantSent = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`${digest.tenant_slug}/${email}: ${msg}`);
       }
     }
 
