@@ -1,11 +1,21 @@
 import { cookies } from "next/headers";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { BrandVoiceEditor } from "@/components/briefs/BrandVoiceEditor";
 
 export default async function BrandVoicePage() {
   const cookieStore = await cookies();
   const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
-  const voice = await getBrandVoice(tenantSlug);
+  const admin = createAdminClient();
+  const [voice, countResult] = await Promise.all([
+    getBrandVoice(tenantSlug),
+    admin
+      .from("blog_posts")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_slug", tenantSlug)
+      .eq("status", "published"),
+  ]);
+  const publishedPostCount = countResult.count ?? 0;
 
   return (
     <div className="max-w-[760px]">
@@ -18,7 +28,7 @@ export default async function BrandVoicePage() {
         </p>
       </div>
 
-      <BrandVoiceEditor tenantSlug={tenantSlug} initial={voice} />
+      <BrandVoiceEditor tenantSlug={tenantSlug} initial={voice} publishedPostCount={publishedPostCount} />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { brandVoiceSchema } from "@/lib/ai/brand-voice";
 import { updateBrandVoice } from "@/lib/actions/briefs";
+import { inferBrandVoiceFromPosts } from "@/lib/actions/infer-brand-voice";
 import type { z } from "zod";
 
 type BrandVoice = z.infer<typeof brandVoiceSchema>;
@@ -14,9 +15,10 @@ type BrandVoice = z.infer<typeof brandVoiceSchema>;
 interface Props {
   tenantSlug: string;
   initial: BrandVoice | null;
+  publishedPostCount?: number;
 }
 
-export function BrandVoiceEditor({ tenantSlug, initial }: Props) {
+export function BrandVoiceEditor({ tenantSlug, initial, publishedPostCount = 0 }: Props) {
   const [tone, setTone] = useState(initial?.tone ?? "");
   const [audience, setAudience] = useState(initial?.audience ?? "");
   const [doList, setDoList] = useState((initial?.do_list ?? [""]).join("\n"));
@@ -27,8 +29,29 @@ export function BrandVoiceEditor({ tenantSlug, initial }: Props) {
     (initial?.example_posts ?? [""]).join("\n\n---\n\n")
   );
   const [isPending, startTransition] = useTransition();
+  const [isInferring, startInferTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const canInfer = publishedPostCount >= 3;
+
+  const handleInfer = () => {
+    setError(null);
+    startInferTransition(async () => {
+      const res = await inferBrandVoiceFromPosts();
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      const v = res.voice;
+      setTone(v.tone);
+      setAudience(v.audience);
+      setDoList(v.do_list.join("\n"));
+      setDontList(v.dont_list.join("\n"));
+      setExamplePosts(v.example_posts.join("\n\n---\n\n"));
+      setSaved(false);
+    });
+  };
 
   const handleSave = () => {
     setError(null);
@@ -142,10 +165,23 @@ export function BrandVoiceEditor({ tenantSlug, initial }: Props) {
         </p>
       )}
 
-      <div className="flex items-center gap-3">
-        <Button onClick={handleSave} disabled={isPending}>
+      <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-border">
+        <Button onClick={handleSave} disabled={isPending || isInferring}>
           {isPending ? "Saving..." : "Save brand voice"}
         </Button>
+        <Button
+          variant="outline"
+          onClick={handleInfer}
+          disabled={isInferring || isPending || !canInfer}
+          title={!canInfer ? `Need at least 3 published blog posts (you have ${publishedPostCount})` : "Infer brand voice from your published posts"}
+        >
+          {isInferring ? "Analysing posts…" : "Infer from posts"}
+        </Button>
+        {!canInfer && (
+          <span className="text-xs text-text-muted">
+            Publish at least 3 blog posts to enable this
+          </span>
+        )}
         {saved && (
           <span className="text-sm text-green-600 dark:text-green-400">
             Saved ✓
