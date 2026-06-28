@@ -51,6 +51,15 @@ export interface ContentfulConfig {
   locale: string;
   blogContentType: string;
   landingContentType: string;
+  /**
+   * Per-tenant field ID overrides. Keys are Pulse's canonical field names
+   * (matching gruveBlog defaults). Values are the actual field IDs in this
+   * tenant's content type, or null to skip that field entirely.
+   *
+   * Example for sippyBlog:
+   *   { title: "blogTitle", content: "blogContent", minuteRead: "readTime", question: null }
+   */
+  fieldAliases?: Record<string, string | null>;
 }
 
 function envContentfulConfig(target: PublishTarget): ContentfulConfig | null {
@@ -83,6 +92,11 @@ export async function resolveContentfulConfig(
   if (creds?.secretToken && spaceId) {
     const liveEnv = String(creds.config.environment ?? "master");
     const testEnv = String(creds.config.test_environment ?? "Production");
+    const rawAliases = creds.config.field_aliases;
+    const fieldAliases: Record<string, string | null> | undefined =
+      rawAliases && typeof rawAliases === "object" && !Array.isArray(rawAliases)
+        ? (rawAliases as Record<string, string | null>)
+        : undefined;
     return {
       spaceId,
       cmaToken: creds.secretToken,
@@ -92,6 +106,7 @@ export async function resolveContentfulConfig(
       landingContentType: String(
         creds.config.landing_content_type ?? DEFAULT_LANDING_CT
       ),
+      fieldAliases,
     };
   }
   return envContentfulConfig(target);
@@ -208,6 +223,30 @@ function loc<T>(locale: string, v: T): Record<string, T> {
   return { [locale]: v };
 }
 
+/**
+ * Resolve a canonical field ID through the tenant's fieldAliases map.
+ * Returns the aliased name, or the canonical name if no alias is defined.
+ * Returns null when the field is explicitly aliased to null (skip it).
+ */
+function resolveField(
+  canonical: string,
+  aliases?: Record<string, string | null>
+): string | null {
+  if (!aliases || !(canonical in aliases)) return canonical;
+  return aliases[canonical]; // may be null (skip) or a new name
+}
+
+/** Set a field using the alias map. No-op when the field is aliased to null. */
+function setField(
+  fields: Record<string, Record<string, unknown>>,
+  canonical: string,
+  value: Record<string, unknown>,
+  aliases?: Record<string, string | null>
+): void {
+  const key = resolveField(canonical, aliases);
+  if (key !== null) fields[key] = value;
+}
+
 /** Pure mapper → Contentful entry `fields` (locale-wrapped). */
 export function mapToGruveBlogFields(
   d: GruveBlogDraft,
@@ -215,47 +254,48 @@ export function mapToGruveBlogFields(
   cfg: ContentfulConfig
 ): Record<string, Record<string, unknown>> {
   const L = <T>(v: T) => loc(cfg.locale, v);
-  const fields: Record<string, Record<string, unknown>> = {
-    title: L(d.title),
-    slug: L(d.slug),
-    content: L(d.bodyRichText),
-    pulseId: L(d.pulseId),
-  };
+  const a = cfg.fieldAliases;
+  const fields: Record<string, Record<string, unknown>> = {};
+
+  setField(fields, "title", L(d.title), a);
+  setField(fields, "slug", L(d.slug), a);
+  setField(fields, "content", L(d.bodyRichText), a);
+  setField(fields, "pulseId", L(d.pulseId), a);
+
   // `question` is REQUIRED on gruveBlog (verified required=true on the live
-  // model). Always emit it, falling back to the first FAQ question, then the
-  // excerpt, then the title — so publish never trips the required-field check.
+  // model). Always emit it unless aliased to null (e.g. sippyBlog has no
+  // question field). Falls back: first FAQ → excerpt → title.
   const firstFaq =
     Array.isArray(d.faqItems) && d.faqItems[0] && typeof d.faqItems[0] === "object"
       ? (d.faqItems[0] as { question?: string }).question
       : undefined;
-  fields.question = L(d.question ?? firstFaq ?? d.excerpt ?? d.title);
-  if (d.excerpt != null) fields.description = L(d.excerpt);
-  if (d.author != null) fields.author = L(d.author);
-  if (d.readMinutes != null) fields.minuteRead = L(d.readMinutes);
-  if (d.seoMetaTitle != null) fields.seoTitle = L(d.seoMetaTitle);
-  if (d.seoMetaDescription != null)
-    fields.seoDescription = L(d.seoMetaDescription);
-  if (d.canonicalOverride != null)
-    fields.canonicalUrl = L(d.canonicalOverride);
-  if (d.faqItems != null) fields.faqItems = L(d.faqItems);
-  if (d.jsonLdOverrides != null) fields.jsonLd = L(d.jsonLdOverrides);
-  if (d.pulseMetadata != null) fields.pulseMetadata = L(d.pulseMetadata);
+  setField(fields, "question", L(d.question ?? firstFaq ?? d.excerpt ?? d.title), a);
+
+  if (d.excerpt != null) setField(fields, "description", L(d.excerpt), a);
+  if (d.author != null) setField(fields, "author", L(d.author), a);
+  if (d.readMinutes != null) setField(fields, "minuteRead", L(d.readMinutes), a);
+  if (d.seoMetaTitle != null) setField(fields, "seoTitle", L(d.seoMetaTitle), a);
+  if (d.seoMetaDescription != null) setField(fields, "seoDescription", L(d.seoMetaDescription), a);
+  if (d.canonicalOverride != null) setField(fields, "canonicalUrl", L(d.canonicalOverride), a);
+  if (d.faqItems != null) setField(fields, "faqItems", L(d.faqItems), a);
+  if (d.jsonLdOverrides != null) setField(fields, "jsonLd", L(d.jsonLdOverrides), a);
+  if (d.pulseMetadata != null) setField(fields, "pulseMetadata", L(d.pulseMetadata), a);
   // SEO / E-E-A-T expansion (slice 2).
-  if (d.tags != null && d.tags.length > 0) fields.tags = L(d.tags);
-  if (d.category != null) fields.category = L(d.category);
-  if (d.authorBio != null) fields.authorBio = L(d.authorBio);
-  if (d.authorTitle != null) fields.authorTitle = L(d.authorTitle);
-  if (d.authorUrl != null) fields.authorUrl = L(d.authorUrl);
-  if (d.publishedDate != null) fields.publishedDate = L(d.publishedDate);
-  if (d.updatedDate != null) fields.updatedDate = L(d.updatedDate);
-  if (d.noindex != null) fields.noindex = L(d.noindex);
+  if (d.tags != null && d.tags.length > 0) setField(fields, "tags", L(d.tags), a);
+  if (d.category != null) setField(fields, "category", L(d.category), a);
+  if (d.authorBio != null) setField(fields, "authorBio", L(d.authorBio), a);
+  if (d.authorTitle != null) setField(fields, "authorTitle", L(d.authorTitle), a);
+  if (d.authorUrl != null) setField(fields, "authorUrl", L(d.authorUrl), a);
+  if (d.publishedDate != null) setField(fields, "publishedDate", L(d.publishedDate), a);
+  if (d.updatedDate != null) setField(fields, "updatedDate", L(d.updatedDate), a);
+  if (d.noindex != null) setField(fields, "noindex", L(d.noindex), a);
 
   const banner = assetLink(assets.bannerImageId);
-  if (banner) fields.bannerImage = L(banner);
+  if (banner) setField(fields, "bannerImage", L(banner), a);
   const thumb = assetLink(assets.thumbnailId);
-  if (thumb) fields.thumbnail = L(thumb);
+  if (thumb) setField(fields, "thumbnail", L(thumb), a);
   const authorImg = assetLink(assets.authorImageId);
-  if (authorImg) fields.authorImage = L(authorImg);
+  if (authorImg) setField(fields, "authorImage", L(authorImg), a);
 
   return fields;
 }

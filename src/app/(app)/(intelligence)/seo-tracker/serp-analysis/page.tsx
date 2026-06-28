@@ -1,11 +1,11 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import { listSerpAnalyses } from "@/lib/services/serp";
 import { getKeywordRankings } from "@/lib/services/seo";
 import { SerpAnalysisClient } from "./client";
 
 export default async function SerpAnalysisPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
 
   const [analyses, keywords] = await Promise.all([
     listSerpAnalyses(tenantSlug),

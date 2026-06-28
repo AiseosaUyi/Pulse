@@ -310,3 +310,48 @@ production — requires the Gruve lead's go-ahead before running.
   `decay_alert`) — still need original spec §13–§16; deterministic
   baseline already shipped.
 - `seo-longform` = OpenAI `gpt-5` (decision stands).
+
+---
+
+## Sippy Tenant Setup
+
+Sippy (`slug: "sippy"`) is seeded in the Pulse DB. To activate the SEO publish pipeline for Sippy:
+
+### Step 1 — Run the Contentful model migration
+
+Adds 13 Pulse SEO fields to the existing `sippyBlog` content type idempotently.
+
+```bash
+CONTENTFUL_SIPPY_SPACE_ID=<sippy-space-id> \
+CONTENTFUL_SIPPY_CMA_TOKEN=<sippy-cma-token> \
+tsx scripts/migrate-sippy-contentful-model.ts
+```
+
+Get the CMA token from: Contentful → Space Settings → API Keys → Content Management Tokens → Create Personal Access Token.  
+The space ID is in the Sippy webapp's `NEXT_PUBLIC_CONTENTFUL_SPACE_ID` env var.
+
+### Step 2 — Wire Contentful in Pulse (Sippy tenant)
+
+Log into Pulse as the `sippy` tenant → Settings → Integrations → Contentful → fill in:
+
+| Field | Value |
+|---|---|
+| Space ID | `<CONTENTFUL_SIPPY_SPACE_ID>` |
+| CMA Token | `<CONTENTFUL_SIPPY_CMA_TOKEN>` |
+| Environment | `master` |
+| Blog content type | `sippyBlog` |
+| Landing content type | `seoLandingPage` |
+
+### Step 3 — Run the landing page content type migration (optional)
+
+If programmatic SEO pages are needed for Sippy:
+
+```bash
+CONTENTFUL_SIPPY_SPACE_ID=<sippy-space-id> \
+CONTENTFUL_SIPPY_CMA_TOKEN=<sippy-cma-token> \
+tsx scripts/migrate-contentful-landing-model.ts
+```
+
+### Step 4 — Verify the publish pipeline
+
+Pulse → Blog Writer (sippy tenant) → Generate draft → Approve → Publish → confirm entry appears in Sippy's Contentful space under `sippyBlog` with `pulseId` set.

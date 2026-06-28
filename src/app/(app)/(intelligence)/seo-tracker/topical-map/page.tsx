@@ -1,11 +1,11 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import { getKeywordRankings } from "@/lib/services/seo";
 import { getLatestTopicalMap } from "@/lib/actions/topical-map";
 import { TopicalMapClient } from "./client";
 
 export default async function TopicalMapPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
 
   const [keywords, savedMap] = await Promise.all([
     getKeywordRankings(tenantSlug),

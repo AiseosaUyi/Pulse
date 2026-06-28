@@ -41,6 +41,7 @@ function emptyForm(): ProviderForm {
       locale: "",
       blog_content_type: "",
       landing_content_type: "",
+      field_aliases: "",
     },
   };
 }
@@ -73,6 +74,9 @@ export function IntegrationsClient({
         base.contentful.landing_content_type = String(
           rec.config.landing_content_type ?? ""
         );
+        base.contentful.field_aliases = rec.config.field_aliases
+          ? JSON.stringify(rec.config.field_aliases, null, 2)
+          : "";
       }
     }
     return base;
@@ -202,6 +206,12 @@ export function IntegrationsClient({
           : {}),
         ...(form.landing_content_type
           ? { landing_content_type: form.landing_content_type }
+          : {}),
+        ...(form.field_aliases
+          ? (() => {
+              try { return { field_aliases: JSON.parse(form.field_aliases) }; }
+              catch { setError("Field aliases must be valid JSON"); return {}; }
+            })()
           : {}),
       };
       if (form.cma_token) {
@@ -554,10 +564,27 @@ function renderFields(
         </div>
         <p className="text-[11px] text-text-muted">
           Locale + content-type ids are optional — blank uses the defaults
-          (<code>en-US</code>, <code>blogPost</code>,{" "}
+          (<code>en-US</code>, <code>gruveBlog</code>,{" "}
           <code>seoLandingPage</code>). Set them only if this workspace&apos;s
           Contentful model differs.
         </p>
+        <div>
+          <Label htmlFor="cf-field-aliases">Field aliases (JSON, optional)</Label>
+          <textarea
+            id="cf-field-aliases"
+            rows={5}
+            value={form.field_aliases}
+            onChange={(e) => onChange("field_aliases", e.target.value)}
+            placeholder={`// Leave blank for gruveBlog defaults.\n// For sippyBlog, paste:\n{\n  "title": "blogTitle",\n  "content": "blogContent",\n  "minuteRead": "readTime",\n  "question": null\n}`}
+            className="w-full rounded-lg border border-border bg-card text-xs font-mono leading-relaxed px-3 py-2 mt-1"
+            spellCheck={false}
+            autoComplete="off"
+          />
+          <p className="text-[11px] text-text-muted mt-1">
+            Maps Pulse&apos;s canonical field names to your content type&apos;s actual field IDs.
+            Set a key to <code>null</code> to skip that field (e.g. <code>&quot;question&quot;: null</code> for sippyBlog).
+          </p>
+        </div>
       </div>
     );
   }

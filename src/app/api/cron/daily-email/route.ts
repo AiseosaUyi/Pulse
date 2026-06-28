@@ -80,7 +80,7 @@ export async function POST(req: Request) {
       ? {
           competitor: (highSignals[0].competitor_name as string),
           description: `posted a ${highSignals[0].content_type} on ${highSignals[0].platform} that got ${((highSignals[0].metrics as { vsAverage?: number } | null)?.vsAverage ?? 0).toFixed(1)}x their average engagement. ${(highSignals[0].summary as string).slice(0, 120)}`,
-          composerUrl: `https://pulse.gruve.events/composer?angle=${encodeURIComponent((highSignals[0].competitor_name as string) + ": " + (highSignals[0].summary as string).slice(0, 120))}`,
+          composerUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://pulse.gruve.events"}/composer?angle=${encodeURIComponent((highSignals[0].competitor_name as string) + ": " + (highSignals[0].summary as string).slice(0, 120))}`,
         }
       : null;
 
