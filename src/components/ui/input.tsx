@@ -11,7 +11,7 @@ export const Input = React.forwardRef<
     data-slot="input"
     className={cn(
       "flex h-12 w-full rounded-lg border border-white-200 bg-transparent px-4 py-3 text-sm",
-      "placeholder:text-gray-1000 text-gray-1200",
+      "placeholder:text-gray-400 dark:placeholder:text-gray-600 text-gray-1200",
       "transition-colors duration-200 outline-none",
       "focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/30",
       "disabled:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed",
