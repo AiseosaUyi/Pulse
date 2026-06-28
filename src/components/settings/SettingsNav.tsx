@@ -110,13 +110,11 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Social publishing",
         href: "/settings/social-publishing",
         icon: Share2,
-        surfaces: ["individual"] as SettingsAccountType[],
       },
       {
         label: "Posting cadence",
         href: "/settings/cadence",
         icon: CalendarCheck,
-        surfaces: ["individual"],
       },
     ],
   },
