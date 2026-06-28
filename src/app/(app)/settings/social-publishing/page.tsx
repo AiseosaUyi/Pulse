@@ -47,7 +47,7 @@ export default async function SocialPublishingSettingsPage({
     <div>
       <SettingsPageHeading
         icon={Share2}
-        title="Social publishing"
+        title="Social Publishing"
         subtitle="Link your social accounts to schedule and publish posts directly from Pulse."
       />
 
@@ -67,7 +67,7 @@ export default async function SocialPublishingSettingsPage({
       <div className="space-y-6">
         {/* YouTube — direct OAuth, free */}
         <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">YouTube</p>
+          <p className="mb-2 text-sm font-medium text-foreground">YouTube</p>
           <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-4">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: "#FF000015" }}>
               <span style={{ color: "#FF0000" }}><YouTubeIcon size={20} /></span>
@@ -109,7 +109,7 @@ export default async function SocialPublishingSettingsPage({
 
         {/* Instagram / LinkedIn / TikTok — via SocialAPI.ai */}
         <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          <p className="mb-2 text-sm font-medium text-foreground">
             Instagram · LinkedIn · TikTok
           </p>
 
@@ -125,9 +125,7 @@ export default async function SocialPublishingSettingsPage({
               <ol className="space-y-1.5 text-sm text-text-muted list-decimal list-inside">
                 <li>Sign up at social-api.ai (free Hobby plan or $29/mo Side Hustle)</li>
                 <li>Copy your API key from their dashboard</li>
-                <li>
-                  Add <code className="rounded bg-muted px-1 py-0.5 text-xs">SOCIAL_API_KEY</code> to Vercel and redeploy
-                </li>
+                <li>Paste your API key into your deployment settings and redeploy</li>
                 <li>Come back here to link accounts</li>
               </ol>
               <a

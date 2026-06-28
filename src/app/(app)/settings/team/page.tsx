@@ -145,10 +145,7 @@ export default async function TeamSettingsPage() {
 
         {canInvite ? (
           <>
-            <h3
-              className="text-xs uppercase tracking-[0.14em] text-gray-500 mb-3"
-              style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
-            >
+            <h3 className="text-sm font-semibold text-foreground mb-3">
               Invite teammate
             </h3>
             <SettingsForm
@@ -179,10 +176,7 @@ export default async function TeamSettingsPage() {
 
             {invites.length > 0 && (
               <div className="mt-8">
-                <h3
-                  className="text-xs uppercase tracking-[0.14em] text-gray-500 mb-3"
-                  style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
-                >
+                <h3 className="text-sm font-semibold text-foreground mb-3">
                   Pending invites
                 </h3>
                 <ul className="divide-y divide-white-200">

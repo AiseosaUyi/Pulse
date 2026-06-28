@@ -66,7 +66,7 @@ export default async function AdsTrackerPage() {
       <section className="bg-card rounded-2xl border border-border/50 p-5">
         <div className="flex items-start justify-between mb-4 gap-2 flex-wrap">
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
+            <h2 className="text-sm font-semibold text-foreground">
               Manual campaign tracker
             </h2>
             <p className="text-xs text-text-muted mt-1">
