@@ -81,6 +81,17 @@ export async function fetchAllSocialApiAccounts() {
   }));
 }
 
+/** Get SocialAPI account IDs already claimed by tenants OTHER than the given one */
+export async function getAccountIdsClaimedByOtherTenants(excludeSlug: string): Promise<Set<string>> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("platform_connections")
+    .select("platform_user_id")
+    .neq("tenant_slug", excludeSlug)
+    .eq("access_token_enc", "socialapi-managed");
+  return new Set((data ?? []).map((r) => r.platform_user_id).filter(Boolean));
+}
+
 /** Get all saved mappings for a tenant */
 export async function getTenantSocialMappings(tenantSlug: string) {
   const admin = createAdminClient();

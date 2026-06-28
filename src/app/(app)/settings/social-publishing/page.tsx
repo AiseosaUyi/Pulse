@@ -5,6 +5,7 @@ import { getCurrentTenant } from "@/lib/auth";
 import {
   fetchAllSocialApiAccounts,
   getTenantSocialMappings,
+  getAccountIdsClaimedByOtherTenants,
 } from "@/lib/services/social-accounts";
 import { isSocialApiConfigured } from "@/lib/integrations/socialapi";
 import { isYouTubeConfigured } from "@/lib/integrations/platforms/youtube";
@@ -31,10 +32,14 @@ export default async function SocialPublishingSettingsPage({
     connections = await getAllPlatformConnections(tenant.slug);
     if (socialApiConfigured) {
       try {
-        [availableAccounts, linkedMappings] = await Promise.all([
+        const [allAccounts, mappings, claimedByOthers] = await Promise.all([
           fetchAllSocialApiAccounts(),
           getTenantSocialMappings(tenant.slug),
+          getAccountIdsClaimedByOtherTenants(tenant.slug),
         ]);
+        // Only show accounts not already claimed by another tenant
+        availableAccounts = allAccounts.filter((a) => !claimedByOthers.has(a.id));
+        linkedMappings = mappings;
       } catch (err) {
         fetchError = err instanceof Error ? err.message : "Failed to load accounts";
       }
