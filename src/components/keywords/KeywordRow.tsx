@@ -18,8 +18,6 @@ export function KeywordRow({ kw }: { kw: KeywordRanking }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  // Map the keyword → a Gruve discovery deep-link (location + closest
-  // category + time tab), save it on the row, and show the result.
   const handleGruveLink = () => {
     startTransition(async () => {
       const res = await generateKeywordDeeplink(kw.keyword, {
@@ -36,7 +34,7 @@ export function KeywordRow({ kw }: { kw: KeywordRanking }) {
       }
       const m = res.data.mapping;
       await dialogs.alert({
-        title: `Gruve link for "${kw.keyword}"`,
+        title: `Deep link for "${kw.keyword}"`,
         subtitle: `Mapped to → category: ${m.category ?? "—"} · location: ${m.location ?? "any"} · when: ${m.when ?? "any"} (${m.source}).\n\n${res.data.liveUrl}`,
       });
       router.refresh();
@@ -175,8 +173,8 @@ export function KeywordRow({ kw }: { kw: KeywordRanking }) {
           <button
             onClick={handleGruveLink}
             disabled={isPending}
-            aria-label="Generate Gruve deep-link"
-            title={kw.url ? "Regenerate Gruve link" : "Map to a Gruve link"}
+            aria-label="Generate deep link"
+            title={kw.url ? "Regenerate deep link" : "Map to a deep link"}
             className="p-1.5 rounded text-text-muted hover:text-primary-500 hover:bg-primary-500/10 transition-colors"
           >
             <Wand2 size={14} />

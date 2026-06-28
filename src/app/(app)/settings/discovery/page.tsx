@@ -36,7 +36,7 @@ export default async function DiscoverySettingsPage() {
       <SettingsPageHeading
         icon={Radar}
         title="Discovery sources"
-        subtitle="Platforms Pulse crawls nightly to find prospects (it pulls the Instagram handles linked on each page). Gruve mines ticketing sites; configure your own — e.g. drinks-delivery platforms — and they become qualified leads in Outbound."
+        subtitle="Platforms Pulse crawls nightly to find new prospects. Add the directories your audience hangs out on — ticketing sites, bar finders, booking apps — and matches surface as leads in Outbound."
       />
       <DiscoveryClient initial={config} />
     </div>

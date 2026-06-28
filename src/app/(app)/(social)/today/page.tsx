@@ -13,11 +13,14 @@ export default async function TodayPage() {
   const tracker = await getTracker(tenant.slug);
 
   return (
-    <div className="mx-auto w-full max-w-xl px-4 py-8 md:py-12">
-      <h1 className="mb-4 text-2xl font-bold text-gray-1100 [font-family:'Satoshi-700',var(--font-sans)]">
-        Today
-      </h1>
-      <CadenceRail tracker={tracker} tenantSlug={tenant.slug} />
+    <div className="p-4 md:p-8 max-w-[1200px]">
+      <div className="mb-6">
+        <h1 className="text-xl md:text-2xl font-bold text-foreground">Today</h1>
+        <p className="text-sm text-text-secondary mt-1">Your posting beat for today.</p>
+      </div>
+      <div className="max-w-lg">
+        <CadenceRail tracker={tracker} tenantSlug={tenant.slug} />
+      </div>
     </div>
   );
 }

@@ -538,7 +538,7 @@ function PublishToGruveButton({
             title:
               target === "test"
                 ? "Published to gamma (test)"
-                : "Published to Gruve (live)",
+                : "Published live",
             subtitle: `Live at ${res.liveUrl} — it'll appear in the sitemap and be indexable shortly.`,
           });
         })

@@ -28,7 +28,7 @@ export default async function StorageSettingsPage() {
       <SettingsPageHeading
         icon={HardDrive}
         title="Storage"
-        subtitle="Extracted videos and thumbnails live in Supabase Storage. Prune old files here once you're past the free-tier limit."
+        subtitle="Videos and thumbnails extracted from your content. Delete old files here to free up space."
       />
 
       {/* Overall usage */}

@@ -66,7 +66,7 @@ export default async function IntegrationsSettingsPage({
       <SettingsPageHeading
         icon={Plug}
         title="Integrations"
-        subtitle="Connect data sources Pulse pulls from, plus API tokens for first-party clients. Credentials stay server-side — the browser never sees them."
+        subtitle="Connect the tools Pulse pulls data from and manage API tokens for your own integrations. All credentials are stored securely."
       />
       <IntegrationsClient tenantSlug={tenant.slug} initial={integrations} />
       <div className="mt-6">

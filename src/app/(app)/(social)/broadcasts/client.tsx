@@ -64,8 +64,8 @@ export function BroadcastsClient({
     <div className="p-4 md:p-8 max-w-[1100px] mx-auto">
       <header className="flex items-center gap-2 mb-6">
         <div>
-          <h1 className="text-xl md:text-2xl text-gray-1100 dark:text-foreground">
-            WhatsApp broadcasts
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">
+            WhatsApp Broadcasts
           </h1>
           <p className="text-sm text-text-muted mt-0.5">
             Weekend deals to opted-in customers. Use <code>{"{link}"}</code> in

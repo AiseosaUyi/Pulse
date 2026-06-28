@@ -17,7 +17,7 @@ export function PulseSuggestions({ suggestions }: PulseSuggestionsProps) {
   if (suggestions.length === 0) {
     return (
       <div className="bg-card rounded-xl p-6 border border-border/50">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-4">
+        <h2 className="text-sm font-semibold text-foreground mb-4">
           Pulse Suggestions
         </h2>
         <div className="text-center py-8">
@@ -32,7 +32,7 @@ export function PulseSuggestions({ suggestions }: PulseSuggestionsProps) {
 
   return (
     <div className="bg-card rounded-xl p-6 border border-border/50">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-5">
+      <h2 className="text-sm font-semibold text-foreground mb-5">
         Pulse Suggestions
       </h2>
       <div className="flex flex-col gap-4">

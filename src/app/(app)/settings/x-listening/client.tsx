@@ -63,8 +63,7 @@ export function XListeningEditor({ tenantSlug, initialConfig }: Props) {
         <div>
           <p className="text-sm font-medium text-foreground">Enable X listening</p>
           <p className="text-xs text-text-muted mt-0.5">
-            Runs 4× per day via Apify — requires{" "}
-            <code className="text-xs bg-sidebar px-1 py-0.5 rounded">APIFY_API_TOKEN</code> in env.
+            X signals refresh automatically throughout the day. Contact your developer if signals stop updating.
           </p>
         </div>
         <button

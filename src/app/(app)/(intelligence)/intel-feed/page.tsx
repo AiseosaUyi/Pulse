@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { getIntelFeed, getMorningBrief, getWeeklyDigest, getCompetitors } from "@/lib/services/intelligence";
 import { getXSignalCards } from "@/lib/services/x-intel";
 import { listBriefs } from "@/lib/services/briefs";
@@ -8,12 +7,13 @@ import { MorningBriefing } from "@/components/intelligence/MorningBriefing";
 import { WeeklyDigest } from "@/components/intelligence/WeeklyDigest";
 import { CrossBrandInsights } from "@/components/intelligence/CrossBrandInsights";
 import { AnomalyAlerts } from "@/components/intelligence/AnomalyAlerts";
+import { getCurrentTenant } from "@/lib/auth";
 import { IntelFeedTabs } from "./client";
 
 export default async function IntelFeedPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
-  const tenantName = tenantSlug === "gruve" ? "Gruve" : "Sippy";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "gruve";
+  const tenantName = tenant?.name ?? tenantSlug;
 
   const [feed, morningBrief, digest, briefs, competitors, patterns, anomalies, xSignals, trends] =
     await Promise.all([

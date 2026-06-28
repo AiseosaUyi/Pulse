@@ -36,7 +36,7 @@ export function PlatformBreakdown({ platforms }: PlatformBreakdownProps) {
   if (connectedPlatforms.length === 0) {
     return (
       <div className="bg-card rounded-xl p-6 border border-border/50">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-4">
+        <h2 className="text-sm font-semibold text-foreground mb-4">
           Platform Breakdown
         </h2>
         <div className="py-6">
@@ -61,7 +61,7 @@ export function PlatformBreakdown({ platforms }: PlatformBreakdownProps) {
 
   return (
     <div className="bg-card rounded-xl p-6 border border-border/50">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground mb-5">
+      <h2 className="text-sm font-semibold text-foreground mb-5">
         Platform Breakdown
       </h2>
       <div className="flex flex-col gap-5">

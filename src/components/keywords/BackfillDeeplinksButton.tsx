@@ -6,7 +6,6 @@ import { Wand2 } from "lucide-react";
 import { backfillKeywordDeeplinks } from "@/lib/actions/keyword-deeplink";
 import { useDialogs } from "@/components/ui/Dialog";
 
-// Bulk-maps every tracked keyword that doesn't yet have a Gruve deep-link.
 export function BackfillDeeplinksButton() {
   const router = useRouter();
   const dialogs = useDialogs();
@@ -24,11 +23,11 @@ export function BackfillDeeplinksButton() {
         return;
       }
       await dialogs.alert({
-        title: "Gruve links generated",
+        title: "Deep links generated",
         subtitle:
           res.updated === 0
-            ? "Every keyword already has a Gruve link."
-            : `Mapped ${res.updated} keyword${res.updated === 1 ? "" : "s"} to Gruve deep-links.`,
+            ? "Every keyword already has a deep link."
+            : `Mapped ${res.updated} keyword${res.updated === 1 ? "" : "s"} to deep links.`,
       });
       router.refresh();
     });
@@ -41,7 +40,7 @@ export function BackfillDeeplinksButton() {
       className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-card text-sm text-foreground hover:bg-sidebar transition-colors disabled:opacity-60"
     >
       <Wand2 size={14} />
-      {isPending ? "Generating…" : "Generate Gruve links"}
+      {isPending ? "Generating…" : "Generate deep links"}
     </button>
   );
 }

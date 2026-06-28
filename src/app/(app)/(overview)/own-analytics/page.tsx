@@ -34,7 +34,7 @@ export default async function OwnAnalyticsPage() {
     <div className="p-4 md:p-8 max-w-[1200px] space-y-6">
       <div>
         <h1 className="text-xl md:text-2xl font-bold text-foreground">
-          Own-content analytics
+          Analytics
         </h1>
         <p className="text-text-secondary text-sm mt-0.5">
           Import your own post metrics — CSV exports from Meta/TikTok/LinkedIn,
@@ -70,7 +70,7 @@ export default async function OwnAnalyticsPage() {
           <div className="flex items-center gap-2 mb-4">
             <TrendingUp size={16} className="text-text-muted" />
             <h2
-              className="text-xs uppercase tracking-[0.14em] text-text-muted"
+              className="text-xs font-semibold text-text-muted"
               style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
             >
               By platform
@@ -116,7 +116,7 @@ export default async function OwnAnalyticsPage() {
 
       <section>
         <h2
-          className="text-xs uppercase tracking-[0.14em] text-text-muted mb-3"
+          className="text-xs font-semibold text-text-muted mb-3"
           style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
         >
           Import
@@ -126,7 +126,7 @@ export default async function OwnAnalyticsPage() {
 
       <section>
         <h2
-          className="text-xs uppercase tracking-[0.14em] text-text-muted mb-3"
+          className="text-xs font-semibold text-text-muted mb-3"
           style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
         >
           Recent imports

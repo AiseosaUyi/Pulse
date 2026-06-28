@@ -707,10 +707,10 @@ export function BlogEditorPageClient({
           <div className="rounded-lg border border-border bg-card">
             <div className="px-4 py-3 border-b border-border/30">
               <h3 className="text-foreground font-semibold text-sm flex items-center gap-1.5">
-                <Rocket size={14} /> Publish to Gruve
+                <Rocket size={14} /> Publish
               </h3>
               <p className="text-[11px] text-text-muted mt-0.5">
-                Goes live on gamma + www (both read the same Contentful).
+                Goes live on your test site (gamma) and live site once published.
               </p>
             </div>
             <div className="p-4 space-y-4">
@@ -841,7 +841,7 @@ export function BlogEditorPageClient({
                   ? "Publishing…"
                   : publishTarget === "test"
                     ? "Push to gamma (test)"
-                    : "Push to Gruve (live)"}
+                    : "Publish live"}
               </Button>
               {dirty && (
                 <p className="text-[11px] text-text-muted">

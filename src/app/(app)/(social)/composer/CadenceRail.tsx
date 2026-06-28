@@ -51,18 +51,12 @@ export function CadenceRail({
         <p className="mt-2 text-sm text-gray-1000">
           Set your posting windows and per-platform targets to start tracking your beat.
         </p>
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="mt-3">
           <Link
             href="/settings/cadence"
             className="text-sm font-medium text-primary-500 hover:text-primary-600"
           >
             Set your cadence →
-          </Link>
-          <Link
-            href="/composer"
-            className="text-sm text-gray-1000 hover:text-gray-1200"
-          >
-            Or draft a post now →
           </Link>
         </div>
       </aside>

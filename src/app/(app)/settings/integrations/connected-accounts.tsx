@@ -132,7 +132,7 @@ export function ConnectedAccountsSection({
         <p className="text-xs text-text-muted mt-1">
           Connect Instagram (Business/Creator), TikTok, and LinkedIn per
           alias. Each alias holds its own OAuth token via Composio. Use
-          aliases to keep Gruve, Sippy, and personal identities separate.
+          aliases to keep your brand accounts and personal accounts separate.
         </p>
       </header>
 

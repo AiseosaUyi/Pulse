@@ -32,7 +32,7 @@ export default async function OutboundFiltersPage() {
       <SettingsPageHeading
         icon={Radar}
         title="Outbound filters"
-        subtitle={`Event-intent keywords, geographic scope, and competitor platforms the qualifier uses to score leads for ${tenant?.name ?? tenantSlug}.`}
+        subtitle={`Keywords, locations, and platforms Pulse uses to find and score new leads for ${tenant?.name ?? tenantSlug}.`}
       />
 
       <section className="bg-card border border-border rounded-2xl p-6">

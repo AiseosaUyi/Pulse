@@ -89,8 +89,8 @@ export default async function SEODashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
         <div className="bg-card rounded-xl border border-border/50">
           <div className="p-5 border-b border-border/50 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
-              SEO Keywords
+            <h2 className="text-sm font-semibold text-foreground">
+              Keywords
             </h2>
             <Link href="/seo-tracker/keywords" className="text-xs text-primary-500 hover:underline">
               View all
@@ -160,7 +160,7 @@ export default async function SEODashboardPage() {
 
         <div className="bg-card rounded-xl border border-border/50">
           <div className="p-5 border-b border-border/50 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">Recent Blog Posts</h2>
+            <h2 className="text-sm font-semibold text-foreground">Recent blog posts</h2>
             <Link href="/seo-tracker/blog-writer" className="text-xs text-primary-500 hover:underline">
               View all
             </Link>

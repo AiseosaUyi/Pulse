@@ -121,7 +121,7 @@ export default async function ContentPage({
           {/* Brief suggestions */}
           <div className="bg-card rounded-xl p-6 border border-border/50">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
+              <h2 className="text-sm font-semibold text-foreground">
                 Briefs ready to schedule
               </h2>
               <Link

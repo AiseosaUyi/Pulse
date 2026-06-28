@@ -124,7 +124,7 @@ export function VideoStudioClient({
   }
 
   function generate() {
-    if (!providerConfigured) return toast.error("Connect PicsArt first (set PICSART_API_KEY).");
+    if (!providerConfigured) return toast.error("Video generation isn't enabled yet. Ask your developer to set it up.");
     if (!prompt.trim()) return toast.error("Write a prompt.");
     if (mode === "replicate" && !sourceVideo) return toast.error("Upload a reference video.");
     if (mode === "continuity" && !startFrame) return toast.error("Upload a start frame.");
@@ -177,7 +177,7 @@ export function VideoStudioClient({
       <header className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <div>
-            <h1 className="text-xl md:text-2xl text-gray-1100 dark:text-foreground">Video studio</h1>
+            <h1 className="text-xl md:text-2xl font-bold text-foreground">Video Studio</h1>
             <p className="text-sm text-text-muted mt-0.5">
               Generate short-form video with consistent characters. Prompt it, animate a frame, or recreate a reference.
             </p>
@@ -190,7 +190,7 @@ export function VideoStudioClient({
 
       {!providerConfigured && (
         <div className="mb-5 rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
-          Video provider isn’t connected yet. Storyboards still build, but generation needs <code>PICSART_API_KEY</code> in Vercel.
+          Video generation isn’t enabled yet. Storyboards and scripts still work — ask your developer to enable video generation to start creating clips.
         </div>
       )}
 

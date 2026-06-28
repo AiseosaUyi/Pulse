@@ -1,8 +1,7 @@
 "use client";
 
-// "Preview on Gruve" pane for the blog-writer sidebar
-// (PULSE-SEO-SPEC.md §13, acceptance M2). Calls the server action to
-// mint a token and embeds Gruve's live preview in an iframe. The token
+// Live-preview pane for the blog-writer sidebar. Calls the server action to
+// mint a token and embeds the site preview in an iframe. The token
 // is single-use/short-lived; "Refresh" re-mints.
 
 import { useState, useTransition } from "react";
@@ -17,7 +16,7 @@ export function SeoPreviewPane({ postId }: { postId: string }) {
 
   const load = () =>
     start(async () => {
-      // Push the current draft to Contentful (unpublished) so Gruve's
+      // Push the current draft to Contentful (unpublished) so the
       // preview renders the latest content. Skips silently pre-cutover
       // (no CMA token) — preview still works against existing data.
       const sync = await syncBlogDraftToContentful(postId);
@@ -38,7 +37,7 @@ export function SeoPreviewPane({ postId }: { postId: string }) {
     <div className="rounded-lg border border-border bg-card">
       <div className="px-4 py-3 border-b border-border/30 flex items-center justify-between">
         <h3 className="text-foreground font-semibold text-sm flex items-center gap-2">
-          <Eye className="size-4" /> Preview on Gruve
+          <Eye className="size-4" /> Live preview
         </h3>
         {url && (
           <button
@@ -70,7 +69,7 @@ export function SeoPreviewPane({ postId }: { postId: string }) {
             <div className="overflow-hidden rounded-md border border-border">
               <iframe
                 src={url}
-                title="Gruve preview"
+                title="Live site preview"
                 className="h-[420px] w-full bg-card"
                 sandbox="allow-scripts allow-same-origin"
               />
