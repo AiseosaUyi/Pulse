@@ -133,7 +133,7 @@ export function OutboundFiltersEditor({ tenantSlug, initialFilters }: Props) {
                   onChange={(e) =>
                     updateGeoRow(i, { country: e.target.value })
                   }
-                  placeholder="Country (e.g. Nigeria)"
+                  placeholder="Country (e.g. United States)"
                   disabled={isPending}
                   className="flex-1"
                 />
@@ -153,7 +153,7 @@ export function OutboundFiltersEditor({ tenantSlug, initialFilters }: Props) {
                 onChange={(e) =>
                   updateGeoRow(i, { statesRaw: e.target.value })
                 }
-                placeholder={"Lagos\nAbuja\nRivers"}
+                placeholder={"New York\nCalifornia\nTexas"}
                 rows={4}
                 disabled={isPending}
                 className="font-mono text-xs"

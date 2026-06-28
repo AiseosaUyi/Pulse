@@ -29,7 +29,7 @@ export function KeywordSeedInput() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="e.g., event ticketing, live music Lagos..."
+            placeholder="e.g., content marketing, remote work tools..."
             className="w-full bg-background border border-border/50 rounded-lg pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>

@@ -100,7 +100,7 @@ export function BrandVoiceEditor({ tenantSlug, initial, publishedPostCount = 0 }
             id="bv-tone"
             value={tone}
             onChange={(e) => setTone(e.target.value)}
-            placeholder="e.g. Playful, irreverent, Lagos-native"
+            placeholder="e.g. Warm, direct, conversational"
             disabled={isPending}
           />
         </div>
@@ -110,7 +110,7 @@ export function BrandVoiceEditor({ tenantSlug, initial, publishedPostCount = 0 }
             id="bv-audience"
             value={audience}
             onChange={(e) => setAudience(e.target.value)}
-            placeholder="e.g. 21-30, Lagos nightlife, Instagram-heavy"
+            placeholder="e.g. 25-40, early-stage founders, LinkedIn-heavy"
             disabled={isPending}
           />
         </div>
@@ -123,7 +123,7 @@ export function BrandVoiceEditor({ tenantSlug, initial, publishedPostCount = 0 }
             id="bv-do"
             value={doList}
             onChange={(e) => setDoList(e.target.value)}
-            placeholder={"Lead with atmosphere, not price\nUse afrobeats references"}
+            placeholder={"Lead with the outcome, not the feature\nUse real customer language"}
             rows={5}
             disabled={isPending}
           />

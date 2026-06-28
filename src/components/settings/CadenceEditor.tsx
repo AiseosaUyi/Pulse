@@ -128,7 +128,7 @@ export function CadenceEditor({
               type="text"
               value={config.timezone}
               onChange={(e) => patch({ timezone: e.target.value })}
-              placeholder="Africa/Lagos"
+              placeholder="America/New_York"
               className="w-full rounded-lg border border-white-200 bg-card px-3 py-2 text-base text-gray-1200 outline-none focus-visible:ring-[3px] focus-visible:ring-blue-500/30"
             />
           </div>

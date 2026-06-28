@@ -281,7 +281,7 @@ export function VideoStudioClient({
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={4}
-              placeholder="A Lagos host pours a chilled drink at a rooftop party, golden hour, smooth camera push-in…"
+              placeholder="A founder walks through a bright office, confident smile, smooth camera follow…"
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
             />
           </div>

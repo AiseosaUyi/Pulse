@@ -54,7 +54,7 @@ export function ScoutConfigEditor({
           id="ig-tags"
           value={igTags}
           onChange={(e) => setIgTags(e.target.value)}
-          placeholder={"lagosmemes\nlagosnightlife\nnaijahumor"}
+          placeholder={"growthhacks\nfounderlife\nbuildingpublicly"}
           rows={6}
           disabled={isPending}
           className="font-mono text-sm"
@@ -70,7 +70,7 @@ export function ScoutConfigEditor({
           id="tt-tags"
           value={ttTags}
           onChange={(e) => setTtTags(e.target.value)}
-          placeholder={"lagosnightlife\nnaijaparty\nafrobeats"}
+          placeholder={"wellnessjourney\npersonalfinance\nproductivitytips"}
           rows={6}
           disabled={isPending}
           className="font-mono text-sm"

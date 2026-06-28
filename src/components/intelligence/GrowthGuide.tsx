@@ -40,7 +40,7 @@ const DAILY_TARGETS: DailyTarget[] = [
     icon: <Film size={13} />,
     label: "Thread (weekly)",
     target: "2–3 / week",
-    tip: "Threads get 3–5× more impressions than single tweets. Educational threads ('How we did X') or story threads ('Thread: Lagos nightlife in 2024'). Post Tuesday–Thursday.",
+    tip: "Threads get 3–5× more impressions than single tweets. Educational threads ('How we did X') or story threads ('Thread: How we grew to 10k followers'). Post Tuesday–Thursday.",
     priority: "medium",
   },
 ];

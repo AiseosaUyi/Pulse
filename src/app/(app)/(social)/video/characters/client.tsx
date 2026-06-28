@@ -62,9 +62,9 @@ export function CharactersClient({
 
       {open && (
         <form action={createNew} className="bg-card border border-border rounded-2xl p-4 mb-6 space-y-3">
-          <input name="name" placeholder="Name (e.g. Sippy host)" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+          <input name="name" placeholder="Name (e.g. Brand host)" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
           <input name="description" placeholder="Short description" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-          <textarea name="identityPrompt" rows={2} placeholder="Identity prompt — locked look/wardrobe appended to every clip (e.g. 'a 20s Nigerian woman, short afro, red Sippy tee')" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+          <textarea name="identityPrompt" rows={2} placeholder="Identity prompt — locked look/wardrobe appended to every clip (e.g. 'a 30s person in a clean white tee, confident, warm expression')" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
           <button type="submit" disabled={pending} className="rounded-full bg-primary-500 text-white px-4 py-2 text-sm font-medium disabled:opacity-60">Create</button>
         </form>
       )}

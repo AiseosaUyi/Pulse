@@ -203,7 +203,7 @@ export function AdCritiquePanel({ tenantSlug }: { tenantSlug: string }) {
               id="ad-audience"
               value={audience}
               onChange={(e) => setAudience(e.target.value)}
-              placeholder="Event organisers in Lagos, 25-45"
+              placeholder="Small business owners, 28-45"
             />
           </div>
         </div>
@@ -223,7 +223,7 @@ export function AdCritiquePanel({ tenantSlug }: { tenantSlug: string }) {
               id="ad-perf"
               value={perf}
               onChange={(e) => setPerf(e.target.value)}
-              placeholder="CTR 0.6%, CPM ₦18,000, ROAS 1.2x"
+              placeholder="CTR 0.6%, CPM $12, ROAS 1.2x"
             />
           </div>
         </div>

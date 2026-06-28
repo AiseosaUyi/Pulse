@@ -513,7 +513,7 @@ function GenerateVariantsForm({
           <Input
             value={audience}
             onChange={(e) => setAudience(e.target.value)}
-            placeholder="e.g. Lagos wedding + corporate event planners"
+            placeholder="e.g. Early-stage SaaS founders, B2B focus"
           />
         </div>
         <div>
@@ -538,7 +538,7 @@ function GenerateVariantsForm({
           rows={2}
           value={angle}
           onChange={(e) => setAngle(e.target.value)}
-          placeholder="e.g. Open by referencing an event they just ran, ask if they'd ever host with a platform that handled payments + ticketing"
+          placeholder="e.g. Open by referencing a recent post they made, ask about their biggest challenge with content distribution"
         />
       </div>
 

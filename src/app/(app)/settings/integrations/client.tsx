@@ -451,7 +451,7 @@ function renderFields(
             id="gsc-site"
             value={form.site_url}
             onChange={(e) => onChange("site_url", e.target.value)}
-            placeholder="https://www.gruve.events/  or  sc-domain:gruve.events"
+            placeholder="https://www.yourbrand.com/  or  sc-domain:yourbrand.com"
           />
           <p className="text-[11px] text-text-muted mt-1">
             Exactly as it appears in Search Console. Domain properties use the{" "}
@@ -537,7 +537,7 @@ function renderFields(
               id="cf-blog-ct"
               value={form.blog_content_type}
               onChange={(e) => onChange("blog_content_type", e.target.value)}
-              placeholder="gruveBlog"
+              placeholder="blogPost"
             />
           </div>
           <div>
@@ -554,7 +554,7 @@ function renderFields(
         </div>
         <p className="text-[11px] text-text-muted">
           Locale + content-type ids are optional — blank uses the defaults
-          (<code>en-US</code>, <code>gruveBlog</code>,{" "}
+          (<code>en-US</code>, <code>blogPost</code>,{" "}
           <code>seoLandingPage</code>). Set them only if this workspace&apos;s
           Contentful model differs.
         </p>

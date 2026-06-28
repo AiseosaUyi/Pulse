@@ -57,7 +57,7 @@ export function AddKeywordModal({ isOpen, onClose }: AddKeywordModalProps) {
               <input
                 name="keyword"
                 required
-                placeholder="e.g. event ticketing Nigeria"
+                placeholder="e.g. project management for remote teams"
                 className={fieldInput}
               />
             </div>

@@ -98,7 +98,7 @@ export function XListeningEditor({ tenantSlug, initialConfig }: Props) {
           value={keywords}
           onChange={(e) => setKeywords(e.target.value)}
           placeholder={
-            "events\nnightlife\nconcert\nlive music\nparty\nopen bar\nwedding\nafrobeats"
+            "growth\nwellness\nproductivity\nstartup\nfitness\nminimalism\ncreativity\nentrepreneurship"
           }
           rows={8}
           disabled={isPending}
@@ -126,7 +126,7 @@ export function XListeningEditor({ tenantSlug, initialConfig }: Props) {
           value={accounts}
           onChange={(e) => setAccounts(e.target.value)}
           placeholder={
-            "lagosnights\nthedotablog\ngruvehq\nnaijapartyking"
+            "hubspot\nnathanbarry\nlevelsio\nnoahkagan"
           }
           rows={8}
           disabled={isPending}

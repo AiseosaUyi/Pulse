@@ -416,7 +416,7 @@ function KeywordsStep({ onClose }: { onClose: () => void }) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             disabled={isPending}
-            placeholder={"weekend events near me\nevent ticketing lagos\nhow to promote a festival"}
+            placeholder={"best tools for remote teams\nhow to grow a newsletter\ncontent strategy for startups"}
             autoFocus
           />
           <p className="text-[11px] text-text-muted">

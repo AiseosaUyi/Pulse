@@ -220,7 +220,7 @@ export function BrandPositioningEditor({ tenantSlug, initial }: Props) {
                         ),
                       }))
                     }
-                    placeholder="Segment — e.g. Lagos-based event promoters, 25-40"
+                    placeholder="Segment — e.g. Independent fitness coaches, 28-45"
                     disabled={isPending}
                   />
                   <Textarea
@@ -268,7 +268,7 @@ export function BrandPositioningEditor({ tenantSlug, initial }: Props) {
             id="bp-cover"
             value={topicsCoverText}
             onChange={(e) => setTopicsCoverText(e.target.value)}
-            placeholder={"Event ticketing\nAfrobeats culture\nConcert logistics\nNightlife reviews"}
+            placeholder={"Founder stories\nProduct deep-dives\nIndustry trends\nCustomer success"}
             rows={6}
             disabled={isPending}
           />
@@ -293,7 +293,7 @@ export function BrandPositioningEditor({ tenantSlug, initial }: Props) {
           id="bp-diff"
           value={differentiatorsText}
           onChange={(e) => setDifferentiatorsText(e.target.value)}
-          placeholder={"Only platform with offline ticket pickup across Lagos\nRefund guarantee within 48hrs\nFirst-mover on afrobeats exclusives"}
+          placeholder={"Only platform built for creators who publish daily\nRefund guarantee within 48hrs\nFirst product with AI-assisted scheduling"}
           rows={5}
           disabled={isPending}
         />

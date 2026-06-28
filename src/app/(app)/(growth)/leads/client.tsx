@@ -559,7 +559,7 @@ function AddProspectQuickForm({
           <Input
             value={handle}
             onChange={(e) => setHandle(e.target.value)}
-            placeholder="@eventsbyjoy"
+            placeholder="@sarahbuilds"
           />
         </div>
         <div>
@@ -567,7 +567,7 @@ function AddProspectQuickForm({
           <Input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Joy Adeleke"
+            placeholder="Sarah Chen"
           />
         </div>
         <div>
@@ -575,7 +575,7 @@ function AddProspectQuickForm({
           <Input
             value={profileUrl}
             onChange={(e) => setProfileUrl(e.target.value)}
-            placeholder="https://instagram.com/eventsbyjoy"
+            placeholder="https://instagram.com/sarahbuilds"
           />
         </div>
       </div>
@@ -584,7 +584,7 @@ function AddProspectQuickForm({
         <Input
           value={bio}
           onChange={(e) => setBio(e.target.value)}
-          placeholder="Wedding + corporate event planner, Lagos"
+          placeholder="Freelance brand strategist, helping startups find their voice"
         />
       </div>
       <div>
@@ -593,7 +593,7 @@ function AddProspectQuickForm({
           rows={2}
           value={signal}
           onChange={(e) => setSignal(e.target.value)}
-          placeholder="Posted about hosting an Afrobeats brunch on March 28. Used hashtag #lagoseventplanner"
+          placeholder="Posted about growing their newsletter to 5k. Used hashtag #creatoreconomy"
         />
       </div>
       <div className="flex justify-end">
@@ -1282,7 +1282,7 @@ function DiscoveryView({
                 Autonomous discovery
               </h3>
               <p className="text-xs text-text-muted leading-relaxed">
-                Save searches like <em>&ldquo;event planner Lagos&rdquo;</em>.
+                Save searches like <em>&ldquo;freelance designer remote&rdquo;</em>.
                 A nightly job runs them against Google site-search and adds
                 fresh profiles to your pipeline — no scrolling required.
                 Toggle <strong>auto-qualify</strong> to have the AI score
@@ -1341,7 +1341,7 @@ function DiscoveryView({
           <p className="text-xs text-text-muted mt-1 max-w-md mx-auto">
             Click <strong>New search</strong> above. Your first search could
             be a keyword your audience uses in bios or captions — e.g.
-            &ldquo;event planner Lagos&rdquo; on Instagram.
+            &ldquo;freelance designer remote&rdquo; on Instagram.
           </p>
         </div>
       )}
@@ -1465,7 +1465,7 @@ function DiscoverySearchForm({
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Lagos event planners"
+          placeholder="e.g. freelance designers on LinkedIn"
         />
       </div>
 
@@ -1509,8 +1509,8 @@ function DiscoverySearchForm({
           onChange={(e) => setQuery(e.target.value)}
           placeholder={
             signalType === "hashtag"
-              ? "#afrobeats"
-              : 'event planner Lagos'
+              ? "#solopreneur"
+              : 'freelance designer remote'
           }
         />
         <p className="text-[11px] text-text-muted mt-1">

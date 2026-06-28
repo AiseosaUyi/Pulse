@@ -112,8 +112,8 @@ export function ProgrammaticClient({ tenantSlug, templates, pages }: Props) {
           <p className="text-text-muted text-sm max-w-[480px] mx-auto">
             Create your first template. Example for events:{" "}
             <code className="font-mono text-xs">{"{eventType} in {city}"}</code>
-            {" "}with <code className="font-mono text-xs">city</code>: [Lagos,
-            Abuja] and{" "}
+            {" "}with <code className="font-mono text-xs">city</code>: [New York,
+            London] and{" "}
             <code className="font-mono text-xs">eventType</code>: [wedding,
             concert] → 4 landing pages.
           </p>
@@ -575,7 +575,7 @@ function TemplateEditorModal({
     editing?.targetWordCount ?? 600
   );
   const [variables, setVariables] = useState<TemplateVariable[]>(
-    editing?.variables ?? [{ name: "city", values: ["Lagos"] }]
+    editing?.variables ?? [{ name: "city", values: ["New York"] }]
   );
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -750,7 +750,7 @@ function TemplateEditorModal({
                   <Input
                     value={v.values.join(", ")}
                     onChange={(e) => updateVarValues(idx, e.target.value)}
-                    placeholder="Lagos, Abuja, Ibadan"
+                    placeholder="New York, London, Toronto"
                     disabled={isPending}
                     className="flex-1"
                   />

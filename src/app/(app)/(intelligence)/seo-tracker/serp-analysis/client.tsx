@@ -152,7 +152,7 @@ export function SerpAnalysisClient({
               id="sa-keyword"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="e.g. event ticketing Lagos"
+              placeholder="e.g. project management software"
               disabled={isPending}
             />
           </div>
