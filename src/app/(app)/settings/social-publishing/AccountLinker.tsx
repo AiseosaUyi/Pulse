@@ -5,6 +5,8 @@ import { CheckCircle2, Link2, Unlink, ExternalLink, X } from "lucide-react";
 import { linkSocialAccount, unlinkSocialAccount } from "@/lib/actions/social-accounts";
 import { toast } from "@/components/ui/Toaster";
 import { Dialog } from "@/components/ui/Dialog";
+import { InstagramIcon, LinkedInIcon, TikTokIcon } from "@/components/icons/social";
+import type { ComponentType } from "react";
 
 interface SocialApiAccount {
   id: string;
@@ -20,11 +22,16 @@ interface LinkedMapping {
   handle: string;
 }
 
-const PLATFORMS = [
-  { key: "instagram", label: "Instagram", color: "#E1306C", abbr: "IG" },
-  { key: "linkedin",  label: "LinkedIn",  color: "#0A66C2", abbr: "LI" },
-  { key: "tiktok",   label: "TikTok",    color: "#010101", abbr: "TK" },
-] as const;
+const PLATFORMS: {
+  key: "instagram" | "linkedin" | "tiktok";
+  label: string;
+  color: string;
+  Icon: ComponentType<{ size?: number }>;
+}[] = [
+  { key: "instagram", label: "Instagram", color: "#E1306C", Icon: InstagramIcon },
+  { key: "linkedin",  label: "LinkedIn",  color: "#0A66C2", Icon: LinkedInIcon },
+  { key: "tiktok",   label: "TikTok",    color: "#010101", Icon: TikTokIcon },
+];
 
 type PlatformKey = (typeof PLATFORMS)[number]["key"];
 
@@ -99,7 +106,7 @@ export default function AccountLinker({
   return (
     <>
       <div className="flex flex-col gap-3">
-        {PLATFORMS.map(({ key, label, color, abbr }) => {
+        {PLATFORMS.map(({ key, label, color, Icon }) => {
           const connection = getLinked(key);
           return (
             <div
@@ -107,10 +114,12 @@ export default function AccountLinker({
               className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4"
             >
               <div
-                className="flex size-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white"
-                style={{ backgroundColor: connection ? color : "#9CA3AF" }}
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl"
+                style={{ backgroundColor: connection ? `${color}18` : "#9CA3AF18" }}
               >
-                {abbr}
+                <span style={{ color: connection ? color : "#9CA3AF" }}>
+                  <Icon size={20} />
+                </span>
               </div>
 
               <div className="flex-1 min-w-0">
@@ -216,15 +225,19 @@ export default function AccountLinker({
                   disabled={pending}
                   className="flex items-center gap-3 rounded-xl border border-border p-3 hover:border-primary-500/50 hover:bg-primary-500/5 transition-colors text-left disabled:opacity-50"
                 >
-                  <div
-                    className="flex size-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-white"
-                    style={{
-                      backgroundColor:
-                        PLATFORMS.find((p) => p.key === account.platform)?.color ?? "#666",
-                    }}
-                  >
-                    {PLATFORMS.find((p) => p.key === account.platform)?.abbr ?? "?"}
-                  </div>
+                  {(() => {
+                    const p = PLATFORMS.find((pl) => pl.key === account.platform);
+                    return p ? (
+                      <div
+                        className="flex size-8 shrink-0 items-center justify-center rounded-lg"
+                        style={{ backgroundColor: `${p.color}18` }}
+                      >
+                        <span style={{ color: p.color }}>
+                          <p.Icon size={16} />
+                        </span>
+                      </div>
+                    ) : null;
+                  })()}
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{account.name}</p>
                     <p className="text-xs text-text-muted">@{account.username}</p>

@@ -177,7 +177,7 @@ export default async function SocialPublishingSettingsPage({
 
         {/* X note */}
         <p className="text-xs text-text-muted">
-          X (Twitter) requires a paid developer plan ($100/mo). Use the Composer to copy X drafts and post manually.
+          X (Twitter) isn&apos;t available for direct publishing. Use the Composer to copy drafts and post manually.
         </p>
       </div>
     </div>
