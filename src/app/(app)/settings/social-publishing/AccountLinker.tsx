@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, Link2, Unlink } from "lucide-react";
+import { CheckCircle2, Link2, Unlink, ExternalLink, X } from "lucide-react";
 import { linkSocialAccount, unlinkSocialAccount } from "@/lib/actions/social-accounts";
 import { toast } from "@/components/ui/Toaster";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface SocialApiAccount {
   id: string;
@@ -19,23 +20,18 @@ interface LinkedMapping {
   handle: string;
 }
 
-const PLATFORM_ICONS: Record<string, string> = {
-  instagram: "IG",
-  linkedin: "LI",
-  tiktok: "TK",
-  youtube: "YT",
-  facebook: "FB",
-  threads: "TH",
-};
+const PLATFORMS = [
+  { key: "instagram", label: "Instagram", color: "#E1306C", abbr: "IG" },
+  { key: "linkedin",  label: "LinkedIn",  color: "#0A66C2", abbr: "LI" },
+  { key: "tiktok",   label: "TikTok",    color: "#010101", abbr: "TK" },
+] as const;
 
-const PLATFORM_COLORS: Record<string, string> = {
-  instagram: "#E1306C",
-  linkedin: "#0A66C2",
-  tiktok: "#010101",
-  youtube: "#FF0000",
-  facebook: "#1877F2",
-  threads: "#000000",
-};
+type PlatformKey = (typeof PLATFORMS)[number]["key"];
+
+type ModalState =
+  | { type: "none" }
+  | { type: "setup"; platform: PlatformKey; label: string }
+  | { type: "pick"; platform: PlatformKey; label: string; options: SocialApiAccount[] };
 
 export default function AccountLinker({
   availableAccounts,
@@ -45,12 +41,30 @@ export default function AccountLinker({
   linkedMappings: LinkedMapping[];
 }) {
   const [linked, setLinked] = useState<LinkedMapping[]>(linkedMappings);
+  const [modal, setModal] = useState<ModalState>({ type: "none" });
   const [pending, startTransition] = useTransition();
 
-  const isLinked = (accountId: string) => linked.some((m) => m.socialApiAccountId === accountId);
-  const linkedPlatforms = new Set(linked.map((m) => m.platform));
+  function getLinked(platform: string) {
+    return linked.find((m) => m.platform === platform) ?? null;
+  }
 
-  function handleLink(account: SocialApiAccount) {
+  function getOptions(platform: string) {
+    return availableAccounts.filter((a) => a.platform === platform);
+  }
+
+  function handleConnectClick(platform: PlatformKey, label: string) {
+    const options = getOptions(platform);
+    if (options.length === 0) {
+      setModal({ type: "setup", platform, label });
+    } else if (options.length === 1) {
+      doLink(options[0]);
+    } else {
+      setModal({ type: "pick", platform, label, options });
+    }
+  }
+
+  function doLink(account: SocialApiAccount) {
+    setModal({ type: "none" });
     startTransition(async () => {
       const res = await linkSocialAccount(
         account.platform,
@@ -65,7 +79,7 @@ export default function AccountLinker({
           ...prev.filter((m) => m.platform !== account.platform),
           { platform: account.platform, socialApiAccountId: account.id, handle: `@${account.username}` },
         ]);
-        toast.success(`${account.name} linked`);
+        toast.success(`${account.name} connected`);
       }
     });
   }
@@ -77,95 +91,149 @@ export default function AccountLinker({
         toast.error(res.error);
       } else {
         setLinked((prev) => prev.filter((m) => m.platform !== platform));
-        toast.success("Account unlinked");
+        toast.success("Account disconnected");
       }
     });
   }
 
-  if (availableAccounts.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-border p-8 text-center">
-        <p className="text-sm text-text-muted">
-          No accounts connected in SocialAPI.ai yet.
-        </p>
-        <p className="mt-1 text-xs text-text-muted">
-          Connect your Instagram, LinkedIn, TikTok, or YouTube in the SocialAPI.ai dashboard, then refresh this page.
-        </p>
-      </div>
-    );
-  }
-
-  // Group by platform, showing linked ones first
-  const sorted = [...availableAccounts].sort((a, b) => {
-    const aLinked = isLinked(a.id) ? 0 : 1;
-    const bLinked = isLinked(b.id) ? 0 : 1;
-    return aLinked - bLinked;
-  });
-
   return (
-    <div className="flex flex-col gap-3">
-      {sorted.map((account) => {
-        const linked_ = isLinked(account.id);
-        const alreadyHasPlatform = !linked_ && linkedPlatforms.has(account.platform);
-        const color = PLATFORM_COLORS[account.platform] ?? "#666";
-        const abbr = PLATFORM_ICONS[account.platform] ?? account.platform.slice(0, 2).toUpperCase();
-
-        return (
-          <div
-            key={account.id}
-            className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4"
-          >
+    <>
+      <div className="flex flex-col gap-3">
+        {PLATFORMS.map(({ key, label, color, abbr }) => {
+          const connection = getLinked(key);
+          return (
             <div
-              className="flex size-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white"
-              style={{ backgroundColor: color }}
+              key={key}
+              className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4"
             >
-              {abbr}
-            </div>
+              <div
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white"
+                style={{ backgroundColor: connection ? color : "#9CA3AF" }}
+              >
+                {abbr}
+              </div>
 
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-foreground">{account.name}</span>
-                {linked_ && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-green-300 bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-950/40 dark:border-green-700 dark:text-green-400">
-                    <CheckCircle2 size={9} />
-                    Linked
-                  </span>
-                )}
-                {alreadyHasPlatform && (
-                  <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:border-amber-700 dark:text-amber-400">
-                    Replace existing
-                  </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-foreground">{label}</span>
+                  {connection && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-green-300 bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-950/40 dark:border-green-700 dark:text-green-400">
+                      <CheckCircle2 size={9} />
+                      Connected
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-text-muted mt-0.5">
+                  {connection ? connection.handle : "Not connected"}
+                </p>
+              </div>
+
+              <div className="shrink-0">
+                {connection ? (
+                  <button
+                    onClick={() => handleUnlink(key)}
+                    disabled={pending}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-text-muted hover:border-red-300 hover:text-red-600 transition-colors disabled:opacity-50"
+                  >
+                    <Unlink size={11} />
+                    Disconnect
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleConnectClick(key, label)}
+                    disabled={pending}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary-500 bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    <Link2 size={11} />
+                    Connect
+                  </button>
                 )}
               </div>
-              <p className="text-xs text-text-muted capitalize">
-                {account.platform} · @{account.username}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Setup instructions modal — no SocialAPI account available yet */}
+      <Dialog open={modal.type === "setup"} onClose={() => setModal({ type: "none" })} size="sm">
+        <div className="p-6">
+          <div className="flex items-start justify-between mb-4">
+            <h2 className="text-base font-semibold text-foreground">
+              Connect {modal.type === "setup" ? modal.label : ""}
+            </h2>
+            <button
+              onClick={() => setModal({ type: "none" })}
+              className="text-text-muted hover:text-foreground transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <p className="text-sm text-text-muted mb-4">
+            Pulse publishes through SocialAPI.ai. To connect your{" "}
+            {modal.type === "setup" ? modal.label : ""} account:
+          </p>
+          <ol className="space-y-2 text-sm text-text-muted list-decimal list-inside mb-5">
+            <li>Go to your SocialAPI.ai dashboard</li>
+            <li>Connect your {modal.type === "setup" ? modal.label : ""} account there</li>
+            <li>Come back here and refresh — it will appear automatically</li>
+          </ol>
+          <a
+            href="https://social-api.ai/dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-full border border-primary-500 bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+          >
+            Open SocialAPI.ai <ExternalLink size={13} />
+          </a>
+        </div>
+      </Dialog>
+
+      {/* Account picker modal — multiple SocialAPI accounts for this platform */}
+      <Dialog open={modal.type === "pick"} onClose={() => setModal({ type: "none" })} size="sm">
+        <div className="p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">
+                Choose your {modal.type === "pick" ? modal.label : ""} account
+              </h2>
+              <p className="text-xs text-text-muted mt-0.5">
+                Pick the account to connect to this workspace.
               </p>
             </div>
-
-            <div className="shrink-0">
-              {linked_ ? (
-                <button
-                  onClick={() => handleUnlink(account.platform)}
-                  disabled={pending}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-text-muted hover:border-red-300 hover:text-red-600 transition-colors disabled:opacity-50"
-                >
-                  <Unlink size={11} />
-                  Unlink
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleLink(account)}
-                  disabled={pending}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-primary-500 bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  <Link2 size={11} />
-                  {alreadyHasPlatform ? "Switch" : "Link"}
-                </button>
-              )}
-            </div>
+            <button
+              onClick={() => setModal({ type: "none" })}
+              className="text-text-muted hover:text-foreground transition-colors"
+            >
+              <X size={16} />
+            </button>
           </div>
-        );
-      })}
-    </div>
+          <div className="flex flex-col gap-2">
+            {modal.type === "pick" &&
+              modal.options.map((account) => (
+                <button
+                  key={account.id}
+                  onClick={() => doLink(account)}
+                  disabled={pending}
+                  className="flex items-center gap-3 rounded-xl border border-border p-3 hover:border-primary-500/50 hover:bg-primary-500/5 transition-colors text-left disabled:opacity-50"
+                >
+                  <div
+                    className="flex size-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-white"
+                    style={{
+                      backgroundColor:
+                        PLATFORMS.find((p) => p.key === account.platform)?.color ?? "#666",
+                    }}
+                  >
+                    {PLATFORMS.find((p) => p.key === account.platform)?.abbr ?? "?"}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{account.name}</p>
+                    <p className="text-xs text-text-muted">@{account.username}</p>
+                  </div>
+                </button>
+              ))}
+          </div>
+        </div>
+      </Dialog>
+    </>
   );
 }
