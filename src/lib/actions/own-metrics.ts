@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseCsv } from "@/lib/ai/csv-maps";
 import { extractMetricsFromScreenshot } from "@/lib/ai/extract-post-metrics";
+import { parseDataExport } from "@/lib/ai/parse-data-export";
 import type {
   OwnMetricsPlatform,
   OwnMetricsPayload,
@@ -114,6 +115,67 @@ export async function uploadScreenshot(
     return {
       success: false,
       error: err instanceof Error ? err.message : "Extraction failed",
+    };
+  }
+}
+
+export async function uploadDataExport(
+  tenantSlug: string,
+  platformHint: OwnMetricsPlatform | null,
+  fileType: "json" | "html",
+  content: string
+): Promise<ActionResult<{ inserted: number; skipped: number; detectedPlatform: OwnMetricsPlatform | null; method: string }>> {
+  if (!content.trim()) return { success: false, error: "File is empty" };
+
+  try {
+    const parsed = await parseDataExport({ tenantSlug, content, fileType, platformHint });
+    const platform = platformHint ?? parsed.detectedPlatform;
+
+    if (!platform) {
+      return {
+        success: false,
+        error: "Could not determine the platform from this file. Please select one from the dropdown.",
+      };
+    }
+
+    if (parsed.rows.length === 0) {
+      return {
+        success: false,
+        error: "No posts with metrics were found in this file. Make sure you're uploading a data export that includes performance numbers (views, likes, etc.).",
+      };
+    }
+
+    const source = fileType === "json" ? ("json_export" as const) : ("html_export" as const);
+    const supabase = await createClient();
+    const rows = parsed.rows.map((r) => ({
+      tenant_slug: tenantSlug,
+      platform,
+      external_url: r.externalUrl ?? null,
+      title: r.title ?? null,
+      caption: r.caption ?? null,
+      captured_at: r.postedAt
+        ? new Date(r.postedAt).toISOString()
+        : new Date().toISOString(),
+      source,
+      metrics: r.metrics,
+    }));
+
+    const { error } = await supabase.from("own_post_metrics").insert(rows);
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/own-analytics");
+    revalidatePath("/dashboard");
+    return {
+      success: true,
+      inserted: rows.length,
+      skipped: 0,
+      detectedPlatform: parsed.detectedPlatform,
+      method: parsed.method,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to parse export file",
     };
   }
 }

@@ -10,7 +10,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/invite", "/forgot-password", "/api/cron", "/.well-known", "/r", "/pricing"];
 
 // Refreshes the Supabase session and gates unauthenticated routes.
-// Called from proxy.ts on every request.
+// Called from middleware.ts on every request.
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -51,17 +51,17 @@ export async function updateSession(request: NextRequest) {
   const isApi = pathname.startsWith("/api/");
 
   if (!user && !isPublic && !isApi) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    // Build the redirect URL from scratch — nextUrl.clone() in Next.js 16
+    // doesn't always serialize search params correctly when used with
+    // NextResponse.redirect, so we construct the absolute URL manually.
+    const origin = request.nextUrl.origin;
+    const loginUrl = new URL(`/login?next=${encodeURIComponent(pathname)}`, origin);
+    return NextResponse.redirect(loginUrl);
   }
 
   if (user && (pathname === "/login" || pathname === "/signup")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    url.searchParams.delete("next");
-    return NextResponse.redirect(url);
+    const origin = request.nextUrl.origin;
+    return NextResponse.redirect(new URL("/dashboard", origin));
   }
 
   return response;

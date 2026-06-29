@@ -13,7 +13,10 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: [["list"]],
   use: {
-    baseURL: "http://localhost:3000",
+    // Port 3001 avoids collisions with the Sippy Webapp (next-server) which
+    // binds :3000 in local dev. Playwright would otherwise reuse that server
+    // and run tests against the wrong app entirely.
+    baseURL: "http://localhost:3001",
     trace: "on-first-retry",
   },
   projects: [
@@ -23,8 +26,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:3000",
+    command: "pnpm dev --port 3001",
+    url: "http://localhost:3001",
     reuseExistingServer: !process.env.CI,
     stdout: "pipe",
     stderr: "pipe",

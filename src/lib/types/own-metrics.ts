@@ -1,5 +1,5 @@
 export type OwnMetricsPlatform = "instagram" | "tiktok" | "twitter" | "linkedin";
-export type OwnMetricsSource = "csv" | "screenshot" | "manual";
+export type OwnMetricsSource = "csv" | "screenshot" | "manual" | "json_export" | "html_export";
 
 export interface OwnMetricsPayload {
   views?: number;

@@ -15,6 +15,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export type Purpose =
   | "synthesis" // blog/brief/serp/trend/digest text generation
   | "scoring" // content-score sub-score rating
+  | "analysis" // structured data extraction (e.g. parsing JSON/HTML exports)
   | "embedding" // vector embeddings for dedup (Phase E)
   | "transcription" // Whisper voice-feedback (Phase D)
   | "vision" // screenshot OCR / post-metrics extraction
@@ -32,11 +33,14 @@ export function getModel(purpose: Purpose): LanguageModel {
       // clips); same model as other long-form synthesis.
       return openai("gpt-4.1");
     case "scoring":
+    case "analysis":
       // Scoring is a rating task with structured output — the deterministic
       // half of the rubric anchors the final number, so the AI half just
       // needs to grade 0-5 per criterion. gpt-4o-mini is ~13x cheaper
       // than 4.1 and more than capable here. Revisit if rubric tuning
       // exposes rating drift.
+      // Analysis (e.g. JSON/HTML export parsing) is also a cheap structured
+      // extraction task with the same model profile.
       return openai("gpt-4o-mini");
     case "vision":
       return openai("gpt-4o");
@@ -67,6 +71,7 @@ export function getModelId(purpose: Purpose): string {
     case "video-storyboard":
       return "openai/gpt-4.1";
     case "scoring":
+    case "analysis":
     case "seo-scoring":
       return "openai/gpt-4o-mini";
     case "vision":

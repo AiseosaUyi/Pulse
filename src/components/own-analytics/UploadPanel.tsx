@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { FileText, Image as ImageIcon, Check, AlertCircle } from "lucide-react";
+import { FileText, Image as ImageIcon, FileJson, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { uploadCsv, uploadScreenshot } from "@/lib/actions/own-metrics";
+import { uploadCsv, uploadScreenshot, uploadDataExport } from "@/lib/actions/own-metrics";
 import type { OwnMetricsPlatform } from "@/lib/types/own-metrics";
 
 const PLATFORMS: { value: OwnMetricsPlatform; label: string }[] = [
@@ -32,9 +32,13 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
+type PendingAction = "csv" | "export" | "screenshot" | null;
+
 export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
   const [csvPlatform, setCsvPlatform] = useState<OwnMetricsPlatform>("instagram");
+  const [exportPlatform, setExportPlatform] = useState<OwnMetricsPlatform | "">("");
   const [shotPlatform, setShotPlatform] = useState<OwnMetricsPlatform | "">("");
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState<
     | { kind: "idle" }
@@ -43,13 +47,16 @@ export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
   >({ kind: "idle" });
 
   const csvInputRef = useRef<HTMLInputElement>(null);
+  const exportInputRef = useRef<HTMLInputElement>(null);
   const shotInputRef = useRef<HTMLInputElement>(null);
 
   const handleCsv = async (file: File) => {
     setStatus({ kind: "idle" });
+    setPendingAction("csv");
     const text = await readAsText(file);
     startTransition(async () => {
       const res = await uploadCsv(tenantSlug, csvPlatform, text);
+      setPendingAction(null);
       if (!res.success) {
         setStatus({ kind: "error", message: res.error });
         return;
@@ -64,8 +71,36 @@ export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
     });
   };
 
+  const handleDataExport = async (file: File) => {
+    setStatus({ kind: "idle" });
+    setPendingAction("export");
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const fileType = ext === "html" || ext === "htm" ? "html" : "json";
+    const content = await readAsText(file);
+    startTransition(async () => {
+      const res = await uploadDataExport(
+        tenantSlug,
+        (exportPlatform || null) as OwnMetricsPlatform | null,
+        fileType,
+        content
+      );
+      setPendingAction(null);
+      if (!res.success) {
+        setStatus({ kind: "error", message: res.error });
+        return;
+      }
+      const platform = res.detectedPlatform ?? exportPlatform;
+      const via = res.method === "rule-based" ? "parsed" : "AI-extracted";
+      setStatus({
+        kind: "success",
+        message: `${via} ${res.inserted} post${res.inserted !== 1 ? "s" : ""} from ${platform ?? "your export"}`,
+      });
+    });
+  };
+
   const handleScreenshot = async (file: File) => {
     setStatus({ kind: "idle" });
+    setPendingAction("screenshot");
     const dataUrl = await readAsDataUrl(file);
     startTransition(async () => {
       const res = await uploadScreenshot(
@@ -73,6 +108,7 @@ export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
         (shotPlatform || null) as OwnMetricsPlatform | null,
         dataUrl
       );
+      setPendingAction(null);
       if (!res.success) {
         setStatus({ kind: "error", message: res.error });
         return;
@@ -88,10 +124,12 @@ export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
     });
   };
 
+  const busy = isPending || pendingAction !== null;
+
   return (
     <div className="space-y-4">
-      <div className="grid md:grid-cols-2 gap-4">
-        {/* CSV */}
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {/* CSV export */}
         <div className="bg-card rounded-2xl border border-border p-5">
           <div className="flex items-center gap-2 mb-3">
             <FileText size={16} className="text-text-muted" />
@@ -101,7 +139,7 @@ export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
           </div>
           <p className="text-xs text-text-muted mb-4">
             From Meta Business Suite, TikTok Business Suite, or LinkedIn Page
-            Analytics. Free on all three.
+            Analytics.
           </p>
           <div className="space-y-3">
             <div>
@@ -112,7 +150,7 @@ export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
                 onChange={(e) =>
                   setCsvPlatform(e.target.value as OwnMetricsPlatform)
                 }
-                disabled={isPending}
+                disabled={busy}
                 className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
               >
                 {PLATFORMS.map((p) => (
@@ -137,9 +175,64 @@ export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
               variant="outline"
               size="sm"
               onClick={() => csvInputRef.current?.click()}
-              disabled={isPending}
+              disabled={busy}
             >
-              {isPending ? "Importing..." : "Choose CSV file"}
+              {pendingAction === "csv" ? "Importing..." : "Choose CSV file"}
+            </Button>
+          </div>
+        </div>
+
+        {/* JSON / HTML data export */}
+        <div className="bg-card rounded-2xl border border-border p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <FileJson size={16} className="text-text-muted" />
+            <h3 className="text-foreground font-semibold text-sm">
+              Import data export (JSON / HTML)
+            </h3>
+          </div>
+          <p className="text-xs text-text-muted mb-4">
+            Upload a .json or .html file from your TikTok or Instagram data
+            download (Settings → Privacy → Download your data). AI extracts
+            post metrics automatically.
+          </p>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="export-platform">Platform hint (optional)</Label>
+              <select
+                id="export-platform"
+                value={exportPlatform}
+                onChange={(e) =>
+                  setExportPlatform(e.target.value as OwnMetricsPlatform | "")
+                }
+                disabled={busy}
+                className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
+              >
+                <option value="">Auto-detect</option>
+                {PLATFORMS.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <input
+              ref={exportInputRef}
+              type="file"
+              accept=".json,.html,.htm,application/json,text/html"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (f) await handleDataExport(f);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportInputRef.current?.click()}
+              disabled={busy}
+            >
+              {pendingAction === "export" ? "Analyzing..." : "Choose JSON or HTML file"}
             </Button>
           </div>
         </div>
@@ -165,7 +258,7 @@ export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
                 onChange={(e) =>
                   setShotPlatform(e.target.value as OwnMetricsPlatform | "")
                 }
-                disabled={isPending}
+                disabled={busy}
                 className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
               >
                 <option value="">Auto-detect</option>
@@ -191,9 +284,9 @@ export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
               variant="outline"
               size="sm"
               onClick={() => shotInputRef.current?.click()}
-              disabled={isPending}
+              disabled={busy}
             >
-              {isPending ? "Analyzing..." : "Choose screenshot"}
+              {pendingAction === "screenshot" ? "Analyzing..." : "Choose screenshot"}
             </Button>
           </div>
         </div>
