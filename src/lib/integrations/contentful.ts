@@ -194,7 +194,7 @@ export interface GruveBlogDraft {
   /** Contentful RichText document (already in RichText shape upstream). */
   bodyRichText: unknown;
   author: string | null;
-  readMinutes: number | null;
+  readMinutes: string | number | null;
   seoMetaTitle: string | null;
   seoMetaDescription: string | null;
   canonicalOverride: string | null;

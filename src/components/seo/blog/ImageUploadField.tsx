@@ -99,7 +99,7 @@ export function ImageUploadField({
         onClick={pick}
         disabled={disabled || busy}
         className={`relative w-full overflow-hidden rounded-lg border border-dashed border-border bg-sidebar/40 hover:bg-sidebar transition-colors flex items-center justify-center ${
-          aspect === "square" ? "aspect-square max-w-[120px]" : "aspect-[16/9]"
+          aspect === "square" ? "aspect-square w-full max-w-[88px]" : "aspect-[16/9]"
         }`}
       >
         {value ? (

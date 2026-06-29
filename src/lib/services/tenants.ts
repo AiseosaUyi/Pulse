@@ -3,6 +3,8 @@ import type { Tenant, AudienceConfig, PlatformConnection } from "@/lib/types/ten
 
 interface TenantSettings {
   domain?: string;
+  stagingDomain?: string;
+  blogPathPrefix?: string;
   currency?: string;
   audienceConfig?: AudienceConfig;
   platforms?: PlatformConnection[];
@@ -27,6 +29,8 @@ function hydrate(row: {
     slug: row.slug,
     name: row.name,
     domain: s.domain ?? "",
+    stagingDomain: s.stagingDomain ?? "",
+    blogPathPrefix: s.blogPathPrefix ?? "/blog",
     currency: s.currency ?? "USD",
     audienceConfig: s.audienceConfig ?? DEFAULT_AUDIENCE,
     platforms: s.platforms ?? [],

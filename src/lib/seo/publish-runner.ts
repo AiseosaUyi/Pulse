@@ -359,6 +359,25 @@ export async function runPublish(args: {
 
     // upsert_entry — idempotent by pulseId.
     const upsertPayload = await runStep("upsert_entry", async () => {
+      // Auto-compute read time from word count when not explicitly set.
+      const estimatedReadTime = (() => {
+        if (post.read_minutes != null) return `${post.read_minutes} mins read`;
+        const richText = post.body_rich_text as { content?: unknown[] } | null;
+        if (!richText?.content) return null;
+        let words = 0;
+        const countWords = (nodes: unknown[]): void => {
+          for (const n of nodes) {
+            const node = n as { nodeType?: string; value?: string; content?: unknown[] };
+            if (node.nodeType === "text" && node.value) {
+              words += node.value.trim().split(/\s+/).filter(Boolean).length;
+            } else if (node.content) countWords(node.content);
+          }
+        };
+        countWords(richText.content);
+        const mins = Math.max(1, Math.ceil(words / 200));
+        return `${mins} mins read`;
+      })();
+
       const draft: GruveBlogDraft = {
         pulseId: post.id,
         title: post.title,
@@ -367,7 +386,7 @@ export async function runPublish(args: {
         excerpt: post.excerpt ?? null,
         bodyRichText: post.body_rich_text,
         author: post.author ?? null,
-        readMinutes: post.read_minutes ?? null,
+        readMinutes: estimatedReadTime,
         seoMetaTitle: post.seo_meta_title ?? null,
         seoMetaDescription: post.seo_meta_description ?? null,
         canonicalOverride: post.canonical_override ?? null,

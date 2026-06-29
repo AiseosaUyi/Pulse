@@ -7,8 +7,12 @@ import { getTenant } from "@/lib/services/tenants";
 import type { AudienceConfig } from "@/lib/types/tenant";
 
 export interface TenantSeoConfig {
-  /** Public site base URL, e.g. https://www.gruve.events. Null if unset. */
+  /** Public site base URL, e.g. https://sippy.life. Null if unset. */
   siteBaseUrl: string | null;
+  /** Staging/preview site base URL, e.g. https://test.sippy.life. Falls back to siteBaseUrl. */
+  stagingBaseUrl: string | null;
+  /** Route prefix the tenant's blog uses, e.g. "/blog". */
+  blogPathPrefix: string;
   /** SERP/GSC country code (lowercased), e.g. "ng". Defaults to "us". */
   serpRegion: string;
   /** Route prefix the tenant's frontend renders landing pages at. */
@@ -41,11 +45,13 @@ export async function getTenantSeoConfig(
   tenantSlug: string
 ): Promise<TenantSeoConfig> {
   const tenant = await getTenant(tenantSlug);
+  const siteBaseUrl = siteBaseUrlFromDomain(tenant?.domain);
+  const stagingBaseUrl = siteBaseUrlFromDomain(tenant?.stagingDomain) ?? siteBaseUrl;
   return {
-    siteBaseUrl: siteBaseUrlFromDomain(tenant?.domain),
+    siteBaseUrl,
+    stagingBaseUrl,
+    blogPathPrefix: tenant?.blogPathPrefix ?? "/blog",
     serpRegion: serpRegionFromAudience(tenant?.audienceConfig),
-    // Convention shared with each tenant's frontend; overridable per tenant
-    // when a tenant settings field is added. Neutral names (not Gruve-specific).
     landingRoutePrefix: "/discover",
     landingContentType: "seoLandingPage",
   };

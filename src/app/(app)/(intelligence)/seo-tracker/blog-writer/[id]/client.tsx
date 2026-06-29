@@ -710,10 +710,10 @@ export function BlogEditorPageClient({
                 <Rocket size={14} /> Publish
               </h3>
               <p className="text-[11px] text-text-muted mt-0.5">
-                Goes live on your test site (gamma) and live site once published.
+                Push to staging to preview, or go live to publish.
               </p>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
               <div className="rounded-lg border border-dashed border-primary-500/30 bg-primary-50/40 p-3 flex items-center justify-between gap-3">
                 <p className="text-[11px] text-text-muted">
                   Skip the designer — fetch a free stock photo matched to your
@@ -766,7 +766,7 @@ export function BlogEditorPageClient({
                   disabled={isPublishing}
                 />
               </div>
-              <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
+              <div className="grid grid-cols-[1fr_88px] gap-2 items-start overflow-hidden">
                 <AuthorPicker
                   tenantSlug={tenantSlug}
                   postId={post.id}
@@ -811,7 +811,7 @@ export function BlogEditorPageClient({
                 aria-label="Publish target"
               >
                 {([
-                  { value: "test", label: "Test (gamma)" },
+                  { value: "test", label: "Staging" },
                   { value: "live", label: "Live (www)" },
                 ] as const).map((opt) => (
                   <button
@@ -840,7 +840,7 @@ export function BlogEditorPageClient({
                 {isPublishing
                   ? "Publishing…"
                   : publishTarget === "test"
-                    ? "Push to gamma (test)"
+                    ? "Push to staging"
                     : "Publish live"}
               </Button>
               {dirty && (
@@ -870,7 +870,7 @@ export function BlogEditorPageClient({
                     rel="noreferrer"
                     className="flex items-center gap-1 text-primary-500 hover:underline"
                   >
-                    <ExternalLink size={12} /> View on gamma
+                    <ExternalLink size={12} /> View on staging
                   </a>
                 </div>
               )}

@@ -129,10 +129,9 @@ export async function publishBlogToGruve(
   //  - gammaUrl → the staging site, from GRUVE_STAGING_BASE_URL when set
   // The returned link the user clicks matches the target they published to.
   const seo = await getTenantSeoConfig(tenant.slug);
-  const path = `/blogs/${post.slug}`;
+  const path = `${seo.blogPathPrefix}/${post.slug}`;
   const liveUrl = seo.siteBaseUrl ? `${seo.siteBaseUrl}${path}` : path;
-  const stagingBase = process.env.GRUVE_STAGING_BASE_URL?.trim();
-  const gammaUrl = stagingBase ? `${stagingBase}${path}` : liveUrl;
+  const gammaUrl = seo.stagingBaseUrl ? `${seo.stagingBaseUrl}${path}` : liveUrl;
   return {
     success: true,
     gammaUrl,

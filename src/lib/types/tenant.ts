@@ -3,6 +3,8 @@ export interface Tenant {
   name: string;
   slug: string;
   domain: string;
+  stagingDomain: string;
+  blogPathPrefix: string;
   currency: string;
   audienceConfig: AudienceConfig;
   platforms: PlatformConnection[];
