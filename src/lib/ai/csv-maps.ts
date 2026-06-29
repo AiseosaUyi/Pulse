@@ -4,7 +4,7 @@
 
 import type { OwnMetricsPayload, OwnMetricsPlatform } from "@/lib/types/own-metrics";
 
-type HeaderMap = Partial<Record<keyof OwnMetricsPayload | "title" | "caption" | "external_url" | "posted_at", string[]>>;
+type HeaderMap = Partial<Record<keyof OwnMetricsPayload | "title" | "caption" | "external_url" | "posted_at" | "tweet_id", string[]>>;
 
 export const CSV_MAPS: Record<OwnMetricsPlatform, HeaderMap> = {
   instagram: {
@@ -38,11 +38,12 @@ export const CSV_MAPS: Record<OwnMetricsPlatform, HeaderMap> = {
     comments: ["Replies"],
     shares: ["Retweets", "Reposts"],
     impressions: ["Impressions"],
-    engagement_rate: ["Engagement rate"],
-    title: ["Tweet text"],
-    caption: ["Tweet text"],
-    external_url: ["Tweet permalink", "URL"],
-    posted_at: ["Time", "Date"],
+    engagement_rate: ["Engagement rate", "Engagement Rate"],
+    title: ["Tweet text", "Tweet Text", "Text", "Content"],
+    caption: ["Tweet text", "Tweet Text", "Text", "Content"],
+    external_url: ["Tweet permalink", "Permalink", "URL", "Link"],
+    tweet_id: ["Tweet id", "Tweet ID", "id", "tweet_id"],
+    posted_at: ["Time", "Date", "Created at", "Timestamp"],
   },
   linkedin: {
     impressions: ["Impressions", "Impressions (total)"],
@@ -63,6 +64,7 @@ export interface ParsedCsvRow {
   caption?: string;
   externalUrl?: string;
   postedAt?: string;
+  tweetId?: string;
 }
 
 export interface CsvParseResult {
@@ -127,7 +129,8 @@ export function parseCsv(
             field === "title" ||
             field === "caption" ||
             field === "external_url" ||
-            field === "posted_at";
+            field === "posted_at" ||
+            field === "tweet_id";
           return { field, kind: isMeta ? "meta" : "metric" };
         }
       }
@@ -154,12 +157,17 @@ export function parseCsv(
           (row.metrics as Record<string, number>)[mapping.field] = num;
         }
       } else {
-        if (mapping.field === "title") row.title = clean;
-        else if (mapping.field === "caption") row.caption = clean;
-        else if (mapping.field === "external_url") row.externalUrl = clean;
-        else if (mapping.field === "posted_at") row.postedAt = clean;
+        if (mapping.field === "title") row.title = clean || undefined;
+        else if (mapping.field === "caption") row.caption = clean || undefined;
+        else if (mapping.field === "external_url") row.externalUrl = clean || undefined;
+        else if (mapping.field === "posted_at") row.postedAt = clean || undefined;
+        else if (mapping.field === "tweet_id") row.tweetId = clean || undefined;
       }
     });
+    // Construct tweet permalink from id when no explicit permalink was exported
+    if (platform === "twitter" && !row.externalUrl && row.tweetId) {
+      row.externalUrl = `https://x.com/i/web/status/${row.tweetId}`;
+    }
     rows.push(row);
   }
 

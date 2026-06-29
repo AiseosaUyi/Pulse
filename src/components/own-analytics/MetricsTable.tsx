@@ -14,6 +14,29 @@ function formatNumber(n: number | undefined): string {
   return String(n);
 }
 
+function calcER(m: OwnPostMetric): { value: number; derived: boolean } | null {
+  if (m.metrics.engagement_rate !== undefined) {
+    return { value: m.metrics.engagement_rate, derived: false };
+  }
+  const views = m.metrics.views ?? m.metrics.impressions;
+  const eng =
+    (m.metrics.likes ?? 0) +
+    (m.metrics.comments ?? 0) +
+    (m.metrics.shares ?? 0);
+  if (views && views > 0 && eng > 0) {
+    return { value: Math.round((eng / views) * 1000) / 10, derived: true };
+  }
+  return null;
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  csv: "CSV",
+  screenshot: "Vision",
+  manual: "Manual",
+  json_export: "JSON",
+  html_export: "HTML",
+};
+
 export function MetricsTable({
   metrics,
   tenantSlug,
@@ -66,7 +89,7 @@ export function MetricsTable({
                 Platform
               </th>
               <th className="text-left px-4 py-3 text-xs uppercase tracking-wide text-text-muted font-medium">
-                Title / Caption
+                Post
               </th>
               <th className="text-right px-4 py-3 text-xs uppercase tracking-wide text-text-muted font-medium">
                 Views
@@ -88,35 +111,36 @@ export function MetricsTable({
           </thead>
           <tbody>
             {metrics.map((m) => {
-              const SOURCE_LABELS: Record<string, string> = {
-                csv: "CSV", screenshot: "Vision", manual: "Manual",
-                json_export: "JSON", html_export: "HTML",
-              };
-              const labelSource = SOURCE_LABELS[m.source] ?? m.source;
               const displayText = m.title ?? m.caption ?? null;
+              const views = m.metrics.views ?? m.metrics.impressions;
+              // When no title and no link, show the view count as a soft identifier
+              const fallbackLabel =
+                views !== undefined
+                  ? `${formatNumber(views)} views`
+                  : undefined;
+              const er = calcER(m);
+              const labelSource = SOURCE_LABELS[m.source] ?? m.source;
               return (
                 <tr
                   key={m.id}
                   className="border-b border-border/30 last:border-0 hover:bg-sidebar/40"
                 >
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="capitalize text-foreground">
-                        {m.platform}
-                      </span>
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-sidebar text-text-muted">
-                        {labelSource}
-                      </span>
-                    </div>
+                    <span
+                      className="capitalize text-foreground"
+                      title={labelSource}
+                    >
+                      {m.platform}
+                    </span>
                   </td>
-                  <td className="px-4 py-3 max-w-[260px]">
+                  <td className="px-4 py-3 max-w-[280px]">
                     {m.externalUrl ? (
                       <a
                         href={m.externalUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="truncate block hover:text-primary-500"
-                        title={m.externalUrl}
+                        className="truncate block hover:text-primary-500 group"
+                        title={displayText ?? m.externalUrl}
                       >
                         <span className={displayText ? "text-foreground" : "text-text-muted italic"}>
                           {displayText ?? "View post →"}
@@ -124,15 +148,15 @@ export function MetricsTable({
                       </a>
                     ) : (
                       <span
-                        className={`truncate block ${displayText ? "text-foreground/80" : "text-text-muted"}`}
-                        title={displayText ?? undefined}
+                        className={`truncate block ${displayText ? "text-foreground/80" : "text-text-muted text-xs"}`}
+                        title={displayText ?? fallbackLabel}
                       >
-                        {displayText ?? "—"}
+                        {displayText ?? fallbackLabel ?? "—"}
                       </span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right text-foreground font-mono">
-                    {formatNumber(m.metrics.views ?? m.metrics.impressions)}
+                    {formatNumber(views)}
                   </td>
                   <td className="px-4 py-3 text-right text-foreground font-mono">
                     {formatNumber(m.metrics.likes)}
@@ -140,10 +164,12 @@ export function MetricsTable({
                   <td className="px-4 py-3 text-right text-foreground font-mono">
                     {formatNumber(m.metrics.comments)}
                   </td>
-                  <td className="px-4 py-3 text-right text-foreground font-mono">
-                    {m.metrics.engagement_rate !== undefined
-                      ? `${m.metrics.engagement_rate}%`
-                      : "—"}
+                  <td className="px-4 py-3 text-right font-mono">
+                    {er ? (
+                      <span className={er.derived ? "text-text-muted" : "text-foreground"}>
+                        {er.derived ? "~" : ""}{er.value}%
+                      </span>
+                    ) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right text-text-muted text-xs whitespace-nowrap">
                     {formatDate(m.capturedAt, {

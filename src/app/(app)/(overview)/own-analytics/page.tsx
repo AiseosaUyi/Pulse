@@ -129,7 +129,7 @@ export default async function OwnAnalyticsPage() {
           className="text-xs font-semibold text-text-muted mb-3"
           style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
         >
-          Recent imports
+          Posts
         </h2>
         <MetricsTable metrics={metrics} tenantSlug={tenantSlug} />
       </section>
