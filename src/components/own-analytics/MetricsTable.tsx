@@ -88,10 +88,12 @@ export function MetricsTable({
           </thead>
           <tbody>
             {metrics.map((m) => {
-              const labelSource =
-                m.source === "csv" ? "CSV" : m.source === "screenshot" ? "Vision" : "Manual";
-              const display =
-                m.title ?? m.caption ?? (m.externalUrl ? "(link)" : "(untitled)");
+              const SOURCE_LABELS: Record<string, string> = {
+                csv: "CSV", screenshot: "Vision", manual: "Manual",
+                json_export: "JSON", html_export: "HTML",
+              };
+              const labelSource = SOURCE_LABELS[m.source] ?? m.source;
+              const displayText = m.title ?? m.caption ?? null;
               return (
                 <tr
                   key={m.id}
@@ -113,17 +115,19 @@ export function MetricsTable({
                         href={m.externalUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-foreground hover:text-primary-500 truncate block"
-                        title={display}
+                        className="truncate block hover:text-primary-500"
+                        title={m.externalUrl}
                       >
-                        {display}
+                        <span className={displayText ? "text-foreground" : "text-text-muted italic"}>
+                          {displayText ?? "View post →"}
+                        </span>
                       </a>
                     ) : (
                       <span
-                        className="text-foreground/80 truncate block"
-                        title={display}
+                        className={`truncate block ${displayText ? "text-foreground/80" : "text-text-muted"}`}
+                        title={displayText ?? undefined}
                       >
-                        {display}
+                        {displayText ?? "—"}
                       </span>
                     )}
                   </td>
