@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import { listBlogPosts } from "@/lib/services/blog-posts";
 import { getKeywordRankings } from "@/lib/services/seo";
 import { getTenant } from "@/lib/services/tenants";
@@ -12,8 +12,8 @@ import { BlogWriterClient } from "./client";
 export const maxDuration = 300;
 
 export default async function BlogWriterPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const currentTenant = await getCurrentTenant();
+  const tenantSlug = currentTenant?.slug ?? "";
 
   const [posts, keywords, tenant] = await Promise.all([
     listBlogPosts(tenantSlug),

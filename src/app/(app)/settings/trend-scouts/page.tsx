@@ -1,12 +1,12 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import { TrendingUp } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { ScoutConfigEditor } from "@/components/trends/ScoutConfigEditor";
 import { SettingsPageHeading } from "../_shared";
 
 export default async function TrendScoutsPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const currentTenant = await getCurrentTenant();
+  const tenantSlug = currentTenant?.slug ?? "";
 
   const supabase = await createClient();
   const { data: tenant } = await supabase

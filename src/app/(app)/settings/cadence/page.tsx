@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import { CalendarCheck } from "lucide-react";
 import { getCadenceConfig } from "@/lib/cadence/config";
 import { defaultCadenceConfig } from "@/lib/cadence/types";
@@ -6,8 +6,8 @@ import { CadenceEditor } from "@/components/settings/CadenceEditor";
 import { SettingsPageHeading } from "../_shared";
 
 export default async function CadenceSettingsPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
   const config = (await getCadenceConfig(tenantSlug)) ?? defaultCadenceConfig();
 
   return (

@@ -12,7 +12,7 @@ import { IntelFeedTabs } from "./client";
 
 export default async function IntelFeedPage() {
   const tenant = await getCurrentTenant();
-  const tenantSlug = tenant?.slug ?? "gruve";
+  const tenantSlug = tenant?.slug ?? "";
   const tenantName = tenant?.name ?? tenantSlug;
 
   const [feed, morningBrief, digest, briefs, competitors, patterns, anomalies, xSignals, trends] =

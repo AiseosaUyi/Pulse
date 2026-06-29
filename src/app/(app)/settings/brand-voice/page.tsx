@@ -1,11 +1,11 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BrandVoiceEditor } from "@/components/briefs/BrandVoiceEditor";
 
 export default async function BrandVoicePage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
   const admin = createAdminClient();
   const [voice, countResult] = await Promise.all([
     getBrandVoice(tenantSlug),

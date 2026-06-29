@@ -1,12 +1,12 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import { getKeywordRankings, deriveSEOMetrics } from "@/lib/services/seo";
 import { KeywordRow } from "@/components/keywords/KeywordRow";
 import { BackfillDeeplinksButton } from "@/components/keywords/BackfillDeeplinksButton";
 import { AddKeywordButton } from "../client";
 
 export default async function KeywordsPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
 
   const keywords = await getKeywordRankings(tenantSlug);
   const metrics = deriveSEOMetrics(keywords);

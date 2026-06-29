@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Sparkles, TrendingUp, Target, Search, Users, Zap } from "lucide-react";
 import { getLatestDigest } from "@/lib/services/insights";
@@ -35,8 +35,8 @@ const MODULE_LABEL: Record<NonNullable<RecommendedAction["target_module"]>, stri
 };
 
 export default async function WeeklyReportPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
 
   const digest = await getLatestDigest(tenantSlug);
 

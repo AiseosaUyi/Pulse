@@ -1,11 +1,11 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BrandAuditClient } from "./client";
 import { SettingsPageHeading } from "../_shared";
 
 export default async function BrandAuditPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const currentTenant = await getCurrentTenant();
+  const tenantSlug = currentTenant?.slug ?? "";
 
   const admin = createAdminClient();
   const [

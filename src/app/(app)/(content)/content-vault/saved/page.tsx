@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import { listSavedContent } from "@/lib/services/saved-content";
 import { listTrendScouts } from "@/lib/services/trends";
 import { getStorageUsage } from "@/lib/services/storage-usage";
@@ -13,8 +13,8 @@ import { VaultClient } from "../client";
 export const maxDuration = 60;
 
 export default async function VaultSavedPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
 
   const [saved, trends, storage] = await Promise.all([
     listSavedContent(tenantSlug),

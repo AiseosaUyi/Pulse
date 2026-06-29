@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { StatCard } from "@/components/dashboard/StatCard";
@@ -20,9 +19,8 @@ import { formatCurrency } from "@/lib/utils/format";
 import { getCurrentTenant } from "@/lib/auth";
 
 export default async function DashboardPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
   const currentTenant = await getCurrentTenant();
+  const tenantSlug = currentTenant?.slug ?? "";
   const accountType = currentTenant?.accountType ?? "startup";
 
   const [tenant, stats, platforms, suggestions, notifications, coachActions, weeklyReview, setupStatus, tracker] = await Promise.all([

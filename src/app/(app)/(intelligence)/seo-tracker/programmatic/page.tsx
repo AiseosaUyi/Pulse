@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import {
   listProgrammaticTemplates,
   listProgrammaticPages,
@@ -6,8 +6,8 @@ import {
 import { ProgrammaticClient } from "./client";
 
 export default async function ProgrammaticPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
 
   const [templates, pages] = await Promise.all([
     listProgrammaticTemplates(tenantSlug),
@@ -20,8 +20,8 @@ export default async function ProgrammaticPage() {
         <p className="text-foreground font-semibold text-lg">Programmatic SEO</p>
         <p className="text-text-muted text-xs mt-0.5 max-w-[640px]">
           Write one template, generate hundreds of landing pages. Pattern
-          variables (e.g. <code className="font-mono">{"{city}"}</code>,{" "}
-          <code className="font-mono">{"{eventType}"}</code>) expand into a
+          variables (e.g. <code className="font-mono">{"{location}"}</code>,{" "}
+          <code className="font-mono">{"{product}"}</code>) expand into a
           page per combination.
         </p>
       </div>

@@ -1,10 +1,10 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import Link from "next/link";
 import { getPlatformScore } from "@/lib/services/platform-score";
 
 export default async function PlatformScorePage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
   const data = await getPlatformScore(tenantSlug);
   const hasAnyData = data.platforms.some((p) => p.hasData);
 

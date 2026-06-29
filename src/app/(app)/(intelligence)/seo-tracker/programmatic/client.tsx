@@ -68,7 +68,7 @@ export function ProgrammaticClient({ tenantSlug, templates, pages }: Props) {
           {pages.length} page{pages.length === 1 ? "" : "s"} generated
         </p>
         <div className="flex items-center gap-3">
-          {/* Publish target for every "Publish to Gruve" button below. */}
+          {/* Publish target for every "Publish" button below. */}
           <div
             className="flex items-center gap-1 rounded-lg border border-border bg-sidebar p-0.5"
             role="group"
@@ -110,12 +110,13 @@ export function ProgrammaticClient({ tenantSlug, templates, pages }: Props) {
         <div className="rounded-2xl border-2 border-dashed border-border p-12 text-center">
           <p className="text-foreground font-semibold mb-1">No templates yet</p>
           <p className="text-text-muted text-sm max-w-[480px] mx-auto">
-            Create your first template. Example for events:{" "}
-            <code className="font-mono text-xs">{"{eventType} in {city}"}</code>
-            {" "}with <code className="font-mono text-xs">city</code>: [New York,
-            London] and{" "}
-            <code className="font-mono text-xs">eventType</code>: [wedding,
-            concert] → 4 landing pages.
+            Create your first template. Use variables to multiply one pattern
+            into many pages — e.g.{" "}
+            <code className="font-mono text-xs">{"{product} delivery in {location}"}</code>
+            {" "}with <code className="font-mono text-xs">product</code>: [beer,
+            wine, spirits] and{" "}
+            <code className="font-mono text-xs">location</code>: [Lagos, Abuja,
+            Port Harcourt] → 9 landing pages.
           </p>
         </div>
       ) : (
@@ -272,7 +273,7 @@ export function ProgrammaticClient({ tenantSlug, templates, pages }: Props) {
                                       Live ↗
                                     </a>
                                   )}
-                                  <PublishToGruveButton
+                                  <PublishButton
                                     tenantSlug={tenantSlug}
                                     pageId={p.id}
                                     isLive={Boolean(p.liveUrl)}
@@ -507,7 +508,7 @@ function StatusToggle({
   );
 }
 
-function PublishToGruveButton({
+function PublishButton({
   tenantSlug,
   pageId,
   isLive,
@@ -575,7 +576,7 @@ function TemplateEditorModal({
     editing?.targetWordCount ?? 600
   );
   const [variables, setVariables] = useState<TemplateVariable[]>(
-    editing?.variables ?? [{ name: "city", values: ["New York"] }]
+    editing?.variables ?? [{ name: "location", values: ["Lagos"] }]
   );
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -649,7 +650,7 @@ function TemplateEditorModal({
               id="pt-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Events by city"
+              placeholder="e.g. Drinks delivery by location"
               disabled={isPending}
             />
           </div>
@@ -663,7 +664,7 @@ function TemplateEditorModal({
               id="pt-title"
               value={titlePattern}
               onChange={(e) => setTitlePattern(e.target.value)}
-              placeholder="Best {eventType} venues in {city} 2026"
+              placeholder="Order {product} delivery in {location} | Sippy"
               disabled={isPending}
             />
           </div>
@@ -674,7 +675,7 @@ function TemplateEditorModal({
               id="pt-url"
               value={urlPattern}
               onChange={(e) => setUrlPattern(e.target.value)}
-              placeholder="events/{city}/{eventType}"
+              placeholder="drinks/{location}/{product}"
               disabled={isPending}
               className="font-mono text-sm"
             />
@@ -688,7 +689,7 @@ function TemplateEditorModal({
               id="pt-meta"
               value={metaPattern ?? ""}
               onChange={(e) => setMetaPattern(e.target.value)}
-              placeholder="Planning a {eventType} in {city}? Explore venues, pricing, and booking."
+              placeholder="Order {product} delivery in {location}. Fast, cold, reliable — get it tonight."
               disabled={isPending}
             />
           </div>
@@ -699,7 +700,7 @@ function TemplateEditorModal({
               id="pt-prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Write a guide for planning a {eventType} in {city}. Cover: venue shortlist with 2-3 real examples, typical budget range, booking tips, and one local insight."
+              placeholder="Write a landing page for {product} delivery in {location}. Cover: why Sippy is the fastest option, what's available (brands, sizes), delivery time, and a clear CTA to order now."
               rows={4}
               disabled={isPending}
             />
@@ -743,14 +744,14 @@ function TemplateEditorModal({
                   <Input
                     value={v.name}
                     onChange={(e) => updateVarName(idx, e.target.value)}
-                    placeholder="name (e.g. city)"
+                    placeholder="name (e.g. location)"
                     disabled={isPending}
                     className="w-40 font-mono text-sm"
                   />
                   <Input
                     value={v.values.join(", ")}
                     onChange={(e) => updateVarValues(idx, e.target.value)}
-                    placeholder="New York, London, Toronto"
+                    placeholder="Lagos, Abuja, Port Harcourt"
                     disabled={isPending}
                     className="flex-1"
                   />

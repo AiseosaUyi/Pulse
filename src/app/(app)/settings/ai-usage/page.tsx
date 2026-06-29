@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import Link from "next/link";
 import { Zap } from "lucide-react";
 import {
@@ -28,8 +28,8 @@ function timeSince(iso: string): string {
 }
 
 export default async function AiUsagePage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
 
   const [summary, recent] = await Promise.all([
     getAiUsageSummary(tenantSlug),

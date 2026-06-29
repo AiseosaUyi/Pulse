@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import Link from "next/link";
 import { HardDrive } from "lucide-react";
 import {
@@ -11,8 +11,8 @@ import { StoragePruneClient } from "./client";
 import { SettingsPageHeading } from "../_shared";
 
 export default async function StorageSettingsPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
 
   const [usage, largest] = await Promise.all([
     getStorageUsage(),

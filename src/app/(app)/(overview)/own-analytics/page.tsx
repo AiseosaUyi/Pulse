@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import { TrendingUp } from "lucide-react";
 import {
   listOwnMetrics,
@@ -22,8 +22,8 @@ const PLATFORM_LABEL: Record<OwnMetricsPlatform, string> = {
 };
 
 export default async function OwnAnalyticsPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
 
   const [summary, metrics] = await Promise.all([
     getOwnMetricsSummary(tenantSlug),

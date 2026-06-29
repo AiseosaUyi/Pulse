@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { listBriefs } from "@/lib/services/briefs";
@@ -35,11 +34,10 @@ export default async function ContentPage({
 }: {
   searchParams: Promise<{ tab?: string | string[] }>;
 }) {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
   const { tab: tabParam } = await searchParams;
   const tab = normalizeTab(tabParam);
   const currentTenant = await getCurrentTenant();
+  const tenantSlug = currentTenant?.slug ?? "";
   const accountType = currentTenant?.accountType ?? "startup";
 
   const now = new Date();

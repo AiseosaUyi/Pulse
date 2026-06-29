@@ -1,12 +1,12 @@
-import { cookies } from "next/headers";
+import { getCurrentTenant } from "@/lib/auth";
 import { Target } from "lucide-react";
 import { getBrandPositioning } from "@/lib/ai/brand-positioning";
 import { BrandPositioningEditor } from "@/components/settings/BrandPositioningEditor";
 import { SettingsPageHeading } from "../_shared";
 
 export default async function BrandPositioningPage() {
-  const cookieStore = await cookies();
-  const tenantSlug = cookieStore.get("tenant")?.value ?? "gruve";
+  const tenant = await getCurrentTenant();
+  const tenantSlug = tenant?.slug ?? "";
   const positioning = await getBrandPositioning(tenantSlug);
 
   return (
