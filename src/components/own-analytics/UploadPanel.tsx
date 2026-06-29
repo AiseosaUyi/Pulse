@@ -138,8 +138,7 @@ export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
             </h3>
           </div>
           <p className="text-xs text-text-muted mb-4">
-            From Meta Business Suite, TikTok Business Suite, or LinkedIn Page
-            Analytics.
+            Meta Business Suite, TikTok Business Suite, or LinkedIn Analytics.
           </p>
           <div className="space-y-3">
             <div>
@@ -191,9 +190,7 @@ export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
             </h3>
           </div>
           <p className="text-xs text-text-muted mb-4">
-            Upload a .json or .html file from your TikTok or Instagram data
-            download (Settings → Privacy → Download your data). AI extracts
-            post metrics automatically.
+            TikTok or Instagram data download (.json / .html).
           </p>
           <div className="space-y-3">
             <div>
@@ -246,8 +243,7 @@ export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
             </h3>
           </div>
           <p className="text-xs text-text-muted mb-4">
-            For Twitter/X (no CSV export) or one-off posts. AI reads the
-            numbers off the image. ~$0.01 per upload.
+            Twitter/X or one-off posts. AI reads metrics from the image.
           </p>
           <div className="space-y-3">
             <div>
