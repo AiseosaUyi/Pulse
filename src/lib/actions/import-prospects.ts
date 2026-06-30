@@ -57,10 +57,17 @@ export async function importProspects(
   const result: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [] };
   const now = new Date().toISOString();
 
+  // Normalise every row at the server boundary (handle: strip @, platform: alias map)
+  const normalised = rows.map((r) => ({
+    ...r,
+    handle: normaliseHandle(r.handle),
+    platform: normalisePlatform(r.platform as string) ?? r.platform,
+  }));
+
   // Process in batches of 50 to stay within PostgREST limits
   const BATCH = 50;
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const batch = rows.slice(i, i + BATCH);
+  for (let i = 0; i < normalised.length; i += BATCH) {
+    const batch = normalised.slice(i, i + BATCH);
 
     // Check which (handle, platform) already exist
     const handles = batch.map((r) => r.handle);
@@ -108,7 +115,7 @@ export async function importProspects(
         // If batch insert fails, record per-row errors conservatively
         for (const r of toInsert) {
           result.errors.push({
-            row: rows.findIndex((x) => x.handle === r.handle) + 1,
+            row: normalised.findIndex((x) => x.handle === r.handle) + 1,
             handle: r.handle as string,
             reason: error.message,
           });
@@ -135,7 +142,7 @@ export async function importProspects(
 
       if (error) {
         result.errors.push({
-          row: rows.findIndex((x) => x.handle === row.handle) + 1,
+          row: normalised.findIndex((x) => x.handle === row.handle) + 1,
           handle: row.handle,
           reason: error.message,
         });

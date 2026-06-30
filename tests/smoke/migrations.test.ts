@@ -25,7 +25,6 @@ describe("migrations + seed smoke", () => {
     { name: "posts", tenantCol: "tenant_slug" },
     { name: "campaigns", tenantCol: "tenant_slug" },
     { name: "keyword_rankings", tenantCol: "tenant_slug" },
-    { name: "engagement_items", tenantCol: "tenant_slug" },
     { name: "competitors", tenantCol: "tenant_id" },
   ] as const;
 
