@@ -25,6 +25,8 @@ import {
   Calendar,
   MapPin,
   Tag,
+  ChevronRight,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,18 +84,18 @@ import type { OutreachCampaignRecord } from "@/lib/types/outreach-intelligence";
 type Tab = "today" | "pipeline" | "inbox" | "discovery" | "templates";
 
 const STATUS_TONE: Record<ProspectStatus, string> = {
-  new: "bg-blue-500/10 text-blue-600 font-medium",
-  qualifying: "bg-primary-500/10 text-primary-500",
+  new: "bg-primary-500/8 text-primary-500 font-medium",
+  qualifying: "bg-status-yellow/10 text-status-yellow",
   qualified: "bg-status-green/10 text-status-green",
   unqualified: "bg-status-red/10 text-status-red",
   drafted: "bg-status-yellow/10 text-status-yellow",
   approved: "bg-primary-500/10 text-primary-500",
-  sent: "bg-primary-500/10 text-primary-500",
+  sent: "bg-gray-200/60 text-gray-500 dark:bg-gray-700/40 dark:text-gray-400",
   replied: "bg-status-green/20 text-status-green font-semibold",
   handed_off: "bg-status-green/10 text-status-green",
   closed_won: "bg-status-green/20 text-status-green",
   closed_lost: "bg-sidebar text-text-muted",
-  dismissed: "bg-sidebar text-text-muted line-through",
+  dismissed: "bg-sidebar text-text-muted",
 };
 
 const NOW_MS = new Date().getTime();
@@ -180,7 +182,7 @@ function ProspectTemporalLine({
           <Calendar size={10} className="shrink-0" />
           {p.lastReachoutAt
             ? <span>Last reachout · {new Date(p.lastReachoutAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
-            : <span>Set last reachout →</span>}
+            : <span className="inline-flex items-center gap-0.5">Set last reachout <ArrowRight size={9} /></span>}
         </button>
       )}
     </div>
@@ -637,9 +639,10 @@ export function OutboundClient({
                 <button
                   type="button"
                   onClick={() => setTab("discovery")}
-                  className="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold bg-primary-500 text-white hover:bg-primary-600 transition-colors"
                 >
-                  → Go to Discovery
+                  Go to Discovery
+                  <ArrowRight size={14} />
                 </button>
               </div>
             ) : (
@@ -660,7 +663,7 @@ export function OutboundClient({
                   <li
                     key={p.id}
                     id={`prospect-${p.id}`}
-                    className={`px-4 py-3 cursor-pointer transition-colors ${
+                    className={`group px-4 py-3 cursor-pointer transition-colors ${
                       selectedIds.has(p.id)
                         ? "bg-primary-500/5"
                         : selectedProspectId === p.id
@@ -683,19 +686,20 @@ export function OutboundClient({
                           <span className="text-sm font-semibold text-foreground">
                             @{p.handle}
                           </span>
-                          <span className="text-xs uppercase tracking-wide text-text-muted">
+                          <span className="text-[10px] uppercase tracking-wide text-text-muted">
                             {PLATFORM_LABELS[p.platform]}
                           </span>
                           <span
-                            className={`text-xs uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                            className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
                               STATUS_TONE[p.status]
                             }`}
                           >
+                            {p.status === "qualifying" && <Loader2 size={9} className="animate-spin" />}
                             {STATUS_LABELS[p.status]}
                           </span>
                           {p.qualificationScore != null && (
-                            <span className="text-xs text-primary-500">
-                              {p.qualificationScore}/100
+                            <span className="text-[10px] text-text-muted">
+                              · {p.qualificationScore}
                             </span>
                           )}
                         </div>
@@ -762,6 +766,14 @@ export function OutboundClient({
                           onDraft={handleDraft}
                           onDelete={handleDelete}
                         />
+                        <ChevronRight
+                          size={14}
+                          className={`shrink-0 transition-colors ${
+                            selectedProspectId === p.id
+                              ? "text-primary-500"
+                              : "text-text-muted/30 group-hover:text-text-muted"
+                          }`}
+                        />
                       </div>
                     </div>
                   </li>
@@ -769,11 +781,11 @@ export function OutboundClient({
               </ul>
             )}
 
-            {totalPages > 1 && (
-              <div className={`flex items-center justify-between gap-2 pt-1 transition-opacity ${pageLoading ? "opacity-50 pointer-events-none" : ""}`}>
-                <span className="text-xs text-text-muted">
-                  Page {page + 1} of {totalPages} · {totalCount} prospects
-                </span>
+            <div className={`flex items-center justify-between gap-2 pt-1 transition-opacity ${pageLoading ? "opacity-50 pointer-events-none" : ""}`}>
+              <span className="text-xs text-text-muted">
+                {totalPages > 1 ? `Page ${page + 1} of ${totalPages} · ` : ""}{totalCount} prospects
+              </span>
+              {totalPages > 1 && (
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
@@ -806,8 +818,8 @@ export function OutboundClient({
                     Next →
                   </button>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
         </div>
 
         {selectedProspectId !== null && (
@@ -817,7 +829,7 @@ export function OutboundClient({
               onClick={() => setSelectedProspectId(null)}
               aria-hidden
             />
-            <aside className={`fixed top-0 right-0 h-screen w-[420px] z-30 bg-card border-l border-border shadow-2xl flex flex-col transition-transform duration-[280ms] ease-out ${selectedProspectId ? "translate-x-0" : "translate-x-full"}`}>
+            <aside className={`fixed top-0 right-0 h-screen w-full sm:w-[420px] z-30 bg-card border-l border-border shadow-2xl flex flex-col transition-transform duration-[280ms] ease-out ${selectedProspectId ? "translate-x-0" : "translate-x-full"}`}>
               <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-border/60">
                 <span className="text-sm font-semibold text-foreground">
                   {selectedProspect ? `@${selectedProspect.handle}` : "Prospect"}
