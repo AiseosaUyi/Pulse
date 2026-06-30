@@ -18,6 +18,7 @@ import {
   Link as LinkIcon,
   MessagesSquare,
   Upload,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,13 +65,14 @@ import type {
 import { ProspectThreadPanel } from "./prospect-thread-panel";
 import { TodayView } from "./today-view";
 import { ImportProspectsModal } from "./import-prospects-modal";
+import { EditProspectModal } from "./edit-prospect-modal";
 import type { OutreachTodayData } from "@/lib/services/outreach-intelligence";
 import type { OutreachCampaignRecord } from "@/lib/types/outreach-intelligence";
 
 type Tab = "today" | "pipeline" | "inbox" | "discovery" | "templates";
 
 const STATUS_TONE: Record<ProspectStatus, string> = {
-  new: "bg-sidebar text-text-muted",
+  new: "bg-blue-500/10 text-blue-600 font-medium",
   qualifying: "bg-primary-500/10 text-primary-500",
   qualified: "bg-status-green/10 text-status-green",
   unqualified: "bg-status-red/10 text-status-red",
@@ -128,6 +130,7 @@ export function OutboundClient({
   );
   const [threadPanelProspect, setThreadPanelProspect] = useState<ProspectRecord | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [editingProspect, setEditingProspect] = useState<ProspectRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ProspectStatus | "all">(
@@ -300,6 +303,19 @@ export function OutboundClient({
           }}
         />
       )}
+      {editingProspect && (
+        <EditProspectModal
+          prospect={editingProspect}
+          tenantSlug={tenantSlug}
+          onClose={() => setEditingProspect(null)}
+          onSaved={(patch) => {
+            setProspects(prev =>
+              prev.map(p => p.id === editingProspect.id ? { ...p, ...patch } : p)
+            );
+            setEditingProspect(null);
+          }}
+        />
+      )}
 
       <div className="flex items-center gap-1 mb-4 border-b border-border">
         {(
@@ -464,6 +480,18 @@ export function OutboundClient({
                         >
                           <MessagesSquare size={11} />
                           Thread
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingProspect(p);
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-foreground px-2 py-1 rounded-md hover:bg-sidebar"
+                          title="Edit prospect"
+                        >
+                          <Pencil size={11} />
+                          Edit
                         </button>
                         <ProspectRowActions
                           prospect={p}

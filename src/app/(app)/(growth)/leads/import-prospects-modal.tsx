@@ -94,7 +94,9 @@ async function parseXLSX(buffer: ArrayBuffer): Promise<ParsedSheet> {
   const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: "" });
   if (!data.length) return { headers: [], rows: [] };
   const headers = (data[0] as string[]).map(String);
-  const rows = (data.slice(1) as string[][]).map((r) => r.map(String));
+  const rows = (data.slice(1) as string[][])
+    .filter(r => r.some(cell => String(cell).trim() !== ""))
+    .map(r => r.map(String));
   return { headers, rows };
 }
 
@@ -393,20 +395,26 @@ export function ImportProspectsModal({
             <div className="space-y-4 py-2">
               <div className="flex items-center gap-2">
                 <CheckCircle2 size={20} className="text-status-green shrink-0" />
-                <p className="text-sm font-semibold text-foreground">Import complete</p>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Import complete</p>
+                  <p className="text-xs text-text-muted">
+                    {result.created + result.updated} prospects imported
+                    {result.errors.length > 0 && ` · ${result.errors.length} skipped`}
+                  </p>
+                </div>
               </div>
               <div className="rounded-xl border border-border bg-sidebar/40 divide-y divide-border/40">
                 <div className="flex justify-between px-4 py-2.5 text-xs">
-                  <span className="text-text-muted">Created</span>
+                  <span className="text-text-muted">New prospects added</span>
                   <span className="font-semibold text-status-green">{result.created}</span>
                 </div>
                 <div className="flex justify-between px-4 py-2.5 text-xs">
-                  <span className="text-text-muted">Updated</span>
+                  <span className="text-text-muted">Existing prospects updated</span>
                   <span className="font-semibold text-foreground">{result.updated}</span>
                 </div>
                 {result.errors.length > 0 && (
                   <div className="px-4 py-2.5 text-xs">
-                    <p className="text-status-red font-medium mb-1">{result.errors.length} errors</p>
+                    <p className="text-status-red font-medium mb-1">{result.errors.length} rows skipped (missing handle or platform)</p>
                     <ul className="space-y-0.5 text-text-muted">
                       {result.errors.slice(0, 5).map((e, i) => (
                         <li key={i}>Row {e.row} (@{e.handle}): {e.reason}</li>

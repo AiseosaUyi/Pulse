@@ -383,6 +383,40 @@ export async function deleteProspect(
   return { success: true };
 }
 
+export async function updateProspect(
+  tenantSlug: string,
+  id: string,
+  patch: {
+    handle?: string;
+    platform?: OutboundPlatform;
+    displayName?: string | null;
+    bio?: string | null;
+    notes?: string | null;
+    profileUrl?: string | null;
+    followerCount?: number | null;
+  }
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const update: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (patch.handle !== undefined) update.handle = patch.handle.replace(/^@/, "").trim().toLowerCase();
+  if (patch.platform !== undefined) update.platform = patch.platform;
+  if (patch.displayName !== undefined) update.display_name = patch.displayName;
+  if (patch.bio !== undefined) update.bio = patch.bio;
+  if (patch.notes !== undefined) update.notes = patch.notes;
+  if (patch.profileUrl !== undefined) update.profile_url = patch.profileUrl;
+  if (patch.followerCount !== undefined) update.follower_count = patch.followerCount;
+  const { error } = await supabase
+    .from("prospects")
+    .update(update)
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", id);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/leads");
+  return { success: true };
+}
+
 /**
  * Mark an inbound message read. Used when the operator opens the
  * conversation in the inbox.
