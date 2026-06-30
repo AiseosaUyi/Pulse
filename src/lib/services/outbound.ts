@@ -73,7 +73,7 @@ export async function listProspects(
     .select("*")
     .eq("tenant_slug", tenantSlug)
     .order("updated_at", { ascending: false })
-    .limit(filter.limit ?? 100);
+    .limit(filter.limit ?? 1000);
   if (filter.status && filter.status !== "all") {
     query = query.eq("status", filter.status);
   }
