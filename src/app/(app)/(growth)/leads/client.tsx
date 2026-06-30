@@ -79,12 +79,39 @@ const STATUS_TONE: Record<ProspectStatus, string> = {
   drafted: "bg-status-yellow/10 text-status-yellow",
   approved: "bg-primary-500/10 text-primary-500",
   sent: "bg-primary-500/10 text-primary-500",
-  replied: "bg-status-green/15 text-status-green",
+  replied: "bg-status-green/20 text-status-green font-semibold",
   handed_off: "bg-status-green/10 text-status-green",
   closed_won: "bg-status-green/20 text-status-green",
   closed_lost: "bg-sidebar text-text-muted",
   dismissed: "bg-sidebar text-text-muted line-through",
 };
+
+const NOW_MS = new Date().getTime();
+
+function temporalLine(p: ProspectRecord): { text: string; cls: string } | null {
+  const rel = (iso: string) => {
+    const d = Math.floor((NOW_MS - new Date(iso).getTime()) / 86_400_000);
+    if (d === 0) return "today";
+    if (d === 1) return "1d ago";
+    return `${d}d ago`;
+  };
+  if (p.status === "replied") {
+    return { text: `● Replied${p.lastTouchedAt ? ` ${rel(p.lastTouchedAt)}` : ""}`, cls: "text-status-green" };
+  }
+  if (p.status === "sent" && p.lastTouchedAt) {
+    const days = (NOW_MS - new Date(p.lastTouchedAt).getTime()) / 86_400_000;
+    return days > 7
+      ? { text: `⚠ Sent ${rel(p.lastTouchedAt)} · follow up`, cls: "text-status-yellow" }
+      : { text: `Sent ${rel(p.lastTouchedAt)}`, cls: "text-text-muted" };
+  }
+  if ((p.status === "drafted" || p.status === "approved") && p.lastTouchedAt) {
+    return { text: "Draft ready · not sent", cls: "text-status-yellow" };
+  }
+  if (p.status === "qualified") {
+    return { text: "Qualified · not contacted", cls: "text-primary-500" };
+  }
+  return null;
+}
 
 export function OutboundClient({
   tenantSlug,
@@ -136,6 +163,7 @@ export function OutboundClient({
   const [statusFilter, setStatusFilter] = useState<ProspectStatus | "all">(
     "all"
   );
+  const [sortBy, setSortBy] = useState<"updated" | "followup">("updated");
 
   const openThreadPanel = useCallback((prospect: ProspectRecord) => {
     setThreadPanelProspect(prospect);
@@ -162,9 +190,21 @@ export function OutboundClient({
   }, [deeplinkProspectId]);
 
   const filtered = useMemo(() => {
-    if (statusFilter === "all") return prospects;
-    return prospects.filter((p) => p.status === statusFilter);
-  }, [prospects, statusFilter]);
+    const base = statusFilter === "all" ? prospects : prospects.filter((p) => p.status === statusFilter);
+    if (sortBy === "followup") {
+      const urgency = (p: ProspectRecord): number => {
+        if (p.status === "replied") return 0;
+        if (p.status === "sent") {
+          const days = p.lastTouchedAt ? (NOW_MS - new Date(p.lastTouchedAt).getTime()) / 86_400_000 : 999;
+          return days > 7 ? 1 : 2;
+        }
+        if (p.status === "qualified") return 3;
+        return 99;
+      };
+      return [...base].sort((a, b) => urgency(a) - urgency(b));
+    }
+    return base;
+  }, [prospects, statusFilter, sortBy]);
 
   const updateProspect = (updated: ProspectRecord) => {
     setProspects((prev) =>
@@ -389,6 +429,17 @@ export function OutboundClient({
           <div className="space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
               <StatusFilter value={statusFilter} onChange={setStatusFilter} />
+              <button
+                type="button"
+                onClick={() => setSortBy(s => s === "updated" ? "followup" : "updated")}
+                className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full border transition-colors ${
+                  sortBy === "followup"
+                    ? "bg-primary-500/10 text-primary-500 border-primary-500/30"
+                    : "text-text-muted border-border hover:text-foreground hover:bg-sidebar"
+                }`}
+              >
+                {sortBy === "followup" ? "Needs follow-up first" : "Sort: most recent"}
+              </button>
               <AddProspectQuickForm onSubmit={handleAddProspect} />
               <button
                 type="button"
@@ -467,6 +518,9 @@ export function OutboundClient({
                             {p.signalSummary}
                           </p>
                         )}
+                        {(() => { const t = temporalLine(p); return t ? (
+                          <p className={`text-[11px] mt-1 ${t.cls}`}>{t.text}</p>
+                        ) : null; })()}
                       </div>
                       <div className="flex items-center gap-1">
                         <button
