@@ -125,8 +125,13 @@ function buildRows(
 
   for (let i = 0; i < sheet.rows.length; i++) {
     const r = sheet.rows[i];
-    const handle = (idx("handle") >= 0 ? r[idx("handle")] : "").replace(/^@/, "").trim();
-    if (!handle) { errors.push(`Row ${i + 2}: missing handle`); continue; }
+    const rawHandle = (idx("handle") >= 0 ? r[idx("handle")] : "").replace(/^@/, "").trim();
+    const rawName = idx("displayName") >= 0 ? r[idx("displayName")].trim() : "";
+
+    // If no handle, fall back to a slug of the display name so name-only rows still import.
+    // The user can edit the handle later via the Edit button.
+    const handle = rawHandle || rawName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    if (!handle) { errors.push(`Row ${i + 2}: no handle or name — skipped`); continue; }
 
     const platformRaw = idx("platform") >= 0 ? r[idx("platform")] : "";
     const platform = normalisePlatform(platformRaw);
@@ -414,7 +419,7 @@ export function ImportProspectsModal({
                 </div>
                 {result.errors.length > 0 && (
                   <div className="px-4 py-2.5 text-xs">
-                    <p className="text-status-red font-medium mb-1">{result.errors.length} rows skipped (missing handle or platform)</p>
+                    <p className="text-status-red font-medium mb-1">{result.errors.length} rows skipped (no handle and no name)</p>
                     <ul className="space-y-0.5 text-text-muted">
                       {result.errors.slice(0, 5).map((e, i) => (
                         <li key={i}>Row {e.row} (@{e.handle}): {e.reason}</li>
