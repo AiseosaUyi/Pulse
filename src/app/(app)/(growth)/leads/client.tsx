@@ -19,6 +19,9 @@ import {
   MessagesSquare,
   Upload,
   Pencil,
+  CheckSquare,
+  Square,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +30,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useDialogs } from "@/components/ui/Dialog";
 import {
   bulkQualifyNewProspects,
+  bulkDeleteProspects,
+  bulkUpdateProspectStatus,
   createProspect,
   deleteProspect,
   draftProspectDm,
@@ -164,6 +169,8 @@ export function OutboundClient({
     "all"
   );
   const [sortBy, setSortBy] = useState<"updated" | "followup">("updated");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkPending, startBulk] = useTransition();
 
   const openThreadPanel = useCallback((prospect: ProspectRecord) => {
     setThreadPanelProspect(prospect);
@@ -205,6 +212,36 @@ export function OutboundClient({
     }
     return base;
   }, [prospects, statusFilter, sortBy]);
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const toggleSelectAll = () =>
+    setSelectedIds(prev => prev.size === filtered.length ? new Set() : new Set(filtered.map(p => p.id)));
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkDelete = () => {
+    const ids = [...selectedIds];
+    startBulk(async () => {
+      const res = await bulkDeleteProspects(tenantSlug, ids);
+      if (res.success) {
+        setProspects(prev => prev.filter(p => !ids.includes(p.id)));
+        clearSelection();
+      }
+    });
+  };
+
+  const handleBulkStatus = (status: ProspectStatus) => {
+    const ids = [...selectedIds];
+    startBulk(async () => {
+      const res = await bulkUpdateProspectStatus(tenantSlug, ids, status);
+      if (res.success) {
+        setProspects(prev => prev.map(p => ids.includes(p.id) ? { ...p, status } : p));
+        clearSelection();
+      }
+    });
+  };
 
   const updateProspect = (updated: ProspectRecord) => {
     setProspects((prev) =>
@@ -457,6 +494,47 @@ export function OutboundClient({
               />
             </div>
 
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-2 flex-wrap px-3 py-2 rounded-xl bg-primary-500/5 border border-primary-500/20 animate-fade-scale-in">
+                <span className="text-xs font-semibold text-primary-500">{selectedIds.size} selected</span>
+                <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => handleBulkStatus("qualified")}
+                    disabled={bulkPending}
+                    className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border border-status-green/30 bg-status-green/10 text-status-green hover:bg-status-green/20 transition-colors disabled:opacity-50"
+                  >
+                    {bulkPending ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                    Mark qualified
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkStatus("dismissed")}
+                    disabled={bulkPending}
+                    className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border border-border bg-sidebar text-text-muted hover:text-foreground hover:bg-sidebar/80 transition-colors disabled:opacity-50"
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkDelete}
+                    disabled={bulkPending}
+                    className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border border-status-red/30 bg-status-red/5 text-status-red hover:bg-status-red/10 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 size={11} />
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    className="p-1 rounded text-text-muted hover:text-foreground"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {filtered.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border p-10 text-center">
                 <p className="text-foreground font-semibold">
@@ -475,18 +553,40 @@ export function OutboundClient({
               </div>
             ) : (
               <ul className="divide-y divide-border/30 rounded-xl border border-border bg-card overflow-hidden">
+                <li className="px-4 py-2 border-b border-border/40 bg-sidebar/30">
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
+                    className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-foreground"
+                  >
+                    {selectedIds.size === filtered.length && filtered.length > 0
+                      ? <CheckSquare size={13} className="text-primary-500" />
+                      : <Square size={13} />}
+                    {selectedIds.size === filtered.length && filtered.length > 0 ? "Deselect all" : `Select all (${filtered.length})`}
+                  </button>
+                </li>
                 {filtered.map((p) => (
                   <li
                     key={p.id}
                     id={`prospect-${p.id}`}
                     className={`px-4 py-3 cursor-pointer transition-colors ${
-                      selectedProspectId === p.id
+                      selectedIds.has(p.id)
+                        ? "bg-primary-500/5"
+                        : selectedProspectId === p.id
                         ? "bg-primary-500/5"
                         : "hover:bg-sidebar/40"
                     }`}
                     onClick={() => setSelectedProspectId(p.id)}
                   >
                     <div className="flex items-center gap-3 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); toggleSelect(p.id); }}
+                        className="shrink-0 text-text-muted hover:text-primary-500"
+                        aria-label={selectedIds.has(p.id) ? "Deselect" : "Select"}
+                      >
+                        {selectedIds.has(p.id) ? <CheckSquare size={14} className="text-primary-500" /> : <Square size={14} />}
+                      </button>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-foreground">

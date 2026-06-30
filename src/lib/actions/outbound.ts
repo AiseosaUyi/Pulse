@@ -417,6 +417,40 @@ export async function updateProspect(
   return { success: true };
 }
 
+export async function bulkDeleteProspects(
+  tenantSlug: string,
+  ids: string[]
+): Promise<ActionResult<{ deleted: number }>> {
+  if (!ids.length) return { success: true, deleted: 0 };
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from("prospects")
+    .delete({ count: "exact" })
+    .eq("tenant_slug", tenantSlug)
+    .in("id", ids);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/leads");
+  return { success: true, deleted: count ?? ids.length };
+}
+
+export async function bulkUpdateProspectStatus(
+  tenantSlug: string,
+  ids: string[],
+  status: ProspectStatus
+): Promise<ActionResult<{ updated: number }>> {
+  if (!ids.length) return { success: true, updated: 0 };
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from("prospects")
+    .update({ status, last_touched_at: new Date().toISOString() })
+    .eq("tenant_slug", tenantSlug)
+    .in("id", ids)
+    .select("id");
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/leads");
+  return { success: true, updated: ids.length };
+}
+
 /**
  * Mark an inbound message read. Used when the operator opens the
  * conversation in the inbox.
