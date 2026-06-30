@@ -65,21 +65,26 @@ function prospectRowTo(row: ProspectRow): ProspectRecord {
 
 export async function listProspects(
   tenantSlug: string,
-  filter: { status?: ProspectStatus | "all"; limit?: number } = {}
-): Promise<ProspectRecord[]> {
+  filter: { status?: ProspectStatus | "all"; page?: number; pageSize?: number } = {}
+): Promise<{ data: ProspectRecord[]; total: number }> {
   const supabase = await createClient();
+  const pageSize = filter.pageSize ?? 50;
+  const page = filter.page ?? 0;
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+
   let query = supabase
     .from("prospects")
-    .select("*")
+    .select("*", { count: "exact" })
     .eq("tenant_slug", tenantSlug)
     .order("updated_at", { ascending: false })
-    .limit(filter.limit ?? 1000);
+    .range(from, to);
   if (filter.status && filter.status !== "all") {
     query = query.eq("status", filter.status);
   }
-  const { data, error } = await query;
-  if (error || !data) return [];
-  return (data as ProspectRow[]).map(prospectRowTo);
+  const { data, error, count } = await query;
+  if (error || !data) return { data: [], total: 0 };
+  return { data: (data as ProspectRow[]).map(prospectRowTo), total: count ?? 0 };
 }
 
 export async function getProspect(

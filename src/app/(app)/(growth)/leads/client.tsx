@@ -32,6 +32,7 @@ import {
   bulkQualifyNewProspects,
   bulkDeleteProspects,
   bulkUpdateProspectStatus,
+  fetchProspectsPage,
   createProspect,
   deleteProspect,
   draftProspectDm,
@@ -118,9 +119,12 @@ function temporalLine(p: ProspectRecord): { text: string; cls: string } | null {
   return null;
 }
 
+const PAGE_SIZE = 50;
+
 export function OutboundClient({
   tenantSlug,
   initialProspects,
+  totalProspects,
   initialInbox,
   searches,
   initialDmsByProspect,
@@ -130,6 +134,7 @@ export function OutboundClient({
 }: {
   tenantSlug: string;
   initialProspects: ProspectRecord[];
+  totalProspects: number;
   initialInbox: InboundMessageRecord[];
   searches: ProspectSearchRecord[];
   initialDmsByProspect: Array<[string, OutboundDmRecord[]]>;
@@ -171,6 +176,10 @@ export function OutboundClient({
   const [sortBy, setSortBy] = useState<"updated" | "followup">("updated");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkPending, startBulk] = useTransition();
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(totalProspects);
+  const [pageLoading, startPageLoad] = useTransition();
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const openThreadPanel = useCallback((prospect: ProspectRecord) => {
     setThreadPanelProspect(prospect);
@@ -197,7 +206,7 @@ export function OutboundClient({
   }, [deeplinkProspectId]);
 
   const filtered = useMemo(() => {
-    const base = statusFilter === "all" ? prospects : prospects.filter((p) => p.status === statusFilter);
+    const base = prospects; // status filtering is server-side per page
     if (sortBy === "followup") {
       const urgency = (p: ProspectRecord): number => {
         if (p.status === "replied") return 0;
@@ -211,7 +220,7 @@ export function OutboundClient({
       return [...base].sort((a, b) => urgency(a) - urgency(b));
     }
     return base;
-  }, [prospects, statusFilter, sortBy]);
+  }, [prospects, sortBy]);
 
   const toggleSelect = (id: string) =>
     setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -220,6 +229,22 @@ export function OutboundClient({
     setSelectedIds(prev => prev.size === filtered.length ? new Set() : new Set(filtered.map(p => p.id)));
 
   const clearSelection = () => setSelectedIds(new Set());
+
+  const goToPage = (nextPage: number, filterOverride?: string) => {
+    const activeFilter = filterOverride ?? statusFilter;
+    startPageLoad(async () => {
+      const res = await fetchProspectsPage(tenantSlug, nextPage, activeFilter === "all" ? undefined : activeFilter);
+      setProspects(res.data);
+      setTotalCount(res.total);
+      setPage(nextPage);
+      setSelectedIds(new Set());
+    });
+  };
+
+  const handleStatusChange = (val: ProspectStatus | "all") => {
+    setStatusFilter(val);
+    goToPage(0, val);
+  };
 
   const handleBulkDelete = () => {
     const ids = [...selectedIds];
@@ -402,7 +427,7 @@ export function OutboundClient({
               label: "Today",
               count: todayUrgentCount,
             },
-            { key: "pipeline" as const, label: "Pipeline", count: prospects.length },
+            { key: "pipeline" as const, label: "Pipeline", count: totalCount },
             {
               key: "inbox" as const,
               label: "Inbox",
@@ -465,7 +490,7 @@ export function OutboundClient({
         <div className="grid lg:grid-cols-[1fr_420px] gap-4 items-start">
           <div className="space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <StatusFilter value={statusFilter} onChange={setStatusFilter} />
+              <StatusFilter value={statusFilter} onChange={handleStatusChange} />
               <button
                 type="button"
                 onClick={() => setSortBy(s => s === "updated" ? "followup" : "updated")}
@@ -659,6 +684,46 @@ export function OutboundClient({
                   </li>
                 ))}
               </ul>
+            )}
+
+            {totalPages > 1 && (
+              <div className={`flex items-center justify-between gap-2 pt-1 transition-opacity ${pageLoading ? "opacity-50 pointer-events-none" : ""}`}>
+                <span className="text-xs text-text-muted">
+                  Page {page + 1} of {totalPages} · {totalCount} prospects
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => goToPage(page - 1)}
+                    disabled={page === 0}
+                    className="px-3 py-1.5 text-xs rounded-full border border-border text-text-muted hover:text-foreground hover:bg-sidebar disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ← Prev
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i).map(i => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => goToPage(i)}
+                      className={`w-7 h-7 text-xs rounded-full border transition-colors ${
+                        i === page
+                          ? "bg-primary-500 text-white border-primary-500"
+                          : "border-border text-text-muted hover:text-foreground hover:bg-sidebar"
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => goToPage(page + 1)}
+                    disabled={page >= totalPages - 1}
+                    className="px-3 py-1.5 text-xs rounded-full border border-border text-text-muted hover:text-foreground hover:bg-sidebar disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 

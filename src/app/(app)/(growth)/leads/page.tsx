@@ -30,9 +30,9 @@ export default async function LeadsPage() {
     );
   }
 
-  const [prospects, searches, inbox, kpis, dmsByProspect, templates, todayData, campaigns] =
+  const [prospectsResult, searches, inbox, kpis, dmsByProspect, templates, todayData, campaigns] =
     await Promise.all([
-      listProspects(tenant.slug, { limit: 100 }),
+      listProspects(tenant.slug, { page: 0, pageSize: 50 }),
       listSearches(tenant.slug),
       listInbox(tenant.slug, 30),
       countOutboundKpis(tenant.slug),
@@ -73,7 +73,8 @@ export default async function LeadsPage() {
 
       <OutboundClient
         tenantSlug={tenant.slug}
-        initialProspects={prospects}
+        initialProspects={prospectsResult.data}
+        totalProspects={prospectsResult.total}
         initialInbox={inbox}
         searches={searches}
         initialDmsByProspect={dms}

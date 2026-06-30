@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getTenant } from "@/lib/services/tenants";
 import { getBrandContext } from "@/lib/ai/brand-positioning";
 import { getOutboundFilters } from "@/lib/server/outbound-filters";
-import { getProspect } from "@/lib/services/outbound";
+import { getProspect, listProspects } from "@/lib/services/outbound";
 import {
   draftOutboundDmAi,
   qualifyProspectAi,
@@ -415,6 +415,20 @@ export async function updateProspect(
   if (error) return { success: false, error: error.message };
   revalidatePath("/leads");
   return { success: true };
+}
+
+export async function fetchProspectsPage(
+  tenantSlug: string,
+  page: number,
+  statusFilter?: string
+): Promise<{ data: import("@/lib/types/outbound").ProspectRecord[]; total: number }> {
+  const user = await getCurrentUser();
+  if (!user) return { data: [], total: 0 };
+  return listProspects(tenantSlug, {
+    page,
+    pageSize: 50,
+    status: (statusFilter === "all" ? undefined : statusFilter) as import("@/lib/types/outbound").ProspectStatus | undefined,
+  });
 }
 
 export async function bulkDeleteProspects(
