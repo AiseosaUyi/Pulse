@@ -81,6 +81,11 @@ export interface ProspectRecord {
   qualificationReason: string | null;
   status: ProspectStatus;
   notes: string | null;
+  category: string | null;
+  location: string | null;
+  verifiedName: string | null;
+  eventTitle: string | null;
+  lastReachoutAt: string | null;
   lastTouchedAt: string | null;
   createdAt: string;
   updatedAt: string;

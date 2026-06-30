@@ -15,10 +15,15 @@ const FIELDS = [
   { key: "handle", label: "Handle / Username", required: true },
   { key: "platform", label: "Platform", required: true },
   { key: "displayName", label: "Display name", required: false },
+  { key: "verifiedName", label: "Verified / account name", required: false },
+  { key: "eventTitle", label: "Event title", required: false },
+  { key: "category", label: "Category", required: false },
+  { key: "location", label: "Location", required: false },
   { key: "bio", label: "Bio", required: false },
   { key: "notes", label: "Notes", required: false },
   { key: "profileUrl", label: "Profile URL", required: false },
   { key: "followerCount", label: "Follower count", required: false },
+  { key: "lastReachoutDate", label: "Last reachout date", required: false },
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number]["key"];
@@ -33,13 +38,18 @@ interface ParsedSheet {
 // ── Guess which header likely maps to a field ────────────────────────────────
 
 const GUESSES: Record<FieldKey, string[]> = {
-  handle: ["handle", "username", "user", "@", "account", "profile", "screen_name"],
+  handle: ["handle", "username", "user", "@", "account", "screen_name"],
   platform: ["platform", "network", "social", "channel", "source"],
-  displayName: ["name", "display", "full name", "fullname", "display_name"],
+  displayName: ["organizer", "display", "full name", "fullname", "display_name", "event name"],
+  verifiedName: ["verified", "account name", "real name", "verified name"],
+  eventTitle: ["event title", "title", "event name"],
+  category: ["category", "type", "niche", "genre", "industry"],
+  location: ["location", "city", "region", "area", "state"],
   bio: ["bio", "description", "about"],
-  notes: ["notes", "note", "comment", "remarks", "memo"],
+  notes: ["notes", "note", "comment", "remarks", "memo", "response", "latest response"],
   profileUrl: ["url", "link", "profile url", "profile_url", "profileurl"],
   followerCount: ["followers", "follower", "follower_count", "followers_count"],
+  lastReachoutDate: ["last reachout", "last reach out", "last contact", "last contacted", "reached out", "last outreach", "outreach date"],
 };
 
 function guessMapping(headers: string[]): Record<FieldKey, string> {
@@ -136,17 +146,29 @@ function buildRows(
     const platformRaw = idx("platform") >= 0 ? r[idx("platform")] : "";
     const platform = normalisePlatform(platformRaw);
 
+    const str = (field: FieldKey) => idx(field) >= 0 ? r[idx(field)]?.trim() || null : null;
+
+    // Parse date string to ISO; returns null if unparseable
+    const rawDate = str("lastReachoutDate");
+    let lastReachoutAt: string | null = null;
+    if (rawDate) {
+      const d = new Date(rawDate);
+      if (!isNaN(d.getTime())) lastReachoutAt = d.toISOString();
+    }
+
     rows.push({
       handle,
       platform,
-      displayName: idx("displayName") >= 0 ? r[idx("displayName")] || null : null,
-      bio: idx("bio") >= 0 ? r[idx("bio")] || null : null,
-      notes: idx("notes") >= 0 ? r[idx("notes")] || null : null,
-      profileUrl: idx("profileUrl") >= 0 ? r[idx("profileUrl")] || null : null,
-      followerCount:
-        idx("followerCount") >= 0
-          ? parseInt(r[idx("followerCount")], 10) || null
-          : null,
+      displayName: str("displayName"),
+      verifiedName: str("verifiedName"),
+      eventTitle: str("eventTitle"),
+      category: str("category"),
+      location: str("location"),
+      bio: str("bio"),
+      notes: str("notes"),
+      profileUrl: str("profileUrl"),
+      followerCount: idx("followerCount") >= 0 ? parseInt(r[idx("followerCount")], 10) || null : null,
+      lastReachoutAt,
     });
   }
   return { rows, errors };

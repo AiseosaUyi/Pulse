@@ -22,6 +22,9 @@ import {
   CheckSquare,
   Square,
   X,
+  Calendar,
+  MapPin,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +44,7 @@ import {
   updateOutboundDm,
   updateProspectStatus,
   markInboundRead,
+  updateProspect as updateProspectAction,
 } from "@/lib/actions/outbound";
 import {
   createProspectSearch,
@@ -102,13 +106,15 @@ function temporalLine(p: ProspectRecord): { text: string; cls: string } | null {
     return `${d}d ago`;
   };
   if (p.status === "replied") {
-    return { text: `● Replied${p.lastTouchedAt ? ` ${rel(p.lastTouchedAt)}` : ""}`, cls: "text-status-green" };
+    const replyRef = p.lastReachoutAt ?? p.lastTouchedAt;
+    return { text: `● Replied${replyRef ? ` ${rel(replyRef)}` : ""}`, cls: "text-status-green" };
   }
-  if (p.status === "sent" && p.lastTouchedAt) {
-    const days = (NOW_MS - new Date(p.lastTouchedAt).getTime()) / 86_400_000;
+  if (p.status === "sent" && (p.lastReachoutAt || p.lastTouchedAt)) {
+    const ref = p.lastReachoutAt ?? p.lastTouchedAt!;
+    const days = (NOW_MS - new Date(ref).getTime()) / 86_400_000;
     return days > 7
-      ? { text: `⚠ Sent ${rel(p.lastTouchedAt)} · follow up`, cls: "text-status-yellow" }
-      : { text: `Sent ${rel(p.lastTouchedAt)}`, cls: "text-text-muted" };
+      ? { text: `⚠ Sent ${rel(ref)} · follow up`, cls: "text-status-yellow" }
+      : { text: `Sent ${rel(ref)}`, cls: "text-text-muted" };
   }
   if ((p.status === "drafted" || p.status === "approved") && p.lastTouchedAt) {
     return { text: "Draft ready · not sent", cls: "text-status-yellow" };
@@ -120,6 +126,63 @@ function temporalLine(p: ProspectRecord): { text: string; cls: string } | null {
 }
 
 const PAGE_SIZE = 50;
+
+function ProspectTemporalLine({
+  p,
+  tenantSlug,
+  onUpdate,
+}: {
+  p: ProspectRecord;
+  tenantSlug: string;
+  onUpdate: (updated: ProspectRecord) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, startSave] = useTransition();
+  const t = temporalLine(p);
+
+  const handleDateChange = (val: string) => {
+    setEditing(false);
+    if (!val) return;
+    const iso = new Date(val).toISOString();
+    startSave(async () => {
+      const res = await updateProspectAction(tenantSlug, p.id, { lastReachoutAt: iso });
+      if (res.success) onUpdate({ ...p, lastReachoutAt: iso });
+    });
+  };
+
+  const dateStr = p.lastReachoutAt
+    ? p.lastReachoutAt.slice(0, 10)
+    : p.lastTouchedAt?.slice(0, 10) ?? "";
+
+  return (
+    <div className="flex items-center gap-1.5 mt-1">
+      {t && <span className={`text-[11px] ${t.cls}`}>{t.text}</span>}
+      {editing ? (
+        <input
+          type="date"
+          autoFocus
+          defaultValue={dateStr}
+          onBlur={e => handleDateChange(e.target.value)}
+          onChange={e => { if (e.target.value) handleDateChange(e.target.value); }}
+          onClick={e => e.stopPropagation()}
+          className="text-[11px] bg-card border border-primary-500/30 rounded px-1.5 py-0.5 text-foreground outline-none"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); setEditing(true); }}
+          title="Set last reachout date"
+          className={`inline-flex items-center gap-0.5 text-[11px] transition-colors ${saving ? "opacity-50" : "text-text-muted/50 hover:text-primary-500"}`}
+        >
+          <Calendar size={10} />
+          {p.lastReachoutAt
+            ? <span>{new Date(p.lastReachoutAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+            : <span className="opacity-0 group-hover:opacity-100">set date</span>}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function OutboundClient({
   tenantSlug,
@@ -633,19 +696,36 @@ export function OutboundClient({
                             </span>
                           )}
                         </div>
-                        {p.displayName && (
+                        {(p.displayName || p.verifiedName) && (
                           <p className="text-xs text-text-muted mt-0.5">
-                            {p.displayName}
+                            {p.verifiedName ? `${p.verifiedName}${p.displayName && p.displayName !== p.verifiedName ? ` · ${p.displayName}` : ""}` : p.displayName}
                           </p>
+                        )}
+                        {(p.category || p.location || p.eventTitle) && (
+                          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                            {p.eventTitle && (
+                              <span className="text-[11px] text-text-muted italic">{p.eventTitle}</span>
+                            )}
+                            {p.category && (
+                              <span className="inline-flex items-center gap-0.5 text-[11px] text-text-muted">
+                                <Tag size={9} />
+                                {p.category}
+                              </span>
+                            )}
+                            {p.location && (
+                              <span className="inline-flex items-center gap-0.5 text-[11px] text-text-muted">
+                                <MapPin size={9} />
+                                {p.location}
+                              </span>
+                            )}
+                          </div>
                         )}
                         {p.signalSummary && (
                           <p className="text-xs text-text-secondary mt-0.5 line-clamp-1">
                             {p.signalSummary}
                           </p>
                         )}
-                        {(() => { const t = temporalLine(p); return t ? (
-                          <p className={`text-[11px] mt-1 ${t.cls}`}>{t.text}</p>
-                        ) : null; })()}
+                        <ProspectTemporalLine p={p} tenantSlug={tenantSlug} onUpdate={updateProspect} />
                       </div>
                       <div className="flex items-center gap-1">
                         <button

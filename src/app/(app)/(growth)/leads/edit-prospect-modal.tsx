@@ -22,11 +22,18 @@ export function EditProspectModal({
   const [handle, setHandle] = useState(prospect.handle);
   const [platform, setPlatform] = useState<OutboundPlatform>(prospect.platform);
   const [displayName, setDisplayName] = useState(prospect.displayName ?? "");
+  const [verifiedName, setVerifiedName] = useState(prospect.verifiedName ?? "");
+  const [eventTitle, setEventTitle] = useState(prospect.eventTitle ?? "");
+  const [category, setCategory] = useState(prospect.category ?? "");
+  const [location, setLocation] = useState(prospect.location ?? "");
   const [bio, setBio] = useState(prospect.bio ?? "");
   const [notes, setNotes] = useState(prospect.notes ?? "");
   const [profileUrl, setProfileUrl] = useState(prospect.profileUrl ?? "");
   const [followerCount, setFollowerCount] = useState(
     prospect.followerCount != null ? String(prospect.followerCount) : ""
+  );
+  const [lastReachoutAt, setLastReachoutAt] = useState(
+    prospect.lastReachoutAt ? prospect.lastReachoutAt.slice(0, 10) : ""
   );
   const [error, setError] = useState<string | null>(null);
   const [isPending, start] = useTransition();
@@ -39,10 +46,15 @@ export function EditProspectModal({
         handle: handle.trim(),
         platform,
         displayName: displayName || null,
+        verifiedName: verifiedName || null,
+        eventTitle: eventTitle || null,
+        category: category || null,
+        location: location || null,
         bio: bio || null,
         notes: notes || null,
         profileUrl: profileUrl || null,
         followerCount: followerCount ? parseInt(followerCount, 10) || null : null,
+        lastReachoutAt: lastReachoutAt ? new Date(lastReachoutAt).toISOString() : null,
       };
       const res = await updateProspect(tenantSlug, prospect.id, patch);
       if (!res.success) { setError(res.error ?? "Save failed"); return; }
@@ -104,7 +116,62 @@ export function EditProspectModal({
               type="text"
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
-              placeholder="Full name"
+              placeholder="Organizer / event name"
+              className="w-full text-sm bg-sidebar border border-border rounded-lg px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-primary-500/30"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">Verified / account name</label>
+            <input
+              type="text"
+              value={verifiedName}
+              onChange={e => setVerifiedName(e.target.value)}
+              placeholder="Real name on verified badge"
+              className="w-full text-sm bg-sidebar border border-border rounded-lg px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-primary-500/30"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">Event title</label>
+            <input
+              type="text"
+              value={eventTitle}
+              onChange={e => setEventTitle(e.target.value)}
+              placeholder="Specific event name for personalised DMs"
+              className="w-full text-sm bg-sidebar border border-border rounded-lg px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-primary-500/30"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">Category</label>
+              <input
+                type="text"
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                placeholder="e.g. Food festival"
+                className="w-full text-sm bg-sidebar border border-border rounded-lg px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-primary-500/30"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">Location</label>
+              <input
+                type="text"
+                value={location}
+                onChange={e => setLocation(e.target.value)}
+                placeholder="e.g. Lagos"
+                className="w-full text-sm bg-sidebar border border-border rounded-lg px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-primary-500/30"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">Last reachout date</label>
+            <input
+              type="date"
+              value={lastReachoutAt}
+              onChange={e => setLastReachoutAt(e.target.value)}
               className="w-full text-sm bg-sidebar border border-border rounded-lg px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-primary-500/30"
             />
           </div>

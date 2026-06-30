@@ -13,6 +13,11 @@ export interface ImportProspectRow {
   notes?: string | null;
   profileUrl?: string | null;
   followerCount?: number | null;
+  category?: string | null;
+  location?: string | null;
+  verifiedName?: string | null;
+  eventTitle?: string | null;
+  lastReachoutAt?: string | null;
 }
 
 export interface ImportResult {
@@ -101,6 +106,11 @@ export async function importProspects(
           notes: row.notes ?? null,
           profile_url: row.profileUrl ?? null,
           follower_count: row.followerCount ?? null,
+          category: row.category ?? null,
+          location: row.location ?? null,
+          verified_name: row.verifiedName ?? null,
+          event_title: row.eventTitle ?? null,
+          last_reachout_at: row.lastReachoutAt ?? null,
           status: "new",
           signal_data: {},
           created_at: now,
@@ -133,6 +143,11 @@ export async function importProspects(
       if (row.notes) patch.notes = row.notes;
       if (row.profileUrl) patch.profile_url = row.profileUrl;
       if (row.followerCount != null) patch.follower_count = row.followerCount;
+      if (row.category) patch.category = row.category;
+      if (row.location) patch.location = row.location;
+      if (row.verifiedName) patch.verified_name = row.verifiedName;
+      if (row.eventTitle) patch.event_title = row.eventTitle;
+      if (row.lastReachoutAt) patch.last_reachout_at = row.lastReachoutAt;
 
       const { error } = await admin
         .from("prospects")

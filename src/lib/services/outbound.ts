@@ -34,6 +34,11 @@ type ProspectRow = Omit<
   signal_data: Record<string, unknown> | null;
   qualification_score: number | null;
   qualification_reason: string | null;
+  category: string | null;
+  location: string | null;
+  verified_name: string | null;
+  event_title: string | null;
+  last_reachout_at: string | null;
   last_touched_at: string | null;
   created_at: string;
   updated_at: string;
@@ -57,6 +62,11 @@ function prospectRowTo(row: ProspectRow): ProspectRecord {
     qualificationReason: row.qualification_reason,
     status: row.status,
     notes: row.notes,
+    category: row.category,
+    location: row.location,
+    verifiedName: row.verified_name,
+    eventTitle: row.event_title,
+    lastReachoutAt: row.last_reachout_at,
     lastTouchedAt: row.last_touched_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

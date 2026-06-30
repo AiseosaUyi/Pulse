@@ -96,6 +96,11 @@ export async function createProspect(
       qualificationReason: data.qualification_reason,
       status: data.status,
       notes: data.notes,
+      category: data.category ?? null,
+      location: data.location ?? null,
+      verifiedName: data.verified_name ?? null,
+      eventTitle: data.event_title ?? null,
+      lastReachoutAt: data.last_reachout_at ?? null,
       lastTouchedAt: data.last_touched_at,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
@@ -394,6 +399,11 @@ export async function updateProspect(
     notes?: string | null;
     profileUrl?: string | null;
     followerCount?: number | null;
+    category?: string | null;
+    location?: string | null;
+    verifiedName?: string | null;
+    eventTitle?: string | null;
+    lastReachoutAt?: string | null;
   }
 ): Promise<ActionResult> {
   const supabase = await createClient();
@@ -407,6 +417,11 @@ export async function updateProspect(
   if (patch.notes !== undefined) update.notes = patch.notes;
   if (patch.profileUrl !== undefined) update.profile_url = patch.profileUrl;
   if (patch.followerCount !== undefined) update.follower_count = patch.followerCount;
+  if (patch.category !== undefined) update.category = patch.category;
+  if (patch.location !== undefined) update.location = patch.location;
+  if (patch.verifiedName !== undefined) update.verified_name = patch.verifiedName;
+  if (patch.eventTitle !== undefined) update.event_title = patch.eventTitle;
+  if (patch.lastReachoutAt !== undefined) update.last_reachout_at = patch.lastReachoutAt;
   const { error } = await supabase
     .from("prospects")
     .update(update)
