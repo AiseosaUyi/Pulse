@@ -19,7 +19,7 @@ import {
   CheckCircle2,
   Clock,
   MessageCircle,
-  Send,
+  Pencil,
   AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -79,7 +79,7 @@ function relativeTime(iso: string): string {
 function CampaignTagsInPanel({
   prospectId,
   tenantSlug,
-  campaigns,
+  campaigns: initialCampaigns,
   taggedIds: initialTaggedIds,
 }: {
   prospectId: string;
@@ -88,6 +88,7 @@ function CampaignTagsInPanel({
   taggedIds: string[];
 }) {
   const [open, setOpen] = useState(false);
+  const [campaigns, setCampaigns] = useState(initialCampaigns);
   const [taggedIds, setTaggedIds] = useState(initialTaggedIds);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -128,10 +129,25 @@ function CampaignTagsInPanel({
     if (!name) return;
     setCreating(true);
     const res = await createOutreachCampaign(tenantSlug, { name });
-    setCreating(false);
     if (res.success) {
+      const now = new Date().toISOString();
+      const newCampaign: OutreachCampaignRecord = {
+        id: res.id,
+        tenantSlug,
+        name,
+        description: null,
+        business: null,
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      };
+      setCampaigns((prev) => [...prev, newCampaign]);
+      // Auto-tag the prospect with the newly created campaign
+      await tagProspectCampaign(prospectId, res.id);
+      setTaggedIds((prev) => [...prev, res.id]);
       setQuery("");
     }
+    setCreating(false);
   };
 
   const tagged = campaigns.filter((c) => taggedIds.includes(c.id));
@@ -246,15 +262,15 @@ function ThreadEventCard({
             {event.dmBody}
           </p>
           <div className="flex items-center gap-2 mt-1 justify-end">
-            <span className="text-[10px] text-text-muted">
+            <span className="text-xs text-text-muted">
               {relativeTime(event.createdAt)}
             </span>
             {event.dmVersion && event.dmVersion > 1 && (
-              <span className="text-[10px] text-text-muted">
+              <span className="text-xs text-text-muted">
                 v{event.dmVersion}
               </span>
             )}
-            <span className="text-[10px] text-text-muted capitalize">
+            <span className="text-xs text-text-muted capitalize">
               {event.dmStatus}
             </span>
           </div>
@@ -270,7 +286,7 @@ function ThreadEventCard({
           <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
             {event.messageBody}
           </p>
-          <p className="text-[10px] text-text-muted mt-1">
+          <p className="text-xs text-text-muted mt-1">
             {relativeTime(event.createdAt)}
           </p>
         </div>
@@ -285,7 +301,7 @@ function ThreadEventCard({
           <p className="text-xs text-text-muted italic leading-relaxed">
             {event.noteBody}
           </p>
-          <p className="text-[10px] text-text-muted mt-0.5">
+          <p className="text-xs text-text-muted mt-0.5">
             {formatDateTime(event.createdAt)}
           </p>
         </div>
@@ -316,26 +332,26 @@ function ThreadEventCard({
       <div className="rounded-xl border border-primary-500/20 bg-primary-500/5 p-3 space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
           <Sparkles size={12} className="text-primary-500 shrink-0" />
-          <span className="text-[10px] uppercase tracking-wide text-primary-500 font-semibold">
+          <span className="text-xs uppercase tracking-wide text-primary-500 font-semibold">
             AI Analysis
           </span>
-          <span className="text-[10px] text-text-muted ml-auto">
+          <span className="text-xs text-text-muted ml-auto">
             {relativeTime(event.createdAt)}
           </span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span
-            className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${STAGE_COLORS[a.conversationStage]}`}
+            className={`text-xs uppercase tracking-wide px-1.5 py-0.5 rounded ${STAGE_COLORS[a.conversationStage]}`}
           >
             {STAGE_LABELS[a.conversationStage]}
           </span>
           <span
-            className={`text-[10px] font-medium ${RISK_COLORS[a.riskLevel]}`}
+            className={`text-xs font-medium ${RISK_COLORS[a.riskLevel]}`}
           >
             {a.riskLevel} risk
           </span>
           {a.objectionDetected && a.objectionCategory && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-yellow/10 text-status-yellow">
+            <span className="text-xs px-1.5 py-0.5 rounded bg-status-yellow/10 text-status-yellow">
               {OBJECTION_LABELS[a.objectionCategory]}
             </span>
           )}
@@ -355,7 +371,7 @@ function ThreadEventCard({
           </div>
         )}
         {a.costUsd > 0 && (
-          <p className="text-[10px] text-text-muted pt-1">
+          <p className="text-xs text-text-muted pt-1">
             ${a.costUsd.toFixed(4)} · {a.model ?? "gpt-4.1-mini"}
           </p>
         )}
@@ -405,7 +421,7 @@ function AnalysisTab({
       </div>
 
       <div>
-        <p className="text-[10px] uppercase tracking-wide text-text-muted mb-1">
+        <p className="text-xs uppercase tracking-wide text-text-muted mb-1">
           AI Summary
         </p>
         <p className="text-sm text-foreground leading-relaxed">
@@ -415,7 +431,7 @@ function AnalysisTab({
 
       {analysis.recommendedFollowUpAt && (
         <div className="rounded-lg border border-border/60 p-3">
-          <p className="text-[10px] uppercase tracking-wide text-text-muted mb-1">
+          <p className="text-xs uppercase tracking-wide text-text-muted mb-1">
             Recommended follow-up
           </p>
           <div className="flex items-center gap-1.5 text-sm text-foreground">
@@ -438,19 +454,19 @@ function AnalysisTab({
       {(analysis.gruveRelevant || analysis.sippoyRelevant) && (
         <div className="flex gap-2 flex-wrap">
           {analysis.gruveRelevant && (
-            <span className="text-[10px] px-2 py-0.5 rounded bg-primary-500/10 text-primary-500">
+            <span className="text-xs px-2 py-0.5 rounded bg-primary-500/10 text-primary-500">
               Gruve relevant
             </span>
           )}
           {analysis.sippoyRelevant && (
-            <span className="text-[10px] px-2 py-0.5 rounded bg-primary-500/10 text-primary-500">
+            <span className="text-xs px-2 py-0.5 rounded bg-primary-500/10 text-primary-500">
               Sippoy relevant
             </span>
           )}
         </div>
       )}
 
-      <p className="text-[10px] text-text-muted">
+      <p className="text-xs text-text-muted">
         Analyzed {formatDateTime(analysis.createdAt)} · {analysis.model ?? "gpt-4.1-mini"}
       </p>
     </div>
@@ -532,7 +548,7 @@ function FollowUpControls({
           <ChevronDown size={10} />
         </button>
         {snoozeOpen && (
-          <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-lg border border-border bg-card shadow-lg py-1">
+          <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-lg border border-border bg-card shadow-lg py-1 animate-popover-in">
             {SNOOZE_OPTIONS.map((o) => (
               <button
                 key={o.days}
@@ -623,7 +639,7 @@ function FollowUpControls({
           )}
         </button>
         {snoozeOpen && (
-          <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-lg border border-border bg-card shadow-lg py-1">
+          <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-lg border border-border bg-card shadow-lg py-1 animate-popover-in">
             {SNOOZE_OPTIONS.map((o) => (
               <button
                 key={o.days}
@@ -780,7 +796,7 @@ export function ProspectThreadPanel({
       <div
         role="dialog"
         aria-label={`Prospect thread: @${prospect.handle}`}
-        className="fixed right-0 inset-y-0 z-50 w-full sm:w-[560px] bg-card border-l border-border shadow-2xl flex flex-col"
+        className="fixed right-0 inset-y-0 z-50 w-full sm:w-[560px] bg-card border-l border-border shadow-2xl flex flex-col animate-slide-in-right"
       >
         {/* Sticky header */}
         <div className="shrink-0 px-4 pt-4 pb-3 border-b border-border/60 space-y-2">
@@ -789,10 +805,10 @@ export function ProspectThreadPanel({
               <h2 className="text-sm font-semibold text-foreground truncate">
                 @{prospect.handle}
               </h2>
-              <span className="text-[10px] uppercase tracking-wide text-text-muted shrink-0">
+              <span className="text-xs uppercase tracking-wide text-text-muted shrink-0">
                 {PLATFORM_LABELS[prospect.platform]}
               </span>
-              <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-sidebar text-text-muted shrink-0">
+              <span className="text-xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-sidebar text-text-muted shrink-0">
                 {STATUS_LABELS[prospect.status]}
               </span>
             </div>
@@ -815,12 +831,12 @@ export function ProspectThreadPanel({
             {latestAnalysis && (
               <>
                 <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded ${STAGE_COLORS[latestAnalysis.conversationStage]}`}
+                  className={`text-xs px-1.5 py-0.5 rounded ${STAGE_COLORS[latestAnalysis.conversationStage]}`}
                 >
                   {STAGE_LABELS[latestAnalysis.conversationStage]}
                 </span>
                 <span
-                  className={`text-[10px] font-medium ${RISK_COLORS[latestAnalysis.riskLevel]}`}
+                  className={`text-xs font-medium ${RISK_COLORS[latestAnalysis.riskLevel]}`}
                 >
                   {latestAnalysis.riskLevel} risk
                 </span>
@@ -868,7 +884,7 @@ export function ProspectThreadPanel({
             >
               {t.label}
               {t.count != null && t.count > 0 && (
-                <span className="ml-1 text-[10px] px-1.5 rounded-full bg-sidebar">
+                <span className="ml-1 text-xs px-1.5 rounded-full bg-sidebar">
                   {t.count}
                 </span>
               )}
@@ -922,7 +938,7 @@ export function ProspectThreadPanel({
                 <div className="space-y-2">
                   {thread.filter((e) => e.type === "note").length === 0 && (
                     <div className="flex flex-col items-center justify-center py-10 gap-2">
-                      <Send size={22} className="text-text-muted" />
+                      <Pencil size={22} className="text-text-muted" />
                       <p className="text-sm font-medium text-foreground">
                         No notes yet
                       </p>

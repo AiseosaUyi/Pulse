@@ -204,7 +204,7 @@ export async function getOutreachToday(
       .eq("tenant_slug", tenantSlug)
       .not("follow_up_at", "is", null)
       .lt("follow_up_at", todayStart)
-      .not("status", "in", '("closed_won","closed_lost","dismissed","unqualified")')
+      .not("status", "in", "(closed_won,closed_lost,dismissed,unqualified)")
       .order("follow_up_at", { ascending: true })
       .limit(30),
 
@@ -216,7 +216,7 @@ export async function getOutreachToday(
       .not("follow_up_at", "is", null)
       .gte("follow_up_at", todayStart)
       .lte("follow_up_at", todayEnd.toISOString())
-      .not("status", "in", '("closed_won","closed_lost","dismissed","unqualified")')
+      .not("status", "in", "(closed_won,closed_lost,dismissed,unqualified)")
       .order("follow_up_at", { ascending: true })
       .limit(30),
 

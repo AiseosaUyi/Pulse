@@ -17,6 +17,7 @@ import {
   Copy,
   Link as LinkIcon,
   MessagesSquare,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,7 @@ import type {
 } from "@/lib/types/outbound-templates";
 import { ProspectThreadPanel } from "./prospect-thread-panel";
 import { TodayView } from "./today-view";
+import { ImportProspectsModal } from "./import-prospects-modal";
 import type { OutreachTodayData } from "@/lib/services/outreach-intelligence";
 import type { OutreachCampaignRecord } from "@/lib/types/outreach-intelligence";
 
@@ -125,6 +127,7 @@ export function OutboundClient({
       null
   );
   const [threadPanelProspect, setThreadPanelProspect] = useState<ProspectRecord | null>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ProspectStatus | "all">(
@@ -287,6 +290,16 @@ export function OutboundClient({
           onClose={() => setThreadPanelProspect(null)}
         />
       )}
+      {importModalOpen && (
+        <ImportProspectsModal
+          tenantSlug={tenantSlug}
+          onClose={() => setImportModalOpen(false)}
+          onImported={(count) => {
+            setImportModalOpen(false);
+            if (count > 0) location.reload();
+          }}
+        />
+      )}
 
       <div className="flex items-center gap-1 mb-4 border-b border-border">
         {(
@@ -326,7 +339,7 @@ export function OutboundClient({
           >
             {t.label}
             {t.count > 0 && (
-              <span className={`ml-1.5 text-[10px] px-1.5 rounded-full ${
+              <span className={`ml-1.5 text-xs px-1.5 rounded-full ${
                 t.key === "today" && t.count > 0
                   ? "bg-status-red/15 text-status-red"
                   : "bg-sidebar"
@@ -361,6 +374,14 @@ export function OutboundClient({
             <div className="flex items-center gap-2 flex-wrap">
               <StatusFilter value={statusFilter} onChange={setStatusFilter} />
               <AddProspectQuickForm onSubmit={handleAddProspect} />
+              <button
+                type="button"
+                onClick={() => setImportModalOpen(true)}
+                className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-foreground px-2.5 py-1.5 rounded-full border border-border hover:bg-sidebar transition-colors"
+              >
+                <Upload size={12} />
+                Import
+              </button>
               <BulkQualifyButton tenantSlug={tenantSlug} prospects={prospects} />
               <CopyPrimaryTemplateButton
                 tenantSlug={tenantSlug}
@@ -404,18 +425,18 @@ export function OutboundClient({
                           <span className="text-sm font-semibold text-foreground">
                             @{p.handle}
                           </span>
-                          <span className="text-[10px] uppercase tracking-wide text-text-muted">
+                          <span className="text-xs uppercase tracking-wide text-text-muted">
                             {PLATFORM_LABELS[p.platform]}
                           </span>
                           <span
-                            className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                            className={`text-xs uppercase tracking-wide px-1.5 py-0.5 rounded ${
                               STATUS_TONE[p.status]
                             }`}
                           >
                             {STATUS_LABELS[p.status]}
                           </span>
                           {p.qualificationScore != null && (
-                            <span className="text-[10px] text-primary-500">
+                            <span className="text-xs text-primary-500">
                               {p.qualificationScore}/100
                             </span>
                           )}
@@ -880,11 +901,11 @@ function ProspectDetail({
           <h3 className="text-sm font-semibold text-foreground">
             @{prospect.handle}
           </h3>
-          <span className="text-[10px] uppercase tracking-wide text-text-muted">
+          <span className="text-xs uppercase tracking-wide text-text-muted">
             {PLATFORM_LABELS[prospect.platform]}
           </span>
           <span
-            className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${STATUS_TONE[prospect.status]}`}
+            className={`text-xs uppercase tracking-wide px-1.5 py-0.5 rounded ${STATUS_TONE[prospect.status]}`}
           >
             {STATUS_LABELS[prospect.status]}
           </span>
@@ -1039,7 +1060,7 @@ function ProspectDetail({
 
             {latestDm.followupBody && !editingDm && (
               <div className="pt-2 border-t border-border/30">
-                <p className="text-[10px] uppercase tracking-wide text-text-muted">
+                <p className="text-xs uppercase tracking-wide text-text-muted">
                   Follow-up if no reply in 3d
                 </p>
                 <p className="text-xs text-text-secondary mt-1 leading-relaxed">
@@ -1090,7 +1111,7 @@ function ProspectDetail({
                 </Button>
               )}
               {dms.length > 1 && (
-                <span className="text-[10px] text-text-muted ml-auto">
+                <span className="text-xs text-text-muted ml-auto">
                   {dms.length} versions
                 </span>
               )}
@@ -1143,7 +1164,7 @@ function ProspectDetail({
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wide text-text-muted">
+      <p className="text-xs uppercase tracking-wide text-text-muted">
         {label}
       </p>
       <p className="text-sm text-foreground mt-0.5 leading-relaxed">{value}</p>
@@ -1209,10 +1230,10 @@ function InboxView({
                 <span className="text-sm font-semibold text-foreground">
                   @{prospect?.handle ?? "unknown"}
                 </span>
-                <span className="text-[10px] uppercase tracking-wide text-text-muted">
+                <span className="text-xs uppercase tracking-wide text-text-muted">
                   {message.platform}
                 </span>
-                <span className="text-[10px] text-text-muted ml-auto">
+                <span className="text-xs text-text-muted ml-auto">
                   {formatDateTime(message.receivedAt)}
                 </span>
               </div>
@@ -1424,7 +1445,7 @@ function DiscoveryView({
                       {PLATFORM_LABELS[s.platform]} ·{" "}
                       {SIGNAL_LABELS[s.signalType]} · &ldquo;{s.query}&rdquo;
                     </p>
-                    <p className="text-[10px] text-text-muted mt-1">
+                    <p className="text-xs text-text-muted mt-1">
                       Last run{" "}
                       {s.lastRunAt
                         ? `${formatDateTime(s.lastRunAt)} · added ${s.lastResultCount}`

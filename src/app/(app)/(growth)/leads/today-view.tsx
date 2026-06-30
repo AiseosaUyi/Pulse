@@ -94,11 +94,11 @@ function FollowUpRow({
           <span className="text-sm font-semibold text-foreground">
             @{prospect.handle}
           </span>
-          <span className="text-[10px] uppercase tracking-wide text-text-muted">
+          <span className="text-xs uppercase tracking-wide text-text-muted">
             {PLATFORM_LABELS[prospect.platform]}
           </span>
           {tone === "overdue" && daysOverdue > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-red/10 text-status-red">
+            <span className="text-xs px-1.5 py-0.5 rounded bg-status-red/10 text-status-red">
               {daysOverdue}d overdue
             </span>
           )}
@@ -109,7 +109,7 @@ function FollowUpRow({
           </p>
         )}
         {prospect.followUpAt && (
-          <p className="text-[10px] text-text-muted mt-0.5">
+          <p className="text-xs text-text-muted mt-0.5">
             {formatDateTime(prospect.followUpAt)}
           </p>
         )}
@@ -142,7 +142,7 @@ function FollowUpRow({
             )}
           </button>
           {snoozeOpen && (
-            <div className="absolute right-0 top-full mt-1 z-20 w-36 rounded-lg border border-border bg-card shadow-lg py-1">
+            <div className="absolute right-0 top-full mt-1 z-20 w-36 rounded-lg border border-border bg-card shadow-lg py-1 animate-popover-in">
               {SNOOZE_OPTIONS.map((o) => (
                 <button
                   key={o.days}
@@ -191,11 +191,11 @@ function ReplyRow({
             @{reply.prospect?.handle ?? "unknown"}
           </span>
           {reply.prospect && (
-            <span className="text-[10px] uppercase tracking-wide text-text-muted">
+            <span className="text-xs uppercase tracking-wide text-text-muted">
               {PLATFORM_LABELS[reply.prospect.platform]}
             </span>
           )}
-          <span className="text-[10px] text-text-muted ml-auto">
+          <span className="text-xs text-text-muted ml-auto">
             {relativeTime(reply.receivedAt)}
           </span>
         </div>
@@ -255,14 +255,14 @@ function GoingColdRow({
           <span className="text-sm font-semibold text-foreground">
             @{prospect.handle}
           </span>
-          <span className="text-[10px] uppercase tracking-wide text-text-muted">
+          <span className="text-xs uppercase tracking-wide text-text-muted">
             {PLATFORM_LABELS[prospect.platform]}
           </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-sidebar text-text-muted">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-sidebar text-text-muted">
             Sent {days}d ago
           </span>
         </div>
-        <p className="text-[10px] text-text-muted mt-0.5">
+        <p className="text-xs text-text-muted mt-0.5">
           No reply · no follow-up scheduled
         </p>
       </div>
@@ -324,7 +324,7 @@ function Section({
         <span className="text-[11px] font-semibold uppercase tracking-wide">
           {title}
         </span>
-        <span className="ml-2 text-[10px]">{count}</span>
+        <span className="ml-2 text-xs">{count}</span>
       </div>
       {count === 0 ? (
         <div className="flex flex-col items-center py-8 gap-1.5">
@@ -430,7 +430,7 @@ export function TodayView({
       <Section
         title="Follow Up Today"
         count={data.dueToday.length}
-        tone="yellow"
+        tone="muted"
         emptyIcon={<Calendar size={28} />}
         emptyHeading="Nothing due today"
         emptyBody="Follow-ups scheduled for tomorrow and beyond."
