@@ -152,7 +152,10 @@ function buildRows(
     const rawDate = str("lastReachoutDate");
     let lastReachoutAt: string | null = null;
     if (rawDate) {
-      const d = new Date(rawDate);
+      const ddmmyyyy = rawDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      const d = ddmmyyyy
+        ? new Date(parseInt(ddmmyyyy[3]), parseInt(ddmmyyyy[2]) - 1, parseInt(ddmmyyyy[1]))
+        : new Date(rawDate);
       if (!isNaN(d.getTime())) lastReachoutAt = d.toISOString();
     }
 

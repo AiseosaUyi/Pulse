@@ -155,7 +155,7 @@ function ProspectTemporalLine({
     : p.lastTouchedAt?.slice(0, 10) ?? "";
 
   return (
-    <div className="flex items-center gap-1.5 mt-1">
+    <div className="flex items-center gap-2 mt-1 flex-wrap">
       {t && <span className={`text-[11px] ${t.cls}`}>{t.text}</span>}
       {editing ? (
         <input
@@ -171,13 +171,16 @@ function ProspectTemporalLine({
         <button
           type="button"
           onClick={e => { e.stopPropagation(); setEditing(true); }}
-          title="Set last reachout date"
-          className={`inline-flex items-center gap-0.5 text-[11px] transition-colors ${saving ? "opacity-50" : "text-text-muted/50 hover:text-primary-500"}`}
+          className={`inline-flex items-center gap-1 text-[11px] transition-colors rounded px-1 -ml-1 ${
+            saving ? "opacity-50" : p.lastReachoutAt
+              ? "text-text-muted hover:text-primary-500 hover:bg-primary-500/5"
+              : "text-text-muted/40 hover:text-text-muted hover:bg-sidebar"
+          }`}
         >
-          <Calendar size={10} />
+          <Calendar size={10} className="shrink-0" />
           {p.lastReachoutAt
-            ? <span>{new Date(p.lastReachoutAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
-            : <span className="opacity-0 group-hover:opacity-100">set date</span>}
+            ? <span>Last reachout · {new Date(p.lastReachoutAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+            : <span>Set last reachout →</span>}
         </button>
       )}
     </div>
@@ -550,8 +553,8 @@ export function OutboundClient({
       )}
 
       {tab === "pipeline" && (
-        <div className="grid lg:grid-cols-[1fr_420px] gap-4 items-start">
-          <div className="space-y-3">
+        <>
+        <div className="space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
               <StatusFilter value={statusFilter} onChange={handleStatusChange} />
               <button
@@ -805,20 +808,44 @@ export function OutboundClient({
                 </div>
               </div>
             )}
-          </div>
-
-          <aside className="lg:sticky lg:top-4">
-            <ProspectDetail
-              prospect={selectedProspect}
-              tenantSlug={tenantSlug}
-              dms={selectedDms}
-              autoOpenReply={autoOpenReply}
-              onStatusChange={handleStatus}
-              onQualify={handleQualify}
-              onDraft={handleDraft}
-            />
-          </aside>
         </div>
+
+        {selectedProspectId !== null && (
+          <>
+            <div
+              className="fixed inset-0 z-20 bg-black/20"
+              onClick={() => setSelectedProspectId(null)}
+              aria-hidden
+            />
+            <aside className={`fixed top-0 right-0 h-screen w-[420px] z-30 bg-card border-l border-border shadow-2xl flex flex-col transition-transform duration-[280ms] ease-out ${selectedProspectId ? "translate-x-0" : "translate-x-full"}`}>
+              <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-border/60">
+                <span className="text-sm font-semibold text-foreground">
+                  {selectedProspect ? `@${selectedProspect.handle}` : "Prospect"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedProspectId(null)}
+                  className="p-1.5 rounded-lg hover:bg-sidebar text-text-muted hover:text-foreground"
+                  aria-label="Close panel"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <ProspectDetail
+                  prospect={selectedProspect}
+                  tenantSlug={tenantSlug}
+                  dms={selectedDms}
+                  autoOpenReply={autoOpenReply}
+                  onStatusChange={handleStatus}
+                  onQualify={handleQualify}
+                  onDraft={handleDraft}
+                />
+              </div>
+            </aside>
+          </>
+        )}
+        </>
       )}
 
       {tab === "inbox" && (
