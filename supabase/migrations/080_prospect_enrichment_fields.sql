@@ -7,9 +7,8 @@
 -- event_title   : specific event name for personalised DMs
 -- last_reachout_at : when outreach was last made; drives "going cold" logic
 
-ALTER TABLE prospects
-  ADD COLUMN IF NOT EXISTS category       TEXT,
-  ADD COLUMN IF NOT EXISTS location       TEXT,
-  ADD COLUMN IF NOT EXISTS verified_name  TEXT,
-  ADD COLUMN IF NOT EXISTS event_title    TEXT,
-  ADD COLUMN IF NOT EXISTS last_reachout_at TIMESTAMPTZ;
+ALTER TABLE prospects ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE prospects ADD COLUMN IF NOT EXISTS location TEXT;
+ALTER TABLE prospects ADD COLUMN IF NOT EXISTS verified_name TEXT;
+ALTER TABLE prospects ADD COLUMN IF NOT EXISTS event_title TEXT;
+ALTER TABLE prospects ADD COLUMN IF NOT EXISTS last_reachout_at TIMESTAMPTZ;
