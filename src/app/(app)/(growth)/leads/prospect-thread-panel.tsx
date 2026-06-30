@@ -21,6 +21,10 @@ import {
   MessageCircle,
   Pencil,
   AlertCircle,
+  Send,
+  ExternalLink,
+  Check,
+  Link as LinkIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,7 +56,7 @@ import type {
   ConversationAnalysisRecord,
   OutreachCampaignRecord,
 } from "@/lib/types/outreach-intelligence";
-import type { ProspectRecord } from "@/lib/types/outbound";
+import type { ProspectRecord, ProspectStatus } from "@/lib/types/outbound";
 import { PLATFORM_LABELS, STATUS_LABELS } from "@/lib/types/outbound";
 
 type PanelTab = "thread" | "analysis" | "notes";
@@ -666,6 +670,20 @@ function FollowUpControls({
   );
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function platformProfileUrl(prospect: ProspectRecord): string {
+  if (prospect.profileUrl) return prospect.profileUrl;
+  const h = prospect.handle;
+  switch (prospect.platform) {
+    case "instagram": return `https://www.instagram.com/${h}/`;
+    case "tiktok": return `https://www.tiktok.com/@${h}`;
+    case "twitter": return `https://twitter.com/${h}`;
+    case "linkedin": return `https://www.linkedin.com/in/${h}/`;
+    default: return "";
+  }
+}
+
 // ── Main panel ───────────────────────────────────────────────────────────────
 
 export function ProspectThreadPanel({
@@ -673,11 +691,21 @@ export function ProspectThreadPanel({
   tenantSlug,
   campaigns,
   onClose,
+  onQualify,
+  onDraft,
+  onStatusChange,
+  onDelete,
+  onEdit,
 }: {
   prospect: ProspectRecord;
   tenantSlug: string;
   campaigns: OutreachCampaignRecord[];
   onClose: () => void;
+  onQualify?: (p: ProspectRecord) => void;
+  onDraft?: (p: ProspectRecord) => void;
+  onStatusChange?: (p: ProspectRecord, status: ProspectStatus) => void;
+  onDelete?: (p: ProspectRecord) => void;
+  onEdit?: (p: ProspectRecord) => void;
 }) {
   const [activeTab, setActiveTab] = useState<PanelTab>("thread");
   // null = not yet loaded (loading); [] = loaded and empty
@@ -691,6 +719,18 @@ export function ProspectThreadPanel({
   const [noteBody, setNoteBody] = useState("");
   const [addingNote, startAddNote] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const profileUrl = platformProfileUrl(prospect);
+
+  const copyReplyLink = async () => {
+    const url = `${window.location.origin}/leads?prospect=${prospect.id}&action=reply`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied("reply");
+      setTimeout(() => setCopied((c) => (c === "reply" ? null : c)), 1500);
+    } catch {}
+  };
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -824,6 +864,70 @@ export function ProspectThreadPanel({
 
           {prospect.displayName && (
             <p className="text-xs text-text-muted">{prospect.displayName}</p>
+          )}
+
+          {/* Profile links */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {profileUrl && (
+              <a
+                href={profileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-primary-500 hover:text-primary-600"
+              >
+                Open profile <ExternalLink size={11} />
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={copyReplyLink}
+              className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-foreground"
+            >
+              {copied === "reply" ? (
+                <Check size={11} className="text-status-green" />
+              ) : (
+                <LinkIcon size={11} />
+              )}
+              {copied === "reply" ? "Copied" : "Copy reply link"}
+            </button>
+          </div>
+
+          {/* Primary action row */}
+          {(onQualify || onDraft || onEdit || onDelete) && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {(prospect.status === "new" || prospect.status === "qualifying") && onQualify && (
+                <Button size="sm" onClick={() => onQualify(prospect)} className="gap-1.5">
+                  <Sparkles size={13} />
+                  AI qualify
+                </Button>
+              )}
+              {prospect.status === "qualified" && onDraft && (
+                <Button size="sm" onClick={() => onDraft(prospect)} className="gap-1.5">
+                  <Send size={13} />
+                  Draft DM
+                </Button>
+              )}
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={() => onEdit(prospect)}
+                  className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-foreground px-2 py-1.5 rounded-lg hover:bg-sidebar border border-border/60"
+                >
+                  <Pencil size={12} />
+                  Edit
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(prospect)}
+                  className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-status-red px-2 py-1.5 rounded-lg hover:bg-status-red/10 border border-border/60"
+                >
+                  <Trash2 size={12} />
+                  Delete
+                </button>
+              )}
+            </div>
           )}
 
           {/* Meta row: stage + risk + follow-up */}

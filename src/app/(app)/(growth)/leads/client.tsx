@@ -227,12 +227,6 @@ export function OutboundClient({
     () => new Map(initialDmsByProspect),
     [initialDmsByProspect]
   );
-  const [selectedProspectId, setSelectedProspectId] = useState<string | null>(
-    () =>
-      deeplinkProspectId ??
-      initialProspects[0]?.id ??
-      null
-  );
   const [threadPanelProspect, setThreadPanelProspect] = useState<ProspectRecord | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingProspect, setEditingProspect] = useState<ProspectRecord | null>(null);
@@ -253,25 +247,15 @@ export function OutboundClient({
     setThreadPanelProspect(prospect);
   }, []);
 
-  // Respond to ?action=reply query param — auto-open reply form.
-  const autoOpenReply = deeplinkAction === "reply";
-
-  const selectedProspect = useMemo(
-    () => prospects.find((p) => p.id === selectedProspectId) ?? null,
-    [prospects, selectedProspectId]
-  );
-  const selectedDms = useMemo(
-    () => (selectedProspectId ? (dmsByProspect.get(selectedProspectId) ?? []) : []),
-    [dmsByProspect, selectedProspectId]
-  );
-
-  // Scroll the selected prospect into view on load if it came from a deep link.
+  // Deeplink: open thread panel for ?prospect=id on mount
   useEffect(() => {
-    if (deeplinkProspectId) {
-      const el = document.getElementById(`prospect-${deeplinkProspectId}`);
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [deeplinkProspectId]);
+    if (!deeplinkProspectId) return;
+    const found = initialProspects.find((p) => p.id === deeplinkProspectId);
+    if (found) openThreadPanel(found);
+    const el = document.getElementById(`prospect-${deeplinkProspectId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = useMemo(() => {
     const base = prospects; // status filtering is server-side per page
@@ -367,7 +351,7 @@ export function OutboundClient({
       const without = prev.filter((p) => p.id !== res.prospect.id);
       return [res.prospect, ...without];
     });
-    setSelectedProspectId(res.prospect.id);
+    openThreadPanel(res.prospect);
     setTab("pipeline");
   };
 
@@ -399,7 +383,6 @@ export function OutboundClient({
       return;
     }
     updateProspect({ ...prospect, status: "drafted" });
-    setSelectedProspectId(prospect.id);
     location.reload();
   };
 
@@ -433,8 +416,8 @@ export function OutboundClient({
       return;
     }
     setProspects((prev) => prev.filter((p) => p.id !== prospect.id));
-    if (selectedProspectId === prospect.id) {
-      setSelectedProspectId(null);
+    if (threadPanelProspect?.id === prospect.id) {
+      setThreadPanelProspect(null);
     }
   };
 
@@ -461,6 +444,11 @@ export function OutboundClient({
           tenantSlug={tenantSlug}
           campaigns={campaigns}
           onClose={() => setThreadPanelProspect(null)}
+          onQualify={handleQualify}
+          onDraft={handleDraft}
+          onStatusChange={handleStatus}
+          onDelete={handleDelete}
+          onEdit={(p) => setEditingProspect(p)}
         />
       )}
       {importModalOpen && (
@@ -583,7 +571,7 @@ export function OutboundClient({
               <CopyPrimaryTemplateButton
                 tenantSlug={tenantSlug}
                 templates={initialTemplates}
-                prospect={selectedProspect}
+                prospect={threadPanelProspect}
               />
             </div>
 
@@ -664,13 +652,11 @@ export function OutboundClient({
                     key={p.id}
                     id={`prospect-${p.id}`}
                     className={`group px-4 py-3 cursor-pointer transition-colors ${
-                      selectedIds.has(p.id)
-                        ? "bg-primary-500/5"
-                        : selectedProspectId === p.id
+                      selectedIds.has(p.id) || threadPanelProspect?.id === p.id
                         ? "bg-primary-500/5"
                         : "hover:bg-sidebar/40"
                     }`}
-                    onClick={() => setSelectedProspectId(p.id)}
+                    onClick={() => openThreadPanel(p)}
                   >
                     <div className="flex items-center gap-3 flex-wrap">
                       <button
@@ -734,47 +720,6 @@ export function OutboundClient({
                         )}
                         <ProspectTemporalLine p={p} tenantSlug={tenantSlug} onUpdate={updateProspect} />
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openThreadPanel(p);
-                          }}
-                          className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-foreground px-2 py-1 rounded-md hover:bg-sidebar"
-                          title="View thread"
-                        >
-                          <MessagesSquare size={11} />
-                          Thread
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingProspect(p);
-                          }}
-                          className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-foreground px-2 py-1 rounded-md hover:bg-sidebar"
-                          title="Edit prospect"
-                        >
-                          <Pencil size={11} />
-                          Edit
-                        </button>
-                        <ProspectRowActions
-                          prospect={p}
-                          busy={busyId === p.id}
-                          onQualify={handleQualify}
-                          onDraft={handleDraft}
-                          onDelete={handleDelete}
-                        />
-                        <ChevronRight
-                          size={14}
-                          className={`shrink-0 transition-colors ${
-                            selectedProspectId === p.id
-                              ? "text-primary-500"
-                              : "text-text-muted/30 group-hover:text-text-muted"
-                          }`}
-                        />
-                      </div>
                     </div>
                   </li>
                 ))}
@@ -822,41 +767,6 @@ export function OutboundClient({
             </div>
         </div>
 
-        {selectedProspectId !== null && (
-          <>
-            <div
-              className="fixed inset-0 z-20 bg-black/20"
-              onClick={() => setSelectedProspectId(null)}
-              aria-hidden
-            />
-            <aside className={`fixed top-0 right-0 h-screen w-full sm:w-[420px] z-30 bg-card border-l border-border shadow-2xl flex flex-col transition-transform duration-[280ms] ease-out ${selectedProspectId ? "translate-x-0" : "translate-x-full"}`}>
-              <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-border/60">
-                <span className="text-sm font-semibold text-foreground">
-                  {selectedProspect ? `@${selectedProspect.handle}` : "Prospect"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedProspectId(null)}
-                  className="p-1.5 rounded-lg hover:bg-sidebar text-text-muted hover:text-foreground"
-                  aria-label="Close panel"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                <ProspectDetail
-                  prospect={selectedProspect}
-                  tenantSlug={tenantSlug}
-                  dms={selectedDms}
-                  autoOpenReply={autoOpenReply}
-                  onStatusChange={handleStatus}
-                  onQualify={handleQualify}
-                  onDraft={handleDraft}
-                />
-              </div>
-            </aside>
-          </>
-        )}
         </>
       )}
 
@@ -866,7 +776,8 @@ export function OutboundClient({
           prospects={prospects}
           onRead={handleInboxRead}
           onOpenProspect={(pid) => {
-            setSelectedProspectId(pid);
+            const found = prospects.find((p) => p.id === pid);
+            if (found) openThreadPanel(found);
             setTab("pipeline");
           }}
         />
