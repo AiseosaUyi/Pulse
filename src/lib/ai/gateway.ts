@@ -16,6 +16,7 @@ export type Purpose =
   | "synthesis" // blog/brief/serp/trend/digest text generation
   | "scoring" // content-score sub-score rating
   | "analysis" // structured data extraction (e.g. parsing JSON/HTML exports)
+  | "outreach-analysis" // conversation intelligence — intent, stage, follow-up (gpt-4.1-mini)
   | "embedding" // vector embeddings for dedup (Phase E)
   | "transcription" // Whisper voice-feedback (Phase D)
   | "vision" // screenshot OCR / post-metrics extraction
@@ -42,6 +43,12 @@ export function getModel(purpose: Purpose): LanguageModel {
       // Analysis (e.g. JSON/HTML export parsing) is also a cheap structured
       // extraction task with the same model profile.
       return openai("gpt-4o-mini");
+    case "outreach-analysis":
+      // Conversation intelligence — intent detection, stage classification,
+      // follow-up scheduling. Needs more reasoning than scoring but not the
+      // full synthesis tier. gpt-4.1-mini hits the sweet spot: strong
+      // structured-output quality at ~8x cheaper than gpt-4.1.
+      return openai("gpt-4.1-mini");
     case "vision":
       return openai("gpt-4o");
     case "seo-longform":
@@ -74,6 +81,8 @@ export function getModelId(purpose: Purpose): string {
     case "analysis":
     case "seo-scoring":
       return "openai/gpt-4o-mini";
+    case "outreach-analysis":
+      return "openai/gpt-4.1-mini";
     case "vision":
       return "openai/gpt-4o";
     case "seo-longform":
@@ -97,6 +106,7 @@ const COST_PER_MTOK: Record<
   { input: number; output: number; cache_read: number }
 > = {
   "openai/gpt-4.1": { input: 2, output: 8, cache_read: 0.5 },
+  "openai/gpt-4.1-mini": { input: 0.4, output: 1.6, cache_read: 0.1 },
   "openai/gpt-4o": { input: 2.5, output: 10, cache_read: 1.25 },
   "openai/gpt-4o-mini": { input: 0.15, output: 0.6, cache_read: 0.075 },
   "openai/gpt-5": { input: 1.25, output: 10, cache_read: 0.125 },

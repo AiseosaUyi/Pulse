@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, useCallback } from "react";
 import { formatDateTime } from "@/lib/utils/format";
 import { useSearchParams } from "next/navigation";
 import {
@@ -16,6 +16,7 @@ import {
   Mail,
   Copy,
   Link as LinkIcon,
+  MessagesSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,8 +60,12 @@ import type {
   OutboundTemplateRecord,
   TemplatePlatform,
 } from "@/lib/types/outbound-templates";
+import { ProspectThreadPanel } from "./prospect-thread-panel";
+import { TodayView } from "./today-view";
+import type { OutreachTodayData } from "@/lib/services/outreach-intelligence";
+import type { OutreachCampaignRecord } from "@/lib/types/outreach-intelligence";
 
-type Tab = "pipeline" | "inbox" | "discovery" | "templates";
+type Tab = "today" | "pipeline" | "inbox" | "discovery" | "templates";
 
 const STATUS_TONE: Record<ProspectStatus, string> = {
   new: "bg-sidebar text-text-muted",
@@ -84,6 +89,8 @@ export function OutboundClient({
   searches,
   initialDmsByProspect,
   initialTemplates,
+  initialTodayData,
+  campaigns,
 }: {
   tenantSlug: string;
   initialProspects: ProspectRecord[];
@@ -91,15 +98,20 @@ export function OutboundClient({
   searches: ProspectSearchRecord[];
   initialDmsByProspect: Array<[string, OutboundDmRecord[]]>;
   initialTemplates: OutboundTemplateRecord[];
+  initialTodayData: OutreachTodayData;
+  campaigns: OutreachCampaignRecord[];
 }) {
   const dialogs = useDialogs();
   const searchParams = useSearchParams();
   const deeplinkProspectId = searchParams.get("prospect");
   const deeplinkAction = searchParams.get("action");
 
-  const [tab, setTab] = useState<Tab>(() =>
-    searchParams.get("tab") === "inbox" ? "inbox" : "pipeline"
-  );
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = searchParams.get("tab");
+    if (t === "inbox") return "inbox";
+    if (t === "today") return "today";
+    return "pipeline";
+  });
   const [prospects, setProspects] = useState(initialProspects);
   const [inbox, setInbox] = useState(initialInbox);
   const dmsByProspect = useMemo(
@@ -112,11 +124,16 @@ export function OutboundClient({
       initialProspects[0]?.id ??
       null
   );
+  const [threadPanelProspect, setThreadPanelProspect] = useState<ProspectRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ProspectStatus | "all">(
     "all"
   );
+
+  const openThreadPanel = useCallback((prospect: ProspectRecord) => {
+    setThreadPanelProspect(prospect);
+  }, []);
 
   // Respond to ?action=reply query param — auto-open reply form.
   const autoOpenReply = deeplinkAction === "reply";
@@ -257,11 +274,28 @@ export function OutboundClient({
     await markInboundRead(tenantSlug, message.id);
   };
 
+  const todayUrgentCount =
+    initialTodayData.overdue.length + initialTodayData.newReplies.length;
+
   return (
     <div>
+      {threadPanelProspect && (
+        <ProspectThreadPanel
+          prospect={threadPanelProspect}
+          tenantSlug={tenantSlug}
+          campaigns={campaigns}
+          onClose={() => setThreadPanelProspect(null)}
+        />
+      )}
+
       <div className="flex items-center gap-1 mb-4 border-b border-border">
         {(
           [
+            {
+              key: "today" as const,
+              label: "Today",
+              count: todayUrgentCount,
+            },
             { key: "pipeline" as const, label: "Pipeline", count: prospects.length },
             {
               key: "inbox" as const,
@@ -292,7 +326,11 @@ export function OutboundClient({
           >
             {t.label}
             {t.count > 0 && (
-              <span className="ml-1.5 text-[10px] px-1.5 rounded-full bg-sidebar">
+              <span className={`ml-1.5 text-[10px] px-1.5 rounded-full ${
+                t.key === "today" && t.count > 0
+                  ? "bg-status-red/15 text-status-red"
+                  : "bg-sidebar"
+              }`}>
                 {t.count}
               </span>
             )}
@@ -307,6 +345,14 @@ export function OutboundClient({
         >
           {error}
         </div>
+      )}
+
+      {tab === "today" && (
+        <TodayView
+          data={initialTodayData}
+          tenantSlug={tenantSlug}
+          onOpenThread={openThreadPanel}
+        />
       )}
 
       {tab === "pipeline" && (
@@ -385,13 +431,27 @@ export function OutboundClient({
                           </p>
                         )}
                       </div>
-                      <ProspectRowActions
-                        prospect={p}
-                        busy={busyId === p.id}
-                        onQualify={handleQualify}
-                        onDraft={handleDraft}
-                        onDelete={handleDelete}
-                      />
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openThreadPanel(p);
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-foreground px-2 py-1 rounded-md hover:bg-sidebar"
+                          title="View thread"
+                        >
+                          <MessagesSquare size={11} />
+                          Thread
+                        </button>
+                        <ProspectRowActions
+                          prospect={p}
+                          busy={busyId === p.id}
+                          onQualify={handleQualify}
+                          onDraft={handleDraft}
+                          onDelete={handleDelete}
+                        />
+                      </div>
                     </div>
                   </li>
                 ))}
