@@ -20,6 +20,10 @@ import {
   getTemplate,
   rowToTemplate,
 } from "@/lib/services/outbound-templates";
+import {
+  personalizeTemplateAi,
+  PersonalizeTemplateError,
+} from "@/lib/ai/personalize-template";
 import type {
   OutboundTemplateRecord,
   TemplatePlatform,
@@ -302,6 +306,43 @@ export async function generateTemplateVariants(
     const msg =
       err instanceof TemplateGenerationError
         ? "Variant generation failed. Please try again."
+        : err instanceof Error
+          ? err.message
+          : "Unknown error";
+    return { success: false, error: msg };
+  }
+}
+
+export async function personalizeTemplate(
+  tenantSlug: string,
+  input: {
+    globalBody: string;
+    exampleMessages: string;
+    direction: string;
+    platform: TemplatePlatform;
+  }
+): Promise<ActionResult<{ body: string }>> {
+  await requireUser();
+  const tenant = await getTenant(tenantSlug);
+  if (!tenant) return { success: false, error: "Tenant not found" };
+
+  try {
+    const { voice, positioning } = await getBrandContext(tenantSlug);
+    const { body } = await personalizeTemplateAi({
+      tenantSlug,
+      tenantName: tenant.name,
+      voice,
+      positioning,
+      globalBody: input.globalBody,
+      exampleMessages: input.exampleMessages,
+      direction: input.direction,
+      platform: input.platform,
+    });
+    return { success: true, body };
+  } catch (err) {
+    const msg =
+      err instanceof PersonalizeTemplateError
+        ? "Personalization failed. Please try again."
         : err instanceof Error
           ? err.message
           : "Unknown error";

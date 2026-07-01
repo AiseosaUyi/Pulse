@@ -1,23 +1,16 @@
 "use client";
 
-// Templates tab for the Outbound page. Three responsibilities:
-//   1. List saved templates (primary first)
-//   2. Score / edit / copy / promote-to-primary / archive any template
-//   3. Generate 3 fresh AI variants from a brief
-// All destructive actions use the shared Dialog primitive.
-
 import { useState, useTransition } from "react";
 import {
   AlertTriangle,
-  Check,
   CheckCircle2,
   Loader2,
   PauseCircle,
   Pencil,
   Plus,
-  RefreshCw,
   Sparkles,
   Trash2,
+  Wand2,
   Wrench,
   XCircle,
 } from "lucide-react";
@@ -29,7 +22,7 @@ import { Dialog, useDialogs } from "@/components/ui/Dialog";
 import {
   createTemplate,
   deleteTemplate,
-  generateTemplateVariants,
+  personalizeTemplate,
   scoreTemplate,
   updateTemplate,
 } from "@/lib/actions/outbound-templates";
@@ -80,9 +73,12 @@ export function TemplatesView({
 }) {
   const dialogs = useDialogs();
   const [templates, setTemplates] = useState(initial);
-  const [creating, setCreating] = useState(initial.length === 0);
-  const [generating, setGenerating] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [customiseTarget, setCustomiseTarget] = useState<OutboundTemplateRecord | null>(null);
+
+  const myTemplates = templates.filter((t) => !t.isGlobal);
+  const globalTemplates = templates.filter((t) => t.isGlobal);
 
   const refreshTemplate = (next: OutboundTemplateRecord) => {
     setTemplates((prev) => prev.map((t) => (t.id === next.id ? next : t)));
@@ -100,30 +96,24 @@ export function TemplatesView({
     const res = await createTemplate(tenantSlug, { ...input, templateType: input.templateType });
     if (!res.success) {
       setError(res.error);
-      return;
+      return false;
     }
     setTemplates((prev) => {
-      // If we promoted a new primary, old ones on the same platform
-      // have been demoted server-side — reflect that client-side too.
       const next = res.template.isPrimary
         ? prev.map((t) =>
-            t.platform === res.template.platform
-              ? { ...t, isPrimary: false }
-              : t
+            t.platform === res.template.platform ? { ...t, isPrimary: false } : t
           )
         : prev;
       return [res.template, ...next];
     });
     setCreating(false);
+    return true;
   };
 
   const handleScore = async (t: OutboundTemplateRecord) => {
     setError(null);
     const res = await scoreTemplate(tenantSlug, t.id);
-    if (!res.success) {
-      setError(res.error);
-      return;
-    }
+    if (!res.success) { setError(res.error); return; }
     refreshTemplate({
       ...t,
       score: res.critique.overall_score,
@@ -141,10 +131,7 @@ export function TemplatesView({
     });
     if (!ok) return;
     const res = await deleteTemplate(tenantSlug, t.id);
-    if (!res.success) {
-      setError(res.error);
-      return;
-    }
+    if (!res.success) { setError(res.error); return; }
     setTemplates((prev) => prev.filter((x) => x.id !== t.id));
   };
 
@@ -153,10 +140,7 @@ export function TemplatesView({
     patch: { body?: string; name?: string; angle?: string | null; templateType?: TemplateType; platform?: TemplatePlatform }
   ) => {
     const res = await updateTemplate(tenantSlug, t.id, patch);
-    if (!res.success) {
-      setError(res.error);
-      return false;
-    }
+    if (!res.success) { setError(res.error); return false; }
     refreshTemplate({
       ...t,
       body: patch.body ?? t.body,
@@ -164,7 +148,6 @@ export function TemplatesView({
       angle: patch.angle !== undefined ? patch.angle : t.angle,
       templateType: patch.templateType ?? t.templateType,
       platform: patch.platform ?? t.platform,
-      // Invalidate score after a body edit — the critique is stale.
       score: patch.body !== undefined ? null : t.score,
       lastCritique: patch.body !== undefined ? null : t.lastCritique,
       lastScoredAt: patch.body !== undefined ? null : t.lastScoredAt,
@@ -173,114 +156,92 @@ export function TemplatesView({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-card p-5">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="h-9 w-9 rounded-full bg-primary-500/10 text-primary-500 flex items-center justify-center shrink-0">
-              <Sparkles size={16} />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-foreground">
-                Outbound templates
-              </h3>
-              <p className="text-xs text-text-muted leading-relaxed">
-                DM templates for every stage of the outreach sequence. Score
-                one to get an AI critique, or generate variants to test
-                different angles. Default templates apply to all tenants —
-                create your own to override them.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setGenerating((v) => !v)}
-              className="gap-1.5"
-            >
-              <RefreshCw size={14} />
-              Generate variants
-            </Button>
-            {!creating && (
-              <Button
-                size="sm"
-                onClick={() => setCreating(true)}
-                className="gap-1.5"
-              >
-                <Plus size={14} />
-                New template
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-
+    <div className="space-y-6">
       {error && (
-        <div
-          className="rounded-lg border border-status-red/30 bg-status-red/5 px-3 py-2 text-sm text-status-red"
-          role="alert"
-        >
+        <div className="rounded-lg border border-status-red/30 bg-status-red/5 px-3 py-2 text-sm text-status-red" role="alert">
           {error}
         </div>
       )}
 
-      {creating && (
-        <NewTemplateForm
-          onCancel={() => setCreating(false)}
-          onSubmit={handleCreate}
-        />
+      {/* Your templates */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Your templates</h3>
+            <p className="text-xs text-text-muted">Editable, scoreable, tenant-specific. These take priority over defaults.</p>
+          </div>
+          {!creating && (
+            <Button size="sm" onClick={() => setCreating(true)} className="gap-1.5">
+              <Plus size={14} />
+              New template
+            </Button>
+          )}
+        </div>
+
+        {creating && (
+          <NewTemplateForm
+            onCancel={() => setCreating(false)}
+            onSubmit={handleCreate}
+          />
+        )}
+
+        {myTemplates.length === 0 && !creating && (
+          <div className="rounded-xl border border-dashed border-border p-6 text-center">
+            <p className="text-sm text-foreground font-semibold">No custom templates yet</p>
+            <p className="text-xs text-text-muted mt-1 max-w-xs mx-auto">
+              Click <strong>Customise</strong> on a default below, or <strong>New template</strong> to paste one of your own.
+            </p>
+          </div>
+        )}
+
+        {myTemplates.length > 0 && (
+          <ul className="space-y-3">
+            {myTemplates.map((t) => (
+              <TemplateCard
+                key={t.id}
+                template={t}
+                onScore={() => handleScore(t)}
+                onDelete={() => handleDelete(t)}
+                onUpdate={(patch) => handleUpdateBody(t, patch)}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Default (global) templates */}
+      {globalTemplates.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Default templates</h3>
+            <p className="text-xs text-text-muted">Read-only starting points. Hit <strong>Customise</strong> to generate your own version from these.</p>
+          </div>
+          <ul className="space-y-3">
+            {globalTemplates.map((t) => (
+              <TemplateCard
+                key={t.id}
+                template={t}
+                onScore={() => {}}
+                onDelete={() => {}}
+                onUpdate={async () => false}
+                onCustomise={() => setCustomiseTarget(t)}
+              />
+            ))}
+          </ul>
+        </section>
       )}
 
-      {generating && (
-        <GenerateVariantsForm
+      {/* Customise wizard */}
+      {customiseTarget && (
+        <CustomiseWizardModal
           tenantSlug={tenantSlug}
-          seed={templates.find((t) => t.isPrimary)?.body}
-          onClose={() => setGenerating(false)}
+          template={customiseTarget}
+          onClose={() => setCustomiseTarget(null)}
           onSave={async (input) => {
-            const res = await createTemplate(tenantSlug, {
-              name: input.name,
-              platform: input.platform,
-              body: input.body,
-              angle: input.angle,
-              generatorModel: input.generatorModel,
-              generatorCostUsd: input.generatorCostUsd,
-            });
-            if (!res.success) {
-              setError(res.error);
-              return false;
-            }
-            setTemplates((prev) => [res.template, ...prev]);
-            return true;
+            const ok = await handleCreate(input);
+            if (ok) setCustomiseTarget(null);
           }}
         />
-      )}
-
-      {templates.length === 0 && !creating && !generating && (
-        <div className="rounded-xl border border-dashed border-border p-8 text-center">
-          <p className="text-sm text-foreground font-semibold">
-            No templates yet
-          </p>
-          <p className="text-xs text-text-muted mt-1 max-w-md mx-auto">
-            Click <strong>New template</strong> to paste your current bulk
-            DM and have Pulse score it. Or <strong>Generate variants</strong>{" "}
-            if you want 3 fresh AI drafts to pick from.
-          </p>
-        </div>
-      )}
-
-      {templates.length > 0 && (
-        <ul className="space-y-3">
-          {templates.map((t) => (
-            <TemplateCard
-              key={t.id}
-              template={t}
-              onScore={() => handleScore(t)}
-              onDelete={() => handleDelete(t)}
-              onUpdate={(patch) => handleUpdateBody(t, patch)}
-            />
-          ))}
-        </ul>
       )}
     </div>
   );
@@ -298,7 +259,7 @@ function NewTemplateForm({
     angle: string;
     body: string;
     makePrimary: boolean;
-  }) => void | Promise<void>;
+  }) => unknown | Promise<unknown>;
 }) {
   const [name, setName] = useState("");
   const [platform, setPlatform] = useState<TemplatePlatform>("instagram");
@@ -318,26 +279,14 @@ function NewTemplateForm({
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-foreground">
-          New template
-        </h4>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-xs text-text-muted hover:text-foreground"
-        >
-          Cancel
-        </button>
+        <h4 className="text-sm font-semibold text-foreground">New template</h4>
+        <button type="button" onClick={onCancel} className="text-xs text-text-muted hover:text-foreground">Cancel</button>
       </div>
 
       <div className="grid md:grid-cols-[1fr_160px_200px] gap-3">
         <div>
           <Label>Name</Label>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Event planners cold open"
-          />
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Event planners cold open" />
         </div>
         <div>
           <Label>Type</Label>
@@ -347,14 +296,10 @@ function NewTemplateForm({
             className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
           >
             {TEMPLATE_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {TEMPLATE_TYPE_LABELS[t]}
-              </option>
+              <option key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</option>
             ))}
           </select>
-          <p className="text-[10px] text-text-muted mt-1 leading-tight">
-            {TEMPLATE_TYPE_DESCRIPTIONS[templateType]}
-          </p>
+          <p className="text-[10px] text-text-muted mt-1 leading-tight">{TEMPLATE_TYPE_DESCRIPTIONS[templateType]}</p>
         </div>
         <div>
           <Label>Platform</Label>
@@ -364,9 +309,7 @@ function NewTemplateForm({
             className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
           >
             {TEMPLATE_PLATFORMS.map((p) => (
-              <option key={p} value={p}>
-                {TEMPLATE_PLATFORM_LABELS[p]}
-              </option>
+              <option key={p} value={p}>{TEMPLATE_PLATFORM_LABELS[p]}</option>
             ))}
           </select>
         </div>
@@ -374,11 +317,7 @@ function NewTemplateForm({
 
       <div>
         <Label>Angle (optional)</Label>
-        <Input
-          value={angle}
-          onChange={(e) => setAngle(e.target.value)}
-          placeholder="e.g. Hit them right after their event wraps"
-        />
+        <Input value={angle} onChange={(e) => setAngle(e.target.value)} placeholder="e.g. Hit them right after their event wraps" />
       </div>
 
       <div>
@@ -390,8 +329,7 @@ function NewTemplateForm({
           placeholder="Paste the exact DM you'd send. Use [FIRST_NAME] / [SIGNAL] as tokens if you swap anything per-prospect."
         />
         <p className="text-[11px] text-text-muted mt-1">
-          {body.length} chars · {body.trim().split(/\s+/).filter(Boolean).length}{" "}
-          words
+          {body.length} chars · {body.trim().split(/\s+/).filter(Boolean).length} words
         </p>
       </div>
 
@@ -402,16 +340,11 @@ function NewTemplateForm({
           onChange={(e) => setMakePrimary(e.target.checked)}
           className="accent-primary-500"
         />
-        Make this the primary template for{" "}
-        {TEMPLATE_PLATFORM_LABELS[platform]}
+        Make this the primary template for {TEMPLATE_PLATFORM_LABELS[platform]}
       </label>
 
       <div className="flex justify-end">
-        <Button
-          size="sm"
-          onClick={submit}
-          disabled={isPending || !name.trim() || !body.trim()}
-        >
+        <Button size="sm" onClick={submit} disabled={isPending || !name.trim() || !body.trim()}>
           {isPending ? "Saving…" : "Save template"}
         </Button>
       </div>
@@ -419,194 +352,183 @@ function NewTemplateForm({
   );
 }
 
-function GenerateVariantsForm({
+function CustomiseWizardModal({
   tenantSlug,
-  seed,
+  template,
   onClose,
   onSave,
 }: {
   tenantSlug: string;
-  seed?: string;
+  template: OutboundTemplateRecord;
   onClose: () => void;
   onSave: (input: {
     name: string;
     platform: TemplatePlatform;
+    templateType: TemplateType;
     angle: string;
     body: string;
-    generatorModel?: string;
-    generatorCostUsd?: number;
-  }) => Promise<boolean>;
+    makePrimary: boolean;
+  }) => Promise<void>;
 }) {
-  const [audience, setAudience] = useState("");
-  const [angle, setAngle] = useState("");
-  const [platform, setPlatform] = useState<TemplatePlatform>("instagram");
-  const [variants, setVariants] = useState<
-    Array<{ name: string; angle: string; body: string }>
-  >([]);
-  const [model, setModel] = useState<string | null>(null);
-  const [costUsd, setCostUsd] = useState(0);
+  const [exampleMessages, setExampleMessages] = useState("");
+  const [direction, setDirection] = useState("");
+  const [generatedBody, setGeneratedBody] = useState("");
+  const [name, setName] = useState(template.name.replace(/^Default — /, ""));
+  const [platform, setPlatform] = useState<TemplatePlatform>(
+    template.platform === "any" ? "instagram" : template.platform
+  );
+  const [templateType, setTemplateType] = useState<TemplateType>(template.templateType);
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, startGenerate] = useTransition();
-  const [savingIdx, setSavingIdx] = useState<number | null>(null);
+  const [isSaving, startSave] = useTransition();
 
   const generate = () => {
-    if (!audience.trim() || !angle.trim()) return;
     setError(null);
     startGenerate(async () => {
-      const res = await generateTemplateVariants(tenantSlug, {
-        audience,
-        angle,
+      const res = await personalizeTemplate(tenantSlug, {
+        globalBody: template.body,
+        exampleMessages,
+        direction,
         platform,
-        seedBody: seed,
       });
-      if (!res.success) {
-        setError(res.error);
-        return;
-      }
-      setVariants(res.variants);
-      setModel(res.model);
-      setCostUsd(res.costUsd);
+      if (!res.success) { setError(res.error); return; }
+      setGeneratedBody(res.body);
     });
   };
 
-  const saveVariant = async (idx: number) => {
-    const v = variants[idx];
-    if (!v) return;
-    setSavingIdx(idx);
-    const ok = await onSave({
-      name: v.name,
-      platform,
-      angle: v.angle,
-      body: v.body,
-      generatorModel: model ?? undefined,
-      generatorCostUsd: costUsd / Math.max(1, variants.length),
+  const save = () => {
+    if (!name.trim() || !generatedBody.trim()) return;
+    startSave(async () => {
+      await onSave({
+        name: name.trim(),
+        platform,
+        templateType,
+        angle: "",
+        body: generatedBody.trim(),
+        makePrimary: false,
+      });
     });
-    setSavingIdx(null);
-    if (ok) {
-      setVariants((prev) => prev.filter((_, i) => i !== idx));
-    }
   };
 
   return (
-    <div className="rounded-xl border border-primary-500/30 bg-primary-500/5 p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-          <Sparkles size={14} className="text-primary-500" />
-          Generate 3 template variants
-        </h4>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-xs text-text-muted hover:text-foreground"
-        >
-          Close
-        </button>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-3">
+    <Dialog open onClose={onClose} locked={isGenerating || isSaving} size="lg">
+      <div className="p-5 space-y-4">
         <div>
-          <Label>Audience</Label>
-          <Input
-            value={audience}
-            onChange={(e) => setAudience(e.target.value)}
-            placeholder="e.g. Early-stage SaaS founders, B2B focus"
+          <h3 className="text-base font-semibold text-foreground">Customise: {template.name.replace(/^Default — /, "")}</h3>
+          <p className="text-xs text-text-muted mt-0.5">AI will rewrite this template to match your voice and needs. You can edit the result before saving.</p>
+        </div>
+
+        {/* Original template for reference */}
+        <div className="rounded-lg border border-border bg-sidebar/40 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-text-muted mb-1.5 font-medium">Starting template</p>
+          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{template.body}</p>
+        </div>
+
+        {/* Context inputs */}
+        <div>
+          <Label>Your old messages <span className="text-text-muted font-normal">(optional)</span></Label>
+          <Textarea
+            rows={4}
+            value={exampleMessages}
+            onChange={(e) => setExampleMessages(e.target.value)}
+            placeholder={"Paste 1–3 DMs you've sent before. The AI learns your natural voice and tone from these.\n\nExample:\n\"Hey [Name], saw your last event – insane crowd. We work with lounges to...\"\n\"Yo [Name], big fan of the Afrobeats nights...\""}
+            className="text-sm leading-relaxed"
           />
         </div>
+
         <div>
-          <Label>Platform</Label>
-          <select
-            value={platform}
-            onChange={(e) => setPlatform(e.target.value as TemplatePlatform)}
-            className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
-          >
-            {TEMPLATE_PLATFORMS.map((p) => (
-              <option key={p} value={p}>
-                {TEMPLATE_PLATFORM_LABELS[p]}
-              </option>
-            ))}
-          </select>
+          <Label>What do you want to change? <span className="text-text-muted font-normal">(optional)</span></Label>
+          <Textarea
+            rows={2}
+            value={direction}
+            onChange={(e) => setDirection(e.target.value)}
+            placeholder="e.g. Make it shorter, more casual. Focus on the ticketing pain point. Open with energy not a question."
+            className="text-sm"
+          />
         </div>
-      </div>
 
-      <div>
-        <Label>Angle / goal</Label>
-        <Textarea
-          rows={2}
-          value={angle}
-          onChange={(e) => setAngle(e.target.value)}
-          placeholder="e.g. Open by referencing a recent post they made, ask about their biggest challenge with content distribution"
-        />
-      </div>
-
-      {seed && (
-        <p className="text-[11px] text-text-muted">
-          Variants will be written to be meaningfully different from your
-          current primary template.
-        </p>
-      )}
-
-      {error && (
-        <p className="text-xs text-status-red" role="alert">
-          {error}
-        </p>
-      )}
-
-      <div className="flex justify-end">
-        <Button
-          size="sm"
-          onClick={generate}
-          disabled={isGenerating || !audience.trim() || !angle.trim()}
-          className="gap-1.5"
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 size={14} className="animate-spin" />
-              Generating…
-            </>
-          ) : (
-            <>
-              <Sparkles size={14} />
-              Generate 3 variants
-            </>
-          )}
-        </Button>
-      </div>
-
-      {variants.length > 0 && (
-        <div className="space-y-2 pt-2 border-t border-border/30">
-          {variants.map((v, i) => (
-            <div
-              key={i}
-              className="rounded-lg bg-card border border-border p-3"
+        <div className="flex items-center gap-3 flex-wrap">
+          <div>
+            <Label className="text-[11px]">Platform</Label>
+            <select
+              value={platform}
+              onChange={(e) => setPlatform(e.target.value as TemplatePlatform)}
+              className="h-9 px-3 rounded-lg border border-border bg-card text-sm"
             >
-              <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
-                <p className="text-sm font-semibold text-foreground">
-                  {v.name}
-                </p>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => saveVariant(i)}
-                  disabled={savingIdx === i}
-                  className="gap-1.5"
-                >
-                  {savingIdx === i ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Plus size={12} />
-                  )}
-                  Save this variant
-                </Button>
-              </div>
-              <p className="text-xs text-text-muted mb-2">{v.angle}</p>
-              <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-                {v.body}
+              {TEMPLATE_PLATFORMS.filter(p => p !== "any").map((p) => (
+                <option key={p} value={p}>{TEMPLATE_PLATFORM_LABELS[p]}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1" />
+          <Button
+            onClick={generate}
+            disabled={isGenerating}
+            className="gap-1.5 mt-4"
+          >
+            {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+            {isGenerating ? "Generating…" : generatedBody ? "Regenerate" : "Generate my version"}
+          </Button>
+        </div>
+
+        {error && (
+          <p className="text-xs text-status-red" role="alert">{error}</p>
+        )}
+
+        {/* Generated result */}
+        {generatedBody && (
+          <div className="space-y-3 pt-3 border-t border-border/30">
+            <p className="text-xs font-medium text-foreground">Generated — edit to fine-tune, then save:</p>
+
+            <div>
+              <Textarea
+                rows={6}
+                value={generatedBody}
+                onChange={(e) => setGeneratedBody(e.target.value)}
+                className="text-sm leading-relaxed"
+              />
+              <p className="text-[10px] text-text-muted mt-1">
+                {generatedBody.length} chars · {generatedBody.trim().split(/\s+/).filter(Boolean).length} words
               </p>
             </div>
-          ))}
+
+            <div className="grid md:grid-cols-[1fr_160px_180px] gap-3">
+              <div>
+                <Label>Template name</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My cold open" />
+              </div>
+              <div>
+                <Label>Type</Label>
+                <select
+                  value={templateType}
+                  onChange={(e) => setTemplateType(e.target.value as TemplateType)}
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+                >
+                  {TEMPLATE_TYPES.map((t) => (
+                    <option key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <Button
+                  size="sm"
+                  onClick={save}
+                  disabled={isSaving || !name.trim() || !generatedBody.trim()}
+                  className="w-full gap-1.5"
+                >
+                  {isSaving ? <Loader2 size={12} className="animate-spin" /> : null}
+                  {isSaving ? "Saving…" : "Save as my template"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end pt-1">
+          <Button size="sm" variant="ghost" onClick={onClose} disabled={isGenerating || isSaving}>Cancel</Button>
         </div>
-      )}
-    </div>
+      </div>
+    </Dialog>
   );
 }
 
@@ -615,6 +537,7 @@ function TemplateCard({
   onScore,
   onDelete,
   onUpdate,
+  onCustomise,
 }: {
   template: OutboundTemplateRecord;
   onScore: () => void | Promise<void>;
@@ -626,6 +549,7 @@ function TemplateCard({
     templateType?: TemplateType;
     platform?: TemplatePlatform;
   }) => Promise<boolean>;
+  onCustomise?: () => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [isScoring, startScore] = useTransition();
@@ -634,7 +558,6 @@ function TemplateCard({
 
   return (
     <li className="rounded-xl border border-border bg-card p-4 space-y-3">
-      {/* Header row */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -645,11 +568,6 @@ function TemplateCard({
             <span className="text-[10px] uppercase tracking-wide text-text-muted">
               {TEMPLATE_PLATFORM_LABELS[template.platform]}
             </span>
-            {isGlobal && (
-              <span className="text-[10px] uppercase tracking-wide text-primary-500 bg-primary-500/8 px-1.5 py-0.5 rounded">
-                Default
-              </span>
-            )}
             {template.score != null && (
               <span className={`text-[10px] font-bold ${
                 template.score >= 85 ? "text-status-green"
@@ -666,50 +584,54 @@ function TemplateCard({
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
-          {!isGlobal && (
+          {isGlobal && onCustomise ? (
             <button
               type="button"
-              onClick={() => startScore(onScore)}
-              disabled={isScoring}
+              onClick={onCustomise}
               className="inline-flex items-center gap-1 text-[11px] text-primary-500 hover:text-primary-600 px-2 py-1 rounded-md hover:bg-primary-500/10"
-              title="AI score this template"
+              title="Generate your own version of this template"
             >
-              {isScoring ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-              {template.score == null ? "Score" : "Re-score"}
+              <Wand2 size={11} />
+              Customise
             </button>
-          )}
-          {!isGlobal && (
-            <button
-              type="button"
-              onClick={() => setEditOpen(true)}
-              className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-foreground px-2 py-1 rounded-md hover:bg-sidebar"
-            >
-              <Pencil size={11} />
-              Edit
-            </button>
-          )}
-          {!isGlobal && (
-            <button
-              type="button"
-              onClick={onDelete}
-              className="p-1.5 rounded-md text-text-muted hover:text-status-red hover:bg-status-red/10"
-              title="Delete template"
-              aria-label="Delete template"
-            >
-              <Trash2 size={11} />
-            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => startScore(onScore)}
+                disabled={isScoring}
+                className="inline-flex items-center gap-1 text-[11px] text-primary-500 hover:text-primary-600 px-2 py-1 rounded-md hover:bg-primary-500/10"
+                title="AI score this template"
+              >
+                {isScoring ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                {template.score == null ? "Score" : "Re-score"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditOpen(true)}
+                className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-foreground px-2 py-1 rounded-md hover:bg-sidebar"
+              >
+                <Pencil size={11} />
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={onDelete}
+                className="p-1.5 rounded-md text-text-muted hover:text-status-red hover:bg-status-red/10"
+                title="Delete template"
+                aria-label="Delete template"
+              >
+                <Trash2 size={11} />
+              </button>
+            </>
           )}
         </div>
       </div>
 
-      {/* Body */}
-      <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-        {template.body}
-      </p>
+      <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{template.body}</p>
 
       {critique && <CritiquePanel critique={critique} />}
 
-      {/* Edit modal */}
       {editOpen && (
         <EditTemplateModal
           template={template}
@@ -781,9 +703,7 @@ function EditTemplateModal({
                 <option key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</option>
               ))}
             </select>
-            <p className="text-[10px] text-text-muted mt-1 leading-tight">
-              {TEMPLATE_TYPE_DESCRIPTIONS[templateType]}
-            </p>
+            <p className="text-[10px] text-text-muted mt-1 leading-tight">{TEMPLATE_TYPE_DESCRIPTIONS[templateType]}</p>
           </div>
           <div>
             <Label>Platform</Label>
@@ -834,18 +754,12 @@ function CritiquePanel({ critique }: { critique: TemplateCritique }) {
   const style = VERDICT_STYLES[critique.verdict];
   return (
     <div className="border-t border-border/30 pt-3 space-y-3">
-      <div
-        className={`rounded-lg border px-3 py-2 flex items-start gap-2 ${style.cls}`}
-      >
+      <div className={`rounded-lg border px-3 py-2 flex items-start gap-2 ${style.cls}`}>
         <style.Icon size={14} className="shrink-0 mt-0.5" />
         <div>
-          <p className="text-[10px] uppercase tracking-wide opacity-80">
-            Verdict
-          </p>
+          <p className="text-[10px] uppercase tracking-wide opacity-80">Verdict</p>
           <p className="text-sm font-bold">{style.label}</p>
-          <p className="text-xs mt-0.5 leading-relaxed">
-            {critique.verdict_reason}
-          </p>
+          <p className="text-xs mt-0.5 leading-relaxed">{critique.verdict_reason}</p>
         </div>
       </div>
 
@@ -865,9 +779,7 @@ function CritiquePanel({ critique }: { critique: TemplateCritique }) {
           </h5>
           <ul className="space-y-1">
             {critique.strengths.map((s, i) => (
-              <li key={i} className="text-xs text-foreground leading-relaxed">
-                • {s}
-              </li>
+              <li key={i} className="text-xs text-foreground leading-relaxed">• {s}</li>
             ))}
           </ul>
         </div>
@@ -878,9 +790,7 @@ function CritiquePanel({ critique }: { critique: TemplateCritique }) {
           </h5>
           <ul className="space-y-1">
             {critique.weaknesses.map((w, i) => (
-              <li key={i} className="text-xs text-foreground leading-relaxed">
-                • {w}
-              </li>
+              <li key={i} className="text-xs text-foreground leading-relaxed">• {w}</li>
             ))}
           </ul>
         </div>
@@ -891,9 +801,7 @@ function CritiquePanel({ critique }: { critique: TemplateCritique }) {
           <h5 className="text-[10px] uppercase tracking-wide text-primary-500 font-semibold mb-1.5">
             Ready-to-ship rewrite
           </h5>
-          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-            {critique.rewrite}
-          </p>
+          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{critique.rewrite}</p>
         </div>
       )}
     </div>
@@ -905,12 +813,9 @@ function ScoreTile({ label, value }: { label: string; value: number }) {
     value >= 8 ? "text-status-green" : value >= 6 ? "text-status-yellow" : "text-status-red";
   return (
     <div className="rounded-md border border-border p-2 bg-sidebar/30 text-center">
-      <p className="text-[9px] uppercase tracking-wide text-text-muted">
-        {label}
-      </p>
+      <p className="text-[9px] uppercase tracking-wide text-text-muted">{label}</p>
       <p className={`text-sm font-bold mt-0.5 ${tone}`}>
-        {value}
-        <span className="text-[9px] text-text-muted font-normal">/10</span>
+        {value}<span className="text-[9px] text-text-muted font-normal">/10</span>
       </p>
     </div>
   );
