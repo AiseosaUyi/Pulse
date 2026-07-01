@@ -320,7 +320,7 @@ export function ImportDataModal({ open, onClose, tenantSlug }: Props) {
         <div>
           <h2 className="text-foreground font-semibold text-[17px]">Import data</h2>
           {phase === "idle" && (
-            <p className="text-text-muted text-sm mt-0.5">ZIP, CSV, JSON, or a screenshot — we'll figure it out.</p>
+            <p className="text-text-muted text-sm mt-0.5">Select the platform first, then upload your export.</p>
           )}
         </div>
         {!busy && (
@@ -335,13 +335,39 @@ export function ImportDataModal({ open, onClose, tenantSlug }: Props) {
         {/* ── IDLE ── */}
         {phase === "idle" && (
           <>
-            {/* Drop zone */}
+            {/* Platform selector — required before anything else */}
+            <div>
+              <label className="text-xs font-medium text-foreground block mb-1.5">
+                Platform <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value)}
+                className={`w-full h-9 px-3 rounded-lg border bg-card text-sm transition-colors ${
+                  platform ? "border-border text-foreground" : "border-primary-500/50 text-text-muted"
+                }`}
+              >
+                <option value="">Select platform…</option>
+                {PLATFORMS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+              {!platform && (
+                <p className="text-[11px] text-text-muted mt-1">Select which platform this data belongs to first.</p>
+              )}
+            </div>
+
+            {/* Drop zone — locked until platform is chosen */}
             <div
-              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${dragging ? "border-primary-500 bg-primary-500/5" : "border-border/50 hover:border-primary-500/40 hover:bg-sidebar/40"}`}
-              onClick={() => inputRef.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                !platform
+                  ? "border-border/30 opacity-40 cursor-not-allowed"
+                  : dragging
+                  ? "border-primary-500 bg-primary-500/5 cursor-pointer"
+                  : "border-border/50 hover:border-primary-500/40 hover:bg-sidebar/40 cursor-pointer"
+              }`}
+              onClick={() => platform && inputRef.current?.click()}
+              onDragOver={(e) => { if (!platform) return; e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
-              onDrop={onDrop}
+              onDrop={(e) => { if (!platform) return; onDrop(e); }}
             >
               <Upload size={22} className="mx-auto mb-2 text-text-muted" />
               <p className="text-sm text-foreground font-medium">Drop your file here</p>
@@ -349,25 +375,12 @@ export function ImportDataModal({ open, onClose, tenantSlug }: Props) {
               <p className="text-[10px] text-text-muted/60 mt-3 tracking-wide">ZIP · CSV · JSON · HTML · PNG · JPG</p>
             </div>
 
-            {/* Platform selector */}
-            <div>
-              <label className="text-xs text-text-muted block mb-1.5">Platform <span className="opacity-60">(optional — we auto-detect)</span></label>
-              <select
-                value={platform}
-                onChange={(e) => setPlatform(e.target.value)}
-                className="w-full h-9 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
-              >
-                <option value="">Auto-detect</option>
-                {PLATFORMS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </div>
-
             <input ref={inputRef} type="file" accept={ACCEPT} className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) run(f); e.target.value = ""; }}
             />
 
-            <Button onClick={() => inputRef.current?.click()} className="w-full gap-2">
-              <Upload size={14} /> Choose file
+            <Button onClick={() => inputRef.current?.click()} disabled={!platform} className="w-full gap-2">
+              <Upload size={14} /> Analyze file
             </Button>
           </>
         )}
