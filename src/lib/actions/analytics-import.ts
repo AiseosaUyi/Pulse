@@ -228,7 +228,7 @@ export async function generateAnalyticsReport(
   const postsPerWeek = ((postsData.length / periodDays) * 7).toFixed(1);
 
   const platformGuidance: Record<string, string> = {
-    instagram: "Instagram rewards accounts that post feed content (photos + carousels + reels) 4–7x/week AND stories consistently (3–7 stories/day is a realistic starting cadence for a small team; repurposing and archiving older stories is a valid and common strategy). Reels are the #1 follower growth lever right now — the algorithm distributes Reels to non-followers. Carousels drive saves and come back to the algorithm. Stories build retention but don't grow new followers on their own.",
+    instagram: "TEAM CONTEXT: One marketer + one content creator who is frequently unavailable. Realistic stretched maximum: 2–3 feed posts/week, 1 Reel/week (up to 2 on a good week), 1–3 stories/day (achievable by repurposing feed posts to stories, resharing older archived stories, and using behind-the-scenes clips). Consistency beats volume — 2 posts/week every week is better than 7 one week and 0 the next. Reels are the #1 growth lever (algorithm distributes them to non-followers) so protecting at least 1 Reel/week is the top priority even if everything else drops. Carousels drive saves and compound over time. Stories build retention but don't grow new followers — repurposing is fine.",
     twitter: "X/Twitter rewards high-frequency original tweets (5–10/day for fast-growing accounts), threads for depth, and reply-farming (engaging in trending conversations). Quote tweets with takes drive impressions far above normal posts. Posting windows: 8am, 12pm, 5pm in the audience's timezone.",
     tiktok: "TikTok rewards volume and iteration: 2–4 videos/day is normal for fast-growing accounts. The For You page distributes to non-followers based on watch-time and completion rate. Hooks in the first 1–3 seconds are everything. Trending sounds multiply reach 3–5x.",
     linkedin: "LinkedIn rewards 3–5 posts/week. Carousels (PDF documents) get the highest organic reach. Personal stories + professional insight outperform company news. Comments in the first hour heavily influence algorithmic reach.",
@@ -272,7 +272,7 @@ ${topPosts.map((p, i) => `${i + 1}. [${p.date}] [${p.mediaType ?? "post"}] ${p.c
 
 YOUR OUTPUT MUST INCLUDE:
 
-narrative: 3 paragraphs — (1) honest assessment of current trajectory, naming which months grew vs declined and why based on data, (2) what content types and behaviors are driving results vs what's holding the account back, (3) what 10x growth requires and what's realistically achievable with a small team + AI tools. Be direct. Name the numbers.
+narrative: 3 paragraphs — (1) honest assessment of current trajectory, naming which months grew vs declined and why based on data, (2) what content types and behaviors are driving results vs what's holding the account back, (3) what 10x growth requires from a team of ONE marketer and ONE unreliable content creator — be specific about what 2–3 posts/week, 1 Reel/week, and 1–3 stories/day (repurposed) can realistically achieve. Be direct. Name the numbers.
 
 recommendations: 5 specific, numbered tactical actions. Each must reference actual data points from this account. No filler.
 
@@ -280,12 +280,12 @@ growthActions: 5 growth-specific plays to 10x followers/visibility. Each needs:
   - title: short action name
   - impact: "Critical" | "High" | "Medium"
   - timeframe: "This week" | "This month" | "Ongoing" | "Next 90 days"
-  - body: exactly what to do, referencing the account's data and the platform algorithm. Keep recommendations achievable — a small team with AI content tools can handle 4–7 feed posts/week and 3–7 stories/day if repurposing is allowed.
+  - body: exactly what to do, referencing the account's data and the platform algorithm. All recommendations must be achievable by ONE marketer + ONE unreliable content creator at their realistic maximum: 2–3 feed posts/week, 1 Reel/week as the priority, 1–3 stories/day via repurposing. Do not recommend higher volumes than this.
 
 frequencyVerdict:
   - current: actual current posting pace (calculate from this data — posts/week, broken down by type if possible)
-  - recommended: what frequency the platform algorithm rewards for consistent growth, calibrated for a small team (not influencer-scale)
-  - gap: what's missing between current and recommended pace
+  - recommended: the realistic maximum for a one-marketer + one-unreliable-content-creator team stretched to capacity (2–3 feed posts/week, 1 Reel/week minimum, 1–3 stories/day via repurposing)
+  - gap: what specifically needs to change to reach that pace, given the team constraint
 
 missingData: list every piece of data that would make this analysis significantly better — be specific (e.g. "Current follower count to calculate follower growth rate", "Stories analytics file from Instagram export", "Reach by content type", "Hashtag performance data", "Profile visit data"). List at least 4–6 items.
 

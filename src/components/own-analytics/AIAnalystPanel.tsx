@@ -201,9 +201,9 @@ export function AIAnalystPanel({ tenantSlug, platform, posts, initialReport }: P
                       <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-3">By content type</p>
                       <div className="space-y-2">
                         {contentInsights.map((c, i) => (
-                          <div key={i} className="flex items-start gap-2 p-3 rounded-xl bg-sidebar/50 border border-border/40">
-                            <span className="shrink-0 text-[10px] font-semibold text-text-muted uppercase bg-border/30 px-1.5 py-0.5 rounded mt-0.5">{c.type}</span>
-                            <div>
+                          <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-sidebar/50 border border-border/40">
+                            <span className="shrink-0 w-28 text-[10px] font-semibold text-text-muted uppercase bg-border/30 px-1.5 py-0.5 rounded mt-0.5 leading-tight">{c.type}</span>
+                            <div className="min-w-0">
                               <p className="text-[11px] text-foreground leading-relaxed">{c.verdict}</p>
                               <p className="text-[10px] text-text-muted mt-0.5">{c.count} posts</p>
                             </div>
@@ -224,11 +224,13 @@ export function AIAnalystPanel({ tenantSlug, platform, posts, initialReport }: P
                   <div className="space-y-3">
                     {growthActions.map((a, i) => (
                       <div key={i} className="p-4 rounded-xl bg-sidebar/50 border border-border/40">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <p className="text-[12px] font-semibold text-foreground leading-snug">{a.title}</p>
-                          <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${IMPACT_STYLES[a.impact] ?? IMPACT_STYLES.Medium}`}>
-                            {a.impact}
-                          </span>
+                        <div className="flex items-start gap-3 mb-2">
+                          <p className="text-[12px] font-semibold text-foreground leading-snug flex-1">{a.title}</p>
+                          <div className="shrink-0 w-16 flex justify-end">
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${IMPACT_STYLES[a.impact] ?? IMPACT_STYLES.Medium}`}>
+                              {a.impact}
+                            </span>
+                          </div>
                         </div>
                         <p className="text-[11px] text-text-muted leading-relaxed">{a.body}</p>
                         <div className="flex items-center gap-1 mt-2">
