@@ -20,6 +20,13 @@ interface FrequencyVerdict {
   gap: string;
 }
 
+interface Projections {
+  conservative: string;
+  withViralMoment: string;
+  keyMultiplier: string;
+  viralPotential: string;
+}
+
 interface ContentInsight {
   type: string;
   count: number;
@@ -30,10 +37,10 @@ interface Report {
   narrative: string;
   recommendations: Array<{ title: string; body: string }>;
   generated_at: string;
-  // extended — only present on reports generated after the schema update
   raw_metrics?: {
     growthActions?: GrowthAction[];
     frequencyVerdict?: FrequencyVerdict;
+    projections?: Projections;
     missingData?: string[];
     contentInsights?: ContentInsight[];
   } | null;
@@ -60,6 +67,7 @@ export function AIAnalystPanel({ tenantSlug, platform, posts, initialReport }: P
 
   const growthActions = report?.raw_metrics?.growthActions ?? [];
   const frequencyVerdict = report?.raw_metrics?.frequencyVerdict ?? null;
+  const projections = report?.raw_metrics?.projections ?? null;
   const missingData = report?.raw_metrics?.missingData ?? [];
   const contentInsights = report?.raw_metrics?.contentInsights ?? [];
   const hasExtended = growthActions.length > 0 || !!frequencyVerdict || missingData.length > 0;
@@ -168,7 +176,7 @@ export function AIAnalystPanel({ tenantSlug, platform, posts, initialReport }: P
                 </div>
               )}
 
-              {/* Overview — narrative + recommendations + content insights */}
+              {/* Overview — narrative + projections + recommendations + content insights */}
               {(activeSection === "overview" || !hasExtended) && (
                 <div className="px-5 py-5 space-y-5">
                   <div className="prose prose-sm max-w-none text-sm text-foreground leading-relaxed">
@@ -176,6 +184,39 @@ export function AIAnalystPanel({ tenantSlug, platform, posts, initialReport }: P
                       <p key={i} className="mb-3 last:mb-0">{para}</p>
                     ))}
                   </div>
+
+                  {/* Projections */}
+                  {projections && (
+                    <div>
+                      <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-3">12-month outlook</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                        <div className="p-3 rounded-xl bg-sidebar/50 border border-border/40">
+                          <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Cadence only</p>
+                          <p className="text-[12px] font-semibold text-foreground">{projections.conservative}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-primary-500/5 border border-primary-500/20">
+                          <p className="text-[10px] font-semibold text-primary-500 uppercase tracking-wider mb-1">With a breakout Reel</p>
+                          <p className="text-[12px] font-semibold text-foreground">{projections.withViralMoment}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2 p-3 rounded-xl bg-sidebar/50 border border-border/40">
+                        <Zap size={12} className="text-primary-500 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[11px] font-semibold text-foreground mb-0.5">The multiplier</p>
+                          <p className="text-[11px] text-text-muted leading-relaxed">{projections.keyMultiplier}</p>
+                        </div>
+                        <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full border ml-auto ${
+                          projections.viralPotential?.toLowerCase().startsWith("high")
+                            ? "bg-green-500/10 text-green-600 border-green-500/20"
+                            : projections.viralPotential?.toLowerCase().startsWith("medium")
+                            ? "bg-orange-500/10 text-orange-500 border-orange-500/20"
+                            : "bg-sidebar text-text-muted border-border/40"
+                        }`}>
+                          {projections.viralPotential?.split(" ")[0]} virality
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {report.recommendations.length > 0 && (
                     <div>

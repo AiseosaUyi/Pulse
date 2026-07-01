@@ -122,6 +122,12 @@ const AnalysisSchema = z.object({
     recommended: z.string(),
     gap: z.string(),
   }),
+  projections: z.object({
+    conservative: z.string(),
+    withViralMoment: z.string(),
+    keyMultiplier: z.string(),
+    viralPotential: z.string(),
+  }),
   missingData: z.array(z.string()),
   contentInsights: z.array(z.object({
     type: z.string(),
@@ -236,6 +242,15 @@ export async function generateAnalyticsReport(
 
   const prompt = `You are a world-class social media growth strategist. Your job is to analyze this ${platform} account's data and build a SPECIFIC, AMBITIOUS but REALISTIC plan to grow followers and visibility 10x over 12 months. Recommendations must be achievable by a small team with the help of AI content tools. Do not give generic advice. Every recommendation must be rooted in this account's actual data.
 
+BEDROCK PRINCIPLES — apply these to every analysis, for every brand, always:
+1. CADENCE IS THE FLOOR, NOT THE CEILING. More consistent posting grows reach linearly. It won't 10x anything by itself. Name what cadence realistically delivers vs what a breakout moment delivers.
+2. ONE REEL THAT LANDS IS THE MULTIPLIER. A single piece of content that hits the algorithm's distribution window can deliver what 3 months of cadence can't. The entire strategy must be oriented around making that happen repeatedly.
+3. CATEGORY SHAREABILITY DETERMINES THE CEILING. Assess whether this account's niche is inherently shareable (drinks, food, events, parties, fashion, fitness, humor = high virality potential; B2B, professional services, niche hobbies = lower). A drinks or events brand has a massive natural advantage — people tag friends, share to stories, save for their next party. Name this explicitly.
+4. UGC IS FREE CONTENT. Real moments — events, customers, deliveries, behind the scenes — should be systematically captured and repurposed. This is the most authentic content and the algorithm rewards it.
+5. 10X REQUIRES A BREAKOUT MOMENT. Without at least 1-2 pieces of content hitting wide distribution per quarter, cadence alone gets you 2-4x over 12 months. Be honest about this.
+6. HOOKS ARE EVERYTHING FOR REELS. The first 1-3 seconds determine whether the algorithm distributes to non-followers. Every Reel recommendation must include a hook strategy.
+7. BE HONEST ABOUT TRAJECTORY. If current execution pattern continues unchanged, say exactly what outcome to expect. Avoid false optimism.
+
 PLATFORM: ${platform}
 PERIOD ANALYSED: ${dates[0]} to ${dates[dates.length - 1]}
 DATA IN THIS REPORT: ${postsData.length} posts, avg ${postsPerWeek} posts/week
@@ -272,7 +287,7 @@ ${topPosts.map((p, i) => `${i + 1}. [${p.date}] [${p.mediaType ?? "post"}] ${p.c
 
 YOUR OUTPUT MUST INCLUDE:
 
-narrative: 3 paragraphs — (1) honest assessment of current trajectory, naming which months grew vs declined and why based on data, (2) what content types and behaviors are driving results vs what's holding the account back, (3) what 10x growth requires from a team of ONE marketer and ONE unreliable content creator — be specific about what 2–3 posts/week, 1 Reel/week, and 1–3 stories/day (repurposed) can realistically achieve. Be direct. Name the numbers.
+narrative: 3 paragraphs — (1) honest assessment of current trajectory, naming which months grew vs declined and why based on data, (2) what content types and behaviors are driving results vs what's holding the account back, (3) what cadence alone delivers vs what happens when a Reel breaks through — name both scenarios with real numbers, and assess whether this brand's content category has natural virality potential. Be direct. Name the numbers.
 
 recommendations: 5 specific, numbered tactical actions. Each must reference actual data points from this account. No filler.
 
@@ -286,6 +301,12 @@ frequencyVerdict:
   - current: actual current posting pace (calculate from this data — posts/week, broken down by type if possible)
   - recommended: the realistic maximum for a one-marketer + one-unreliable-content-creator team stretched to capacity (2–3 feed posts/week, 1 Reel/week minimum, 1–3 stories/day via repurposing)
   - gap: what specifically needs to change to reach that pace, given the team constraint
+
+projections: 12-month outlook based on the data and the team constraint:
+  - conservative: what consistent cadence alone (2-3 posts/week, 1 Reel/week, no viral moment) realistically delivers — be specific (e.g. "~2,500–3,500 followers from current 915")
+  - withViralMoment: what happens if 1–2 Reels hit wide distribution per quarter — specific follower range
+  - keyMultiplier: the single highest-leverage action that separates the conservative and viral-moment scenarios — what exactly needs to happen
+  - viralPotential: honest rating of how shareable this account's content category is (High / Medium / Low) with a one-sentence reason
 
 missingData: list every piece of data that would make this analysis significantly better — be specific (e.g. "Current follower count to calculate follower growth rate", "Stories analytics file from Instagram export", "Reach by content type", "Hashtag performance data", "Profile visit data"). List at least 4–6 items.
 
@@ -332,6 +353,7 @@ rawMetrics: compute from the data above.`;
         ...parsed.rawMetrics,
         growthActions: parsed.growthActions,
         frequencyVerdict: parsed.frequencyVerdict,
+        projections: parsed.projections,
         missingData: parsed.missingData,
         contentInsights: parsed.contentInsights,
       },
