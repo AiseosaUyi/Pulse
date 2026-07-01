@@ -130,19 +130,11 @@ export function ZipUploadSection({ tenantSlug, onDone }: Props) {
 
   return (
     <div className="bg-card rounded-2xl border border-border p-5">
-      <div className="flex items-center gap-2 mb-1">
+      <div className="flex items-center gap-2 mb-4">
         <Archive size={16} className="text-primary-500" />
         <h3 className="text-foreground font-semibold text-sm">Data export ZIP</h3>
       </div>
-      <p className="text-xs text-text-muted mb-3 leading-relaxed">
-        Drop your Instagram, Twitter/X, or TikTok archive. Only analytics files are read — media is skipped entirely.
-      </p>
-
-      <div className="text-[11px] text-text-muted mb-3 space-y-0.5">
-        <p><span className="font-medium text-foreground">Instagram</span> → Settings → Your activity → Download your information</p>
-        <p><span className="font-medium text-foreground">Twitter/X</span> → Settings → Your account → Download an archive</p>
-        <p><span className="font-medium text-foreground">TikTok</span> → Settings → Privacy → Download data</p>
-      </div>
+      <p className="text-xs text-text-muted mb-4">Instagram, Twitter/X, or TikTok archive.</p>
 
       <input
         ref={inputRef}
