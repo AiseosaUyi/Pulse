@@ -674,18 +674,26 @@ export function OutboundClient({
                         {selectedIds.has(p.id) ? <CheckSquare size={14} className="text-primary-500" /> : <Square size={14} />}
                       </button>
 
-                      {/* 3-column grid on desktop, single column on mobile */}
-                      <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-[1fr_200px_160px] gap-x-8 items-start">
+                      {/* 4-column grid on desktop, single column on mobile */}
+                      <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-[1fr_90px_160px_160px] gap-x-6 items-start">
 
-                        {/* Col 1: Identity */}
+                        {/* Col 1: Identity — display name headline, handle + status secondary, event title */}
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-semibold text-foreground">
+                          {/* Display Name — primary */}
+                          {p.displayName ? (
+                            <p className="text-sm font-semibold text-foreground leading-snug truncate">
+                              {p.displayName}
+                            </p>
+                          ) : (
+                            <p className="text-sm font-semibold text-foreground leading-snug truncate">
                               @{p.handle}
-                            </span>
-                            <span className="text-[10px] uppercase tracking-wide text-text-muted">
-                              {PLATFORM_LABELS[p.platform]}
-                            </span>
+                            </p>
+                          )}
+                          {/* Handle + status — secondary */}
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            {p.displayName && (
+                              <span className="text-[11px] text-text-muted">@{p.handle}</span>
+                            )}
                             <span
                               className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
                                 STATUS_TONE[p.status]
@@ -700,35 +708,27 @@ export function OutboundClient({
                               </span>
                             )}
                           </div>
-                          {(p.displayName || p.verifiedName) && (
-                            <p className="text-xs text-text-muted mt-0.5">
-                              {p.verifiedName
-                                ? `${p.verifiedName}${p.displayName && p.displayName !== p.verifiedName ? ` · ${p.displayName}` : ""}`
-                                : p.displayName}
+                          {/* Event title */}
+                          {p.eventTitle && (
+                            <p className="text-[11px] text-text-muted italic mt-0.5 truncate">
+                              {p.eventTitle}
                             </p>
                           )}
-                          {p.signalSummary && (
-                            <p className="text-xs text-text-secondary mt-0.5 line-clamp-1">
-                              {p.signalSummary}
-                            </p>
-                          )}
-                          {/* Mobile-only: context + temporal stacked below identity */}
+                          {/* Mobile-only: platform + context + temporal */}
                           <div className="sm:hidden mt-1 flex flex-col gap-0.5">
-                            {(p.category || p.location || p.eventTitle) && (
+                            <span className="text-[10px] uppercase tracking-wide text-text-muted">
+                              {PLATFORM_LABELS[p.platform]}
+                            </span>
+                            {(p.category || p.location) && (
                               <div className="flex items-center gap-2 flex-wrap">
-                                {p.eventTitle && (
-                                  <span className="text-[11px] text-text-muted italic">{p.eventTitle}</span>
-                                )}
                                 {p.category && (
                                   <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
-                                    <Tag size={12} />
-                                    {p.category}
+                                    <Tag size={12} />{p.category}
                                   </span>
                                 )}
                                 {p.location && (
                                   <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
-                                    <MapPin size={12} />
-                                    {p.location}
+                                    <MapPin size={12} />{p.location}
                                   </span>
                                 )}
                               </div>
@@ -737,28 +737,28 @@ export function OutboundClient({
                           </div>
                         </div>
 
-                        {/* Col 2: Context — event / category / location (desktop only) */}
+                        {/* Col 2: Platform (desktop only) */}
+                        <div className="hidden sm:flex items-start pt-0.5">
+                          <span className="text-[10px] uppercase tracking-wide text-text-muted">
+                            {PLATFORM_LABELS[p.platform]}
+                          </span>
+                        </div>
+
+                        {/* Col 3: Context — category + location only (desktop only) */}
                         <div className="hidden sm:flex flex-col gap-1 pt-0.5">
-                          {p.eventTitle && (
-                            <span className="text-[11px] text-text-muted italic leading-tight line-clamp-1">
-                              {p.eventTitle}
-                            </span>
-                          )}
                           {p.category && (
                             <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
-                              <Tag size={12} className="shrink-0" />
-                              {p.category}
+                              <Tag size={12} className="shrink-0" />{p.category}
                             </span>
                           )}
                           {p.location && (
                             <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
-                              <MapPin size={12} className="shrink-0" />
-                              {p.location}
+                              <MapPin size={12} className="shrink-0" />{p.location}
                             </span>
                           )}
                         </div>
 
-                        {/* Col 3: Last reachout (desktop only) */}
+                        {/* Col 4: Last reachout (desktop only) */}
                         <div className="hidden sm:block pt-0.5">
                           <ProspectTemporalLine p={p} tenantSlug={tenantSlug} onUpdate={updateProspect} />
                         </div>
