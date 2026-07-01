@@ -129,12 +129,14 @@ export function ZipUploadSection({ tenantSlug, onDone }: Props) {
   const busy = phase !== "idle" && phase !== "done" && phase !== "error";
 
   return (
-    <div className="bg-card rounded-2xl border border-border p-5">
-      <div className="flex items-center gap-2 mb-4">
+    <div className="bg-card rounded-2xl border border-border p-5 flex flex-col">
+      <div className="flex items-center gap-2 mb-2">
         <Archive size={16} className="text-primary-500" />
         <h3 className="text-foreground font-semibold text-sm">Data export ZIP</h3>
       </div>
-      <p className="text-xs text-text-muted mb-4">Instagram, Twitter/X, or TikTok archive.</p>
+      <p className="text-xs text-text-muted mb-4 grow">
+        If your download came as a ZIP file, upload it here — works with Instagram, Twitter/X, and TikTok archives.
+      </p>
 
       <input
         ref={inputRef}
@@ -152,10 +154,10 @@ export function ZipUploadSection({ tenantSlug, onDone }: Props) {
         size="sm"
         onClick={() => inputRef.current?.click()}
         disabled={busy}
-        className="gap-1.5"
+        className="gap-1.5 w-fit"
       >
         {busy ? <Loader2 size={13} className="animate-spin" /> : <Archive size={13} />}
-        {busy ? "Processing…" : "Choose ZIP file"}
+        {busy ? "Processing…" : "Upload ZIP"}
       </Button>
 
       {log.length > 0 && (

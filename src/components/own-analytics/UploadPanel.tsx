@@ -3,7 +3,6 @@
 import { useRef, useState, useTransition } from "react";
 import { FileText, Image as ImageIcon, FileJson, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { uploadCsv, uploadScreenshot, uploadDataExport } from "@/lib/actions/own-metrics";
 import type { OwnMetricsPlatform } from "@/lib/types/own-metrics";
 
@@ -130,153 +129,84 @@ export function UploadPanel({ tenantSlug, compact: _compact }: { tenantSlug: str
     <div className="space-y-4">
       <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* CSV export */}
-        <div className="bg-card rounded-2xl border border-border p-5">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="bg-card rounded-2xl border border-border p-5 flex flex-col">
+          <div className="flex items-center gap-2 mb-2">
             <FileText size={16} className="text-text-muted" />
             <h3 className="text-foreground font-semibold text-sm">CSV export</h3>
           </div>
-          <p className="text-xs text-text-muted mb-4">
-            From Meta Business Suite, TikTok, or LinkedIn Analytics.
-          </p>
+          <p className="text-xs text-text-muted mb-4 grow">From Meta Business Suite, TikTok, or LinkedIn Analytics.</p>
           <div className="space-y-3">
-            <div>
-              <Label htmlFor="csv-platform">Platform</Label>
-              <select
-                id="csv-platform"
-                value={csvPlatform}
-                onChange={(e) =>
-                  setCsvPlatform(e.target.value as OwnMetricsPlatform)
-                }
-                disabled={busy}
-                className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
-              >
-                {PLATFORMS.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <input
-              ref={csvInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (f) await handleCsv(f);
-                e.target.value = "";
-              }}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => csvInputRef.current?.click()}
+            <select
+              value={csvPlatform}
+              onChange={(e) => setCsvPlatform(e.target.value as OwnMetricsPlatform)}
               disabled={busy}
+              className="w-full h-9 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
             >
-              {pendingAction === "csv" ? "Importing..." : "Choose CSV file"}
+              {PLATFORMS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+            <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden"
+              onChange={async (e) => { const f = e.target.files?.[0]; if (f) await handleCsv(f); e.target.value = ""; }}
+            />
+            <Button variant="outline" size="sm" onClick={() => csvInputRef.current?.click()} disabled={busy}>
+              {pendingAction === "csv" ? "Importing…" : "Upload CSV"}
             </Button>
           </div>
         </div>
 
         {/* JSON / HTML data export */}
-        <div className="bg-card rounded-2xl border border-border p-5">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="bg-card rounded-2xl border border-border p-5 flex flex-col">
+          <div className="flex items-center gap-2 mb-2">
             <FileJson size={16} className="text-text-muted" />
-            <h3 className="text-foreground font-semibold text-sm">JSON / HTML export</h3>
+            <h3 className="text-foreground font-semibold text-sm">JSON / HTML file</h3>
           </div>
-          <p className="text-xs text-text-muted mb-4">
-            TikTok or Instagram individual file download.
-          </p>
+          <p className="text-xs text-text-muted mb-4 grow">Individual file from your TikTok or Instagram download.</p>
           <div className="space-y-3">
-            <div>
-              <Label htmlFor="export-platform">Platform hint (optional)</Label>
-              <select
-                id="export-platform"
-                value={exportPlatform}
-                onChange={(e) =>
-                  setExportPlatform(e.target.value as OwnMetricsPlatform | "")
-                }
-                disabled={busy}
-                className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
-              >
-                <option value="">Auto-detect</option>
-                {PLATFORMS.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <input
-              ref={exportInputRef}
-              type="file"
-              accept=".json,.html,.htm,application/json,text/html"
-              className="hidden"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (f) await handleDataExport(f);
-                e.target.value = "";
-              }}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportInputRef.current?.click()}
+            <select
+              value={exportPlatform}
+              onChange={(e) => setExportPlatform(e.target.value as OwnMetricsPlatform | "")}
               disabled={busy}
+              className="w-full h-9 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
             >
-              {pendingAction === "export" ? "Analyzing..." : "Choose JSON or HTML file"}
+              <option value="">Auto-detect platform</option>
+              {PLATFORMS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+            <input ref={exportInputRef} type="file" accept=".json,.html,.htm,application/json,text/html" className="hidden"
+              onChange={async (e) => { const f = e.target.files?.[0]; if (f) await handleDataExport(f); e.target.value = ""; }}
+            />
+            <Button variant="outline" size="sm" onClick={() => exportInputRef.current?.click()} disabled={busy}>
+              {pendingAction === "export" ? "Analysing…" : "Upload file"}
             </Button>
           </div>
         </div>
 
         {/* Screenshot */}
-        <div className="bg-card rounded-2xl border border-border p-5">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="bg-card rounded-2xl border border-border p-5 flex flex-col">
+          <div className="flex items-center gap-2 mb-2">
             <ImageIcon size={16} className="text-text-muted" />
             <h3 className="text-foreground font-semibold text-sm">Screenshot</h3>
           </div>
-          <p className="text-xs text-text-muted mb-4">
-            Paste a screenshot — AI pulls the numbers out for you.
-          </p>
+          <p className="text-xs text-text-muted mb-4 grow">AI reads the numbers from your screenshot for you.</p>
           <div className="space-y-3">
-            <div>
-              <Label htmlFor="shot-platform">Platform hint (optional)</Label>
-              <select
-                id="shot-platform"
-                value={shotPlatform}
-                onChange={(e) =>
-                  setShotPlatform(e.target.value as OwnMetricsPlatform | "")
-                }
-                disabled={busy}
-                className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
-              >
-                <option value="">Auto-detect</option>
-                {PLATFORMS.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <input
-              ref={shotInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="hidden"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (f) await handleScreenshot(f);
-                e.target.value = "";
-              }}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => shotInputRef.current?.click()}
+            <select
+              value={shotPlatform}
+              onChange={(e) => setShotPlatform(e.target.value as OwnMetricsPlatform | "")}
               disabled={busy}
+              className="w-full h-9 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
             >
-              {pendingAction === "screenshot" ? "Analyzing..." : "Choose screenshot"}
+              <option value="">Auto-detect platform</option>
+              {PLATFORMS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+            <input ref={shotInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+              onChange={async (e) => { const f = e.target.files?.[0]; if (f) await handleScreenshot(f); e.target.value = ""; }}
+            />
+            <Button variant="outline" size="sm" onClick={() => shotInputRef.current?.click()} disabled={busy}>
+              {pendingAction === "screenshot" ? "Analysing…" : "Upload screenshot"}
             </Button>
           </div>
         </div>

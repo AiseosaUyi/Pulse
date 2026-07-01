@@ -1,8 +1,7 @@
 import { getCurrentTenant } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listOwnMetrics } from "@/lib/services/own-metrics";
-import { UploadPanel } from "@/components/own-analytics/UploadPanel";
-import { ZipUploadSection } from "@/components/own-analytics/ZipUploadSection";
+import { UnifiedUploadCard } from "@/components/own-analytics/UnifiedUploadCard";
 import { PlatformTabsClient } from "@/components/own-analytics/PlatformTabsClient";
 import type { OwnMetricsPlatform } from "@/lib/types/own-metrics";
 
@@ -49,12 +48,8 @@ export default async function OwnAnalyticsPage() {
       {/* Import section */}
       <section className="space-y-4">
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Add data</h2>
-        {/* ZIP card takes 1 col; UploadPanel spans remaining 3 cols at xl */}
-        <div className="grid xl:grid-cols-4 gap-4">
-          <ZipUploadSection tenantSlug={tenantSlug} />
-          <div className="xl:col-span-3">
-            <UploadPanel tenantSlug={tenantSlug} compact />
-          </div>
+        <div className="max-w-sm">
+          <UnifiedUploadCard tenantSlug={tenantSlug} />
         </div>
       </section>
 
