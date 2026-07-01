@@ -19,6 +19,22 @@ function shortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
+// Repairs captions where UTF-8 bytes were misread as Latin-1 (mojibake).
+// Pattern: â€™ → ', ð[box] → emoji, etc. Falls back to original on failure.
+function cleanCaption(text: string | null | undefined): string {
+  if (!text) return "";
+  if (/â€|Ã[À-ÿ]/.test(text)) {
+    try {
+      const bytes = new Uint8Array(text.length);
+      for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0xff;
+      const fixed = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      if (!fixed.includes("�")) return fixed;
+    } catch { /* fall through */ }
+  }
+  // Strip lone high bytes that couldn't decode (e.g. bare ð without continuation bytes)
+  return text.replace(/[\x80-\x9F�]/g, "").replace(/\s{2,}/g, " ").trim();
+}
+
 interface KpiProps { label: string; value: string; sub?: string; trend?: "up" | "down" | "flat" }
 function KpiCard({ label, value, sub, trend }: KpiProps) {
   return (
@@ -84,7 +100,7 @@ function TopPostsTable({ posts, metricKey, metricLabel }: {
               <td className="py-2 pr-3 text-text-muted whitespace-nowrap">{shortDate(p.capturedAt)}</td>
               <td className="py-2 pr-3 max-w-[260px]">
                 <div className="flex items-start gap-1">
-                  <span className="text-foreground line-clamp-2 leading-snug">{p.caption || p.title || "—"}</span>
+                  <span className="text-foreground line-clamp-2 leading-snug">{cleanCaption(p.caption || p.title) || "—"}</span>
                   {p.externalUrl && (
                     <a href={p.externalUrl} target="_blank" rel="noreferrer" className="shrink-0 mt-0.5 text-primary-500 hover:text-primary-600">
                       <ExternalLink size={10} />

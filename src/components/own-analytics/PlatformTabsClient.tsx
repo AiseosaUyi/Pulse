@@ -19,6 +19,23 @@ const TABS: { id: OwnMetricsPlatform; label: string; color: string }[] = [
   { id: "linkedin", label: "LinkedIn", color: "#0A66C2" },
 ];
 
+type PeriodKey = "1m" | "3m" | "6m" | "1y" | "all";
+const PERIODS: { key: PeriodKey; label: string; months: number | null }[] = [
+  { key: "1m",  label: "1M",  months: 1  },
+  { key: "3m",  label: "3M",  months: 3  },
+  { key: "6m",  label: "6M",  months: 6  },
+  { key: "1y",  label: "1Y",  months: 12 },
+  { key: "all", label: "All", months: null },
+];
+
+function cutoffForPeriod(key: PeriodKey): string | null {
+  const p = PERIODS.find((p) => p.key === key);
+  if (!p || p.months === null) return null;
+  const d = new Date();
+  d.setMonth(d.getMonth() - p.months);
+  return d.toISOString().slice(0, 10);
+}
+
 function relativeDate(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
@@ -50,15 +67,23 @@ export function PlatformTabsClient({ posts, tenantSlug, reportsByPlatform, impor
   })).sort((a, b) => b.count - a.count)[0]?.id ?? "instagram";
 
   const [active, setActive] = useState<OwnMetricsPlatform>(mostDataPlatform);
+  const [period, setPeriod] = useState<PeriodKey>("6m");
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearing, startClearing] = useTransition();
 
   const platformPosts = posts.filter((p) => p.platform === active);
-  const filteredPosts = selectedBatchId
-    ? platformPosts.filter((p) => p.importBatchId === selectedBatchId)
-    : platformPosts;
+
+  // Apply period filter unless a specific batch is selected (batch already scopes the range)
+  const cutoff = selectedBatchId ? null : cutoffForPeriod(period);
+  const filteredPosts = (() => {
+    let result = selectedBatchId
+      ? platformPosts.filter((p) => p.importBatchId === selectedBatchId)
+      : platformPosts;
+    if (cutoff) result = result.filter((p) => p.capturedAt.slice(0, 10) >= cutoff);
+    return result;
+  })();
   const hasPlatformData = platformPosts.length > 0;
 
   const platformSessions = importSessions.filter((s) => s.platform === active);
@@ -231,6 +256,30 @@ export function PlatformTabsClient({ posts, tenantSlug, reportsByPlatform, impor
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Period filter pills — hidden when a specific batch is active */}
+      {!selectedBatchId && (
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-text-muted mr-1">Period:</span>
+          {PERIODS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => { setPeriod(p.key); setSelectedBatchId(null); }}
+              className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
+                period === p.key
+                  ? "bg-primary-500 text-white"
+                  : "bg-sidebar text-text-muted hover:text-foreground hover:bg-sidebar/80"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+          <span className="ml-2 text-[11px] text-text-muted">
+            {filteredPosts.length} posts
+          </span>
         </div>
       )}
 
