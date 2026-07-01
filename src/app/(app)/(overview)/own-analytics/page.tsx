@@ -1,7 +1,7 @@
 import { getCurrentTenant } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listOwnMetrics } from "@/lib/services/own-metrics";
-import { UnifiedUploadCard } from "@/components/own-analytics/UnifiedUploadCard";
+import { ImportDataButton } from "@/components/own-analytics/ImportDataButton";
 import { PlatformTabsClient } from "@/components/own-analytics/PlatformTabsClient";
 import type { OwnMetricsPlatform } from "@/lib/types/own-metrics";
 
@@ -38,20 +38,13 @@ export default async function OwnAnalyticsPage() {
   return (
     <div className="p-4 md:p-8 max-w-[1280px] space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-xl md:text-2xl font-bold text-foreground">Analytics</h1>
-        <p className="text-text-secondary text-sm mt-0.5">
-          Import your data, see the charts, get AI analysis.
-        </p>
-      </div>
-
-      {/* Import section */}
-      <section className="space-y-4">
-        <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Add data</h2>
-        <div className="max-w-sm">
-          <UnifiedUploadCard tenantSlug={tenantSlug} />
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Analytics</h1>
+          <p className="text-text-secondary text-sm mt-0.5">Platform-by-platform performance, AI analysis, top posts.</p>
         </div>
-      </section>
+        <ImportDataButton tenantSlug={tenantSlug} />
+      </div>
 
       {/* Platform tabs + analytics */}
       {hasPosts ? (

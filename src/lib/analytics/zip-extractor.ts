@@ -39,8 +39,11 @@ export function extractZip(file: File): Promise<ExtractedFile[]> {
         const dec = new TextDecoder("utf-8", { fatal: false });
         for (const [path, data] of Object.entries(files)) {
           if (!isAnalyticsFile(path)) continue;
-          // Skip very large files (> 8 MB) to avoid memory issues
-          if (data.byteLength > 8 * 1024 * 1024) continue;
+          // JSON files can be large (Instagram posts_1.json = 20-100 MB) — allow up to 150 MB.
+          // Binary/HTML files capped at 8 MB.
+          const isJson = path.toLowerCase().endsWith(".json");
+          const limit = isJson ? 150 * 1024 * 1024 : 8 * 1024 * 1024;
+          if (data.byteLength > limit) continue;
           try {
             results.push({ path, text: dec.decode(data) });
           } catch {
@@ -55,11 +58,17 @@ export function extractZip(file: File): Promise<ExtractedFile[]> {
   });
 }
 
-/** Detect which platform a ZIP belongs to based on folder names */
+/** Detect which platform a ZIP belongs to based on folder/file names */
 export function detectZipPlatform(files: ExtractedFile[]): OwnMetricsPlatform | null {
   const paths = files.map((f) => f.path.toLowerCase());
-  if (paths.some((p) => p.includes("your_instagram_activity") || p.includes("instagram"))) return "instagram";
-  if (paths.some((p) => p.includes("tweet.js") || p.includes("tweets.csv") || p.includes("twitter"))) return "twitter";
+  // Instagram: folder name OR presence of posts_N.json / reels.json / stories.json
+  if (
+    paths.some((p) => p.includes("your_instagram_activity") || p.includes("instagram")) ||
+    paths.some((p) => /posts_\d*\.json$/.test(p) || /reels(?:_media)?\.json$/.test(p))
+  ) return "instagram";
+  // Twitter/X: tweet.js is the canonical file; also CSV analytics exports
+  if (paths.some((p) => p.includes("tweet.js") || /tweets?\.csv$/.test(p) || p.includes("twitter"))) return "twitter";
+  // TikTok: user_data.json is the canonical file
   if (paths.some((p) => p.includes("user_data.json") || p.includes("tiktok"))) return "tiktok";
   if (paths.some((p) => p.includes("linkedin"))) return "linkedin";
   return null;
