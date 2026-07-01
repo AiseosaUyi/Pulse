@@ -415,41 +415,42 @@ function CustomiseWizardModal({
       <div className="p-5 space-y-4">
         <div>
           <h3 className="text-base font-semibold text-foreground">Customise: {template.name.replace(/^Default — /, "")}</h3>
-          <p className="text-xs text-text-muted mt-0.5">AI will rewrite this template to match your voice and needs. You can edit the result before saving.</p>
+          <p className="text-xs text-text-muted mt-0.5">Give context, generate, edit, save.</p>
         </div>
 
         {/* Original template for reference */}
         <div className="rounded-lg border border-border bg-sidebar/40 p-3">
-          <p className="text-[10px] uppercase tracking-wide text-text-muted mb-1.5 font-medium">Starting template</p>
+          <p className="text-[10px] uppercase tracking-wide text-text-muted mb-1.5 font-medium">Starting point</p>
           <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{template.body}</p>
         </div>
 
         {/* Context inputs */}
         <div>
-          <Label>Your old messages <span className="text-text-muted font-normal">(optional)</span></Label>
+          <Label>Your messages <span className="text-text-muted font-normal text-[11px]">— paste 1–3 DMs you've sent before</span></Label>
           <Textarea
-            rows={4}
+            rows={3}
             value={exampleMessages}
             onChange={(e) => setExampleMessages(e.target.value)}
-            placeholder={"Paste 1–3 DMs you've sent before. The AI learns your natural voice and tone from these.\n\nExample:\n\"Hey [Name], saw your last event – insane crowd. We work with lounges to...\"\n\"Yo [Name], big fan of the Afrobeats nights...\""}
+            placeholder="Paste examples of your actual outreach style here…"
             className="text-sm leading-relaxed"
           />
         </div>
 
         <div>
-          <Label>What do you want to change? <span className="text-text-muted font-normal">(optional)</span></Label>
+          <Label>What to change <span className="text-text-muted font-normal text-[11px]">— tone, focus, length, etc.</span></Label>
           <Textarea
             rows={2}
             value={direction}
             onChange={(e) => setDirection(e.target.value)}
-            placeholder="e.g. Make it shorter, more casual. Focus on the ticketing pain point. Open with energy not a question."
+            placeholder="e.g. Shorter, more casual. Lead with the pain point."
             className="text-sm"
           />
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <div>
-            <Label className="text-[11px]">Platform</Label>
+        {/* Platform row + CTAs in one line */}
+        <div>
+          <Label className="text-[11px]">Platform</Label>
+          <div className="flex items-center gap-2 mt-1">
             <select
               value={platform}
               onChange={(e) => setPlatform(e.target.value as TemplatePlatform)}
@@ -459,16 +460,17 @@ function CustomiseWizardModal({
                 <option key={p} value={p}>{TEMPLATE_PLATFORM_LABELS[p]}</option>
               ))}
             </select>
+            <div className="flex-1" />
+            <Button size="sm" variant="ghost" onClick={onClose} disabled={isGenerating || isSaving}>Cancel</Button>
+            <Button
+              onClick={generate}
+              disabled={isGenerating}
+              className="gap-1.5"
+            >
+              {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+              {isGenerating ? "Generating…" : generatedBody ? "Regenerate" : "Generate"}
+            </Button>
           </div>
-          <div className="flex-1" />
-          <Button
-            onClick={generate}
-            disabled={isGenerating}
-            className="gap-1.5 mt-4"
-          >
-            {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-            {isGenerating ? "Generating…" : generatedBody ? "Regenerate" : "Generate my version"}
-          </Button>
         </div>
 
         {error && (
@@ -524,9 +526,6 @@ function CustomiseWizardModal({
           </div>
         )}
 
-        <div className="flex justify-end pt-1">
-          <Button size="sm" variant="ghost" onClick={onClose} disabled={isGenerating || isSaving}>Cancel</Button>
-        </div>
       </div>
     </Dialog>
   );
