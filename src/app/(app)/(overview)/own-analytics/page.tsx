@@ -52,6 +52,7 @@ export default async function OwnAnalyticsPage() {
           posts={allMetrics}
           tenantSlug={tenantSlug}
           reportsByPlatform={reportsByPlatform}
+          isOwner={tenant?.role === "owner"}
         />
       ) : (
         <div className="rounded-2xl border border-dashed border-border/50 p-16 text-center">

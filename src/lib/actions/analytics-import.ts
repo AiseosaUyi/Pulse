@@ -1,7 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, getCurrentTenant } from "@/lib/auth";
 import { getModel, getModelId, logAiCall, estimateCostUsd } from "@/lib/ai/gateway";
 import { generateText, Output } from "ai";
 import { z } from "zod";
@@ -204,6 +204,38 @@ Write a concise narrative (2-3 paragraphs) analyzing performance, trends, and wh
     });
     return { success: false, error: String(err) };
   }
+}
+
+/** Owner-only: delete all analytics data for one platform from the current tenant. */
+export async function clearPlatformMetrics(
+  platform: OwnMetricsPlatform
+): Promise<{ success: true; deleted: number } | { success: false; error: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Not authenticated" };
+
+  const membership = await getCurrentTenant();
+  if (!membership) return { success: false, error: "No active tenant" };
+  if (membership.role !== "owner") return { success: false, error: "Only owners can clear analytics data" };
+
+  const tenantSlug = membership.slug;
+  const admin = createAdminClient();
+
+  const { error: metricsErr, count: metricsCount } = await admin
+    .from("own_post_metrics")
+    .delete({ count: "exact" })
+    .eq("tenant_slug", tenantSlug)
+    .eq("platform", platform);
+
+  if (metricsErr) return { success: false, error: metricsErr.message };
+
+  // Also remove AI reports for this platform
+  await admin
+    .from("analytics_ai_reports")
+    .delete()
+    .eq("tenant_slug", tenantSlug)
+    .eq("platform", platform);
+
+  return { success: true, deleted: metricsCount ?? 0 };
 }
 
 export async function getLatestReport(tenantSlug: string, platform: string) {
