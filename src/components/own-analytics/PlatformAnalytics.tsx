@@ -97,7 +97,7 @@ function TopPostsTable({ posts, metricKey, metricLabel }: {
           {sorted.map((p, i) => (
             <tr key={p.id} className="border-b border-border/20 hover:bg-sidebar/30 transition-colors">
               <td className="py-2 pr-3 text-text-muted">{i + 1}</td>
-              <td className="py-2 pr-3 text-text-muted whitespace-nowrap">{shortDate(p.capturedAt)}</td>
+              <td className="py-2 pr-3 text-text-muted whitespace-nowrap">{new Date(p.capturedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
               <td className="py-2 pr-3 max-w-[260px]">
                 <div className="flex items-start gap-1">
                   <span className="text-foreground line-clamp-2 leading-snug">{cleanCaption(p.caption || p.title) || "—"}</span>
