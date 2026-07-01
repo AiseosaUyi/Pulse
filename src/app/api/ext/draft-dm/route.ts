@@ -124,6 +124,7 @@ export async function POST(req: Request) {
     location: prospectRow.location ?? null,
     verifiedName: prospectRow.verified_name ?? null,
     eventTitle: prospectRow.event_title ?? null,
+    phone: prospectRow.phone ?? null,
     lastReachoutAt: prospectRow.last_reachout_at ?? null,
     lastTouchedAt: prospectRow.last_touched_at,
     createdAt: prospectRow.created_at,

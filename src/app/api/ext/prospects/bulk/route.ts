@@ -268,6 +268,7 @@ function toProspect(row: Record<string, unknown>): ProspectRecord {
     location: (row.location as string) ?? null,
     verifiedName: (row.verified_name as string) ?? null,
     eventTitle: (row.event_title as string) ?? null,
+    phone: (row.phone as string) ?? null,
     lastReachoutAt: (row.last_reachout_at as string) ?? null,
     lastTouchedAt: (row.last_touched_at as string) ?? null,
     createdAt: row.created_at as string,

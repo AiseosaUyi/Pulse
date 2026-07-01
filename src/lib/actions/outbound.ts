@@ -100,6 +100,7 @@ export async function createProspect(
       location: data.location ?? null,
       verifiedName: data.verified_name ?? null,
       eventTitle: data.event_title ?? null,
+      phone: data.phone ?? null,
       lastReachoutAt: data.last_reachout_at ?? null,
       lastTouchedAt: data.last_touched_at,
       createdAt: data.created_at,

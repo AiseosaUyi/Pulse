@@ -17,6 +17,7 @@ export interface ImportProspectRow {
   location?: string | null;
   verifiedName?: string | null;
   eventTitle?: string | null;
+  phone?: string | null;
   lastReachoutAt?: string | null;
 }
 
@@ -48,6 +49,22 @@ function normalisePlatform(raw: string): OutboundPlatform | null {
   if (MAP[s]) return MAP[s];
   if ((OUTBOUND_PLATFORMS as readonly string[]).includes(s)) return s as OutboundPlatform;
   return null;
+}
+
+export async function checkExistingHandles(
+  tenantSlug: string,
+  rows: Array<{ handle: string; platform: string }>
+): Promise<string[]> {
+  const user = await getCurrentUser();
+  if (!user) return [];
+  const admin = createAdminClient();
+  const handles = rows.map((r) => r.handle.replace(/^@/, "").trim().toLowerCase());
+  const { data } = await admin
+    .from("prospects")
+    .select("handle, platform")
+    .eq("tenant_slug", tenantSlug)
+    .in("handle", handles);
+  return (data ?? []).map((r) => `${r.handle}:${r.platform}`);
 }
 
 export async function importProspects(
@@ -110,6 +127,7 @@ export async function importProspects(
           location: row.location ?? null,
           verified_name: row.verifiedName ?? null,
           event_title: row.eventTitle ?? null,
+          phone: row.phone ?? null,
           last_reachout_at: row.lastReachoutAt ?? null,
           status: "new",
           signal_data: {},
@@ -120,18 +138,20 @@ export async function importProspects(
     }
 
     if (toInsert.length > 0) {
-      // Dedup within this batch — if the same (handle, platform) appears twice in
-      // the same 50-row window, Postgres throws a unique constraint and drops the
-      // entire INSERT. Silently skip the second occurrence (it's a sheet duplicate).
-      const batchSeen = new Set<string>();
-      const dedupedInsert = toInsert.filter((row) => {
-        const k = `${row.handle}:${row.platform}`;
-        if (batchSeen.has(k)) { result.skipped += 1; return false; }
-        batchSeen.add(k);
-        return true;
-      });
+      // Dedup within this batch — keep LAST occurrence per (handle, platform) so
+      // sheet duplicates don't cause a unique constraint error that drops the batch.
+      const batchMap = new Map<string, Record<string, unknown>>();
+      for (const row of toInsert) {
+        batchMap.set(`${row.handle}:${row.platform}`, row);
+      }
+      const dedupedInsert = Array.from(batchMap.values());
 
-      const { error } = await admin.from("prospects").insert(dedupedInsert);
+      // UPSERT instead of INSERT — if any conflict slips through (race condition,
+      // edge case), the row is updated rather than the entire batch being dropped.
+      const { error } = await admin
+        .from("prospects")
+        .upsert(dedupedInsert, { onConflict: "tenant_slug,platform,handle" });
+
       if (error) {
         for (const r of dedupedInsert) {
           result.errors.push({
@@ -157,6 +177,7 @@ export async function importProspects(
       if (row.location) patch.location = row.location;
       if (row.verifiedName) patch.verified_name = row.verifiedName;
       if (row.eventTitle) patch.event_title = row.eventTitle;
+      if (row.phone) patch.phone = row.phone;
       if (row.lastReachoutAt) patch.last_reachout_at = row.lastReachoutAt;
 
       const { error } = await admin

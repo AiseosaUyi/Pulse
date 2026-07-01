@@ -85,6 +85,7 @@ export interface ProspectRecord {
   location: string | null;
   verifiedName: string | null;
   eventTitle: string | null;
+  phone: string | null;
   lastReachoutAt: string | null;
   lastTouchedAt: string | null;
   createdAt: string;

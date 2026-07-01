@@ -38,6 +38,7 @@ type ProspectRow = Omit<
   location: string | null;
   verified_name: string | null;
   event_title: string | null;
+  phone: string | null;
   last_reachout_at: string | null;
   last_touched_at: string | null;
   created_at: string;
@@ -66,6 +67,7 @@ function prospectRowTo(row: ProspectRow): ProspectRecord {
     location: row.location,
     verifiedName: row.verified_name,
     eventTitle: row.event_title,
+    phone: row.phone,
     lastReachoutAt: row.last_reachout_at,
     lastTouchedAt: row.last_touched_at,
     createdAt: row.created_at,

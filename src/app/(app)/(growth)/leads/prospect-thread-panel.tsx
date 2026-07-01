@@ -25,6 +25,7 @@ import {
   ExternalLink,
   Check,
   Link as LinkIcon,
+  Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -864,6 +865,17 @@ export function ProspectThreadPanel({
 
           {prospect.displayName && (
             <p className="text-xs text-text-muted">{prospect.displayName}</p>
+          )}
+
+          {/* Phone number */}
+          {prospect.phone && (
+            <a
+              href={`tel:${prospect.phone}`}
+              className="inline-flex items-center gap-1.5 text-[11px] text-text-muted hover:text-primary-500"
+            >
+              <Phone size={11} />
+              {prospect.phone}
+            </a>
           )}
 
           {/* Profile links */}
