@@ -17,7 +17,9 @@ pnpm db:seed      # One-time founder + Gruve/Sippy seed (reads SEED_* + SUPABASE
 
 Single test: `pnpm test tests/unit/foo.test.ts`. Tests live under `tests/unit`, `tests/integration`, `tests/smoke`, `tests/e2e`. Playwright config at `playwright.config.ts`, Vitest at `vitest.config.ts`.
 
-DB migrations live in `supabase/migrations/`, named `NNN_*.sql` — currently through 068 (063 = cadence_loop, 064 = account_type, 065 = engage_candidates, 066 = platform_connections, 067 = scheduled_posts, 068 = metrics_sync). Apply via Supabase SQL Editor (paste + run) or `supabase db push` after `supabase login --token <pat>` and `supabase link --project-ref <ref>`. The user typically runs migrations by hand in the SQL Editor, so the migration *number* (not the SQL) is what they need from you.
+DB migrations live in `supabase/migrations/`, named `NNN_*.sql` — currently through 084. Key recent milestones: 063 cadence_loop, 066 platform_connections, 067 scheduled_posts, 068 metrics_sync, 069 r2_storage, 073 social_drafts_variants, 074 gsc_contentful_providers, 075 seo_posts, 076 outbound_template_type + outreach_campaigns, 077 global_outbound_templates + prospect_follow_up, 078 conversation_analyses, 079 prospect_notes, 080 prospect_enrichment_fields, 082 analytics_reports, 083 own_post_metrics_dedup, 084 analytics_import_sessions. Apply via Supabase SQL Editor (paste + run) or `supabase db push` after `supabase login --token <pat>` and `supabase link --project-ref <ref>`. The user typically runs migrations by hand in the SQL Editor, so the migration *number* (not the SQL) is what they need from you.
+
+**Duplicate migration numbers exist** (076 and 077 each have two files). When writing new migrations, check the highest actual file number first — don't trust the sequence to be gapless.
 
 When modifying a table, **grep prior migrations first** — retrofits later in the chain can change column shapes/RLS for tables defined earlier (e.g. 002 retrofit affected 009).
 
@@ -73,7 +75,7 @@ src/app/
 └── (app)/                ← all protected pages — sidebar + auth check
     ├── layout.tsx        ← runs requireUser(), getUserTenants(), renders sidebar
     ├── settings/         ← has own layout.tsx with inner nav; sections are sub-routes
-    ├── (overview)/       (dashboard, own-analytics, weekly-report)
+    ├── (overview)/       (dashboard, own-analytics, weekly-report, analytics)
     ├── (content)/        (content-vault)
     ├── (social)/         (engagement, platform-score, viral-trends, ai-content, post-history, video, broadcasts, composer, engage, today, schedule)
     ├── (growth)/         (leads → Outbound rebuild, ads-tracker → Ads Critic, orders)
@@ -137,6 +139,12 @@ All AI calls go through `src/lib/ai/gateway.ts`:
 - **Today**: `/today` — daily cadence dashboard showing today's posting windows and what's behind.
 - **Cadence loop**: posting-rhythm engine. Config stored in `tenants.settings.cadence` (JSONB, same `jsonb_set` pattern as `platforms`). `src/lib/cadence/` — `types.ts` (Zod schemas), `config.ts` (reader), `compute.ts` (tracker math), `digest.ts` (daily digest email). `cadence_log` table (mig 063). Settings UI at `/settings/cadence` (`CadenceEditor` component). Daily digest cron at `/api/cron/cadence-digest`. Cadence currently targets X and LinkedIn only (see `cadencePlatforms` in `types.ts`).
 - **Video Generation Engine** (see its own section below).
+- **Analytics** (social import): `/analytics` — upload JSON/HTML exports from TikTok and Instagram; parses into `analytics_import_sessions` (mig 084) and `analytics_reports` (mig 082). `src/app/(app)/analytics/` is untracked (new, not yet in the deploy). Own-post metrics also sync via `sync-post-metrics` cron.
+- **Outbound templates** (scenario-driven): `outbound_templates` table extended with `template_type` (mig 076 — 9 types: `cold_open`, `follow_up_1`, `follow_up_2`, `post_event`, `event_confirmed`, `promised_reminder`, `re_engagement`, `value_add`, `objection_response`) and global templates pattern (mig 077 — `tenant_slug` nullable + `is_global boolean`, XOR CHECK). Global templates have `tenant_slug = NULL`; RLS allows all authenticated users to read them. New tenants auto-inherit all 9 defaults. `[COMPANY]` token fills from `tenant.name`. See `supabase/cleanups/seed-outbound-templates.sql` to seed. AI personalisation: `src/lib/ai/personalize-template.ts` + `personalizeTemplate` action.
+- **Outreach Intelligence**: `outreach_campaigns` (mig 076), `prospect_follow_ups` (mig 077), `conversation_analyses` (mig 078), `prospect_notes` (mig 079), prospect enrichment fields (mig 080 — adds `phone`, company/role metadata). Services at `src/lib/services/outreach-campaigns.ts` + `src/lib/services/outreach-intelligence.ts`.
+- **X listening / signal cache**: `x_listening` (mig 071) + `x_signal_ai_cache` (mig 072) — stores X posts matching brand keywords, AI-scored for signal quality. Feeds the Engage tab and Outbound discovery.
+- **Social drafts variants** (mig 073): `social_draft_variants` table — alternative takes on a draft, linked to `scheduled_posts`. Used by the Composer A/B flow.
+- **SEO posts + GSC/Contentful providers** (mig 074–075): `seo_posts` tracks programmatic SEO content items. `gsc` and `contentful` added to the provider enum for platform connections.
 
 The 100x product roadmap is `docs/pulse-100x-roadmap.md`. Long-form context for the most recent roadmap items lives in `TODOS.md` under `## P8`.
 
