@@ -59,6 +59,8 @@ import type {
 } from "@/lib/types/outreach-intelligence";
 import type { ProspectRecord, ProspectStatus } from "@/lib/types/outbound";
 import { PLATFORM_LABELS, STATUS_LABELS } from "@/lib/types/outbound";
+import type { OutboundTemplateRecord, TemplateType } from "@/lib/types/outbound-templates";
+import { TEMPLATE_TYPE_LABELS } from "@/lib/types/outbound-templates";
 
 type PanelTab = "thread" | "analysis" | "notes";
 
@@ -705,24 +707,78 @@ function platformDmUrl(prospect: ProspectRecord): string | null {
   }
 }
 
-// ── Reachout card (shown when no conversation has started) ───────────────────
+// ── Token substitution ───────────────────────────────────────────────────────
+
+function fillTokens(body: string, prospect: ProspectRecord): string {
+  const firstName = prospect.displayName?.split(" ")[0] ?? prospect.handle;
+  return body
+    .replace(/\[FIRST_NAME\]/gi, firstName)
+    .replace(/\[HANDLE\]/gi, `@${prospect.handle}`)
+    .replace(/\[SIGNAL\]/gi, prospect.signalSummary ?? "your recent content")
+    .replace(/\[EVENT\]/gi, prospect.eventTitle ?? "your event");
+}
+
+// ── Smart template selector ──────────────────────────────────────────────────
+
+function selectTemplate(
+  templates: OutboundTemplateRecord[],
+  preferredType: TemplateType,
+  platform: string
+): OutboundTemplateRecord | null {
+  const active = templates.filter((t) => t.status !== "archived");
+  // exact platform + preferred type (primary first)
+  const exact = active
+    .filter((t) => t.templateType === preferredType && (t.platform === platform || t.platform === "any"))
+    .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+  if (exact.length > 0) return exact[0];
+  // any type primary for platform
+  const anyType = active
+    .filter((t) => t.platform === platform || t.platform === "any")
+    .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+  if (anyType.length > 0) return anyType[0];
+  return null;
+}
+
+// ── Reachout card (shown when no conversation has started OR follow-up needed) ─
 
 function ReachoutCard({
   prospect,
   profileUrl,
   dmUrl,
+  templates,
+  conversationStage,
 }: {
   prospect: ProspectRecord;
   profileUrl: string;
   dmUrl: string | null;
+  templates: OutboundTemplateRecord[];
+  conversationStage: string | null;
 }) {
   const [copied, setCopied] = useState(false);
 
-  const greeting = `Hey @${prospect.handle}! 👋 I came across your profile and thought you'd be a great fit for what we do. Would love to connect!`;
+  // Pick template type based on conversation stage / prospect status
+  const preferredType: TemplateType =
+    conversationStage === "cold"
+      ? "follow_up_2"
+    : conversationStage === "follow_up_requested"
+      ? "promised_reminder"
+    : prospect.status === "sent"
+      ? "follow_up_1"
+    : "cold_open";
+
+  const template = selectTemplate(templates, preferredType, prospect.platform);
+  const body = template
+    ? fillTokens(template.body, prospect)
+    : `Hey @${prospect.handle}! I came across your profile and thought you'd be a great fit for what we do. Would love to connect!`;
+
+  const label =
+    conversationStage === "cold" || conversationStage === "follow_up_requested" || prospect.status === "sent"
+      ? "Send a follow-up"
+      : "Start the conversation";
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(greeting);
+      await navigator.clipboard.writeText(body);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {}
@@ -730,12 +786,32 @@ function ReachoutCard({
 
   return (
     <div className="rounded-xl border border-border/60 bg-sidebar/50 p-4 space-y-3">
-      <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Start the conversation</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-text-muted uppercase tracking-wide">{label}</p>
+        {template && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-sidebar text-text-muted border border-border/40">
+            {TEMPLATE_TYPE_LABELS[template.templateType]}
+          </span>
+        )}
+      </div>
+
+      {/* Why reach out */}
+      {prospect.signalSummary && (
+        <p className="text-[11px] text-text-muted leading-relaxed border-l-2 border-primary-500/30 pl-2">
+          <span className="text-primary-500 font-medium">Why: </span>{prospect.signalSummary}
+        </p>
+      )}
 
       {/* Message to copy */}
       <div className="rounded-lg border border-border bg-card px-3 py-2.5">
-        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{greeting}</p>
+        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{body}</p>
       </div>
+
+      {!template && (
+        <p className="text-[11px] text-status-yellow">
+          No template found — <a href="/leads?tab=templates" className="underline">create one in Templates</a> to use your brand voice here.
+        </p>
+      )}
 
       <div className="flex items-center gap-2 flex-wrap">
         <Button size="sm" variant="outline" onClick={copy} className="gap-1.5">
@@ -776,6 +852,7 @@ export function ProspectThreadPanel({
   prospect,
   tenantSlug,
   campaigns,
+  templates,
   onClose,
   onQualify,
   onDraft,
@@ -786,6 +863,7 @@ export function ProspectThreadPanel({
   prospect: ProspectRecord;
   tenantSlug: string;
   campaigns: OutreachCampaignRecord[];
+  templates?: OutboundTemplateRecord[];
   onClose: () => void;
   onQualify?: (p: ProspectRecord) => void;
   onDraft?: (p: ProspectRecord) => void;
@@ -856,20 +934,24 @@ export function ProspectThreadPanel({
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  const [analysisCancelled, setAnalysisCancelled] = useState(false);
+
   const handleAnalyze = () => {
     setError(null);
+    setAnalysisCancelled(false);
     startAnalyzing(async () => {
       const res = await analyzeProspectConversation(
         tenantSlug,
         prospect.id,
         "manual"
       );
+      if (analysisCancelled) return;
       if (!res.success) {
         setError(res.error);
         return;
       }
       setLatestAnalysis(res.analysis);
-      // Reload thread to include the new analysis event
+      // Reload thread (analysis events stay in Analysis tab only)
       loadProspectPanelData(tenantSlug, prospect.id).then((refreshed) => {
         if (refreshed.success) {
           setThread(refreshed.thread);
@@ -1006,15 +1088,26 @@ export function ProspectThreadPanel({
                 Draft DM
               </Button>
             )}
-            <button
-              type="button"
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-foreground px-2 py-1.5 rounded-lg hover:bg-sidebar border border-border/60"
-            >
-              {analyzing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-              Analyze
-            </button>
+            {analyzing ? (
+              <button
+                type="button"
+                onClick={() => setAnalysisCancelled(true)}
+                className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-foreground px-2 py-1.5 rounded-lg hover:bg-sidebar border border-border/60"
+              >
+                <Loader2 size={12} className="animate-spin" />
+                Analysing…
+                <span className="ml-1 text-status-red hover:underline">Cancel</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleAnalyze}
+                className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-foreground px-2 py-1.5 rounded-lg hover:bg-sidebar border border-border/60"
+              >
+                <Sparkles size={12} />
+                Analyse
+              </button>
+            )}
             {onEdit && (
               <button
                 type="button"
@@ -1078,8 +1171,8 @@ export function ProspectThreadPanel({
         <div className="shrink-0 flex border-b border-border/60 px-4">
           {(
             [
-              { key: "thread" as const, label: "Thread", count: loadedThread.length },
-              { key: "analysis" as const, label: "Analysis", count: null },
+              { key: "thread" as const, label: "Thread", count: loadedThread.filter((e) => e.type !== "analysis").length },
+              { key: "analysis" as const, label: "Analysis", count: latestAnalysis ? 1 : null },
               { key: "notes" as const, label: "Notes", count: noteCount || null },
             ] satisfies Array<{ key: PanelTab; label: string; count: number | null }>
           ).map((t) => (
@@ -1112,26 +1205,64 @@ export function ProspectThreadPanel({
             </div>
           ) : (
             <>
-              {activeTab === "thread" && (
-                <div className="space-y-3" role="feed">
-                  {loadedThread.length === 0 && (
-                    <ReachoutCard prospect={prospect} profileUrl={profileUrl} dmUrl={dmUrl} />
-                  )}
-                  {analyzing && (
-                    <div className="flex items-center gap-2 py-2 text-sm text-text-muted">
-                      <Loader2 size={14} className="animate-spin text-primary-500" />
-                      Analyzing conversation…
-                    </div>
-                  )}
-                  {loadedThread.map((event) => (
-                    <ThreadEventCard
-                      key={event.id}
-                      event={event}
-                      onDeleteNote={handleDeleteNote}
-                    />
-                  ))}
-                </div>
-              )}
+              {activeTab === "thread" && (() => {
+                // Analysis events live in the Analysis tab only
+                const visibleThread = loadedThread.filter((e) => e.type !== "analysis");
+                const hasConversation = visibleThread.some(
+                  (e) => e.type === "outbound_dm" || e.type === "inbound_message"
+                );
+                const stage = latestAnalysis?.conversationStage ?? null;
+                // Show reachout card when no DMs/messages yet, OR when cold and no recent DM
+                const showReachoutCard =
+                  !hasConversation ||
+                  stage === "cold" ||
+                  stage === "follow_up_requested";
+
+                return (
+                  <div className="space-y-3" role="feed">
+                    {showReachoutCard && (
+                      <ReachoutCard
+                        prospect={prospect}
+                        profileUrl={profileUrl}
+                        dmUrl={dmUrl}
+                        templates={templates ?? []}
+                        conversationStage={stage}
+                      />
+                    )}
+
+                    {/* Next best step from analysis */}
+                    {latestAnalysis?.recommendedFollowUpNote && (
+                      <div className="flex items-start gap-2 text-[11px] text-text-muted bg-primary-500/5 border border-primary-500/10 rounded-lg px-3 py-2">
+                        <Sparkles size={11} className="text-primary-500 mt-0.5 shrink-0" />
+                        <span>
+                          <span className="text-foreground font-medium">Next best step: </span>
+                          {latestAnalysis.recommendedFollowUpNote}
+                          {latestAnalysis.recommendedFollowUpAt && (
+                            <span className="text-text-muted">
+                              {" · "}by {formatDateTime(latestAnalysis.recommendedFollowUpAt)}
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("analysis")}
+                          className="shrink-0 ml-auto text-primary-500 hover:underline"
+                        >
+                          Full analysis →
+                        </button>
+                      </div>
+                    )}
+
+                    {visibleThread.map((event) => (
+                      <ThreadEventCard
+                        key={event.id}
+                        event={event}
+                        onDeleteNote={handleDeleteNote}
+                      />
+                    ))}
+                  </div>
+                );
+              })()}
 
               {activeTab === "analysis" && (
                 <AnalysisTab analysis={latestAnalysis} />

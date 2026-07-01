@@ -24,6 +24,7 @@ import type {
   OutboundTemplateRecord,
   TemplatePlatform,
   TemplateStatus,
+  TemplateType,
 } from "@/lib/types/outbound-templates";
 
 type ActionResult<T = unknown> =
@@ -33,6 +34,7 @@ type ActionResult<T = unknown> =
 export interface CreateTemplateInput {
   name: string;
   platform: TemplatePlatform;
+  templateType?: TemplateType;
   body: string;
   angle?: string;
   makePrimary?: boolean;
@@ -70,6 +72,7 @@ export async function createTemplate(
       tenant_slug: tenantSlug,
       name: input.name.trim(),
       platform: input.platform,
+      template_type: input.templateType ?? "cold_open",
       body: input.body.trim(),
       angle: input.angle?.trim() || null,
       is_primary: Boolean(input.makePrimary),

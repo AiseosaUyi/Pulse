@@ -4,6 +4,7 @@ import type {
   TemplateCritique,
   TemplatePlatform,
   TemplateStatus,
+  TemplateType,
 } from "@/lib/types/outbound-templates";
 
 interface Row {
@@ -11,6 +12,7 @@ interface Row {
   tenant_slug: string;
   name: string;
   platform: TemplatePlatform;
+  template_type: TemplateType;
   body: string;
   angle: string | null;
   status: TemplateStatus;
@@ -31,6 +33,7 @@ export function rowToTemplate(row: Row): OutboundTemplateRecord {
     tenantSlug: row.tenant_slug,
     name: row.name,
     platform: row.platform,
+    templateType: row.template_type ?? "cold_open",
     body: row.body,
     angle: row.angle,
     status: row.status,
@@ -65,6 +68,28 @@ export async function listTemplates(
   const { data, error } = await query;
   if (error || !data) return [];
   return (data as Row[]).map(rowToTemplate);
+}
+
+export async function getTemplateByType(
+  tenantSlug: string,
+  platform: TemplatePlatform,
+  templateType: TemplateType
+): Promise<OutboundTemplateRecord | null> {
+  const supabase = await createClient();
+  // Prefer exact platform + type, then any platform + type, then any primary
+  const { data } = await supabase
+    .from("outbound_templates")
+    .select("*")
+    .eq("tenant_slug", tenantSlug)
+    .eq("template_type", templateType)
+    .in("platform", [platform, "any"])
+    .neq("status", "archived")
+    .order("is_primary", { ascending: false })
+    .order("platform", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  return rowToTemplate(data as Row);
 }
 
 export async function getPrimaryTemplate(

@@ -38,9 +38,13 @@ import {
 import {
   TEMPLATE_PLATFORM_LABELS,
   TEMPLATE_PLATFORMS,
+  TEMPLATE_TYPE_LABELS,
+  TEMPLATE_TYPE_DESCRIPTIONS,
+  TEMPLATE_TYPES,
   type OutboundTemplateRecord,
   type TemplateCritique,
   type TemplatePlatform,
+  type TemplateType,
 } from "@/lib/types/outbound-templates";
 
 const VERDICT_STYLES: Record<
@@ -90,12 +94,13 @@ export function TemplatesView({
   const handleCreate = async (input: {
     name: string;
     platform: TemplatePlatform;
+    templateType: TemplateType;
     angle: string;
     body: string;
     makePrimary: boolean;
   }) => {
     setError(null);
-    const res = await createTemplate(tenantSlug, input);
+    const res = await createTemplate(tenantSlug, { ...input, templateType: input.templateType });
     if (!res.success) {
       setError(res.error);
       return;
@@ -317,6 +322,7 @@ function NewTemplateForm({
   onSubmit: (input: {
     name: string;
     platform: TemplatePlatform;
+    templateType: TemplateType;
     angle: string;
     body: string;
     makePrimary: boolean;
@@ -324,6 +330,7 @@ function NewTemplateForm({
 }) {
   const [name, setName] = useState("");
   const [platform, setPlatform] = useState<TemplatePlatform>("instagram");
+  const [templateType, setTemplateType] = useState<TemplateType>("cold_open");
   const [angle, setAngle] = useState("");
   const [body, setBody] = useState("");
   const [makePrimary, setMakePrimary] = useState(true);
@@ -332,7 +339,7 @@ function NewTemplateForm({
   const submit = () => {
     if (!name.trim() || !body.trim()) return;
     startTransition(async () => {
-      await onSubmit({ name, platform, angle, body, makePrimary });
+      await onSubmit({ name, platform, templateType, angle, body, makePrimary });
     });
   };
 
@@ -351,7 +358,7 @@ function NewTemplateForm({
         </button>
       </div>
 
-      <div className="grid md:grid-cols-[1fr_220px] gap-3">
+      <div className="grid md:grid-cols-[1fr_160px_200px] gap-3">
         <div>
           <Label>Name</Label>
           <Input
@@ -359,6 +366,23 @@ function NewTemplateForm({
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Event planners cold open"
           />
+        </div>
+        <div>
+          <Label>Type</Label>
+          <select
+            value={templateType}
+            onChange={(e) => setTemplateType(e.target.value as TemplateType)}
+            className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+          >
+            {TEMPLATE_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {TEMPLATE_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
+          <p className="text-[10px] text-text-muted mt-1 leading-tight">
+            {TEMPLATE_TYPE_DESCRIPTIONS[templateType]}
+          </p>
         </div>
         <div>
           <Label>Platform</Label>
@@ -682,6 +706,9 @@ function TemplateCard({
                 {template.name}
               </h4>
             )}
+            <span className="text-[10px] uppercase tracking-wide text-text-muted bg-sidebar px-1.5 py-0.5 rounded">
+              {TEMPLATE_TYPE_LABELS[template.templateType]}
+            </span>
             <span className="text-[10px] uppercase tracking-wide text-text-muted">
               {TEMPLATE_PLATFORM_LABELS[template.platform]}
             </span>

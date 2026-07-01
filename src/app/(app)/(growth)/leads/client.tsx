@@ -444,6 +444,7 @@ export function OutboundClient({
           prospect={threadPanelProspect}
           tenantSlug={tenantSlug}
           campaigns={campaigns}
+          templates={initialTemplates}
           onClose={() => setThreadPanelProspect(null)}
           onQualify={handleQualify}
           onDraft={handleDraft}
