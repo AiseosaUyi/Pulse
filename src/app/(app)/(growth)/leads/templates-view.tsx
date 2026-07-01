@@ -11,13 +11,12 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
-  Copy,
   Loader2,
   PauseCircle,
+  Pencil,
   Plus,
   RefreshCw,
   Sparkles,
-  Star,
   Trash2,
   Wrench,
   XCircle,
@@ -26,13 +25,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useDialogs } from "@/components/ui/Dialog";
+import { Dialog, useDialogs } from "@/components/ui/Dialog";
 import {
   createTemplate,
   deleteTemplate,
   generateTemplateVariants,
   scoreTemplate,
-  setPrimaryTemplate,
   updateTemplate,
 } from "@/lib/actions/outbound-templates";
 import {
@@ -85,7 +83,6 @@ export function TemplatesView({
   const [creating, setCreating] = useState(initial.length === 0);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const refreshTemplate = (next: OutboundTemplateRecord) => {
     setTemplates((prev) => prev.map((t) => (t.id === next.id ? next : t)));
@@ -120,16 +117,6 @@ export function TemplatesView({
     setCreating(false);
   };
 
-  const handleCopy = async (t: OutboundTemplateRecord) => {
-    try {
-      await navigator.clipboard.writeText(t.body);
-      setCopiedId(t.id);
-      setTimeout(() => setCopiedId((c) => (c === t.id ? null : c)), 1500);
-    } catch {
-      setError("Couldn't copy to clipboard");
-    }
-  };
-
   const handleScore = async (t: OutboundTemplateRecord) => {
     setError(null);
     const res = await scoreTemplate(tenantSlug, t.id);
@@ -143,20 +130,6 @@ export function TemplatesView({
       lastCritique: res.critique,
       lastScoredAt: new Date().toISOString(),
     });
-  };
-
-  const handleMakePrimary = async (t: OutboundTemplateRecord) => {
-    setError(null);
-    const res = await setPrimaryTemplate(tenantSlug, t.id);
-    if (!res.success) {
-      setError(res.error);
-      return;
-    }
-    setTemplates((prev) =>
-      prev.map((x) =>
-        x.platform === t.platform ? { ...x, isPrimary: x.id === t.id } : x
-      )
-    );
   };
 
   const handleDelete = async (t: OutboundTemplateRecord) => {
@@ -177,7 +150,7 @@ export function TemplatesView({
 
   const handleUpdateBody = async (
     t: OutboundTemplateRecord,
-    patch: { body?: string; name?: string; angle?: string | null }
+    patch: { body?: string; name?: string; angle?: string | null; templateType?: TemplateType; platform?: TemplatePlatform }
   ) => {
     const res = await updateTemplate(tenantSlug, t.id, patch);
     if (!res.success) {
@@ -189,6 +162,8 @@ export function TemplatesView({
       body: patch.body ?? t.body,
       name: patch.name ?? t.name,
       angle: patch.angle !== undefined ? patch.angle : t.angle,
+      templateType: patch.templateType ?? t.templateType,
+      platform: patch.platform ?? t.platform,
       // Invalidate score after a body edit — the critique is stale.
       score: patch.body !== undefined ? null : t.score,
       lastCritique: patch.body !== undefined ? null : t.lastCritique,
@@ -210,10 +185,10 @@ export function TemplatesView({
                 Outbound templates
               </h3>
               <p className="text-xs text-text-muted leading-relaxed">
-                Bulk DMs that carry your brand voice. Save one, score it,
-                generate variants when it goes stale. Mark one as
-                <strong> primary</strong> per platform — that&apos;s the one
-                the Pipeline &ldquo;Copy primary&rdquo; button hands back.
+                DM templates for every stage of the outreach sequence. Score
+                one to get an AI critique, or generate variants to test
+                different angles. Default templates apply to all tenants —
+                create your own to override them.
               </p>
             </div>
           </div>
@@ -300,10 +275,7 @@ export function TemplatesView({
             <TemplateCard
               key={t.id}
               template={t}
-              copied={copiedId === t.id}
-              onCopy={() => handleCopy(t)}
               onScore={() => handleScore(t)}
-              onMakePrimary={() => handleMakePrimary(t)}
               onDelete={() => handleDelete(t)}
               onUpdate={(patch) => handleUpdateBody(t, patch)}
             />
@@ -640,195 +612,221 @@ function GenerateVariantsForm({
 
 function TemplateCard({
   template,
-  copied,
-  onCopy,
   onScore,
-  onMakePrimary,
   onDelete,
   onUpdate,
 }: {
   template: OutboundTemplateRecord;
-  copied: boolean;
-  onCopy: () => void;
   onScore: () => void | Promise<void>;
-  onMakePrimary: () => void | Promise<void>;
   onDelete: () => void | Promise<void>;
   onUpdate: (patch: {
     body?: string;
     name?: string;
     angle?: string | null;
+    templateType?: TemplateType;
+    platform?: TemplatePlatform;
   }) => Promise<boolean>;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draftBody, setDraftBody] = useState(template.body);
-  const [draftName, setDraftName] = useState(template.name);
+  const [editOpen, setEditOpen] = useState(false);
   const [isScoring, startScore] = useTransition();
-  const [isSaving, startSave] = useTransition();
-
   const critique = template.lastCritique;
-
-  const handleSaveEdit = () => {
-    startSave(async () => {
-      const changed =
-        draftBody.trim() !== template.body.trim() ||
-        draftName.trim() !== template.name.trim();
-      if (!changed) {
-        setEditing(false);
-        return;
-      }
-      const ok = await onUpdate({
-        body: draftBody.trim() !== template.body ? draftBody : undefined,
-        name: draftName.trim() !== template.name ? draftName : undefined,
-      });
-      if (ok) setEditing(false);
-    });
-  };
+  const isGlobal = template.isGlobal;
 
   return (
     <li className="rounded-xl border border-border bg-card p-4 space-y-3">
+      {/* Header row */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            {template.isPrimary && (
-              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-primary-500 bg-primary-500/10 px-1.5 py-0.5 rounded">
-                <Star size={10} className="fill-current" />
-                Primary
-              </span>
-            )}
-            {editing ? (
-              <Input
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                className="h-8 text-sm font-semibold flex-1 min-w-[200px]"
-              />
-            ) : (
-              <h4 className="text-sm font-semibold text-foreground">
-                {template.name}
-              </h4>
-            )}
+            <h4 className="text-sm font-semibold text-foreground">{template.name}</h4>
             <span className="text-[10px] uppercase tracking-wide text-text-muted bg-sidebar px-1.5 py-0.5 rounded">
               {TEMPLATE_TYPE_LABELS[template.templateType]}
             </span>
             <span className="text-[10px] uppercase tracking-wide text-text-muted">
               {TEMPLATE_PLATFORM_LABELS[template.platform]}
             </span>
-            {template.isGlobal && (
+            {isGlobal && (
               <span className="text-[10px] uppercase tracking-wide text-primary-500 bg-primary-500/8 px-1.5 py-0.5 rounded">
                 Default
               </span>
             )}
             {template.score != null && (
-              <span
-                className={`text-[10px] font-bold ${
-                  template.score >= 85
-                    ? "text-status-green"
-                    : template.score >= 70
-                      ? "text-status-yellow"
-                      : "text-status-red"
-                }`}
-              >
+              <span className={`text-[10px] font-bold ${
+                template.score >= 85 ? "text-status-green"
+                : template.score >= 70 ? "text-status-yellow"
+                : "text-status-red"
+              }`}>
                 {template.score}/100
               </span>
             )}
-            {template.generatorModel && (
-              <span className="text-[10px] text-text-muted">
-                AI-generated
-              </span>
-            )}
           </div>
-          {template.angle && !editing && (
-            <p className="text-xs text-text-muted mt-1">{template.angle}</p>
+          {template.angle && (
+            <p className="text-xs text-text-muted">{template.angle}</p>
           )}
         </div>
 
-        <div className="flex items-center gap-1 shrink-0 flex-wrap">
-          <button
-            type="button"
-            onClick={onCopy}
-            className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-foreground px-2 py-1 rounded-md hover:bg-sidebar"
-            title="Copy to clipboard"
-          >
-            {copied ? (
-              <Check size={11} className="text-status-green" />
-            ) : (
-              <Copy size={11} />
-            )}
-            {copied ? "Copied" : "Copy"}
-          </button>
-          <button
-            type="button"
-            onClick={() => startScore(onScore)}
-            disabled={isScoring}
-            className="inline-flex items-center gap-1 text-[11px] text-primary-500 hover:text-primary-600 px-2 py-1 rounded-md hover:bg-primary-500/10"
-            title="AI score this template"
-          >
-            {isScoring ? (
-              <Loader2 size={11} className="animate-spin" />
-            ) : (
-              <Sparkles size={11} />
-            )}
-            {template.score == null ? "Score" : "Re-score"}
-          </button>
-          {!template.isPrimary && (
+        <div className="flex items-center gap-1 shrink-0">
+          {!isGlobal && (
             <button
               type="button"
-              onClick={onMakePrimary}
-              className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-primary-500 px-2 py-1 rounded-md hover:bg-sidebar"
-              title={`Make primary for ${TEMPLATE_PLATFORM_LABELS[template.platform]}`}
+              onClick={() => startScore(onScore)}
+              disabled={isScoring}
+              className="inline-flex items-center gap-1 text-[11px] text-primary-500 hover:text-primary-600 px-2 py-1 rounded-md hover:bg-primary-500/10"
+              title="AI score this template"
             >
-              <Star size={11} />
-              Primary
+              {isScoring ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+              {template.score == null ? "Score" : "Re-score"}
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => {
-              setEditing((v) => !v);
-              setDraftBody(template.body);
-              setDraftName(template.name);
-            }}
-            className="text-[11px] text-text-muted hover:text-foreground px-2 py-1 rounded-md hover:bg-sidebar"
-          >
-            {editing ? "Discard" : "Edit"}
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="p-1.5 rounded-md text-text-muted hover:text-status-red hover:bg-status-red/10"
-            title="Delete template"
-            aria-label="Delete template"
-          >
-            <Trash2 size={11} />
-          </button>
+          {!isGlobal && (
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-foreground px-2 py-1 rounded-md hover:bg-sidebar"
+            >
+              <Pencil size={11} />
+              Edit
+            </button>
+          )}
+          {!isGlobal && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="p-1.5 rounded-md text-text-muted hover:text-status-red hover:bg-status-red/10"
+              title="Delete template"
+              aria-label="Delete template"
+            >
+              <Trash2 size={11} />
+            </button>
+          )}
         </div>
       </div>
 
-      {editing ? (
-        <>
-          <Textarea
-            rows={6}
-            value={draftBody}
-            onChange={(e) => setDraftBody(e.target.value)}
-            className="text-sm leading-relaxed"
-          />
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] text-text-muted">
-              Saving a new body invalidates the current score — re-run to see
-              the new critique.
-            </p>
-            <Button size="sm" onClick={handleSaveEdit} disabled={isSaving}>
-              {isSaving ? "Saving…" : "Save edit"}
-            </Button>
-          </div>
-        </>
-      ) : (
-        <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-          {template.body}
-        </p>
-      )}
+      {/* Body */}
+      <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+        {template.body}
+      </p>
 
-      {critique && !editing && <CritiquePanel critique={critique} />}
+      {critique && <CritiquePanel critique={critique} />}
+
+      {/* Edit modal */}
+      {editOpen && (
+        <EditTemplateModal
+          template={template}
+          onClose={() => setEditOpen(false)}
+          onSave={async (patch) => {
+            const ok = await onUpdate(patch);
+            if (ok) setEditOpen(false);
+          }}
+        />
+      )}
     </li>
+  );
+}
+
+function EditTemplateModal({
+  template,
+  onClose,
+  onSave,
+}: {
+  template: OutboundTemplateRecord;
+  onClose: () => void;
+  onSave: (patch: {
+    name?: string;
+    body?: string;
+    angle?: string | null;
+    templateType?: TemplateType;
+    platform?: TemplatePlatform;
+  }) => Promise<void>;
+}) {
+  const [name, setName] = useState(template.name);
+  const [templateType, setTemplateType] = useState<TemplateType>(template.templateType);
+  const [platform, setPlatform] = useState<TemplatePlatform>(template.platform);
+  const [angle, setAngle] = useState(template.angle ?? "");
+  const [body, setBody] = useState(template.body);
+  const [isSaving, startSave] = useTransition();
+
+  const save = () => {
+    startSave(async () => {
+      const patch: Parameters<typeof onSave>[0] = {};
+      if (name.trim() !== template.name) patch.name = name.trim();
+      if (body.trim() !== template.body) patch.body = body.trim();
+      if (angle.trim() !== (template.angle ?? "")) patch.angle = angle.trim() || null;
+      if (templateType !== template.templateType) patch.templateType = templateType;
+      if (platform !== template.platform) patch.platform = platform;
+      if (Object.keys(patch).length === 0) { onClose(); return; }
+      await onSave(patch);
+    });
+  };
+
+  return (
+    <Dialog open onClose={onClose} locked={isSaving} size="lg">
+      <div className="p-5 space-y-4">
+        <h3 className="text-base font-semibold text-foreground">Edit template</h3>
+
+        <div>
+          <Label>Name</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Event planners cold open" />
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-3">
+          <div>
+            <Label>Category</Label>
+            <select
+              value={templateType}
+              onChange={(e) => setTemplateType(e.target.value as TemplateType)}
+              className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+            >
+              {TEMPLATE_TYPES.map((t) => (
+                <option key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-text-muted mt-1 leading-tight">
+              {TEMPLATE_TYPE_DESCRIPTIONS[templateType]}
+            </p>
+          </div>
+          <div>
+            <Label>Platform</Label>
+            <select
+              value={platform}
+              onChange={(e) => setPlatform(e.target.value as TemplatePlatform)}
+              className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+            >
+              {TEMPLATE_PLATFORMS.map((p) => (
+                <option key={p} value={p}>{TEMPLATE_PLATFORM_LABELS[p]}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <Label>Angle (optional)</Label>
+          <Input value={angle} onChange={(e) => setAngle(e.target.value)} placeholder="e.g. Hit them right after their event wraps" />
+        </div>
+
+        <div>
+          <Label>Message</Label>
+          <Textarea
+            rows={7}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            className="text-sm leading-relaxed"
+            placeholder="Use [FIRST_NAME], [COMPANY], [SIGNAL], [EVENT] as tokens"
+          />
+          <p className="text-[10px] text-text-muted mt-1">
+            {body.length} chars · {body.trim().split(/\s+/).filter(Boolean).length} words
+            {body !== template.body && " · Score will be reset on save"}
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button size="sm" variant="ghost" onClick={onClose} disabled={isSaving}>Cancel</Button>
+          <Button size="sm" onClick={save} disabled={isSaving || !name.trim() || !body.trim()}>
+            {isSaving ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
 

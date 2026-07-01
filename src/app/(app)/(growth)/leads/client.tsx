@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useDialogs } from "@/components/ui/Dialog";
+import { Dialog, useDialogs } from "@/components/ui/Dialog";
 import {
   bulkQualifyNewProspects,
   bulkDeleteProspects,
@@ -576,12 +576,6 @@ export function OutboundClient({
                 <Upload size={12} />
                 Import
               </button>
-              <BulkQualifyButton tenantSlug={tenantSlug} prospects={prospects} />
-              <CopyPrimaryTemplateButton
-                tenantSlug={tenantSlug}
-                templates={initialTemplates}
-                prospect={threadPanelProspect}
-              />
             </div>
 
             {selectedIds.size > 0 && (
@@ -901,6 +895,11 @@ function AddProspectQuickForm({
   const [profileUrl, setProfileUrl] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  const close = () => {
+    setOpen(false);
+    setHandle(""); setDisplayName(""); setBio(""); setSignal(""); setProfileUrl("");
+  };
+
   const submit = () => {
     if (!handle.trim()) return;
     startTransition(async () => {
@@ -912,104 +911,62 @@ function AddProspectQuickForm({
         signal: signal.trim() || undefined,
         profileUrl: profileUrl.trim() || undefined,
       });
-      setHandle("");
-      setDisplayName("");
-      setBio("");
-      setSignal("");
-      setProfileUrl("");
-      setOpen(false);
+      close();
     });
   };
 
-  if (!open) {
-    return (
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => setOpen(true)}
-        className="gap-1.5"
-      >
+  return (
+    <>
+      <Button size="sm" variant="ghost" onClick={() => setOpen(true)} className="gap-1.5">
         <Plus size={14} />
         Add prospect
       </Button>
-    );
-  }
-
-  return (
-    <div className="w-full rounded-xl border border-border bg-card p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-foreground">Add prospect</h3>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="text-text-muted text-xs hover:text-foreground"
-        >
-          Cancel
-        </button>
-      </div>
-      <div className="grid md:grid-cols-2 gap-2">
-        <div>
-          <Label>Platform</Label>
-          <select
-            value={platform}
-            onChange={(e) => setPlatform(e.target.value as OutboundPlatform)}
-            className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
-          >
-            {OUTBOUND_PLATFORMS.map((p) => (
-              <option key={p} value={p}>
-                {PLATFORM_LABELS[p]}
-              </option>
-            ))}
-          </select>
+      <Dialog open={open} onClose={close} locked={isPending} size="lg">
+        <div className="p-5 space-y-4">
+          <h3 className="text-base font-semibold text-foreground">Add prospect</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div>
+              <Label>Platform</Label>
+              <select
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value as OutboundPlatform)}
+                className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+              >
+                {OUTBOUND_PLATFORMS.map((p) => (
+                  <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Handle</Label>
+              <Input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@sarahbuilds" />
+            </div>
+            <div>
+              <Label>Display name</Label>
+              <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Sarah Chen" />
+            </div>
+            <div>
+              <Label>Profile URL</Label>
+              <Input value={profileUrl} onChange={(e) => setProfileUrl(e.target.value)} placeholder="https://instagram.com/sarahbuilds" />
+            </div>
+          </div>
+          <div>
+            <Label>Bio (optional)</Label>
+            <Input value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Freelance brand strategist, helping startups find their voice" />
+          </div>
+          <div>
+            <Label>Signal (why did we find them?)</Label>
+            <Textarea rows={3} value={signal} onChange={(e) => setSignal(e.target.value)} placeholder="Posted about growing their newsletter to 5k. Used hashtag #creatoreconomy" />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button size="sm" variant="ghost" onClick={close} disabled={isPending}>Cancel</Button>
+            <Button size="sm" onClick={submit} disabled={isPending || !handle.trim()}>
+              {isPending ? "Adding…" : "Add prospect"}
+            </Button>
+          </div>
         </div>
-        <div>
-          <Label>Handle</Label>
-          <Input
-            value={handle}
-            onChange={(e) => setHandle(e.target.value)}
-            placeholder="@sarahbuilds"
-          />
-        </div>
-        <div>
-          <Label>Display name</Label>
-          <Input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Sarah Chen"
-          />
-        </div>
-        <div>
-          <Label>Profile URL</Label>
-          <Input
-            value={profileUrl}
-            onChange={(e) => setProfileUrl(e.target.value)}
-            placeholder="https://instagram.com/sarahbuilds"
-          />
-        </div>
-      </div>
-      <div>
-        <Label>Bio (optional)</Label>
-        <Input
-          value={bio}
-          onChange={(e) => setBio(e.target.value)}
-          placeholder="Freelance brand strategist, helping startups find their voice"
-        />
-      </div>
-      <div>
-        <Label>Signal (why did we find them?)</Label>
-        <Textarea
-          rows={2}
-          value={signal}
-          onChange={(e) => setSignal(e.target.value)}
-          placeholder="Posted about growing their newsletter to 5k. Used hashtag #creatoreconomy"
-        />
-      </div>
-      <div className="flex justify-end">
-        <Button size="sm" onClick={submit} disabled={isPending || !handle.trim()}>
-          {isPending ? "Adding…" : "Add prospect"}
-        </Button>
-      </div>
-    </div>
+      </Dialog>
+    </>
   );
 }
 

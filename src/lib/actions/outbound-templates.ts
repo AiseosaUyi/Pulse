@@ -99,6 +99,7 @@ export async function updateTemplate(
     body?: string;
     angle?: string | null;
     platform?: TemplatePlatform;
+    templateType?: TemplateType;
     status?: TemplateStatus;
   }
 ): Promise<ActionResult> {
@@ -109,6 +110,7 @@ export async function updateTemplate(
   if (patch.angle !== undefined)
     update.angle = patch.angle ? patch.angle.trim() : null;
   if (patch.platform !== undefined) update.platform = patch.platform;
+  if (patch.templateType !== undefined) update.template_type = patch.templateType;
   if (patch.status !== undefined) update.status = patch.status;
   if (Object.keys(update).length === 0) {
     return { success: false, error: "No changes" };
