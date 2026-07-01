@@ -132,17 +132,16 @@ export function ZipUploadSection({ tenantSlug, onDone }: Props) {
     <div className="bg-card rounded-2xl border border-border p-5">
       <div className="flex items-center gap-2 mb-1">
         <Archive size={16} className="text-primary-500" />
-        <h3 className="text-foreground font-semibold text-sm">Import full data export (ZIP)</h3>
+        <h3 className="text-foreground font-semibold text-sm">Data export ZIP</h3>
       </div>
-      <p className="text-xs text-text-muted mb-4 leading-relaxed">
-        Upload the ZIP from Instagram, Twitter/X, or TikTok "Download your data". We extract only the analytics files
-        in your browser — the 700 MB+ of media is never read or uploaded.
+      <p className="text-xs text-text-muted mb-3 leading-relaxed">
+        Drop your Instagram, Twitter/X, or TikTok archive. Only analytics files are read — media is skipped entirely.
       </p>
 
       <div className="text-[11px] text-text-muted mb-3 space-y-0.5">
-        <p><span className="font-medium text-foreground">Instagram:</span> Settings → Your activity → Download your information</p>
-        <p><span className="font-medium text-foreground">Twitter/X:</span> Settings → Your account → Download an archive</p>
-        <p><span className="font-medium text-foreground">TikTok:</span> Settings → Privacy → Personalisation and data → Download data</p>
+        <p><span className="font-medium text-foreground">Instagram</span> → Settings → Your activity → Download your information</p>
+        <p><span className="font-medium text-foreground">Twitter/X</span> → Settings → Your account → Download an archive</p>
+        <p><span className="font-medium text-foreground">TikTok</span> → Settings → Privacy → Download data</p>
       </div>
 
       <input
@@ -183,7 +182,7 @@ export function ZipUploadSection({ tenantSlug, onDone }: Props) {
       {phase === "done" && (
         <div className="mt-3 flex items-center gap-1.5 text-[11px] text-status-green">
           <Check size={12} />
-          Import complete — refresh to see your updated analytics.
+          Done — refresh to see your analytics.
         </div>
       )}
 

@@ -42,13 +42,13 @@ export default async function OwnAnalyticsPage() {
       <div>
         <h1 className="text-xl md:text-2xl font-bold text-foreground">Analytics</h1>
         <p className="text-text-secondary text-sm mt-0.5">
-          Your social media data — charts, AI analysis, and platform-specific insights.
+          Import your data, see the charts, get AI analysis.
         </p>
       </div>
 
       {/* Import section */}
       <section className="space-y-4">
-        <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Import data</h2>
+        <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Add data</h2>
         {/* ZIP card takes 1 col; UploadPanel spans remaining 3 cols at xl */}
         <div className="grid xl:grid-cols-4 gap-4">
           <ZipUploadSection tenantSlug={tenantSlug} />
@@ -68,9 +68,7 @@ export default async function OwnAnalyticsPage() {
       ) : (
         <div className="rounded-2xl border border-dashed border-border/50 p-16 text-center">
           <p className="text-sm font-medium text-foreground mb-1">No data yet</p>
-          <p className="text-xs text-text-muted">
-            Upload your data export ZIP above to see charts, AI analysis, and top posts.
-          </p>
+          <p className="text-xs text-text-muted">Upload a ZIP or CSV above to get started.</p>
         </div>
       )}
     </div>

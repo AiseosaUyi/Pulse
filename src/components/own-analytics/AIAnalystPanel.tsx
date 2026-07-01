@@ -79,8 +79,8 @@ export function AIAnalystPanel({ tenantSlug, platform, posts, initialReport }: P
             <div className="pt-4 text-center">
               <p className="text-sm text-text-muted mb-3">
                 {posts.length > 0
-                  ? "No AI report yet. Generate one to get a full analysis, trends, and recommendations."
-                  : "Import your data first, then run the AI analysis."}
+                  ? "No report yet — generate one to get trends, insights, and recommendations."
+                  : "Import your data first, then run the analysis."}
               </p>
               {posts.length > 0 && (
                 <Button size="sm" onClick={regenerate} disabled={isPending} className="gap-1.5">
@@ -93,7 +93,7 @@ export function AIAnalystPanel({ tenantSlug, platform, posts, initialReport }: P
           {isPending && (
             <div className="pt-4 flex items-center gap-2 text-sm text-text-muted">
               <Loader2 size={14} className="animate-spin text-primary-500" />
-              AI is reading your data and writing analysis…
+              Analysing your data…
             </div>
           )}
 

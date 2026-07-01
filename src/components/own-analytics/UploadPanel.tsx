@@ -133,12 +133,10 @@ export function UploadPanel({ tenantSlug, compact: _compact }: { tenantSlug: str
         <div className="bg-card rounded-2xl border border-border p-5">
           <div className="flex items-center gap-2 mb-3">
             <FileText size={16} className="text-text-muted" />
-            <h3 className="text-foreground font-semibold text-sm">
-              Import CSV export
-            </h3>
+            <h3 className="text-foreground font-semibold text-sm">CSV export</h3>
           </div>
           <p className="text-xs text-text-muted mb-4">
-            Meta Business Suite, TikTok Business Suite, or LinkedIn Analytics.
+            From Meta Business Suite, TikTok, or LinkedIn Analytics.
           </p>
           <div className="space-y-3">
             <div>
@@ -185,12 +183,10 @@ export function UploadPanel({ tenantSlug, compact: _compact }: { tenantSlug: str
         <div className="bg-card rounded-2xl border border-border p-5">
           <div className="flex items-center gap-2 mb-3">
             <FileJson size={16} className="text-text-muted" />
-            <h3 className="text-foreground font-semibold text-sm">
-              Import data export (JSON / HTML)
-            </h3>
+            <h3 className="text-foreground font-semibold text-sm">JSON / HTML export</h3>
           </div>
           <p className="text-xs text-text-muted mb-4">
-            TikTok or Instagram data download (.json / .html).
+            TikTok or Instagram individual file download.
           </p>
           <div className="space-y-3">
             <div>
@@ -238,12 +234,10 @@ export function UploadPanel({ tenantSlug, compact: _compact }: { tenantSlug: str
         <div className="bg-card rounded-2xl border border-border p-5">
           <div className="flex items-center gap-2 mb-3">
             <ImageIcon size={16} className="text-text-muted" />
-            <h3 className="text-foreground font-semibold text-sm">
-              Upload screenshot (AI extraction)
-            </h3>
+            <h3 className="text-foreground font-semibold text-sm">Screenshot</h3>
           </div>
           <p className="text-xs text-text-muted mb-4">
-            Twitter/X or one-off posts. AI reads metrics from the image.
+            Paste a screenshot — AI pulls the numbers out for you.
           </p>
           <div className="space-y-3">
             <div>
