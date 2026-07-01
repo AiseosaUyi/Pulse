@@ -111,6 +111,23 @@ export async function importAnalyticsPosts(
 const AnalysisSchema = z.object({
   narrative: z.string(),
   recommendations: z.array(z.object({ title: z.string(), body: z.string() })),
+  growthActions: z.array(z.object({
+    title: z.string(),
+    impact: z.string(),
+    timeframe: z.string(),
+    body: z.string(),
+  })),
+  frequencyVerdict: z.object({
+    current: z.string(),
+    recommended: z.string(),
+    gap: z.string(),
+  }),
+  missingData: z.array(z.string()),
+  contentInsights: z.array(z.object({
+    type: z.string(),
+    count: z.number(),
+    verdict: z.string(),
+  })),
   rawMetrics: z.object({
     totalPosts: z.number(),
     totalImpressions: z.nullable(z.number()),
@@ -146,6 +163,25 @@ export async function generateAnalyticsReport(
     s + (p.metrics.engagements ?? (p.metrics.likes ?? 0) + (p.metrics.replies ?? 0) + (p.metrics.shares ?? 0) + (p.metrics.comments ?? 0)), 0
   );
 
+  // Content type breakdown
+  const byType = new Map<string, { count: number; impressions: number; likes: number; saves: number }>();
+  for (const p of postsData) {
+    const type = (p.mediaType ?? "post").toLowerCase();
+    const cur = byType.get(type) ?? { count: 0, impressions: 0, likes: 0, saves: 0 };
+    byType.set(type, {
+      count: cur.count + 1,
+      impressions: cur.impressions + (p.metrics.impressions ?? 0),
+      likes: cur.likes + (p.metrics.likes ?? 0),
+      saves: cur.saves + (p.metrics.saves ?? 0),
+    });
+  }
+  const contentTypeLines = Array.from(byType.entries()).map(([type, d]) => {
+    const avgImpr = d.count > 0 ? Math.round(d.impressions / d.count) : 0;
+    return `  ${type}: ${d.count} posts · avg ${avgImpr.toLocaleString()} impressions · ${d.likes.toLocaleString()} likes · ${d.saves.toLocaleString()} saves`;
+  }).join("\n");
+
+  const storiesInData = byType.has("story") || byType.has("stories");
+
   // Monthly breakdown
   const byMonth = new Map<string, { posts: number; impressions: number; likes: number; engagements: number }>();
   for (const p of postsData) {
@@ -166,23 +202,22 @@ export async function generateAnalyticsReport(
     return `  ${label}: ${m.posts} posts · ${m.impressions.toLocaleString()} impressions · ${m.likes.toLocaleString()} likes · ER ${er}`;
   }).join("\n");
 
-  // Best month by engagement
-  const bestMonth = monthlyRows.sort((a, b) => b[1].impressions - a[1].impressions)[0];
-  const worstMonth = monthlyRows.sort((a, b) => a[1].impressions - b[1].impressions)[0];
+  const sortedByImpression = [...monthlyRows].sort((a, b) => b[1].impressions - a[1].impressions);
+  const bestMonth = sortedByImpression[0];
+  const worstMonth = sortedByImpression[sortedByImpression.length - 1];
 
-  // Top posts by impressions or likes
+  // Top posts
   const sorted = [...postsData].sort((a, b) =>
     (b.metrics.impressions ?? b.metrics.likes ?? 0) - (a.metrics.impressions ?? a.metrics.likes ?? 0)
   );
   const topPosts = sorted.slice(0, 8).map((p) => ({
     date: p.capturedAt.slice(0, 10),
     caption: p.caption?.slice(0, 200),
-    url: p.externalUrl,
+    mediaType: p.mediaType,
     impressions: p.metrics.impressions,
     likes: p.metrics.likes,
     saves: p.metrics.saves,
     shares: p.metrics.shares,
-    engagements: p.metrics.engagements,
   }));
 
   // Posting frequency
@@ -192,10 +227,27 @@ export async function generateAnalyticsReport(
     : 1;
   const postsPerWeek = ((postsData.length / periodDays) * 7).toFixed(1);
 
-  const prompt = `You are a senior social media analyst reviewing ${platform} performance data for a brand.
+  const platformGuidance: Record<string, string> = {
+    instagram: "Instagram rewards accounts that post feed content (photos + carousels + reels) 4–7x/week AND stories daily (15–20 stories/day is normal for growing accounts). Reels are the #1 follower growth lever right now — the algorithm distributes Reels to non-followers. Carousels drive saves and come back to the algorithm. Stories build retention but don't grow new followers on their own.",
+    twitter: "X/Twitter rewards high-frequency original tweets (5–10/day for fast-growing accounts), threads for depth, and reply-farming (engaging in trending conversations). Quote tweets with takes drive impressions far above normal posts. Posting windows: 8am, 12pm, 5pm in the audience's timezone.",
+    tiktok: "TikTok rewards volume and iteration: 2–4 videos/day is normal for fast-growing accounts. The For You page distributes to non-followers based on watch-time and completion rate. Hooks in the first 1–3 seconds are everything. Trending sounds multiply reach 3–5x.",
+    linkedin: "LinkedIn rewards 3–5 posts/week. Carousels (PDF documents) get the highest organic reach. Personal stories + professional insight outperform company news. Comments in the first hour heavily influence algorithmic reach.",
+  };
+
+  const prompt = `You are a world-class social media growth strategist. Your job is to analyze this ${platform} account's data and build a SPECIFIC, AGGRESSIVE plan to grow followers and visibility 100x over 12 months. Do not give generic advice. Every recommendation must be rooted in this account's actual data.
 
 PLATFORM: ${platform}
-PERIOD: ${dates[0]} to ${dates[dates.length - 1]} (${postsData.length} posts, ${postsPerWeek}/week avg)
+PERIOD ANALYSED: ${dates[0]} to ${dates[dates.length - 1]}
+DATA IN THIS REPORT: ${postsData.length} posts, avg ${postsPerWeek} posts/week
+
+⚠️ DATA GAPS (you MUST account for these — they affect your recommendations):
+${!storiesInData ? `- STORIES NOT IN DATA: Instagram Stories analytics are in a separate export file. If the account posts daily stories, those impressions and views are completely missing from this analysis. You must flag this and factor it into frequency recommendations.` : ""}
+- Follower count history is NOT in this data — you cannot calculate follower growth rate. Flag this.
+- Profile visits, website clicks, and story metrics are not included unless they appear above.
+- You do not know the current follower count. Ask for it in missingData.
+
+PLATFORM ALGORITHM CONTEXT:
+${platformGuidance[platform] ?? "Post consistently, engage with comments in the first hour, use relevant hashtags."}
 
 OVERALL METRICS:
 - Total impressions: ${totalImpressions.toLocaleString()}
@@ -206,21 +258,40 @@ ${totalShares > 0 ? `- Total shares: ${totalShares.toLocaleString()}` : ""}
 ${totalComments > 0 ? `- Total comments: ${totalComments.toLocaleString()}` : ""}
 - Total engagements: ${totalEngagements.toLocaleString()}
 - Avg engagement rate: ${totalImpressions > 0 ? ((totalEngagements / totalImpressions) * 100).toFixed(2) : "N/A"}%
-${bestMonth ? `- Best month (impressions): ${bestMonth[0]}` : ""}
-${worstMonth && worstMonth[0] !== bestMonth?.[0] ? `- Weakest month: ${worstMonth[0]}` : ""}
+${bestMonth ? `- Best month: ${bestMonth[0]} (${bestMonth[1].impressions.toLocaleString()} impressions)` : ""}
+${worstMonth && worstMonth[0] !== bestMonth?.[0] ? `- Weakest month: ${worstMonth[0]} (${worstMonth[1].impressions.toLocaleString()} impressions)` : ""}
+
+CONTENT TYPE BREAKDOWN:
+${contentTypeLines || "  No media type data available"}
 
 MONTHLY BREAKDOWN:
 ${monthlyBreakdown}
 
-TOP 8 POSTS BY PERFORMANCE:
-${topPosts.map((p, i) => `${i + 1}. [${p.date}] ${p.caption ?? "(no caption)"} — ${(p.impressions ?? p.likes ?? 0).toLocaleString()} ${p.impressions != null ? "impressions" : "likes"}${p.saves ? `, ${p.saves} saves` : ""}${p.url ? ` — ${p.url}` : ""}`).join("\n")}
+TOP 8 POSTS BY PERFORMANCE (study these for patterns):
+${topPosts.map((p, i) => `${i + 1}. [${p.date}] [${p.mediaType ?? "post"}] ${p.caption ?? "(no caption)"} — ${(p.impressions ?? p.likes ?? 0).toLocaleString()} ${p.impressions != null ? "impr" : "likes"}${p.saves ? `, ${p.saves} saves` : ""}${p.shares ? `, ${p.shares} shares` : ""}`).join("\n")}
 
-Analyze this data as a senior analyst. Write 2–3 focused paragraphs covering:
-1. Overall trajectory and which months showed notable growth or decline and why (based on data patterns)
-2. What content and behaviors drove the best results — look for patterns in top posts
-3. Notable opportunities the brand should act on
+YOUR OUTPUT MUST INCLUDE:
 
-Then give 4 specific, actionable recommendations tailored to this platform and the patterns you see. Reference actual months and numbers. Be direct and data-grounded, not generic.`;
+narrative: 3 paragraphs — (1) honest assessment of current trajectory, naming which months grew vs declined and why based on data, (2) what content types and behaviors are driving results vs what's holding the account back, (3) what 100x growth requires at this platform's current algorithm stage. Be direct. Name the numbers.
+
+recommendations: 5 specific, numbered tactical actions. Each must reference actual data points from this account. No filler.
+
+growthActions: 5 growth-specific plays to 100x followers/visibility. Each needs:
+  - title: short action name
+  - impact: "Critical" | "High" | "Medium"
+  - timeframe: "This week" | "This month" | "Ongoing" | "Next 90 days"
+  - body: exactly what to do, referencing the account's data and the platform algorithm
+
+frequencyVerdict:
+  - current: actual current posting pace (calculate from this data — posts/week, broken down by type if possible)
+  - recommended: what frequency the platform algorithm rewards for 100x growth
+  - gap: what's missing between current and recommended pace
+
+missingData: list every piece of data that would make this analysis significantly better — be specific (e.g. "Current follower count to calculate follower growth rate", "Stories analytics file from Instagram export", "Reach by content type", "Hashtag performance data", "Profile visit data"). List at least 4–6 items.
+
+contentInsights: for each content type in the data, give a verdict on whether it's working and what to change.
+
+rawMetrics: compute from the data above.`;
 
 
   const start = Date.now();
@@ -257,7 +328,13 @@ Then give 4 specific, actionable recommendations tailored to this platform and t
       period_end: dates[dates.length - 1] ?? null,
       narrative: parsed.narrative,
       recommendations: parsed.recommendations,
-      raw_metrics: parsed.rawMetrics,
+      raw_metrics: {
+        ...parsed.rawMetrics,
+        growthActions: parsed.growthActions,
+        frequencyVerdict: parsed.frequencyVerdict,
+        missingData: parsed.missingData,
+        contentInsights: parsed.contentInsights,
+      },
     });
 
     return { success: true };

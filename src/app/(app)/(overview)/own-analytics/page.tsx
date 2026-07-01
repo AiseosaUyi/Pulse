@@ -9,7 +9,7 @@ async function getLatestReport(tenantSlug: string, platform: string) {
   const admin = createAdminClient();
   const { data } = await admin
     .from("analytics_ai_reports")
-    .select("narrative, recommendations, generated_at")
+    .select("narrative, recommendations, generated_at, raw_metrics")
     .eq("tenant_slug", tenantSlug)
     .eq("platform", platform)
     .order("generated_at", { ascending: false })
