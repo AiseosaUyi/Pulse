@@ -128,7 +128,7 @@ export function UploadPanel({ tenantSlug, compact: _compact }: { tenantSlug: str
 
   return (
     <div className="space-y-4">
-      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* CSV export */}
         <div className="bg-card rounded-2xl border border-border p-5">
           <div className="flex items-center gap-2 mb-3">

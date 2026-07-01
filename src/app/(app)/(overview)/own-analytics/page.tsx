@@ -49,9 +49,12 @@ export default async function OwnAnalyticsPage() {
       {/* Import section */}
       <section className="space-y-4">
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Import data</h2>
-        <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* ZIP card takes 1 col; UploadPanel spans remaining 3 cols at xl */}
+        <div className="grid xl:grid-cols-4 gap-4">
           <ZipUploadSection tenantSlug={tenantSlug} />
-          <UploadPanel tenantSlug={tenantSlug} compact />
+          <div className="xl:col-span-3">
+            <UploadPanel tenantSlug={tenantSlug} compact />
+          </div>
         </div>
       </section>
 
