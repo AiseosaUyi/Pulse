@@ -258,6 +258,15 @@ function ThreadEventCard({
   onDeleteNote: (noteId: string) => void;
 }) {
   const [deleting, startDelete] = useTransition();
+  const [copiedDm, setCopiedDm] = useState(false);
+
+  const copyDm = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedDm(true);
+      setTimeout(() => setCopiedDm(false), 1500);
+    } catch {}
+  };
 
   if (event.type === "outbound_dm") {
     return (
@@ -267,13 +276,19 @@ function ThreadEventCard({
             {event.dmBody}
           </p>
           <div className="flex items-center gap-2 mt-1 justify-end">
+            <button
+              type="button"
+              onClick={() => copyDm(event.dmBody ?? "")}
+              className="inline-flex items-center gap-1 text-[10px] text-text-muted hover:text-foreground"
+            >
+              {copiedDm ? <Check size={10} className="text-status-green" /> : <LinkIcon size={10} />}
+              {copiedDm ? "Copied" : "Copy"}
+            </button>
             <span className="text-xs text-text-muted">
               {relativeTime(event.createdAt)}
             </span>
             {event.dmVersion && event.dmVersion > 1 && (
-              <span className="text-xs text-text-muted">
-                v{event.dmVersion}
-              </span>
+              <span className="text-xs text-text-muted">v{event.dmVersion}</span>
             )}
             <span className="text-xs text-text-muted capitalize">
               {event.dmStatus}
@@ -680,6 +695,81 @@ function platformProfileUrl(prospect: ProspectRecord): string {
   }
 }
 
+function platformDmUrl(prospect: ProspectRecord): string | null {
+  const h = prospect.handle;
+  switch (prospect.platform) {
+    case "instagram": return `https://ig.me/m/${h}`;
+    case "twitter": return `https://twitter.com/messages/compose?recipient_id=${h}`;
+    case "linkedin": return `https://www.linkedin.com/messaging/compose/?recipients=${h}`;
+    default: return null;
+  }
+}
+
+// ── Reachout card (shown when no conversation has started) ───────────────────
+
+function ReachoutCard({
+  prospect,
+  profileUrl,
+  dmUrl,
+}: {
+  prospect: ProspectRecord;
+  profileUrl: string;
+  dmUrl: string | null;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const greeting = `Hey @${prospect.handle}! 👋 I came across your profile and thought you'd be a great fit for what we do. Would love to connect!`;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(greeting);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {}
+  };
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-sidebar/50 p-4 space-y-3">
+      <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Start the conversation</p>
+
+      {/* Message to copy */}
+      <div className="rounded-lg border border-border bg-card px-3 py-2.5">
+        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{greeting}</p>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button size="sm" variant="outline" onClick={copy} className="gap-1.5">
+          {copied ? <Check size={12} className="text-status-green" /> : <LinkIcon size={12} />}
+          {copied ? "Copied!" : "Copy message"}
+        </Button>
+        {dmUrl && (
+          <a
+            href={dmUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-600 px-3 py-1.5 rounded-lg border border-primary-500/30 hover:bg-primary-500/5"
+          >
+            <ExternalLink size={12} />
+            Open DMs on {PLATFORM_LABELS[prospect.platform]}
+          </a>
+        )}
+        {!dmUrl && profileUrl && (
+          <a
+            href={profileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-600 px-3 py-1.5 rounded-lg border border-primary-500/30 hover:bg-primary-500/5"
+          >
+            <ExternalLink size={12} />
+            Open profile
+          </a>
+        )}
+      </div>
+      <p className="text-[11px] text-text-muted">Copy the message, open their DMs, paste and send.</p>
+    </div>
+  );
+}
+
 // ── Main panel ───────────────────────────────────────────────────────────────
 
 export function ProspectThreadPanel({
@@ -714,10 +804,12 @@ export function ProspectThreadPanel({
   const [analyzing, startAnalyzing] = useTransition();
   const [noteBody, setNoteBody] = useState("");
   const [addingNote, startAddNote] = useTransition();
+  const [noteOpen, setNoteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
   const profileUrl = platformProfileUrl(prospect);
+  const dmUrl = platformDmUrl(prospect);
 
   const copyReplyLink = async () => {
     const url = `${window.location.origin}/leads?prospect=${prospect.id}&action=reply`;
@@ -799,6 +891,7 @@ export function ProspectThreadPanel({
         return;
       }
       setNoteBody("");
+      setNoteOpen(false);
       // Optimistically add note to thread
       setThread((prev) => [
         ...(prev ?? []),
@@ -900,42 +993,49 @@ export function ProspectThreadPanel({
           </div>
 
           {/* Primary action row */}
-          {(onQualify || onDraft || onEdit || onDelete) && (
-            <div className="flex items-center gap-2 flex-wrap">
-              {(prospect.status === "new" || prospect.status === "qualifying") && onQualify && (
-                <Button size="sm" onClick={() => onQualify(prospect)} className="gap-1.5">
-                  <Sparkles size={13} />
-                  AI qualify
-                </Button>
-              )}
-              {prospect.status === "qualified" && onDraft && (
-                <Button size="sm" onClick={() => onDraft(prospect)} className="gap-1.5">
-                  <Send size={13} />
-                  Draft DM
-                </Button>
-              )}
-              {onEdit && (
-                <button
-                  type="button"
-                  onClick={() => onEdit(prospect)}
-                  className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-foreground px-2 py-1.5 rounded-lg hover:bg-sidebar border border-border/60"
-                >
-                  <Pencil size={12} />
-                  Edit
-                </button>
-              )}
-              {onDelete && (
-                <button
-                  type="button"
-                  onClick={() => onDelete(prospect)}
-                  className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-status-red px-2 py-1.5 rounded-lg hover:bg-status-red/10 border border-border/60"
-                >
-                  <Trash2 size={12} />
-                  Delete
-                </button>
-              )}
-            </div>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {(prospect.status === "new" || prospect.status === "qualifying") && onQualify && (
+              <Button size="sm" onClick={() => onQualify(prospect)} className="gap-1.5">
+                <Sparkles size={13} />
+                AI qualify
+              </Button>
+            )}
+            {prospect.status === "qualified" && onDraft && (
+              <Button size="sm" onClick={() => onDraft(prospect)} className="gap-1.5">
+                <Send size={13} />
+                Draft DM
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-foreground px-2 py-1.5 rounded-lg hover:bg-sidebar border border-border/60"
+            >
+              {analyzing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              Analyze
+            </button>
+            {onEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(prospect)}
+                className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-foreground px-2 py-1.5 rounded-lg hover:bg-sidebar border border-border/60"
+              >
+                <Pencil size={12} />
+                Edit
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(prospect)}
+                className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-status-red px-2 py-1.5 rounded-lg hover:bg-status-red/10 border border-border/60"
+              >
+                <Trash2 size={12} />
+                Delete
+              </button>
+            )}
+          </div>
 
           {/* Meta row: stage + risk + follow-up */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -1015,15 +1115,7 @@ export function ProspectThreadPanel({
               {activeTab === "thread" && (
                 <div className="space-y-3" role="feed">
                   {loadedThread.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-10 gap-2">
-                      <MessageCircle size={24} className="text-text-muted" />
-                      <p className="text-sm font-medium text-foreground">
-                        No messages yet
-                      </p>
-                      <p className="text-xs text-text-muted text-center max-w-[200px]">
-                        DMs, replies, notes and AI analysis will appear here.
-                      </p>
-                    </div>
+                    <ReachoutCard prospect={prospect} profileUrl={profileUrl} dmUrl={dmUrl} />
                   )}
                   {analyzing && (
                     <div className="flex items-center gap-2 py-2 text-sm text-text-muted">
@@ -1073,7 +1165,7 @@ export function ProspectThreadPanel({
           )}
         </div>
 
-        {/* Sticky action bar */}
+        {/* Sticky note bar */}
         <div className="shrink-0 border-t border-border/60 px-4 py-3 space-y-2">
           {error && (
             <div className="flex items-center gap-1.5 text-xs text-status-red">
@@ -1081,44 +1173,49 @@ export function ProspectThreadPanel({
               {error}
             </div>
           )}
-          <div className="flex gap-2 items-end">
-            <Textarea
-              rows={2}
-              value={noteBody}
-              onChange={(e) => setNoteBody(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleAddNote();
-              }}
-              placeholder="Add a note… (⌘↵ to save)"
-              className="flex-1 text-sm resize-none"
-            />
-            <div className="flex flex-col gap-1.5">
-              <Button
-                size="sm"
-                onClick={handleAddNote}
-                disabled={addingNote || !noteBody.trim()}
-                className="gap-1.5"
-              >
-                {addingNote ? <Loader2 size={12} className="animate-spin" /> : null}
-                Note
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleAnalyze}
-                disabled={analyzing}
-                className="gap-1.5"
-                title="AI analyzes the conversation and auto-sets a follow-up date"
-              >
-                {analyzing ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <Sparkles size={12} />
-                )}
-                Analyze
-              </Button>
+          {noteOpen ? (
+            <div className="space-y-2">
+              <Textarea
+                autoFocus
+                rows={2}
+                value={noteBody}
+                onChange={(e) => setNoteBody(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleAddNote();
+                  if (e.key === "Escape") { setNoteOpen(false); setNoteBody(""); }
+                }}
+                placeholder="Add a note… (⌘↵ to save)"
+                className="w-full text-sm resize-none"
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setNoteOpen(false); setNoteBody(""); }}
+                  className="text-xs text-text-muted hover:text-foreground px-2 py-1"
+                >
+                  Cancel
+                </button>
+                <Button
+                  size="sm"
+                  onClick={handleAddNote}
+                  disabled={addingNote || !noteBody.trim()}
+                  className="gap-1.5"
+                >
+                  {addingNote ? <Loader2 size={12} className="animate-spin" /> : <Pencil size={12} />}
+                  Save note
+                </Button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setNoteOpen(true)}
+              className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-foreground px-2 py-1.5 rounded-lg hover:bg-sidebar w-full"
+            >
+              <Pencil size={12} />
+              Add a note…
+            </button>
+          )}
         </div>
       </div>
     </>
