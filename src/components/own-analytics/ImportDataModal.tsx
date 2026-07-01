@@ -182,7 +182,7 @@ export function ImportDataModal({ open, onClose, tenantSlug }: Props) {
       try {
         if (detected === "instagram") {
           const p = parseInstagramZip(files);
-          posts = p.map((x) => ({ capturedAt: x.timestamp.toISOString(), platform: "instagram", caption: x.caption, externalUrl: x.permalink, metrics: { likes: x.likes } }));
+          posts = p.map((x) => ({ capturedAt: x.timestamp.toISOString(), platform: "instagram", caption: x.caption, externalUrl: x.permalink, metrics: { likes: x.likes, impressions: x.impressions, reach: x.reach, comments: x.comments, shares: x.shares, saves: x.saves } }));
         } else if (detected === "twitter") {
           const p = parseTwitterZip(files);
           posts = p.map((x) => ({ capturedAt: x.timestamp.toISOString(), platform: "twitter", caption: x.text, externalUrl: x.permalink, metrics: { impressions: x.impressions, engagements: x.engagements, likes: x.likes, shares: x.retweets, replies: x.replies, bookmarks: x.bookmarks } }));

@@ -95,7 +95,7 @@ export function UnifiedUploadCard({ tenantSlug, onDone }: Props) {
             platform: "instagram",
             caption: p.caption,
             externalUrl: p.permalink,
-            metrics: { likes: p.likes },
+            metrics: { likes: p.likes, impressions: p.impressions, reach: p.reach, comments: p.comments, shares: p.shares, saves: p.saves },
           }));
         } else if (detected === "twitter") {
           const parsed = parseTwitterZip(files);

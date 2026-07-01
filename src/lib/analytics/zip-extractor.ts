@@ -8,14 +8,12 @@ export interface ExtractedFile {
   text: string;
 }
 
-/** Paths that contain media — skip them to avoid reading GBs of binary data */
-const SKIP_PREFIXES = ["/media/", "/photos/", "/videos/", "/stories_archival/"];
-
 function isMediaPath(path: string): boolean {
-  const lower = path.toLowerCase();
-  return (
-    SKIP_PREFIXES.some((p) => lower.includes(p)) ||
-    /\.(jpg|jpeg|png|mp4|mov|gif|webp|heic|m4v|avi|mkv|wav|mp3|aac)$/i.test(lower)
+  // Skip by file extension only — do NOT skip by folder name.
+  // Instagram stores JSON metadata (posts.json, reels.json, insights) inside /media/ and
+  // /logged_information/ folders, so folder-based skipping blocks valid analytics files.
+  return /\.(jpg|jpeg|png|mp4|mov|gif|webp|heic|m4v|avi|mkv|wav|mp3|aac|srt)$/i.test(
+    path.toLowerCase()
   );
 }
 
@@ -39,7 +37,7 @@ export function extractZip(file: File): Promise<ExtractedFile[]> {
         const dec = new TextDecoder("utf-8", { fatal: false });
         for (const [path, data] of Object.entries(files)) {
           if (!isAnalyticsFile(path)) continue;
-          // JSON files have no size cap — posts_1.json can be several hundred MB.
+          // JSON files have no size cap — posts.json can be several hundred MB.
           // Non-JSON text (CSV, HTML, JS) capped at 8 MB.
           const isJson = path.toLowerCase().endsWith(".json");
           if (!isJson && data.byteLength > 8 * 1024 * 1024) continue;
@@ -60,10 +58,14 @@ export function extractZip(file: File): Promise<ExtractedFile[]> {
 /** Detect which platform a ZIP belongs to based on folder/file names */
 export function detectZipPlatform(files: ExtractedFile[]): OwnMetricsPlatform | null {
   const paths = files.map((f) => f.path.toLowerCase());
-  // Instagram: folder name OR presence of posts_N.json / reels.json / stories.json
+  // Instagram: folder name OR presence of posts_N.json / reels.json / insights
   if (
-    paths.some((p) => p.includes("your_instagram_activity") || p.includes("instagram")) ||
-    paths.some((p) => /posts_\d*\.json$/.test(p) || /reels(?:_media)?\.json$/.test(p))
+    paths.some((p) =>
+      p.includes("your_instagram_activity") ||
+      p.includes("instagram") ||
+      p.includes("past_instagram_insights")
+    ) ||
+    paths.some((p) => /posts_?\d*\.json$/.test(p) || /reels(?:_media)?\.json$/.test(p))
   ) return "instagram";
   // Twitter/X: tweet.js is the canonical file; also CSV analytics exports
   if (paths.some((p) => p.includes("tweet.js") || /tweets?\.csv$/.test(p) || p.includes("twitter"))) return "twitter";
