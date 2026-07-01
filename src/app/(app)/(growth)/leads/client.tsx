@@ -229,6 +229,7 @@ export function OutboundClient({
   );
   const [threadPanelProspect, setThreadPanelProspect] = useState<ProspectRecord | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importDidChange, setImportDidChange] = useState(false);
   const [editingProspect, setEditingProspect] = useState<ProspectRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -454,10 +455,14 @@ export function OutboundClient({
       {importModalOpen && (
         <ImportProspectsModal
           tenantSlug={tenantSlug}
-          onClose={() => setImportModalOpen(false)}
-          onImported={(count) => {
+          onClose={() => {
             setImportModalOpen(false);
-            if (count > 0) location.reload();
+            if (importDidChange) location.reload();
+          }}
+          onImported={(count) => {
+            // Don't close yet — let the Done step render so the user sees
+            // created/updated/error counts before the page reloads.
+            if (count > 0) setImportDidChange(true);
           }}
         />
       )}
@@ -651,74 +656,113 @@ export function OutboundClient({
                   <li
                     key={p.id}
                     id={`prospect-${p.id}`}
-                    className={`group px-4 py-3 cursor-pointer transition-colors ${
+                    className={`group px-4 py-4 cursor-pointer transition-colors ${
                       selectedIds.has(p.id) || threadPanelProspect?.id === p.id
                         ? "bg-primary-500/5"
                         : "hover:bg-sidebar/40"
                     }`}
                     onClick={() => openThreadPanel(p)}
                   >
-                    <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-start gap-3">
+                      {/* Checkbox */}
                       <button
                         type="button"
                         onClick={e => { e.stopPropagation(); toggleSelect(p.id); }}
-                        className="shrink-0 text-text-muted hover:text-primary-500"
+                        className="shrink-0 mt-0.5 text-text-muted hover:text-primary-500"
                         aria-label={selectedIds.has(p.id) ? "Deselect" : "Select"}
                       >
                         {selectedIds.has(p.id) ? <CheckSquare size={14} className="text-primary-500" /> : <Square size={14} />}
                       </button>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-foreground">
-                            @{p.handle}
-                          </span>
-                          <span className="text-[10px] uppercase tracking-wide text-text-muted">
-                            {PLATFORM_LABELS[p.platform]}
-                          </span>
-                          <span
-                            className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
-                              STATUS_TONE[p.status]
-                            }`}
-                          >
-                            {p.status === "qualifying" && <Loader2 size={9} className="animate-spin" />}
-                            {STATUS_LABELS[p.status]}
-                          </span>
-                          {p.qualificationScore != null && (
-                            <span className="text-[10px] text-text-muted">
-                              · {p.qualificationScore}
+
+                      {/* 3-column grid on desktop, single column on mobile */}
+                      <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-[1fr_200px_160px] gap-x-8 items-start">
+
+                        {/* Col 1: Identity */}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-foreground">
+                              @{p.handle}
                             </span>
-                          )}
-                        </div>
-                        {(p.displayName || p.verifiedName) && (
-                          <p className="text-xs text-text-muted mt-0.5">
-                            {p.verifiedName ? `${p.verifiedName}${p.displayName && p.displayName !== p.verifiedName ? ` · ${p.displayName}` : ""}` : p.displayName}
-                          </p>
-                        )}
-                        {(p.category || p.location || p.eventTitle) && (
-                          <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                            {p.eventTitle && (
-                              <span className="text-[11px] text-text-muted italic">{p.eventTitle}</span>
-                            )}
-                            {p.category && (
-                              <span className="inline-flex items-center gap-0.5 text-[11px] text-text-muted">
-                                <Tag size={9} />
-                                {p.category}
-                              </span>
-                            )}
-                            {p.location && (
-                              <span className="inline-flex items-center gap-0.5 text-[11px] text-text-muted">
-                                <MapPin size={9} />
-                                {p.location}
+                            <span className="text-[10px] uppercase tracking-wide text-text-muted">
+                              {PLATFORM_LABELS[p.platform]}
+                            </span>
+                            <span
+                              className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                                STATUS_TONE[p.status]
+                              }`}
+                            >
+                              {p.status === "qualifying" && <Loader2 size={9} className="animate-spin" />}
+                              {STATUS_LABELS[p.status]}
+                            </span>
+                            {p.qualificationScore != null && (
+                              <span className="text-[10px] text-text-muted">
+                                · {p.qualificationScore}
                               </span>
                             )}
                           </div>
-                        )}
-                        {p.signalSummary && (
-                          <p className="text-xs text-text-secondary mt-0.5 line-clamp-1">
-                            {p.signalSummary}
-                          </p>
-                        )}
-                        <ProspectTemporalLine p={p} tenantSlug={tenantSlug} onUpdate={updateProspect} />
+                          {(p.displayName || p.verifiedName) && (
+                            <p className="text-xs text-text-muted mt-0.5">
+                              {p.verifiedName
+                                ? `${p.verifiedName}${p.displayName && p.displayName !== p.verifiedName ? ` · ${p.displayName}` : ""}`
+                                : p.displayName}
+                            </p>
+                          )}
+                          {p.signalSummary && (
+                            <p className="text-xs text-text-secondary mt-0.5 line-clamp-1">
+                              {p.signalSummary}
+                            </p>
+                          )}
+                          {/* Mobile-only: context + temporal stacked below identity */}
+                          <div className="sm:hidden mt-1 flex flex-col gap-0.5">
+                            {(p.category || p.location || p.eventTitle) && (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {p.eventTitle && (
+                                  <span className="text-[11px] text-text-muted italic">{p.eventTitle}</span>
+                                )}
+                                {p.category && (
+                                  <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
+                                    <Tag size={12} />
+                                    {p.category}
+                                  </span>
+                                )}
+                                {p.location && (
+                                  <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
+                                    <MapPin size={12} />
+                                    {p.location}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            <ProspectTemporalLine p={p} tenantSlug={tenantSlug} onUpdate={updateProspect} />
+                          </div>
+                        </div>
+
+                        {/* Col 2: Context — event / category / location (desktop only) */}
+                        <div className="hidden sm:flex flex-col gap-1 pt-0.5">
+                          {p.eventTitle && (
+                            <span className="text-[11px] text-text-muted italic leading-tight line-clamp-1">
+                              {p.eventTitle}
+                            </span>
+                          )}
+                          {p.category && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
+                              <Tag size={12} className="shrink-0" />
+                              {p.category}
+                            </span>
+                          )}
+                          {p.location && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-text-muted">
+                              <MapPin size={12} className="shrink-0" />
+                              {p.location}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Col 3: Last reachout (desktop only) */}
+                        <div className="hidden sm:block pt-0.5">
+                          <ProspectTemporalLine p={p} tenantSlug={tenantSlug} onUpdate={updateProspect} />
+                        </div>
+
                       </div>
                     </div>
                   </li>

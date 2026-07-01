@@ -120,10 +120,20 @@ export async function importProspects(
     }
 
     if (toInsert.length > 0) {
-      const { error } = await admin.from("prospects").insert(toInsert);
+      // Dedup within this batch — if the same (handle, platform) appears twice in
+      // the same 50-row window, Postgres throws a unique constraint and drops the
+      // entire INSERT. Silently skip the second occurrence (it's a sheet duplicate).
+      const batchSeen = new Set<string>();
+      const dedupedInsert = toInsert.filter((row) => {
+        const k = `${row.handle}:${row.platform}`;
+        if (batchSeen.has(k)) { result.skipped += 1; return false; }
+        batchSeen.add(k);
+        return true;
+      });
+
+      const { error } = await admin.from("prospects").insert(dedupedInsert);
       if (error) {
-        // If batch insert fails, record per-row errors conservatively
-        for (const r of toInsert) {
+        for (const r of dedupedInsert) {
           result.errors.push({
             row: normalised.findIndex((x) => x.handle === r.handle) + 1,
             handle: r.handle as string,
@@ -131,7 +141,7 @@ export async function importProspects(
           });
         }
       } else {
-        result.created += toInsert.length;
+        result.created += dedupedInsert.length;
       }
     }
 
