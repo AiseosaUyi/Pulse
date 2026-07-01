@@ -228,13 +228,13 @@ export async function generateAnalyticsReport(
   const postsPerWeek = ((postsData.length / periodDays) * 7).toFixed(1);
 
   const platformGuidance: Record<string, string> = {
-    instagram: "Instagram rewards accounts that post feed content (photos + carousels + reels) 4–7x/week AND stories daily (15–20 stories/day is normal for growing accounts). Reels are the #1 follower growth lever right now — the algorithm distributes Reels to non-followers. Carousels drive saves and come back to the algorithm. Stories build retention but don't grow new followers on their own.",
+    instagram: "Instagram rewards accounts that post feed content (photos + carousels + reels) 4–7x/week AND stories consistently (3–7 stories/day is a realistic starting cadence for a small team; repurposing and archiving older stories is a valid and common strategy). Reels are the #1 follower growth lever right now — the algorithm distributes Reels to non-followers. Carousels drive saves and come back to the algorithm. Stories build retention but don't grow new followers on their own.",
     twitter: "X/Twitter rewards high-frequency original tweets (5–10/day for fast-growing accounts), threads for depth, and reply-farming (engaging in trending conversations). Quote tweets with takes drive impressions far above normal posts. Posting windows: 8am, 12pm, 5pm in the audience's timezone.",
     tiktok: "TikTok rewards volume and iteration: 2–4 videos/day is normal for fast-growing accounts. The For You page distributes to non-followers based on watch-time and completion rate. Hooks in the first 1–3 seconds are everything. Trending sounds multiply reach 3–5x.",
     linkedin: "LinkedIn rewards 3–5 posts/week. Carousels (PDF documents) get the highest organic reach. Personal stories + professional insight outperform company news. Comments in the first hour heavily influence algorithmic reach.",
   };
 
-  const prompt = `You are a world-class social media growth strategist. Your job is to analyze this ${platform} account's data and build a SPECIFIC, AGGRESSIVE plan to grow followers and visibility 100x over 12 months. Do not give generic advice. Every recommendation must be rooted in this account's actual data.
+  const prompt = `You are a world-class social media growth strategist. Your job is to analyze this ${platform} account's data and build a SPECIFIC, AMBITIOUS but REALISTIC plan to grow followers and visibility 10x over 12 months. Recommendations must be achievable by a small team with the help of AI content tools. Do not give generic advice. Every recommendation must be rooted in this account's actual data.
 
 PLATFORM: ${platform}
 PERIOD ANALYSED: ${dates[0]} to ${dates[dates.length - 1]}
@@ -272,19 +272,19 @@ ${topPosts.map((p, i) => `${i + 1}. [${p.date}] [${p.mediaType ?? "post"}] ${p.c
 
 YOUR OUTPUT MUST INCLUDE:
 
-narrative: 3 paragraphs — (1) honest assessment of current trajectory, naming which months grew vs declined and why based on data, (2) what content types and behaviors are driving results vs what's holding the account back, (3) what 100x growth requires at this platform's current algorithm stage. Be direct. Name the numbers.
+narrative: 3 paragraphs — (1) honest assessment of current trajectory, naming which months grew vs declined and why based on data, (2) what content types and behaviors are driving results vs what's holding the account back, (3) what 10x growth requires and what's realistically achievable with a small team + AI tools. Be direct. Name the numbers.
 
 recommendations: 5 specific, numbered tactical actions. Each must reference actual data points from this account. No filler.
 
-growthActions: 5 growth-specific plays to 100x followers/visibility. Each needs:
+growthActions: 5 growth-specific plays to 10x followers/visibility. Each needs:
   - title: short action name
   - impact: "Critical" | "High" | "Medium"
   - timeframe: "This week" | "This month" | "Ongoing" | "Next 90 days"
-  - body: exactly what to do, referencing the account's data and the platform algorithm
+  - body: exactly what to do, referencing the account's data and the platform algorithm. Keep recommendations achievable — a small team with AI content tools can handle 4–7 feed posts/week and 3–7 stories/day if repurposing is allowed.
 
 frequencyVerdict:
   - current: actual current posting pace (calculate from this data — posts/week, broken down by type if possible)
-  - recommended: what frequency the platform algorithm rewards for 100x growth
+  - recommended: what frequency the platform algorithm rewards for consistent growth, calibrated for a small team (not influencer-scale)
   - gap: what's missing between current and recommended pace
 
 missingData: list every piece of data that would make this analysis significantly better — be specific (e.g. "Current follower count to calculate follower growth rate", "Stories analytics file from Instagram export", "Reach by content type", "Hashtag performance data", "Profile visit data"). List at least 4–6 items.

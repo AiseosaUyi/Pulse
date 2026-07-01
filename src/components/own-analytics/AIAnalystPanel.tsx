@@ -219,7 +219,7 @@ export function AIAnalystPanel({ tenantSlug, platform, posts, initialReport }: P
               {activeSection === "growth" && hasExtended && (
                 <div className="px-5 py-5">
                   <p className="text-xs text-text-muted mb-4 leading-relaxed">
-                    Specific plays to grow followers and visibility 100x. Ranked by impact.
+                    Specific plays to grow followers and visibility 10x. Ranked by impact.
                   </p>
                   <div className="space-y-3">
                     {growthActions.map((a, i) => (
@@ -250,7 +250,7 @@ export function AIAnalystPanel({ tenantSlug, platform, posts, initialReport }: P
                       <p className="text-sm font-semibold text-foreground">{frequencyVerdict.current}</p>
                     </div>
                     <div className="p-4 rounded-xl bg-primary-500/5 border border-primary-500/20">
-                      <p className="text-[10px] font-semibold text-primary-500 uppercase tracking-wider mb-1.5">Recommended for 100x</p>
+                      <p className="text-[10px] font-semibold text-primary-500 uppercase tracking-wider mb-1.5">Recommended</p>
                       <p className="text-sm font-semibold text-foreground">{frequencyVerdict.recommended}</p>
                     </div>
                   </div>
