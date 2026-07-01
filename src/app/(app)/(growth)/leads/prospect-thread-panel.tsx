@@ -375,11 +375,6 @@ function ThreadEventCard({
             </span>
           </div>
         )}
-        {a.costUsd > 0 && (
-          <p className="text-xs text-text-muted pt-1">
-            ${a.costUsd.toFixed(4)} · {a.model ?? "gpt-4.1-mini"}
-          </p>
-        )}
       </div>
     );
   }
@@ -472,7 +467,7 @@ function AnalysisTab({
       )}
 
       <p className="text-xs text-text-muted">
-        Analyzed {formatDateTime(analysis.createdAt)} · {analysis.model ?? "gpt-4.1-mini"}
+        Analyzed {formatDateTime(analysis.createdAt)}
       </p>
     </div>
   );
