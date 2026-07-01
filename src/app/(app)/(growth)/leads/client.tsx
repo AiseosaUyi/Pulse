@@ -157,7 +157,7 @@ function ProspectTemporalLine({
     : p.lastTouchedAt?.slice(0, 10) ?? "";
 
   return (
-    <div className="flex items-center gap-2 mt-1 flex-wrap">
+    <div className="flex items-center gap-2 flex-wrap">
       {t && <span className={`text-[11px] ${t.cls}`}>{t.text}</span>}
       {editing ? (
         <input
@@ -656,10 +656,10 @@ export function OutboundClient({
                   <li
                     key={p.id}
                     id={`prospect-${p.id}`}
-                    className={`group px-4 py-4 cursor-pointer transition-colors ${
+                    className={`group px-4 py-3.5 cursor-pointer transition-colors border-b border-border/30 last:border-0 ${
                       selectedIds.has(p.id) || threadPanelProspect?.id === p.id
                         ? "bg-primary-500/5"
-                        : "hover:bg-sidebar/40"
+                        : "hover:bg-sidebar/50"
                     }`}
                     onClick={() => openThreadPanel(p)}
                   >
@@ -692,7 +692,7 @@ export function OutboundClient({
                           {/* Handle + status — secondary */}
                           <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                             {p.displayName && (
-                              <span className="text-[11px] text-text-muted">@{p.handle}</span>
+                              <span className="text-[11px] text-text-muted/60">@{p.handle}</span>
                             )}
                             <span
                               className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
@@ -716,7 +716,7 @@ export function OutboundClient({
                           )}
                           {/* Mobile-only: platform + context + temporal */}
                           <div className="sm:hidden mt-1 flex flex-col gap-0.5">
-                            <span className="text-[10px] uppercase tracking-wide text-text-muted">
+                            <span className="inline-block text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border border-border/50 bg-sidebar text-text-muted/70 w-fit">
                               {PLATFORM_LABELS[p.platform]}
                             </span>
                             {(p.category || p.location) && (
@@ -733,13 +733,15 @@ export function OutboundClient({
                                 )}
                               </div>
                             )}
-                            <ProspectTemporalLine p={p} tenantSlug={tenantSlug} onUpdate={updateProspect} />
+                            <div className="mt-1">
+                              <ProspectTemporalLine p={p} tenantSlug={tenantSlug} onUpdate={updateProspect} />
+                            </div>
                           </div>
                         </div>
 
                         {/* Col 2: Platform (desktop only) */}
                         <div className="hidden sm:flex items-start pt-0.5">
-                          <span className="text-[10px] uppercase tracking-wide text-text-muted">
+                          <span className="inline-block text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border border-border/50 bg-sidebar text-text-muted/70">
                             {PLATFORM_LABELS[p.platform]}
                           </span>
                         </div>
