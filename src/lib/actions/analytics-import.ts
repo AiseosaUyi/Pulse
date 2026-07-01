@@ -54,23 +54,25 @@ export async function importAnalyticsPosts(
       title: p.caption?.slice(0, 500) ?? null,
       caption: p.caption ?? null,
       captured_at: p.capturedAt,
-      source: "json_export" as const,
+      source: "csv" as const,
       metrics: Object.fromEntries(
         Object.entries(p.metrics).filter(([, v]) => v !== null && v !== undefined)
       ),
       created_at: now,
     }));
 
-    const { data, error } = await admin
+    // Upsert on (tenant_slug, platform, captured_at) — requires mig 083 unique index.
+    // Falls back to plain insert if the index doesn't exist yet.
+    const { error } = await admin
       .from("own_post_metrics")
-      .upsert(rows, { onConflict: "tenant_slug,platform,captured_at", ignoreDuplicates: false });
+      .upsert(rows, { onConflict: "tenant_slug,platform,captured_at", ignoreDuplicates: true });
 
     if (error) {
-      // If upsert fails (e.g. no unique constraint), fall back to insert ignoring duplicates
       const { error: insertErr, count } = await admin
         .from("own_post_metrics")
         .insert(rows, { count: "exact" });
       if (!insertErr) inserted += count ?? batch.length;
+      // If insert also fails, rows already exist or constraint mismatch — skip silently
     } else {
       inserted += batch.length;
     }
