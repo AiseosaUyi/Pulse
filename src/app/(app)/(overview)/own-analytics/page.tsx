@@ -1,152 +1,75 @@
 import { getCurrentTenant } from "@/lib/auth";
-import { TrendingUp } from "lucide-react";
-import {
-  listOwnMetrics,
-  getOwnMetricsSummary,
-} from "@/lib/services/own-metrics";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { listOwnMetrics } from "@/lib/services/own-metrics";
 import { UploadPanel } from "@/components/own-analytics/UploadPanel";
-import { MetricsTable } from "@/components/own-analytics/MetricsTable";
+import { ZipUploadSection } from "@/components/own-analytics/ZipUploadSection";
+import { PlatformTabsClient } from "@/components/own-analytics/PlatformTabsClient";
 import type { OwnMetricsPlatform } from "@/lib/types/own-metrics";
 
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
+async function getLatestReport(tenantSlug: string, platform: string) {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("analytics_ai_reports")
+    .select("narrative, recommendations, generated_at")
+    .eq("tenant_slug", tenantSlug)
+    .eq("platform", platform)
+    .order("generated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
 }
 
-const PLATFORM_LABEL: Record<OwnMetricsPlatform, string> = {
-  instagram: "Instagram",
-  tiktok: "TikTok",
-  twitter: "Twitter/X",
-  linkedin: "LinkedIn",
-};
+const PLATFORMS: OwnMetricsPlatform[] = ["instagram", "twitter", "tiktok", "linkedin"];
 
 export default async function OwnAnalyticsPage() {
   const tenant = await getCurrentTenant();
   const tenantSlug = tenant?.slug ?? "";
 
-  const [summary, metrics] = await Promise.all([
-    getOwnMetricsSummary(tenantSlug),
-    listOwnMetrics(tenantSlug, { limit: 100 }),
+  const [allMetrics, ...reports] = await Promise.all([
+    listOwnMetrics(tenantSlug, { limit: 500 }),
+    ...PLATFORMS.map((p) => getLatestReport(tenantSlug, p)),
   ]);
 
+  const reportsByPlatform = Object.fromEntries(
+    PLATFORMS.map((p, i) => [p, reports[i]])
+  );
+
+  const hasPosts = allMetrics.length > 0;
+
   return (
-    <div className="p-4 md:p-8 max-w-[1200px] space-y-6">
+    <div className="p-4 md:p-8 max-w-[1280px] space-y-8">
+      {/* Header */}
       <div>
-        <h1 className="text-xl md:text-2xl font-bold text-foreground">
-          Analytics
-        </h1>
+        <h1 className="text-xl md:text-2xl font-bold text-foreground">Analytics</h1>
         <p className="text-text-secondary text-sm mt-0.5">
-          Import your own post metrics — CSV exports from Meta/TikTok/LinkedIn,
-          or screenshots for anything else.
+          Your social media data — charts, AI analysis, and platform-specific insights.
         </p>
       </div>
 
-      {/* Weekly summary */}
-      {summary.totalPosts > 0 && (
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard
-            label="Total posts tracked"
-            value={String(summary.totalPosts)}
-          />
-          <StatCard
-            label="Reach (7d)"
-            value={formatNumber(summary.weeklyReach)}
-          />
-          <StatCard
-            label="Engagement (7d)"
-            value={formatNumber(summary.weeklyEngagement)}
-          />
-          <StatCard
-            label="Platforms tracked"
-            value={String(summary.perPlatform.length)}
-          />
-        </section>
-      )}
-
-      {/* Per-platform breakdown */}
-      {summary.perPlatform.length > 0 && (
-        <section className="bg-card border border-border rounded-2xl p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp size={16} className="text-text-muted" />
-            <h2
-              className="text-xs font-semibold text-text-muted"
-              style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
-            >
-              By platform
-            </h2>
-          </div>
-          <ul className="divide-y divide-border/30">
-            {summary.perPlatform.map((p) => (
-              <li key={p.platform} className="py-3 flex items-center justify-between gap-4 flex-wrap">
-                <span className="text-foreground font-medium">
-                  {PLATFORM_LABEL[p.platform]}
-                </span>
-                <div className="flex items-center gap-6 text-xs text-text-muted">
-                  <span>
-                    <span className="text-foreground font-mono">{p.posts}</span>{" "}
-                    posts
-                  </span>
-                  <span>
-                    Reach{" "}
-                    <span className="text-foreground font-mono">
-                      {formatNumber(p.totalReach)}
-                    </span>
-                  </span>
-                  <span>
-                    Engagement{" "}
-                    <span className="text-foreground font-mono">
-                      {formatNumber(p.totalEngagement)}
-                    </span>
-                  </span>
-                  {p.avgEngagementRate > 0 && (
-                    <span>
-                      Avg ER{" "}
-                      <span className="text-foreground font-mono">
-                        {p.avgEngagementRate.toFixed(1)}%
-                      </span>
-                    </span>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section>
-        <h2
-          className="text-xs font-semibold text-text-muted mb-3"
-          style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
-        >
-          Import
-        </h2>
-        <UploadPanel tenantSlug={tenantSlug} />
+      {/* Import section */}
+      <section className="space-y-4">
+        <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Import data</h2>
+        <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <ZipUploadSection tenantSlug={tenantSlug} />
+          <UploadPanel tenantSlug={tenantSlug} compact />
+        </div>
       </section>
 
-      <section>
-        <h2
-          className="text-xs font-semibold text-text-muted mb-3"
-          style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
-        >
-          Posts
-        </h2>
-        <MetricsTable metrics={metrics} tenantSlug={tenantSlug} />
-      </section>
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-card border border-border rounded-2xl p-4">
-      <p className="text-xs text-text-muted mb-1">{label}</p>
-      <p
-        className="text-xl text-foreground tracking-tight"
-        style={{ fontFamily: "'Satoshi-700', var(--font-sans)" }}
-      >
-        {value}
-      </p>
+      {/* Platform tabs + analytics */}
+      {hasPosts ? (
+        <PlatformTabsClient
+          posts={allMetrics}
+          tenantSlug={tenantSlug}
+          reportsByPlatform={reportsByPlatform}
+        />
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border/50 p-16 text-center">
+          <p className="text-sm font-medium text-foreground mb-1">No data yet</p>
+          <p className="text-xs text-text-muted">
+            Upload your data export ZIP above to see charts, AI analysis, and top posts.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

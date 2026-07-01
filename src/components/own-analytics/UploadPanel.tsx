@@ -34,7 +34,7 @@ function readAsDataUrl(file: File): Promise<string> {
 
 type PendingAction = "csv" | "export" | "screenshot" | null;
 
-export function UploadPanel({ tenantSlug }: { tenantSlug: string }) {
+export function UploadPanel({ tenantSlug, compact: _compact }: { tenantSlug: string; compact?: boolean }) {
   const [csvPlatform, setCsvPlatform] = useState<OwnMetricsPlatform>("instagram");
   const [exportPlatform, setExportPlatform] = useState<OwnMetricsPlatform | "">("");
   const [shotPlatform, setShotPlatform] = useState<OwnMetricsPlatform | "">("");
