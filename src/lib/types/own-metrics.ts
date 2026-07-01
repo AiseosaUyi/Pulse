@@ -24,4 +24,16 @@ export interface OwnPostMetric {
   source: OwnMetricsSource;
   metrics: OwnMetricsPayload;
   createdAt: string;
+  importBatchId: string | null;
+}
+
+export interface ImportSession {
+  id: string;
+  tenantSlug: string;
+  platform: string;
+  postCount: number;
+  periodStart: string | null;
+  periodEnd: string | null;
+  importedAt: string;
+  label: string | null;
 }

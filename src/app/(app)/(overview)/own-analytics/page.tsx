@@ -1,6 +1,6 @@
 import { getCurrentTenant } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { listOwnMetrics } from "@/lib/services/own-metrics";
+import { listOwnMetrics, listImportSessions } from "@/lib/services/own-metrics";
 import { ImportDataButton } from "@/components/own-analytics/ImportDataButton";
 import { PlatformTabsClient } from "@/components/own-analytics/PlatformTabsClient";
 import type { OwnMetricsPlatform } from "@/lib/types/own-metrics";
@@ -24,8 +24,9 @@ export default async function OwnAnalyticsPage() {
   const tenant = await getCurrentTenant();
   const tenantSlug = tenant?.slug ?? "";
 
-  const [allMetrics, ...reports] = await Promise.all([
-    listOwnMetrics(tenantSlug, { limit: 500 }),
+  const [allMetrics, allSessions, ...reports] = await Promise.all([
+    listOwnMetrics(tenantSlug, { limit: 2000 }),
+    listImportSessions(tenantSlug),
     ...PLATFORMS.map((p) => getLatestReport(tenantSlug, p)),
   ]);
 
@@ -52,6 +53,7 @@ export default async function OwnAnalyticsPage() {
           posts={allMetrics}
           tenantSlug={tenantSlug}
           reportsByPlatform={reportsByPlatform}
+          importSessions={allSessions}
           isOwner={tenant?.role === "owner"}
         />
       ) : (

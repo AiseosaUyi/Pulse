@@ -127,6 +127,53 @@ function buildPostingFrequency(posts: OwnPostMetric[]) {
     .map(([date, count]) => ({ date: shortDate(date), count }));
 }
 
+interface MonthlyRow { month: string; impressions: number; likes: number; engagements: number; saves: number; posts: number }
+function buildMonthlySeries(posts: OwnPostMetric[]): MonthlyRow[] {
+  const byMonth = new Map<string, MonthlyRow>();
+  for (const p of posts) {
+    const key = p.capturedAt.slice(0, 7);
+    const cur = byMonth.get(key) ?? { month: key, impressions: 0, likes: 0, engagements: 0, saves: 0, posts: 0 };
+    const m = p.metrics as Record<string, number>;
+    const eng = m.engagements ?? (m.likes ?? 0) + (m.replies ?? 0) + (m.shares ?? 0) + (m.comments ?? 0);
+    byMonth.set(key, {
+      month: new Date(key + "-01").toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
+      impressions: cur.impressions + (m.impressions ?? 0),
+      likes: cur.likes + (m.likes ?? 0),
+      engagements: cur.engagements + eng,
+      saves: cur.saves + (m.saves ?? 0),
+      posts: cur.posts + 1,
+    });
+  }
+  return Array.from(byMonth.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, row]) => row);
+}
+
+function MonthlyChart({ posts, metricKey, metricLabel, color }: {
+  posts: OwnPostMetric[];
+  metricKey: keyof MonthlyRow;
+  metricLabel: string;
+  color?: string;
+}) {
+  const data = buildMonthlySeries(posts);
+  if (data.length < 2) return null;
+  const hasData = data.some((d) => (d[metricKey] as number) > 0);
+  if (!hasData) return null;
+  return (
+    <div className="bg-card border border-border rounded-2xl p-5">
+      <p className="text-xs font-semibold text-text-muted mb-4">{metricLabel} by month</p>
+      <ResponsiveContainer width="100%" height={180}>
+        <BarChart data={data} barSize={18}>
+          <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
+          <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={fmt} />
+          <Tooltip content={<CustomTooltip />} />
+          <Bar dataKey={metricKey as string} name={metricLabel} fill={color ?? "var(--color-primary-500)"} radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════
    INSTAGRAM
 ══════════════════════════════════════ */
@@ -156,6 +203,10 @@ export function InstagramAnalytics({ posts }: { posts: OwnPostMetric[] }) {
         {totalLikes > 0 && <KpiCard label="Total likes" value={fmt(totalLikes)} />}
         {totalSaves > 0 && <KpiCard label="Total saves" value={fmt(totalSaves)} />}
       </div>
+
+      {/* Monthly impressions chart */}
+      <MonthlyChart posts={igPosts} metricKey="impressions" metricLabel="Impressions" color="#E1306C" />
+      <MonthlyChart posts={igPosts} metricKey="likes" metricLabel="Likes" color="var(--color-primary-500)" />
 
       {/* Posting frequency chart */}
       <div className="bg-card border border-border rounded-2xl p-5">
@@ -211,10 +262,13 @@ export function TwitterAnalytics({ posts }: { posts: OwnPostMetric[] }) {
         {totalBookmarks > 0 && <KpiCard label="Bookmarks" value={fmt(totalBookmarks)} />}
       </div>
 
-      {/* Impressions bar chart */}
+      {/* Monthly chart */}
+      <MonthlyChart posts={tweets} metricKey="impressions" metricLabel="Impressions" color="#4F9CF9" />
+
+      {/* Daily impressions bar chart */}
       {impressionsSeries.length > 0 && (
         <div className="bg-card border border-border rounded-2xl p-5">
-          <p className="text-xs font-semibold text-text-muted mb-4">Impressions over time</p>
+          <p className="text-xs font-semibold text-text-muted mb-4">Impressions — daily</p>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={impressionsSeries} barSize={10}>
               <XAxis dataKey="date" tick={axisStyle} axisLine={false} tickLine={false} />
@@ -280,9 +334,12 @@ export function TikTokAnalytics({ posts }: { posts: OwnPostMetric[] }) {
         {totalShares > 0 && <KpiCard label="Shares" value={fmt(totalShares)} />}
       </div>
 
+      {/* Monthly views chart */}
+      <MonthlyChart posts={videos} metricKey="impressions" metricLabel="Views" color="#FE2C55" />
+
       {viewsSeries.length > 0 && (
         <div className="bg-card border border-border rounded-2xl p-5">
-          <p className="text-xs font-semibold text-text-muted mb-4">Views over time</p>
+          <p className="text-xs font-semibold text-text-muted mb-4">Views — daily</p>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={viewsSeries} barSize={10}>
               <XAxis dataKey="date" tick={axisStyle} axisLine={false} tickLine={false} />
@@ -330,9 +387,12 @@ export function LinkedInAnalytics({ posts }: { posts: OwnPostMetric[] }) {
         <KpiCard label="Reactions" value={fmt(totalLikes)} />
       </div>
 
+      {/* Monthly chart */}
+      <MonthlyChart posts={lkPosts} metricKey="impressions" metricLabel="Impressions" color="#0A66C2" />
+
       {impSeries.length > 0 && (
         <div className="bg-card border border-border rounded-2xl p-5">
-          <p className="text-xs font-semibold text-text-muted mb-4">Impressions over time</p>
+          <p className="text-xs font-semibold text-text-muted mb-4">Impressions — daily</p>
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={impSeries} barSize={10}>
               <XAxis dataKey="date" tick={axisStyle} axisLine={false} tickLine={false} />

@@ -34,7 +34,7 @@ export interface ImportablePost {
 export async function importAnalyticsPosts(
   tenantSlug: string,
   posts: ImportablePost[]
-): Promise<{ success: true; inserted: number; updated: number } | { success: false; error: string }> {
+): Promise<{ success: true; inserted: number; updated: number; batchId: string } | { success: false; error: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Not authenticated" };
   if (!posts.length) return { success: false, error: "No posts" };
@@ -42,7 +42,35 @@ export async function importAnalyticsPosts(
   const admin = createAdminClient();
   const now = new Date().toISOString();
   let inserted = 0;
-  let updated = 0;
+  const updated = 0;
+
+  // Compute batch metadata from the incoming posts
+  const platform = posts[0].platform;
+  const dates = posts.map((p) => p.capturedAt.slice(0, 10)).sort();
+  const periodStart = dates[0];
+  const periodEnd = dates[dates.length - 1];
+  const startLabel = new Date(periodStart).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+  const endLabel = new Date(periodEnd).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+  const label = startLabel === endLabel
+    ? `${startLabel} · ${posts.length} posts`
+    : `${startLabel} – ${endLabel} · ${posts.length} posts`;
+
+  // Create the import session first to get the batch id
+  const { data: sessionData, error: sessionErr } = await admin
+    .from("analytics_import_sessions")
+    .insert({
+      tenant_slug: tenantSlug,
+      platform,
+      post_count: posts.length,
+      period_start: periodStart,
+      period_end: periodEnd,
+      imported_at: now,
+      label,
+    })
+    .select("id")
+    .single();
+
+  const batchId: string | null = sessionErr ? null : (sessionData as { id: string }).id;
 
   const BATCH = 50;
   for (let i = 0; i < posts.length; i += BATCH) {
@@ -59,10 +87,10 @@ export async function importAnalyticsPosts(
         Object.entries(p.metrics).filter(([, v]) => v !== null && v !== undefined)
       ),
       created_at: now,
+      ...(batchId ? { import_batch_id: batchId } : {}),
     }));
 
     // Upsert on (tenant_slug, platform, captured_at) — requires mig 083 unique index.
-    // Falls back to plain insert if the index doesn't exist yet.
     const { error } = await admin
       .from("own_post_metrics")
       .upsert(rows, { onConflict: "tenant_slug,platform,captured_at", ignoreDuplicates: true });
@@ -72,13 +100,12 @@ export async function importAnalyticsPosts(
         .from("own_post_metrics")
         .insert(rows, { count: "exact" });
       if (!insertErr) inserted += count ?? batch.length;
-      // If insert also fails, rows already exist or constraint mismatch — skip silently
     } else {
       inserted += batch.length;
     }
   }
 
-  return { success: true, inserted, updated };
+  return { success: true, inserted, updated, batchId: batchId ?? "" };
 }
 
 const AnalysisSchema = z.object({
@@ -108,23 +135,53 @@ export async function generateAnalyticsReport(
   const model = getModel("synthesis");
   const modelId = getModelId("synthesis");
 
-  // Aggregate metrics for context
+  // Aggregate metrics
   const totalImpressions = postsData.reduce((s, p) => s + (p.metrics.impressions ?? 0), 0);
+  const totalReach = postsData.reduce((s, p) => s + (p.metrics.reach ?? 0), 0);
   const totalLikes = postsData.reduce((s, p) => s + (p.metrics.likes ?? 0), 0);
+  const totalShares = postsData.reduce((s, p) => s + (p.metrics.shares ?? 0), 0);
+  const totalSaves = postsData.reduce((s, p) => s + (p.metrics.saves ?? 0), 0);
+  const totalComments = postsData.reduce((s, p) => s + (p.metrics.comments ?? 0), 0);
   const totalEngagements = postsData.reduce((s, p) =>
-    s + (p.metrics.engagements ?? (p.metrics.likes ?? 0) + (p.metrics.replies ?? 0) + (p.metrics.shares ?? 0)), 0
+    s + (p.metrics.engagements ?? (p.metrics.likes ?? 0) + (p.metrics.replies ?? 0) + (p.metrics.shares ?? 0) + (p.metrics.comments ?? 0)), 0
   );
+
+  // Monthly breakdown
+  const byMonth = new Map<string, { posts: number; impressions: number; likes: number; engagements: number }>();
+  for (const p of postsData) {
+    const month = p.capturedAt.slice(0, 7);
+    const cur = byMonth.get(month) ?? { posts: 0, impressions: 0, likes: 0, engagements: 0 };
+    const eng = p.metrics.engagements ?? (p.metrics.likes ?? 0) + (p.metrics.replies ?? 0) + (p.metrics.shares ?? 0) + (p.metrics.comments ?? 0);
+    byMonth.set(month, {
+      posts: cur.posts + 1,
+      impressions: cur.impressions + (p.metrics.impressions ?? 0),
+      likes: cur.likes + (p.metrics.likes ?? 0),
+      engagements: cur.engagements + eng,
+    });
+  }
+  const monthlyRows = Array.from(byMonth.entries()).sort(([a], [b]) => a.localeCompare(b));
+  const monthlyBreakdown = monthlyRows.map(([month, m]) => {
+    const label = new Date(month + "-01").toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+    const er = m.impressions > 0 ? ((m.engagements / m.impressions) * 100).toFixed(1) + "%" : "—";
+    return `  ${label}: ${m.posts} posts · ${m.impressions.toLocaleString()} impressions · ${m.likes.toLocaleString()} likes · ER ${er}`;
+  }).join("\n");
+
+  // Best month by engagement
+  const bestMonth = monthlyRows.sort((a, b) => b[1].impressions - a[1].impressions)[0];
+  const worstMonth = monthlyRows.sort((a, b) => a[1].impressions - b[1].impressions)[0];
 
   // Top posts by impressions or likes
   const sorted = [...postsData].sort((a, b) =>
     (b.metrics.impressions ?? b.metrics.likes ?? 0) - (a.metrics.impressions ?? a.metrics.likes ?? 0)
   );
-  const topPosts = sorted.slice(0, 5).map((p) => ({
+  const topPosts = sorted.slice(0, 8).map((p) => ({
     date: p.capturedAt.slice(0, 10),
     caption: p.caption?.slice(0, 200),
     url: p.externalUrl,
     impressions: p.metrics.impressions,
     likes: p.metrics.likes,
+    saves: p.metrics.saves,
+    shares: p.metrics.shares,
     engagements: p.metrics.engagements,
   }));
 
@@ -137,19 +194,34 @@ export async function generateAnalyticsReport(
 
   const prompt = `You are a senior social media analyst reviewing ${platform} performance data for a brand.
 
-Platform: ${platform}
-Period: ${dates[0]} to ${dates[dates.length - 1]}
-Total posts: ${postsData.length}
-Posts/week: ${postsPerWeek}
-Total impressions: ${totalImpressions.toLocaleString()}
-Total likes: ${totalLikes.toLocaleString()}
-Total engagements: ${totalEngagements.toLocaleString()}
-Avg engagement rate: ${totalImpressions > 0 ? ((totalEngagements / totalImpressions) * 100).toFixed(2) : "N/A"}%
+PLATFORM: ${platform}
+PERIOD: ${dates[0]} to ${dates[dates.length - 1]} (${postsData.length} posts, ${postsPerWeek}/week avg)
 
-Top 5 posts by performance:
-${topPosts.map((p, i) => `${i + 1}. [${p.date}] ${p.caption ?? "(no caption)"} — ${p.impressions ?? p.likes ?? 0} ${p.impressions != null ? "impressions" : "likes"}${p.url ? ` — ${p.url}` : ""}`).join("\n")}
+OVERALL METRICS:
+- Total impressions: ${totalImpressions.toLocaleString()}
+${totalReach > 0 ? `- Total reach: ${totalReach.toLocaleString()}` : ""}
+- Total likes: ${totalLikes.toLocaleString()}
+${totalSaves > 0 ? `- Total saves: ${totalSaves.toLocaleString()}` : ""}
+${totalShares > 0 ? `- Total shares: ${totalShares.toLocaleString()}` : ""}
+${totalComments > 0 ? `- Total comments: ${totalComments.toLocaleString()}` : ""}
+- Total engagements: ${totalEngagements.toLocaleString()}
+- Avg engagement rate: ${totalImpressions > 0 ? ((totalEngagements / totalImpressions) * 100).toFixed(2) : "N/A"}%
+${bestMonth ? `- Best month (impressions): ${bestMonth[0]}` : ""}
+${worstMonth && worstMonth[0] !== bestMonth?.[0] ? `- Weakest month: ${worstMonth[0]}` : ""}
 
-Write a concise narrative (2-3 paragraphs) analyzing performance, trends, and what content resonates. Then give 4 specific, actionable recommendations for this platform. Be direct, data-grounded, and platform-savvy — not generic. Mention specific patterns you notice in the data.`;
+MONTHLY BREAKDOWN:
+${monthlyBreakdown}
+
+TOP 8 POSTS BY PERFORMANCE:
+${topPosts.map((p, i) => `${i + 1}. [${p.date}] ${p.caption ?? "(no caption)"} — ${(p.impressions ?? p.likes ?? 0).toLocaleString()} ${p.impressions != null ? "impressions" : "likes"}${p.saves ? `, ${p.saves} saves` : ""}${p.url ? ` — ${p.url}` : ""}`).join("\n")}
+
+Analyze this data as a senior analyst. Write 2–3 focused paragraphs covering:
+1. Overall trajectory and which months showed notable growth or decline and why (based on data patterns)
+2. What content and behaviors drove the best results — look for patterns in top posts
+3. Notable opportunities the brand should act on
+
+Then give 4 specific, actionable recommendations tailored to this platform and the patterns you see. Reference actual months and numbers. Be direct and data-grounded, not generic.`;
+
 
   const start = Date.now();
   try {
@@ -228,12 +300,9 @@ export async function clearPlatformMetrics(
 
   if (metricsErr) return { success: false, error: metricsErr.message };
 
-  // Also remove AI reports for this platform
-  await admin
-    .from("analytics_ai_reports")
-    .delete()
-    .eq("tenant_slug", tenantSlug)
-    .eq("platform", platform);
+  // Also remove AI reports and import sessions for this platform
+  await admin.from("analytics_ai_reports").delete().eq("tenant_slug", tenantSlug).eq("platform", platform);
+  await admin.from("analytics_import_sessions").delete().eq("tenant_slug", tenantSlug).eq("platform", platform);
 
   return { success: true, deleted: metricsCount ?? 0 };
 }

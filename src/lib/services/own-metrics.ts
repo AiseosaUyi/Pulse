@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   OwnPostMetric,
   OwnMetricsPlatform,
   OwnMetricsSource,
   OwnMetricsPayload,
+  ImportSession,
 } from "@/lib/types/own-metrics";
 
 interface Row {
@@ -18,6 +20,18 @@ interface Row {
   source: OwnMetricsSource;
   metrics: OwnMetricsPayload | null;
   created_at: string;
+  import_batch_id: string | null;
+}
+
+interface SessionRow {
+  id: string;
+  tenant_slug: string;
+  platform: string;
+  post_count: number;
+  period_start: string | null;
+  period_end: string | null;
+  imported_at: string;
+  label: string | null;
 }
 
 function rowTo(row: Row): OwnPostMetric {
@@ -33,12 +47,26 @@ function rowTo(row: Row): OwnPostMetric {
     source: row.source,
     metrics: row.metrics ?? {},
     createdAt: row.created_at,
+    importBatchId: row.import_batch_id,
+  };
+}
+
+function sessionRowTo(row: SessionRow): ImportSession {
+  return {
+    id: row.id,
+    tenantSlug: row.tenant_slug,
+    platform: row.platform,
+    postCount: row.post_count,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    importedAt: row.imported_at,
+    label: row.label,
   };
 }
 
 export async function listOwnMetrics(
   tenantSlug: string,
-  options: { platform?: OwnMetricsPlatform; limit?: number } = {}
+  options: { platform?: OwnMetricsPlatform; limit?: number; batchId?: string } = {}
 ): Promise<OwnPostMetric[]> {
   const supabase = await createClient();
   let query = supabase
@@ -46,11 +74,29 @@ export async function listOwnMetrics(
     .select("*")
     .eq("tenant_slug", tenantSlug)
     .order("captured_at", { ascending: false })
-    .limit(options.limit ?? 100);
+    .limit(options.limit ?? 2000);
   if (options.platform) query = query.eq("platform", options.platform);
+  if (options.batchId) query = query.eq("import_batch_id", options.batchId);
   const { data, error } = await query;
   if (error || !data) return [];
   return (data as Row[]).map(rowTo);
+}
+
+export async function listImportSessions(
+  tenantSlug: string,
+  platform?: string
+): Promise<ImportSession[]> {
+  const admin = createAdminClient();
+  let query = admin
+    .from("analytics_import_sessions")
+    .select("*")
+    .eq("tenant_slug", tenantSlug)
+    .order("imported_at", { ascending: false })
+    .limit(50);
+  if (platform) query = query.eq("platform", platform);
+  const { data, error } = await query;
+  if (error || !data) return [];
+  return (data as SessionRow[]).map(sessionRowTo);
 }
 
 export interface OwnMetricsSummary {
