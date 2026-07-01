@@ -125,6 +125,7 @@ export function PlatformTabsClient({ posts, tenantSlug, reportsByPlatform, isOwn
 
       {/* AI Analyst */}
       <AIAnalystPanel
+        key={active}
         tenantSlug={tenantSlug}
         platform={active}
         posts={platformPosts}
