@@ -39,11 +39,10 @@ export function extractZip(file: File): Promise<ExtractedFile[]> {
         const dec = new TextDecoder("utf-8", { fatal: false });
         for (const [path, data] of Object.entries(files)) {
           if (!isAnalyticsFile(path)) continue;
-          // JSON files can be large (Instagram posts_1.json = 20-100 MB) — allow up to 150 MB.
-          // Binary/HTML files capped at 8 MB.
+          // JSON files have no size cap — posts_1.json can be several hundred MB.
+          // Non-JSON text (CSV, HTML, JS) capped at 8 MB.
           const isJson = path.toLowerCase().endsWith(".json");
-          const limit = isJson ? 150 * 1024 * 1024 : 8 * 1024 * 1024;
-          if (data.byteLength > limit) continue;
+          if (!isJson && data.byteLength > 8 * 1024 * 1024) continue;
           try {
             results.push({ path, text: dec.decode(data) });
           } catch {
