@@ -709,13 +709,14 @@ function platformDmUrl(prospect: ProspectRecord): string | null {
 
 // ── Token substitution ───────────────────────────────────────────────────────
 
-function fillTokens(body: string, prospect: ProspectRecord): string {
+function fillTokens(body: string, prospect: ProspectRecord, companyName?: string): string {
   const firstName = prospect.displayName?.split(" ")[0] ?? prospect.handle;
   return body
     .replace(/\[FIRST_NAME\]/gi, firstName)
     .replace(/\[HANDLE\]/gi, `@${prospect.handle}`)
     .replace(/\[SIGNAL\]/gi, prospect.signalSummary ?? "your recent content")
-    .replace(/\[EVENT\]/gi, prospect.eventTitle ?? "your event");
+    .replace(/\[EVENT\]/gi, prospect.eventTitle ?? "your event")
+    .replace(/\[COMPANY\]/gi, companyName ?? "us");
 }
 
 // ── Smart template selector ──────────────────────────────────────────────────
@@ -747,12 +748,14 @@ function ReachoutCard({
   dmUrl,
   templates,
   conversationStage,
+  companyName,
 }: {
   prospect: ProspectRecord;
   profileUrl: string;
   dmUrl: string | null;
   templates: OutboundTemplateRecord[];
   conversationStage: string | null;
+  companyName?: string;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -768,7 +771,7 @@ function ReachoutCard({
 
   const template = selectTemplate(templates, preferredType, prospect.platform);
   const body = template
-    ? fillTokens(template.body, prospect)
+    ? fillTokens(template.body, prospect, companyName)
     : `Hey @${prospect.handle}! I came across your profile and thought you'd be a great fit for what we do. Would love to connect!`;
 
   const label =
@@ -851,6 +854,7 @@ function ReachoutCard({
 export function ProspectThreadPanel({
   prospect,
   tenantSlug,
+  tenantName,
   campaigns,
   templates,
   onClose,
@@ -862,6 +866,7 @@ export function ProspectThreadPanel({
 }: {
   prospect: ProspectRecord;
   tenantSlug: string;
+  tenantName?: string;
   campaigns: OutreachCampaignRecord[];
   templates?: OutboundTemplateRecord[];
   onClose: () => void;
@@ -1227,6 +1232,7 @@ export function ProspectThreadPanel({
                         dmUrl={dmUrl}
                         templates={templates ?? []}
                         conversationStage={stage}
+                        companyName={tenantName}
                       />
                     )}
 

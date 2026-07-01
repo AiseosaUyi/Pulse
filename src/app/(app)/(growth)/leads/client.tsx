@@ -191,6 +191,7 @@ function ProspectTemporalLine({
 
 export function OutboundClient({
   tenantSlug,
+  tenantName,
   initialProspects,
   totalProspects,
   initialInbox,
@@ -201,6 +202,7 @@ export function OutboundClient({
   campaigns,
 }: {
   tenantSlug: string;
+  tenantName: string;
   initialProspects: ProspectRecord[];
   totalProspects: number;
   initialInbox: InboundMessageRecord[];
@@ -443,6 +445,7 @@ export function OutboundClient({
         <ProspectThreadPanel
           prospect={threadPanelProspect}
           tenantSlug={tenantSlug}
+          tenantName={tenantName}
           campaigns={campaigns}
           templates={initialTemplates}
           onClose={() => setThreadPanelProspect(null)}

@@ -712,6 +712,11 @@ function TemplateCard({
             <span className="text-[10px] uppercase tracking-wide text-text-muted">
               {TEMPLATE_PLATFORM_LABELS[template.platform]}
             </span>
+            {template.isGlobal && (
+              <span className="text-[10px] uppercase tracking-wide text-primary-500 bg-primary-500/8 px-1.5 py-0.5 rounded">
+                Default
+              </span>
+            )}
             {template.score != null && (
               <span
                 className={`text-[10px] font-bold ${

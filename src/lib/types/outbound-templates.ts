@@ -68,7 +68,8 @@ export interface TemplateCritique {
 
 export interface OutboundTemplateRecord {
   id: string;
-  tenantSlug: string;
+  tenantSlug: string | null;
+  isGlobal: boolean;
   name: string;
   platform: TemplatePlatform;
   templateType: TemplateType;

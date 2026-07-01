@@ -73,6 +73,7 @@ export default async function LeadsPage() {
 
       <OutboundClient
         tenantSlug={tenant.slug}
+        tenantName={tenant.name}
         initialProspects={prospectsResult.data}
         totalProspects={prospectsResult.total}
         initialInbox={inbox}

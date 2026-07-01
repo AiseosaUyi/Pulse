@@ -9,7 +9,8 @@ import type {
 
 interface Row {
   id: string;
-  tenant_slug: string;
+  tenant_slug: string | null;
+  is_global: boolean;
   name: string;
   platform: TemplatePlatform;
   template_type: TemplateType;
@@ -31,6 +32,7 @@ export function rowToTemplate(row: Row): OutboundTemplateRecord {
   return {
     id: row.id,
     tenantSlug: row.tenant_slug,
+    isGlobal: row.is_global ?? false,
     name: row.name,
     platform: row.platform,
     templateType: row.template_type ?? "cold_open",
@@ -54,10 +56,13 @@ export async function listTemplates(
   options: { status?: TemplateStatus | "all" } = {}
 ): Promise<OutboundTemplateRecord[]> {
   const supabase = await createClient();
+  // Return tenant-specific templates AND globals together.
+  // Tenant-specific ones sort first so they visually override globals.
   let query = supabase
     .from("outbound_templates")
     .select("*")
-    .eq("tenant_slug", tenantSlug)
+    .or(`tenant_slug.eq.${tenantSlug},is_global.eq.true`)
+    .order("is_global", { ascending: true })   // tenant-specific first
     .order("is_primary", { ascending: false })
     .order("updated_at", { ascending: false });
   if (options.status && options.status !== "all") {
@@ -76,7 +81,7 @@ export async function getTemplateByType(
   templateType: TemplateType
 ): Promise<OutboundTemplateRecord | null> {
   const supabase = await createClient();
-  // Prefer exact platform + type, then any platform + type, then any primary
+  // 1. Tenant-specific match
   const { data } = await supabase
     .from("outbound_templates")
     .select("*")
@@ -88,8 +93,21 @@ export async function getTemplateByType(
     .order("platform", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (!data) return null;
-  return rowToTemplate(data as Row);
+  if (data) return rowToTemplate(data as Row);
+
+  // 2. Fall back to a global template
+  const { data: global } = await supabase
+    .from("outbound_templates")
+    .select("*")
+    .eq("is_global", true)
+    .eq("template_type", templateType)
+    .in("platform", [platform, "any"])
+    .neq("status", "archived")
+    .order("platform", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!global) return null;
+  return rowToTemplate(global as Row);
 }
 
 export async function getPrimaryTemplate(
