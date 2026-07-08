@@ -36,6 +36,14 @@ export const RESEARCHED_NOT_BUILT: Array<{
     listingUrls: ["https://clooza.com/events"],
   },
   {
+    id: "eventporte",
+    label: "EventPorte",
+    status: "extension_needed",
+    researchNote:
+      "Added 2026-07-08 (user-suggested). VERIFIED via real Chrome: real 'Discover Events' feed at /discovery with priced events (e.g. 'Sunday Service' — From ₦3,000.00, venue, date). Event detail pages show the organizer directly ('Sunday Service WITH DEJI' + a clickable 'Visit Profile' link) — no login required, publicly viewable. curl confirms client-rendered (86 real words vs. full content in a real browser) — same category as Clooza/Tickethub/Eventpadi.",
+    listingUrls: ["https://www.eventporte.com/discovery"],
+  },
+  {
     id: "selar",
     label: "Selar",
     status: "extension_needed",
