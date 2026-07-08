@@ -24,6 +24,7 @@ import {
   withEventScraperRun,
   type EventScraperRunResult,
 } from "@/lib/cron/event-scraper-run-tracker";
+import { mapWithConcurrency } from "@/lib/utils/concurrency";
 
 // Reactive-only blocking policy (design doc, cost constraint: no proxy
 // pre-purchased). If a platform returns zero candidates this many
@@ -39,26 +40,8 @@ export function slugifyForHandle(input: string): string {
     .slice(0, 60) || "unknown";
 }
 
-// Runs `fn` over `items` with at most `limit` in flight at once, preserving
-// input order in the result. Used to spread out the per-candidate
-// organizer/handle resolution fetches instead of firing them all at once —
-// see the note at its call site in resolveAndUpsert for why.
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  async function worker() {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i], i);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
+// See the note at its call site in resolveAndUpsert for why a bounded-
+// concurrency fan-out is used here instead of a plain Promise.all.
 
 // Instagram's post/reel share-card snippet has a stable "<N> likes, <M>
 // comments - <handle> on <date>: ..." prefix (confirmed live, 2026-07-08,
