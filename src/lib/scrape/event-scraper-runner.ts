@@ -39,6 +39,27 @@ export function slugifyForHandle(input: string): string {
     .slice(0, 60) || "unknown";
 }
 
+// Runs `fn` over `items` with at most `limit` in flight at once, preserving
+// input order in the result. Used to spread out the per-candidate
+// organizer/handle resolution fetches instead of firing them all at once —
+// see the note at its call site in resolveAndUpsert for why.
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 // Exported for reuse by /api/ext/event-lead — the extension capture path
 // needs the exact same SERP-based handle resolution the cron path uses.
 export async function resolveHandleViaSerp(
@@ -221,12 +242,19 @@ async function resolveAndUpsert(
     return true;
   });
 
+  // Resolving all candidates fully in parallel is a burst of N near-
+  // simultaneous requests to the SAME origin from one IP — live evidence
+  // (2026-07-08, Shows.ng) showed this pattern resolving 1/9 organizers in
+  // production on a run where 7/7 of the identical URLs succeeded when
+  // fetched directly (not concurrently) minutes later. Bounded concurrency
+  // is a free mitigation to try before reaching for a paid proxy.
+  let organizerResolveFailures = 0;
   const t0 = Date.now();
-  const rows = await Promise.all(
-    deduped.map(async (c) => {
+  const rows = await mapWithConcurrency(deduped, 3, async (c) => {
       let organizerName = c.organizerName;
       if (!organizerName && resolveOrganizer) {
         organizerName = await resolveOrganizer(c);
+        if (!organizerName) organizerResolveFailures += 1;
       }
 
       const searchQuery = organizerName ?? c.eventTitle;
@@ -257,14 +285,17 @@ async function resolveAndUpsert(
         },
         status: "new",
       };
-    })
-  );
+    });
 
   await recordStep({
     step: "resolve_organizer_and_handle",
     status: "ok",
     durationMs: Date.now() - t0,
-    payload: { resolvedCount: rows.filter((r) => r.platform !== "manual").length, total: rows.length },
+    payload: {
+      resolvedCount: rows.filter((r) => r.platform !== "manual").length,
+      total: rows.length,
+      organizerResolveFailures,
+    },
   });
 
   // Postgres rejects an upsert batch containing two rows with the same

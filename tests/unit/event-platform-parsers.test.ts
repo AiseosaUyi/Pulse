@@ -3,15 +3,18 @@ import { parseEgoticketsListing } from "@/lib/scrape/event-platforms/egotickets"
 import { parseGenericJsonLd } from "@/lib/scrape/event-platforms/generic-jsonld";
 
 // Mocked before importing shows-ng.ts so resolveShowsNgOrganizer's real
-// fetchEventHtml call never hits the network.
+// fetchEventHtmlWithRetry call never hits the network.
 vi.mock("@/lib/scrape/event-fetch", () => ({
   fetchEventHtml: vi.fn(),
+  fetchEventHtmlWithRetry: vi.fn(),
 }));
 
 const { parseShowsNgListing, resolveShowsNgOrganizer } = await import(
   "@/lib/scrape/event-platforms/shows-ng"
 );
-const { fetchEventHtml } = await import("@/lib/scrape/event-fetch");
+const { fetchEventHtmlWithRetry: fetchEventHtml } = await import(
+  "@/lib/scrape/event-fetch"
+);
 
 // Fixtures below are trimmed reproductions of real markup captured during
 // DOM research (2026-07-08) — not full pages, just the structural shape

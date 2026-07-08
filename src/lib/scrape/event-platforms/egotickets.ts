@@ -8,7 +8,7 @@
 // pattern already used for Jetron/Luma/Tix.africa (ticketing-platforms.ts).
 
 import * as cheerio from "cheerio";
-import { fetchEventHtml } from "@/lib/scrape/event-fetch";
+import { fetchEventHtmlWithRetry } from "@/lib/scrape/event-fetch";
 import type { EventCandidate, EventPlatformConfig } from "./types";
 
 const BASE_URL = "https://egotickets.com";
@@ -93,7 +93,10 @@ export async function resolveEgoticketsOrganizer(
   candidate: EventCandidate
 ): Promise<string | null> {
   try {
-    const { html } = await fetchEventHtml(candidate.eventUrl);
+    const { html } = await fetchEventHtmlWithRetry(candidate.eventUrl, {
+      retries: 1,
+      backoffMs: 900,
+    });
     const $ = cheerio.load(html);
     const text = $("body").text();
     const match = ORGANIZER_RE.exec(text);

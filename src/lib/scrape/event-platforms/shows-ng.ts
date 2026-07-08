@@ -8,7 +8,7 @@
 // via SERP fallback instead, same as the existing pipeline).
 
 import * as cheerio from "cheerio";
-import { fetchEventHtml } from "@/lib/scrape/event-fetch";
+import { fetchEventHtmlWithRetry } from "@/lib/scrape/event-fetch";
 import type { EventCandidate, EventPlatformConfig } from "./types";
 
 const BASE_URL = "https://shows.ng";
@@ -74,7 +74,14 @@ export async function resolveShowsNgOrganizer(
   candidate: EventCandidate
 ): Promise<string | null> {
   try {
-    const { html } = await fetchEventHtml(candidate.eventUrl);
+    // Retries once on failure — live evidence (2026-07-08) showed 9/9
+    // production resolutions failing on a run where 7/7 of those same
+    // URLs succeeded seconds later via a plain direct fetch, consistent
+    // with a transient block/challenge rather than a parsing problem.
+    const { html } = await fetchEventHtmlWithRetry(candidate.eventUrl, {
+      retries: 1,
+      backoffMs: 900,
+    });
     const paramMatch = DETAILS_PARAM_RE.exec(html);
     if (!paramMatch) return null;
     const decoded = decodeURIComponent(paramMatch[1].replace(/\+/g, "%20"));

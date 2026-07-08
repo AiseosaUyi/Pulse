@@ -75,3 +75,34 @@ export async function fetchEventHtml(
     clearTimeout(timer);
   }
 }
+
+// Organizer-resolution fetches (one extra request per candidate, run in a
+// production serverless environment) have been observed to fail far more
+// often than a plain manual/local fetch of the exact same URL — e.g.
+// Shows.ng: 7/7 event pages succeeded via a direct residential fetch the
+// same day 9/9 of the equivalent production run's resolutions came back
+// empty. That gap is consistent with datacenter-IP-based blocking/rate
+// limiting rather than a parsing bug (confirmed live: the "Organiser:"
+// text is present and the regex matches every one of those pages when
+// fetched directly). A short-backoff retry is a free first mitigation —
+// worth trying before reaching for a paid proxy, since a transient
+// block/challenge often clears on a second attempt seconds later.
+export async function fetchEventHtmlWithRetry(
+  url: string,
+  opts?: { timeoutMs?: number; retries?: number; backoffMs?: number }
+): Promise<FetchEventHtmlResult> {
+  const retries = opts?.retries ?? 1;
+  const backoffMs = opts?.backoffMs ?? 800;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, backoffMs * attempt));
+    }
+    try {
+      return await fetchEventHtml(url, opts);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
