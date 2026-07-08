@@ -265,9 +265,20 @@ async function resolveAndUpsert(
     payload: { resolvedCount: rows.filter((r) => r.platform !== "manual").length, total: rows.length },
   });
 
+  // Postgres rejects an upsert batch containing two rows with the same
+  // conflict key ("ON CONFLICT DO UPDATE command cannot affect row a
+  // second time") — confirmed live on eGotickets, where two different
+  // events resolved to the same organizer handle in one run. Dedup on
+  // the actual (platform, handle) upsert key, not just event URL.
+  const byUpsertKey = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) {
+    byUpsertKey.set(`${row.platform}:${row.handle}`, row);
+  }
+  const dedupedRows = [...byUpsertKey.values()];
+
   const { data: upserted, error } = await admin
     .from("prospects")
-    .upsert(rows, { onConflict: "tenant_slug,platform,handle" })
+    .upsert(dedupedRows, { onConflict: "tenant_slug,platform,handle" })
     .select("id");
 
   if (error) {

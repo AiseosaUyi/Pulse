@@ -61,6 +61,13 @@ export function parseShowsNgListing(
 
 // The calendar link's `details=` param decodes to a plain-text block like:
 //   "Date and time: ...\nDuration: ...\nOrganiser: NAME\nCategory: ...\n..."
+// Extract ONLY that query-param value before decoding — decodeURIComponent
+// on the whole page throws (real HTML is full of stray "%" that isn't
+// percent-encoding, e.g. CSS "width: 100%"), confirmed live in production.
+// The href attribute HTML-encodes "&" as "&amp;" (confirmed live: real
+// markup has "...&amp;details=Date%20and%20ti..."), so the char before
+// "details=" is ";" not "&" — match both forms.
+const DETAILS_PARAM_RE = /(?:[?&]|&amp;)details=([^&"']+)/;
 const ORGANISER_RE = /organiser:\s*([^\n<]{2,120})/i;
 
 export async function resolveShowsNgOrganizer(
@@ -68,7 +75,9 @@ export async function resolveShowsNgOrganizer(
 ): Promise<string | null> {
   try {
     const { html } = await fetchEventHtml(candidate.eventUrl);
-    const decoded = decodeURIComponent(html.replace(/\+/g, "%20"));
+    const paramMatch = DETAILS_PARAM_RE.exec(html);
+    if (!paramMatch) return null;
+    const decoded = decodeURIComponent(paramMatch[1].replace(/\+/g, "%20"));
     const match = ORGANISER_RE.exec(decoded);
     return match ? match[1].trim() : null;
   } catch (err) {

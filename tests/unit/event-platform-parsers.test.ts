@@ -1,7 +1,17 @@
-import { describe, it, expect } from "vitest";
-import { parseShowsNgListing } from "@/lib/scrape/event-platforms/shows-ng";
+import { describe, it, expect, vi } from "vitest";
 import { parseEgoticketsListing } from "@/lib/scrape/event-platforms/egotickets";
 import { parseGenericJsonLd } from "@/lib/scrape/event-platforms/generic-jsonld";
+
+// Mocked before importing shows-ng.ts so resolveShowsNgOrganizer's real
+// fetchEventHtml call never hits the network.
+vi.mock("@/lib/scrape/event-fetch", () => ({
+  fetchEventHtml: vi.fn(),
+}));
+
+const { parseShowsNgListing, resolveShowsNgOrganizer } = await import(
+  "@/lib/scrape/event-platforms/shows-ng"
+);
+const { fetchEventHtml } = await import("@/lib/scrape/event-fetch");
 
 // Fixtures below are trimmed reproductions of real markup captured during
 // DOM research (2026-07-08) — not full pages, just the structural shape
@@ -105,6 +115,74 @@ describe("parseShowsNgListing", () => {
 
   it("returns an empty array (not a throw) when selectors find nothing", () => {
     expect(parseShowsNgListing("<html><body>no cards here</body></html>", "https://shows.ng/")).toEqual([]);
+  });
+});
+
+describe("resolveShowsNgOrganizer", () => {
+  // Real markup (2026-07-08 DOM research) HTML-encodes "&" as "&amp;" in
+  // the calendar-link href, and the page is full of unrelated "%" (CSS
+  // widths etc.) that isn't percent-encoding — both previously caused a
+  // silent failure (URIError, and later a regex miss) in production.
+  const DETAIL_PAGE_FIXTURE = `
+    <html><body>
+      <div style="width: 100%; height: 50%">unrelated % signs, not URI-encoded</div>
+      <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&amp;dates=20260717T160000Z&amp;details=Date%20and%20time%3A%20Friday%2C%20July%2017%2C%202026%0ADuration%3A%201%20Hr%0AOrganiser%3A%20PHOENIXTRIBEAFRICA%20In%20Collaboration%20With%20NEW%20CULTURE%20STUDIOS%2C%20Ibadan.%0ACategory%3A%20Music">Add to calendar</a>
+    </body></html>
+  `;
+
+  it("extracts the organizer name from the HTML-encoded calendar link", async () => {
+    vi.mocked(fetchEventHtml).mockResolvedValue({
+      html: DETAIL_PAGE_FIXTURE,
+      finalUrl: "https://shows.ng/event/nemesis",
+      httpStatus: 200,
+    });
+    const organizer = await resolveShowsNgOrganizer({
+      platformId: "shows_ng",
+      eventTitle: "NEMESIS",
+      eventUrl: "https://shows.ng/event/nemesis",
+      eventDate: "2026-07-17",
+      priceRaw: "₦5,000.00",
+      isPaid: true,
+      organizerName: null,
+      category: "Music",
+    });
+    expect(organizer).toBe(
+      "PHOENIXTRIBEAFRICA In Collaboration With NEW CULTURE STUDIOS, Ibadan."
+    );
+  });
+
+  it("returns null (not a throw) when there's no calendar link at all", async () => {
+    vi.mocked(fetchEventHtml).mockResolvedValue({
+      html: "<html><body>no calendar link here, plenty of stray % signs: 50%</body></html>",
+      finalUrl: "https://shows.ng/event/x",
+      httpStatus: 200,
+    });
+    const organizer = await resolveShowsNgOrganizer({
+      platformId: "shows_ng",
+      eventTitle: "X",
+      eventUrl: "https://shows.ng/event/x",
+      eventDate: "2026-07-17",
+      priceRaw: null,
+      isPaid: false,
+      organizerName: null,
+      category: null,
+    });
+    expect(organizer).toBeNull();
+  });
+
+  it("returns null (not a throw) when fetchEventHtml itself fails", async () => {
+    vi.mocked(fetchEventHtml).mockRejectedValue(new Error("network error"));
+    const organizer = await resolveShowsNgOrganizer({
+      platformId: "shows_ng",
+      eventTitle: "X",
+      eventUrl: "https://shows.ng/event/x",
+      eventDate: "2026-07-17",
+      priceRaw: null,
+      isPaid: false,
+      organizerName: null,
+      category: null,
+    });
+    expect(organizer).toBeNull();
   });
 });
 
