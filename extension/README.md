@@ -33,7 +33,9 @@ A second, separate capture flow (`event-content.js`) for event/ticketing
 platforms confirmed (2026-07-08) to have real organizer data behind
 client-side rendering that backend scraping can't reach: **Clooza,
 Tickethub.ng, Eventpadi (app.eventpadi.com — requires being signed in),
-EventPorte, Tixvnt, Selar**.
+EventPorte, Tixvnt**. (Selar and Ariiya Tickets were researched and
+ruled out — Selar has no public event directory, just private per-seller
+storefronts; Ariiya's individual event pages currently 404 site-wide.)
 
 - Visit an event or organizer page on any of those platforms
 - Bottom-right floating button: **Capture event lead**
@@ -43,8 +45,14 @@ EventPorte, Tixvnt, Selar**.
 - If the auto-detected organizer name looks wrong, highlight the correct
   text on the page *before* clicking Capture — your selection always
   wins over the automatic guess
-- Eventpadi's discovery feed is behind a login — sign in to your Eventpadi
-  account first, same browser tab
+- **Eventpadi works differently**: it has no per-event page at all (clicking
+  an event opens a same-URL modal), so there's nothing to visit one at a
+  time. Instead, log in to Eventpadi in that tab and go to Discover — the
+  extension detects you're signed in and shows **Capture visible events**
+  on the listing page itself, which bulk-saves every event card currently
+  rendered (title + "Organized by:" organizer) in one click. If you're not
+  signed in yet, the button is replaced with a "Log in to Eventpadi first"
+  notice — it watches the page and switches over automatically once you do
 
 This is intentionally separate from the profile-capture flow above — event
 pages have a completely different shape (no single "prospect handle" in

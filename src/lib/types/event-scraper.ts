@@ -47,5 +47,4 @@ export const EVENT_PLATFORM_LABELS: Record<string, string> = {
   eventpadi: "Eventpadi",
   eventporte: "EventPorte",
   ariiyatickets: "Ariiya Tickets",
-  selar: "Selar",
 };

@@ -18,8 +18,6 @@ const EVENT_PLATFORM_HOSTS = {
   "www.eventporte.com": "eventporte",
   "tixvnt.com": "tixvnt",
   "www.tixvnt.com": "tixvnt",
-  "selar.co": "selar",
-  "www.selar.co": "selar",
 };
 
 const PLATFORM_LABELS = {
@@ -28,7 +26,6 @@ const PLATFORM_LABELS = {
   eventpadi: "Eventpadi",
   eventporte: "EventPorte",
   tixvnt: "Tixvnt",
-  selar: "Selar",
 };
 
 // Paths that are never an event/organizer detail page, checked against
@@ -56,6 +53,23 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   "event-details", // eventporte uses /event-details/<slug> — handled specially below
 ]);
 
+// Eventpadi has NO per-event URL at all — clicking an event opens a
+// same-URL modal (confirmed live: Chakra UI dialog, URL never changes).
+// Its "Explore Events" LISTING page is the actual capture target, unlike
+// every other platform here where the listing is just a jumping-off point.
+const EVENTPADI_LISTING_PATHS = new Set([
+  "/dashboard/discover",
+  "/dashboard/discover/events",
+]);
+
+// A password input on screen is a reliable, structure-agnostic signal
+// that the user hasn't signed in yet — Eventpadi's discover feed is
+// login-gated (confirmed live), and this doesn't depend on knowing their
+// exact login route or any Chakra-generated class name.
+function isLikelyLoggedOut() {
+  return !!document.querySelector('input[type="password"]');
+}
+
 export function detectEventPlatform(url = location.href) {
   try {
     const u = new URL(url);
@@ -63,6 +77,15 @@ export function detectEventPlatform(url = location.href) {
     if (!platformId) return null;
 
     const path = u.pathname.replace(/\/+$/, "") || "/";
+
+    if (platformId === "eventpadi") {
+      if (!EVENTPADI_LISTING_PATHS.has(path)) return null;
+      if (isLikelyLoggedOut()) {
+        return { platformId, label: PLATFORM_LABELS[platformId], url, loggedOut: true };
+      }
+      return { platformId, label: PLATFORM_LABELS[platformId], url, pageType: "listing" };
+    }
+
     if (path === "/") return null;
     const parts = path.split("/").filter(Boolean);
     const first = parts[0]?.toLowerCase();
@@ -76,8 +99,8 @@ export function detectEventPlatform(url = location.href) {
       return null;
     }
 
-    // Tickethub / Tixvnt / Selar: a real event page is anything that
-    // isn't a reserved marketing/account route.
+    // Tickethub / Tixvnt: a real event page is anything that isn't a
+    // reserved marketing/account route.
     if (first && RESERVED_FIRST_SEGMENTS.has(first)) return null;
 
     // Clooza: single-segment paths are organizer profile pages
@@ -112,6 +135,87 @@ const ORGANIZER_PATTERNS = [
 const TITLE_WITH_RE = /\bwith\s+([A-Za-z][A-Za-z0-9 .'&-]{1,60})\b/i;
 
 const SOCIAL_LINK_RE = /instagram\.com|twitter\.com|x\.com|linktr\.ee/i;
+
+// ──────────────────────────────────────────────
+// Eventpadi bulk-listing extractor. Its Chakra UI cards use auto-hashed
+// class names ("css-xfvhj7") that change on every deploy — a CSS-selector
+// scraper would be MORE fragile here than text parsing, not less. Cards
+// are delimited by a known, fixed category-tag vocabulary (from the
+// platform's own filter dropdown), so a state-machine line-walk pairs
+// each "Organized by: X" with the nearest preceding real title line.
+// Verified against real captured text (2026-07-08): 4/4 cards parsed
+// correctly, venue/date/price lines correctly ignored as non-titles.
+// ──────────────────────────────────────────────
+
+const EVENTPADI_CATEGORIES = new Set([
+  "NETWORKING EVENTS",
+  "EDUCATIONAL EVENTS",
+  "PROMOTIONAL EVENTS",
+  "ENTERTAINMENT EVENTS",
+  "SOCIAL EVENTS",
+  "FUNDRAISING EVENTS",
+  "CONFERENCES & SUMMITS",
+  "TRAININGS & WORKSHOPS",
+  "FAITH-BASED EVENTS",
+  "SOCIAL EVENTS & CELEBRATIONS",
+  "FAIRS & EXPOS",
+]);
+const EVENTPADI_STATUS_WORDS = new Set(["UPCOMING", "PAST", "ONGOING", "CANCELLED"]);
+const EVENTPADI_TIME_RE = /\b\d{1,2}:\d{2}\s?(am|pm)?\b|\bN\/A\b/i;
+const EVENTPADI_DATE_RE = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i;
+
+function isEventpadiStructuralLine(line) {
+  return (
+    EVENTPADI_STATUS_WORDS.has(line.toUpperCase()) ||
+    EVENTPADI_DATE_RE.test(line) ||
+    EVENTPADI_TIME_RE.test(line) ||
+    PRICE_RE.test(line) ||
+    /^\+?\d+$/.test(line) || // follower/attendee counts
+    /^G\d$/.test(line) // avatar-stack placeholder tags
+  );
+}
+
+// Returns an array of { eventTitle, organizerName } for every event card
+// currently rendered in the viewport/DOM on Eventpadi's discover listing.
+export function scrapeEventpadiListing() {
+  const bodyText = document.body.innerText || "";
+  const lines = bodyText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const results = [];
+  let currentTitle = null;
+  let titleCaptured = false;
+
+  for (const line of lines) {
+    if (EVENTPADI_CATEGORIES.has(line.toUpperCase())) {
+      currentTitle = null;
+      titleCaptured = false;
+      continue;
+    }
+    const organizedMatch = /^Organized by:\s*(.+)$/i.exec(line);
+    if (organizedMatch) {
+      if (currentTitle) {
+        results.push({
+          eventTitle: currentTitle,
+          organizerName: organizedMatch[1].trim(),
+        });
+      }
+      currentTitle = null;
+      titleCaptured = false;
+      continue;
+    }
+    if (isEventpadiStructuralLine(line)) continue;
+    if (!titleCaptured) {
+      currentTitle = line;
+      titleCaptured = true;
+    }
+    // else: a venue/other prose line after the title is already
+    // captured for this card — ignore until the next category tag.
+  }
+  return results;
+}
 
 // Reads whatever the CURRENT rendered page shows — the browser has
 // already done the JS execution/rendering a backend scraper can't.

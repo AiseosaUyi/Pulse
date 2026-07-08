@@ -44,14 +44,6 @@ export const RESEARCHED_NOT_BUILT: Array<{
     listingUrls: ["https://www.eventporte.com/discovery"],
   },
   {
-    id: "selar",
-    label: "Selar",
-    status: "extension_needed",
-    researchNote:
-      "627KB page, ~10 words of real text — fully client-rendered SPA (not re-verified live, but same signature as Clooza/Tickethub before verification). Not IG-native the way Clooza was — a real-browser check (same as Clooza) would likely confirm this is extension-buildable too; not yet prioritized.",
-    listingUrls: ["https://selar.co/"],
-  },
-  {
     id: "tickethub",
     label: "Tickethub.ng",
     status: "extension_needed",
@@ -80,8 +72,16 @@ export const RESEARCHED_NOT_BUILT: Array<{
     label: "Ariiya Tickets",
     status: "unconfirmed",
     researchNote:
-      "Added 2026-07-08 (user-suggested). Homepage is real and server-rendered (2,133 words via curl) with a genuine Featured Events carousel. BUT: every individual event/category page tested 404s — both /events/, /event/<real-slug>/ copied directly from the homepage's own links, AND clicking the link in a real browser (which just anchor-scrolls to the carousel instead of navigating). This looks like a live bug/instability on Ariiya's own site right now, not a rendering or anti-bot problem. Worth a second look later — not a clean win today.",
+      "Added 2026-07-08 (user-suggested). RE-VERIFIED twice more (2026-07-08, at user's request — homepage is genuinely good): the Featured Events carousel and Upcoming Events grid are real, with real event posters, dates, and organizer contact info baked into the flyer images. BUT every individual event page still 404s — tested via direct URL, via a fresh in-app click from a freshly-loaded homepage, and again via a different real event link, all with the exact href the site's own homepage provides. This is conclusively a live, site-wide bug on Ariiya's detail-page routing, not a research/navigation mistake — there is currently no reachable event or organizer detail page on this platform for any method (extension included) to capture from. Revisit once their site is fixed.",
     listingUrls: ["https://www.ariiyatickets.com/"],
+  },
+  {
+    id: "selar",
+    label: "Selar",
+    status: "no_public_directory",
+    researchNote:
+      "VERIFIED via real Chrome (2026-07-08, re-checked at user's request): Selar is a general creator-commerce platform (courses, ebooks, physical goods, event tickets are just ONE product type among many) — like a Gumroad/Payhip for Nigeria/Africa. Each seller gets their own private storefront link; there is no public 'browse all events on Selar' directory anywhere (checked homepage + /tickets feature page). Same shape as Obodo/Unboxd — no directory to capture from by any method. Corrected from an earlier under-researched 'extension_needed' read.",
+    listingUrls: [],
   },
   {
     id: "syticks",

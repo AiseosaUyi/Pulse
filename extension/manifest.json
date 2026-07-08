@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pulse Outbound",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Draft personalized IG / TikTok / Twitter / LinkedIn DMs from Pulse, and capture event-organizer leads from Clooza / Tickethub.ng / Eventpadi / EventPorte / Tixvnt. Human-in-the-loop by design.",
   "action": {
     "default_popup": "popup.html",
@@ -37,9 +37,7 @@
         "https://eventporte.com/*",
         "https://www.eventporte.com/*",
         "https://tixvnt.com/*",
-        "https://www.tixvnt.com/*",
-        "https://selar.co/*",
-        "https://www.selar.co/*"
+        "https://www.tixvnt.com/*"
       ],
       "js": ["event-content.js"],
       "css": ["content.css"],
@@ -71,9 +69,7 @@
         "https://eventporte.com/*",
         "https://www.eventporte.com/*",
         "https://tixvnt.com/*",
-        "https://www.tixvnt.com/*",
-        "https://selar.co/*",
-        "https://www.selar.co/*"
+        "https://www.tixvnt.com/*"
       ]
     }
   ],

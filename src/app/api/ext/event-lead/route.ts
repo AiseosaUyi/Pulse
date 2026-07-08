@@ -30,7 +30,6 @@ const KNOWN_PLATFORM_IDS = new Set([
   "eventpadi",
   "eventporte",
   "tixvnt",
-  "selar",
 ]);
 
 function toProspect(row: Record<string, unknown>): ProspectRecord {
