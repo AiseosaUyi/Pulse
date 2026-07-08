@@ -16,8 +16,14 @@ import { listAllDmsByProspect } from "@/lib/services/outbound-dms-bulk";
 import { listTemplates } from "@/lib/services/outbound-templates";
 import { getOutreachToday } from "@/lib/services/outreach-intelligence";
 import { listOutreachCampaigns } from "@/lib/services/outreach-campaigns";
+import { listEventScraperRuns } from "@/lib/services/event-scraper-runs";
+import {
+  ACTIVE_EVENT_PLATFORMS,
+  UNCONFIRMED_PLATFORM_IDS,
+} from "@/lib/scrape/event-platforms";
 import { OutboundClient } from "./client";
 import type { OutboundDmRecord } from "@/lib/types/outbound";
+import type { EventScraperPlatformOption } from "./event-platform-runs";
 
 export default async function LeadsPage() {
   const tenant = await getCurrentTenant();
@@ -30,8 +36,17 @@ export default async function LeadsPage() {
     );
   }
 
-  const [prospectsResult, searches, inbox, kpis, dmsByProspect, templates, todayData, campaigns] =
-    await Promise.all([
+  const [
+    prospectsResult,
+    searches,
+    inbox,
+    kpis,
+    dmsByProspect,
+    templates,
+    todayData,
+    campaigns,
+    eventScraperRuns,
+  ] = await Promise.all([
       listProspects(tenant.slug, { page: 0, pageSize: 50 }),
       listSearches(tenant.slug),
       listInbox(tenant.slug, 30),
@@ -40,12 +55,29 @@ export default async function LeadsPage() {
       listTemplates(tenant.slug),
       getOutreachToday(tenant.slug),
       listOutreachCampaigns(tenant.slug),
+      listEventScraperRuns(tenant.slug),
     ]);
 
   // Flatten the Map into a serializable array for the client component.
   const dms: Array<[string, OutboundDmRecord[]]> = Array.from(
     dmsByProspect.entries()
   );
+
+  // Plain-data platform list for the "Run now" buttons — deliberately NOT
+  // importing the scraper configs themselves into client code (they pull in
+  // cheerio + parser functions with no reason to ship to the browser).
+  const eventScraperPlatforms: EventScraperPlatformOption[] = [
+    ...ACTIVE_EVENT_PLATFORMS.map((p) => ({
+      id: p.id,
+      label: p.label,
+      kind: "active" as const,
+    })),
+    ...UNCONFIRMED_PLATFORM_IDS.map((p) => ({
+      id: p.id,
+      label: p.label,
+      kind: "unconfirmed" as const,
+    })),
+  ];
 
   return (
     <div className="p-4 md:p-8 max-w-[1200px]">
@@ -82,6 +114,8 @@ export default async function LeadsPage() {
         initialTemplates={templates}
         initialTodayData={todayData}
         campaigns={campaigns}
+        initialEventScraperRuns={eventScraperRuns}
+        eventScraperPlatforms={eventScraperPlatforms}
       />
     </div>
   );

@@ -32,6 +32,10 @@
       "schedule": "0 3 * * *"
     },
     {
+      "path": "/api/cron/scrape-event-platforms",
+      "schedule": "30 3 * * *"
+    },
+    {
       "path": "/api/cron/composio-sync-engagement",
       "schedule": "0 8 * * *"
     },

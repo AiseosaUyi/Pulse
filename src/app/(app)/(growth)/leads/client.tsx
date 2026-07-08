@@ -80,6 +80,11 @@ import { ImportProspectsModal } from "./import-prospects-modal";
 import { EditProspectModal } from "./edit-prospect-modal";
 import type { OutreachTodayData } from "@/lib/services/outreach-intelligence";
 import type { OutreachCampaignRecord } from "@/lib/types/outreach-intelligence";
+import type { EventScraperRunRecord } from "@/lib/types/event-scraper";
+import {
+  EventPlatformRuns,
+  type EventScraperPlatformOption,
+} from "./event-platform-runs";
 
 type Tab = "today" | "pipeline" | "inbox" | "discovery" | "templates";
 
@@ -200,6 +205,8 @@ export function OutboundClient({
   initialTemplates,
   initialTodayData,
   campaigns,
+  initialEventScraperRuns,
+  eventScraperPlatforms,
 }: {
   tenantSlug: string;
   tenantName: string;
@@ -211,6 +218,8 @@ export function OutboundClient({
   initialTemplates: OutboundTemplateRecord[];
   initialTodayData: OutreachTodayData;
   campaigns: OutreachCampaignRecord[];
+  initialEventScraperRuns: EventScraperRunRecord[];
+  eventScraperPlatforms: EventScraperPlatformOption[];
 }) {
   const dialogs = useDialogs();
   const searchParams = useSearchParams();
@@ -828,7 +837,12 @@ export function OutboundClient({
       )}
 
       {tab === "discovery" && (
-        <DiscoveryView tenantSlug={tenantSlug} searches={searches} />
+        <DiscoveryView
+          tenantSlug={tenantSlug}
+          searches={searches}
+          initialEventScraperRuns={initialEventScraperRuns}
+          eventScraperPlatforms={eventScraperPlatforms}
+        />
       )}
 
       {tab === "templates" && (
@@ -1535,9 +1549,13 @@ function InboxView({
 function DiscoveryView({
   tenantSlug,
   searches: initial,
+  initialEventScraperRuns,
+  eventScraperPlatforms,
 }: {
   tenantSlug: string;
   searches: ProspectSearchRecord[];
+  initialEventScraperRuns: EventScraperRunRecord[];
+  eventScraperPlatforms: EventScraperPlatformOption[];
 }) {
   const dialogs = useDialogs();
   const [searches, setSearches] = useState(initial);
@@ -1667,6 +1685,12 @@ function DiscoveryView({
           )}
         </div>
       </div>
+
+      <EventPlatformRuns
+        tenantSlug={tenantSlug}
+        initialRuns={initialEventScraperRuns}
+        platforms={eventScraperPlatforms}
+      />
 
       {error && (
         <div
