@@ -11,10 +11,12 @@ import { withCronRun } from "@/lib/cron/run-tracker";
 import {
   ACTIVE_EVENT_PLATFORMS,
   UNCONFIRMED_PLATFORM_IDS,
+  IG_MENTION_PLATFORMS,
 } from "@/lib/scrape/event-platforms";
 import {
   runActiveEventPlatform,
   runUnconfirmedEventPlatform,
+  runIgMentionScan,
 } from "@/lib/scrape/event-scraper-runner";
 import { isEventScraperEnabledForTenant } from "@/lib/scrape/event-platforms/tenant-config";
 
@@ -72,6 +74,25 @@ export async function POST(req: Request) {
         summary.platformsRun += 1;
         try {
           const res = await runUnconfirmedEventPlatform(platform, {
+            tenantSlug: tenant.slug,
+            trigger: "cron",
+          });
+          summary.candidatesFound += res.candidatesFound;
+          summary.prospectsCreated += res.prospectsCreated;
+        } catch (err) {
+          summary.failed += 1;
+          summary.errors.push({
+            tenant: tenant.slug,
+            platform: platform.id,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      for (const platform of IG_MENTION_PLATFORMS) {
+        summary.platformsRun += 1;
+        try {
+          const res = await runIgMentionScan(platform.id, platform.label, platform.hashtags, {
             tenantSlug: tenant.slug,
             trigger: "cron",
           });

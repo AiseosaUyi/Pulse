@@ -5,10 +5,12 @@ import { requireUser } from "@/lib/auth";
 import {
   ACTIVE_EVENT_PLATFORMS,
   UNCONFIRMED_PLATFORM_IDS,
+  IG_MENTION_PLATFORMS,
 } from "@/lib/scrape/event-platforms";
 import {
   runActiveEventPlatform,
   runUnconfirmedEventPlatform,
+  runIgMentionScan,
 } from "@/lib/scrape/event-scraper-runner";
 import { listRunProspects } from "@/lib/services/event-scraper-runs";
 import type { ProspectRecord } from "@/lib/types/outbound";
@@ -31,23 +33,19 @@ export async function runEventPlatformScraperNow(
 
   const active = ACTIVE_EVENT_PLATFORMS.find((c) => c.id === platformId);
   const unconfirmed = UNCONFIRMED_PLATFORM_IDS.find((p) => p.id === platformId);
+  const igMention = IG_MENTION_PLATFORMS.find((p) => p.id === platformId);
 
-  if (!active && !unconfirmed) {
+  if (!active && !unconfirmed && !igMention) {
     return { success: false, error: `Unknown or unbuilt platform: ${platformId}` };
   }
 
   try {
+    const runOpts = { tenantSlug, trigger: "manual" as const, triggeredBy: user.id };
     const result = active
-      ? await runActiveEventPlatform(active, {
-          tenantSlug,
-          trigger: "manual",
-          triggeredBy: user.id,
-        })
-      : await runUnconfirmedEventPlatform(unconfirmed!, {
-          tenantSlug,
-          trigger: "manual",
-          triggeredBy: user.id,
-        });
+      ? await runActiveEventPlatform(active, runOpts)
+      : unconfirmed
+        ? await runUnconfirmedEventPlatform(unconfirmed, runOpts)
+        : await runIgMentionScan(igMention!.id, igMention!.label, igMention!.hashtags, runOpts);
 
     revalidatePath("/leads");
     return {

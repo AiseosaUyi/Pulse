@@ -25,7 +25,7 @@ import type { ProspectRecord } from "@/lib/types/outbound";
 export interface EventScraperPlatformOption {
   id: string;
   label: string;
-  kind: "active" | "unconfirmed";
+  kind: "active" | "unconfirmed" | "ig_mention";
 }
 
 function platformLabel(id: string): string {
@@ -145,7 +145,9 @@ export function EventPlatformRuns({
                 title={
                   p.kind === "unconfirmed"
                     ? "Best-effort parser — not yet confirmed to have a scrapable listing page"
-                    : undefined
+                    : p.kind === "ig_mention"
+                      ? "No scrapable website — finds organizers via branded-hashtag Instagram posts instead"
+                      : undefined
                 }
               >
                 {busy ? (
@@ -156,6 +158,9 @@ export function EventPlatformRuns({
                 Run {p.label}
                 {p.kind === "unconfirmed" && (
                   <span className="text-[10px] text-text-muted">(best-effort)</span>
+                )}
+                {p.kind === "ig_mention" && (
+                  <span className="text-[10px] text-text-muted">(IG scan)</span>
                 )}
               </Button>
             );

@@ -20,6 +20,7 @@ import { listEventScraperRuns } from "@/lib/services/event-scraper-runs";
 import {
   ACTIVE_EVENT_PLATFORMS,
   UNCONFIRMED_PLATFORM_IDS,
+  IG_MENTION_PLATFORMS,
 } from "@/lib/scrape/event-platforms";
 import { OutboundClient } from "./client";
 import type { OutboundDmRecord } from "@/lib/types/outbound";
@@ -76,6 +77,11 @@ export default async function LeadsPage() {
       id: p.id,
       label: p.label,
       kind: "unconfirmed" as const,
+    })),
+    ...IG_MENTION_PLATFORMS.map((p) => ({
+      id: p.id,
+      label: p.label,
+      kind: "ig_mention" as const,
     })),
   ];
 

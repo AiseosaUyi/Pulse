@@ -5,11 +5,18 @@
 // into prospects exactly like the Apify-based pipeline, tagged with a
 // distinct signal_type so the two lineages stay distinguishable.
 //
-// No Apify anywhere in this file — see event-fetch.ts for why.
+// The cheerio/JSON-LD paths below (runActiveEventPlatform, resolveAndUpsert)
+// use no Apify — see event-fetch.ts for why. runIgMentionScan (bottom of
+// this file) is the one exception: Clooza and Partyverse are IG-native
+// brands with no real website to scrape (confirmed via DOM research), so
+// those two route through the EXISTING Apify Instagram hashtag scraper
+// (instagram-hashtag.ts, already paid for by the trend-scout feature)
+// instead of a bespoke web scraper.
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchEventHtml, EventFetchError } from "@/lib/scrape/event-fetch";
 import { scrapeGoogleSerp } from "@/lib/scrape/google-serp";
+import { scrapeInstagramTopPosts } from "@/lib/scrape/instagram-hashtag";
 import { detectFromUrl, siteSearchQueryFor } from "@/lib/outbound/handle";
 import { parseGenericJsonLd } from "@/lib/scrape/event-platforms/generic-jsonld";
 import type { EventCandidate, EventPlatformConfig } from "@/lib/scrape/event-platforms/types";
@@ -274,4 +281,90 @@ async function resolveAndUpsert(
   });
 
   return upserted?.length ?? 0;
+}
+
+// Clooza / Partyverse: neither has a scrapable website (DOM research,
+// 2026-07-08 — both are client-rendered SPAs) but both are IG-native event
+// brands, so organizers using them surface via branded-hashtag posts. Being
+// found here (posting with the platform's hashtag) IS the qualifying
+// signal — unlike the web-scraped platforms there's no separate price to
+// check, since using the platform at all means running a ticketed event.
+export async function runIgMentionScan(
+  platformId: string,
+  platformLabel: string,
+  hashtags: string[],
+  opts: RunEventPlatformOpts
+): Promise<EventScraperRunResult> {
+  return withEventScraperRun(
+    {
+      tenantSlug: opts.tenantSlug,
+      platform: platformId,
+      provider: "apify",
+      trigger: opts.trigger,
+      triggeredBy: opts.triggeredBy,
+    },
+    async ({ runId, recordStep }) => {
+      const t0 = Date.now();
+      const posts = await scrapeInstagramTopPosts(hashtags, { limitPerHashtag: 15 });
+      await recordStep({
+        step: "ig_hashtag_scan",
+        status: "ok",
+        durationMs: Date.now() - t0,
+        payload: { hashtags, postsFound: posts.length },
+      });
+
+      const withHandle = posts.filter((p) => !!p.owner_handle);
+      const seen = new Set<string>();
+      const deduped = withHandle.filter((p) => {
+        const handle = p.owner_handle!.toLowerCase();
+        if (seen.has(handle)) return false;
+        seen.add(handle);
+        return true;
+      });
+
+      if (deduped.length === 0) {
+        return { status: "succeeded", candidatesFound: 0, prospectsCreated: 0 };
+      }
+
+      const admin = createAdminClient();
+      const rows = deduped.map((p) => ({
+        tenant_slug: opts.tenantSlug,
+        platform: "instagram" as const,
+        handle: p.owner_handle!.toLowerCase(),
+        profile_url: `https://www.instagram.com/${p.owner_handle!.toLowerCase()}/`,
+        signal_summary: `[event_platform_scraper] Posted using ${p.hashtag} (${platformLabel})`,
+        signal_data: {
+          source_type: "event_platform_scraper",
+          platform_id: platformId,
+          hashtag: p.hashtag,
+          post_url: p.external_url,
+          caption_snippet: p.summary,
+          qualify_pending: true,
+        },
+        event_scraper_run_id: runId,
+        status: "new",
+      }));
+
+      const { data: upserted, error } = await admin
+        .from("prospects")
+        .upsert(rows, { onConflict: "tenant_slug,platform,handle" })
+        .select("id");
+
+      if (error) {
+        await recordStep({ step: "upsert_prospects", status: "failed", payload: { message: error.message } });
+        throw new Error(error.message);
+      }
+      await recordStep({
+        step: "upsert_prospects",
+        status: "ok",
+        payload: { upserted: upserted?.length ?? 0 },
+      });
+
+      return {
+        status: "succeeded",
+        candidatesFound: deduped.length,
+        prospectsCreated: upserted?.length ?? 0,
+      };
+    }
+  );
 }

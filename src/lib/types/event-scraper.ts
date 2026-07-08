@@ -42,4 +42,10 @@ export const EVENT_PLATFORM_LABELS: Record<string, string> = {
   unboxd: "Unboxd",
   tiqbuy: "Tiqbuy",
   tixvnt: "Tixvnt",
+  clooza: "Clooza",
+  partyverse: "Partyverse",
+  tixtango: "TixTango",
+  tickethub: "Tickethub.ng",
+  eventpadi: "Eventpadi",
+  naijaticketshop: "NaijaTicketShop",
 };

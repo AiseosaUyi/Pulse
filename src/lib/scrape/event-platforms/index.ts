@@ -32,7 +32,7 @@ export const RESEARCHED_NOT_BUILT: Array<{
     label: "TixTango",
     status: "needs_browser",
     researchNote:
-      "Homepage is a mobile-app marketing shell only ('Preparing your event discovery experience...' loading placeholder) — no event listings are server-rendered on the public web at all. This is an app-first platform (TikTok-style feed), not a scrapable website.",
+      "Homepage is a mobile-app marketing shell only ('Preparing your event discovery experience...' loading placeholder) — no event listings are server-rendered on the public web at all, and no public API host is discoverable in the shipped JS chunks (Next.js app — data likely fetched client-side). PENDING: will be wired up via a scraping-API rendered-fetch (see scraping-api.ts) once a real rendered page can be inspected and a proper parser written — not yet built.",
     listingUrls: ["https://tixtango.com/"],
   },
   {
@@ -40,7 +40,7 @@ export const RESEARCHED_NOT_BUILT: Array<{
     label: "Clooza",
     status: "needs_browser",
     researchNote:
-      "162KB page, ~21 words of real text after stripping scripts — a client-rendered SPA shell. Would need Playwright, which the cost constraint (no proxy/Playwright spend without evidence it's needed) rules out for this pass.",
+      "162KB page, ~21 words of real text after stripping scripts — a client-rendered SPA shell, no public API discoverable. NOT going through Playwright/scraping-API — Clooza is IG-native, so organizers surface via branded-hashtag posts instead. See IG_MENTION_PLATFORMS below (event-scraper-runner.ts runIgMentionScan) — uses the existing Apify Instagram hashtag scraper, already paid for.",
     listingUrls: ["https://clooza.com/events"],
   },
   {
@@ -48,7 +48,7 @@ export const RESEARCHED_NOT_BUILT: Array<{
     label: "Partyverse",
     status: "needs_browser",
     researchNote:
-      "404KB page, mostly JS bundle bloat with low real-text ratio on the /guests discovery page — client-rendered. Same Playwright/cost tradeoff as Clooza.",
+      "404KB page, mostly JS bundle bloat with low real-text ratio on the /guests discovery page — client-rendered, no public API discoverable. Same as Clooza: handled via IG_MENTION_PLATFORMS below instead of a web scraper.",
     listingUrls: ["https://www.partyverse.com/guests"],
   },
   {
@@ -56,7 +56,7 @@ export const RESEARCHED_NOT_BUILT: Array<{
     label: "Selar",
     status: "needs_browser",
     researchNote:
-      "627KB page, ~10 words of real text — fully client-rendered SPA. Same Playwright/cost tradeoff.",
+      "627KB page, ~10 words of real text — fully client-rendered SPA. Not IG-native the way Clooza/Partyverse are (Selar is a broader digital-products platform, tickets are one feature) — deferred rather than routed to IG scan.",
     listingUrls: ["https://selar.co/"],
   },
   {
@@ -64,7 +64,7 @@ export const RESEARCHED_NOT_BUILT: Array<{
     label: "Tickethub.ng",
     status: "needs_browser",
     researchNote:
-      "Homepage HTML ships 30 repeated loading-shimmer skeleton divs with no real event data — content loads client-side after initial paint despite looking promising on first signal-count pass. Corrected from an earlier, wrong 'good candidate' read.",
+      "Homepage HTML ships 30 repeated loading-shimmer skeleton divs with no real event data — Next.js app, content loads client-side after initial paint, no public API host discoverable in shipped JS chunk filenames. PENDING: scraping-API rendered-fetch once available — see scraping-api.ts.",
     listingUrls: ["https://tickethub.ng/"],
   },
   {
@@ -72,7 +72,7 @@ export const RESEARCHED_NOT_BUILT: Array<{
     label: "Eventpadi",
     status: "blocked",
     researchNote:
-      "TLS handshake reset (curl error 35/56) on every attempt — anti-bot/WAF blocking non-browser TLS fingerprints at the network layer, before HTTP even starts. Unreachable via plain fetch; would need a real browser's TLS stack.",
+      "TLS handshake reset (curl error 35/56) on every attempt — anti-bot/WAF blocking non-browser TLS fingerprints at the network layer, before HTTP even starts. A real browser's TLS stack fixes this — PENDING: scraping-API rendered-fetch (ScraperAPI presents a real browser TLS fingerprint) — see scraping-api.ts.",
     listingUrls: ["https://eventpadi.com/"],
   },
   {
@@ -80,7 +80,7 @@ export const RESEARCHED_NOT_BUILT: Array<{
     label: "NaijaTicketShop",
     status: "blocked",
     researchNote:
-      "Self-signed/broken TLS cert, an HTTP→HTTPS→HTTP redirect loop, and a 403 on the plain-HTTP fallback — broken infra plus active bot-blocking. Low-quality target even if reachable.",
+      "Self-signed/broken TLS cert, an HTTP→HTTPS→HTTP redirect loop, and a 403 on the plain-HTTP fallback — broken infra plus active bot-blocking. Low-quality target even if reachable; worth an opportunistic retry through the scraping API once wired, but not a priority build.",
     listingUrls: ["https://naijaticketshop.com/"],
   },
   {
@@ -135,3 +135,19 @@ export const ACTIVE_EVENT_PLATFORMS: EventPlatformConfig[] = BUILT_CONFIGS.filte
 export const UNCONFIRMED_PLATFORM_IDS = RESEARCHED_NOT_BUILT.filter(
   (p) => p.status === "unconfirmed"
 );
+
+// Clooza and Partyverse are IG-native brands with no scrapable website
+// (see researchNote above) — organizers surface via branded-hashtag posts
+// instead, through the existing Apify Instagram hashtag scraper
+// (runIgMentionScan in event-scraper-runner.ts). Hashtags are best guesses
+// at what organizers actually tag when posting about an event on these
+// platforms — worth revisiting once real run data shows which tags surface
+// real organizers vs. noise.
+export const IG_MENTION_PLATFORMS: Array<{
+  id: string;
+  label: string;
+  hashtags: string[];
+}> = [
+  { id: "clooza", label: "Clooza", hashtags: ["clooza", "cloozaevents"] },
+  { id: "partyverse", label: "Partyverse", hashtags: ["partyverse", "partyverseapp"] },
+];
