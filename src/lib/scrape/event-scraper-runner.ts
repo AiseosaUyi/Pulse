@@ -60,6 +60,23 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+// Instagram's post/reel share-card snippet has a stable "<N> likes, <M>
+// comments - <handle> on <date>: ..." prefix (confirmed live, 2026-07-08,
+// e.g. "31 likes, 9 comments - mcbarrackomed_official on April 13, 2020").
+// Google indexes far more individual posts than profile pages for small
+// local accounts, so a site:instagram.com search often returns ONLY /p/
+// or /reel/ links — detectFromUrl (below) correctly rejects those as
+// "not a profile URL", but that discards a real, extractable handle
+// sitting right in the snippet. Confirmed on a real failing case
+// ("BARRACKOMED"): the profile-URL check alone found nothing, but 2 of
+// its top 5 results matched this pattern with the same real handle.
+const IG_SNIPPET_HANDLE_RE = /^\d+\s+likes?,\s*\d+\s+comments?\s*-\s*([a-z0-9_.]+)\s+on\s/i;
+
+function extractIgHandleFromSnippet(snippet: string): string | null {
+  const match = IG_SNIPPET_HANDLE_RE.exec(snippet.trim());
+  return match ? match[1].toLowerCase() : null;
+}
+
 // Exported for reuse by /api/ext/event-lead — the extension capture path
 // needs the exact same SERP-based handle resolution the cron path uses.
 export async function resolveHandleViaSerp(
@@ -75,6 +92,23 @@ export async function resolveHandleViaSerp(
       const detected = detectFromUrl(r.url);
       if (detected && detected.platform === "instagram") {
         return { platform: "instagram", handle: detected.handle, profileUrl: detected.profileUrl };
+      }
+    }
+    // Broadening the query itself (dropping quotes, trimming suffixes)
+    // was tested live and rejected — it surfaces unrelated accounts
+    // (false positives) rather than the real organizer, which is worse
+    // than staying unresolved. The snippet fallback below only fires on
+    // results the exact-phrase query already matched, so it can't
+    // introduce a wrong-account risk the way loosening the query would.
+    for (const r of results) {
+      if (!r.domain.includes("instagram.com")) continue;
+      const handle = extractIgHandleFromSnippet(r.snippet);
+      if (handle) {
+        return {
+          platform: "instagram",
+          handle,
+          profileUrl: `https://www.instagram.com/${handle}/`,
+        };
       }
     }
     return null;
