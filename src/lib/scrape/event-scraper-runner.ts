@@ -31,7 +31,7 @@ import {
 // manually check for a 403/CAPTCHA and consider a proxy — not before.
 export const BLOCK_DETECTION_CONSECUTIVE_EMPTY_RUNS = 5;
 
-function slugifyForHandle(input: string): string {
+export function slugifyForHandle(input: string): string {
   return input
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -39,7 +39,9 @@ function slugifyForHandle(input: string): string {
     .slice(0, 60) || "unknown";
 }
 
-async function resolveHandleViaSerp(
+// Exported for reuse by /api/ext/event-lead — the extension capture path
+// needs the exact same SERP-based handle resolution the cron path uses.
+export async function resolveHandleViaSerp(
   query: string
 ): Promise<{ platform: "instagram"; handle: string; profileUrl: string } | null> {
   try {

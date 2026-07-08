@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Pulse Outbound",
-  "version": "0.5.0",
-  "description": "Draft personalized IG / TikTok / Twitter / LinkedIn DMs from Pulse while viewing a prospect's profile. Human-in-the-loop by design.",
+  "version": "0.6.0",
+  "description": "Draft personalized IG / TikTok / Twitter / LinkedIn DMs from Pulse, and capture event-organizer leads from Clooza / Tickethub.ng / Eventpadi / EventPorte / Tixvnt. Human-in-the-loop by design.",
   "action": {
     "default_popup": "popup.html",
     "default_title": "Pulse Outbound"
@@ -26,6 +26,24 @@
       "js": ["content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://clooza.com/*",
+        "https://www.clooza.com/*",
+        "https://tickethub.ng/*",
+        "https://www.tickethub.ng/*",
+        "https://app.eventpadi.com/*",
+        "https://eventporte.com/*",
+        "https://www.eventporte.com/*",
+        "https://tixvnt.com/*",
+        "https://www.tixvnt.com/*",
+        "https://selar.co/*",
+        "https://www.selar.co/*"
+      ],
+      "js": ["event-content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
     }
   ],
   "permissions": ["storage", "clipboardWrite", "activeTab", "tabs"],
@@ -44,7 +62,18 @@
         "https://twitter.com/*",
         "https://x.com/*",
         "https://www.linkedin.com/*",
-        "https://linkedin.com/*"
+        "https://linkedin.com/*",
+        "https://clooza.com/*",
+        "https://www.clooza.com/*",
+        "https://tickethub.ng/*",
+        "https://www.tickethub.ng/*",
+        "https://app.eventpadi.com/*",
+        "https://eventporte.com/*",
+        "https://www.eventporte.com/*",
+        "https://tixvnt.com/*",
+        "https://www.tixvnt.com/*",
+        "https://selar.co/*",
+        "https://www.selar.co/*"
       ]
     }
   ],

@@ -122,6 +122,12 @@ export async function bulkUploadProspects(items) {
   });
 }
 
+// Event-platform capture (Clooza/Tickethub.ng/Eventpadi/EventPorte/Tixvnt)
+// — separate endpoint from upsertProspect, see event-content.js.
+export async function upsertEventLead(input) {
+  return request("/api/ext/event-lead", { method: "POST", body: input });
+}
+
 // ──────────────────────────────────────────────
 // Captured-store facade — proxied through background
 // (content scripts can't reach chrome.storage.local directly).

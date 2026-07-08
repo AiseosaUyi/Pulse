@@ -27,6 +27,31 @@ message — no automation, no ban risk.
 - Click **Copy DM** → paste into the native DM composer on the page → Send
 - Click **Mark sent in Pulse** to advance the prospect's pipeline stage
 
+## Event platform lead capture
+
+A second, separate capture flow (`event-content.js`) for event/ticketing
+platforms confirmed (2026-07-08) to have real organizer data behind
+client-side rendering that backend scraping can't reach: **Clooza,
+Tickethub.ng, Eventpadi (app.eventpadi.com — requires being signed in),
+EventPorte, Tixvnt, Selar**.
+
+- Visit an event or organizer page on any of those platforms
+- Bottom-right floating button: **Capture event lead**
+- It reads whatever the page shows — event title, price, organizer name,
+  and any linked social/Instagram profile — and saves it as a prospect in
+  Pulse's Outbound pipeline
+- If the auto-detected organizer name looks wrong, highlight the correct
+  text on the page *before* clicking Capture — your selection always
+  wins over the automatic guess
+- Eventpadi's discovery feed is behind a login — sign in to your Eventpadi
+  account first, same browser tab
+
+This is intentionally separate from the profile-capture flow above — event
+pages have a completely different shape (no single "prospect handle" in
+the URL), so it gets its own detection module (`lib/detect-events.js`) and
+its own backend endpoint (`/api/ext/event-lead`), decoupled from the
+IG/TikTok/X/LinkedIn path so neither can break the other.
+
 ## Permissions
 
 - `storage` — stores your token + base URL in `chrome.storage.sync`
@@ -53,9 +78,11 @@ at `/api/ext/*`.
 ## File map
 
 - `manifest.json` — MV3 config
-- `content.js` + `content.css` — floating FAB + sidebar on host sites
+- `content.js` + `content.css` — floating FAB + sidebar on host sites (IG/TikTok/X/LinkedIn)
+- `event-content.js` — floating FAB for event-platform lead capture (separate flow, shares content.css)
 - `popup.html` + `popup.js` — toolbar popup (connection status)
 - `options.html` + `options.js` — base URL + token settings
 - `background.js` — service worker (opens options on first install)
 - `lib/api.js` — fetch wrapper against the Pulse API
-- `lib/detect.js` — URL → `{platform, handle}` detector + DOM scraper
+- `lib/detect.js` — URL → `{platform, handle}` detector + DOM scraper (profiles)
+- `lib/detect-events.js` — URL → `{platformId}` detector + DOM scraper (event pages)
