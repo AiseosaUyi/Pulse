@@ -30,49 +30,49 @@ export const RESEARCHED_NOT_BUILT: Array<{
   {
     id: "tixtango",
     label: "TixTango",
-    status: "needs_browser",
+    status: "no_public_directory",
     researchNote:
-      "Homepage is a mobile-app marketing shell only ('Preparing your event discovery experience...' loading placeholder) — no event listings are server-rendered on the public web at all, and no public API host is discoverable in the shipped JS chunks (Next.js app — data likely fetched client-side). PENDING: will be wired up via a scraping-API rendered-fetch (see scraping-api.ts) once a real rendered page can be inspected and a proper parser written — not yet built.",
+      "VERIFIED via real Chrome (2026-07-08, not just curl): the website is a pure marketing/download page — 'About Us', 'Product' (features/pricing), 'Download App'. Only 7 real interactive elements on the whole page. No event browsing surface exists on the web at all; the actual product (TikTok-style event feed) only exists inside the native mobile app. A browser extension cannot reach inside a native app — not fixable by any web-based method (Playwright, scraping API, or extension).",
     listingUrls: ["https://tixtango.com/"],
   },
   {
     id: "clooza",
     label: "Clooza",
-    status: "needs_browser",
+    status: "extension_needed",
     researchNote:
-      "162KB page, ~21 words of real text after stripping scripts — a client-rendered SPA shell, no public API discoverable. NOT going through Playwright/scraping-API — Clooza is IG-native, so organizers surface via branded-hashtag posts instead. See IG_MENTION_PLATFORMS below (event-scraper-runner.ts runIgMentionScan) — uses the existing Apify Instagram hashtag scraper, already paid for.",
+      "VERIFIED via real Chrome (2026-07-08): genuinely real, rich web app once past the client-render — an 'Explore' feed with real events (title, organizer name + handle, engagement), and organizer PROFILE pages at a predictable clooza.com/<handle> URL with display name, bio, an external link (often Linktree — a strong secondary social-handle signal), and follower count. curl confirms this data is 100% client-fetched (16 words of real text vs. the full profile seen in a real browser) — genuinely needs a real browser, which is exactly what extension-based capture provides. Best candidate for the extension build alongside Tickethub.ng.",
     listingUrls: ["https://clooza.com/events"],
   },
   {
     id: "partyverse",
     label: "Partyverse",
-    status: "needs_browser",
+    status: "no_public_directory",
     researchNote:
-      "404KB page, mostly JS bundle bloat with low real-text ratio on the /guests discovery page — client-rendered, no public API discoverable. Same as Clooza: handled via IG_MENTION_PLATFORMS below instead of a web scraper.",
+      "VERIFIED via real Chrome (2026-07-08): the /guests page is a marketing landing page with a phone-mockup graphic showing example events ('Lovers & Frnds', 'LAGOS TRIVIA NIGHT') — confirmed via accessibility tree that these are static images, not real clickable elements (only 5 real interactive elements on the page, all nav/app-store links). No web-based event browsing exists; the real product is app-only. Same conclusion as TixTango — not fixable by any web-based method. The IG-mention path (IG_MENTION_PLATFORMS below) remains the only automatable signal.",
     listingUrls: ["https://www.partyverse.com/guests"],
   },
   {
     id: "selar",
     label: "Selar",
-    status: "needs_browser",
+    status: "extension_needed",
     researchNote:
-      "627KB page, ~10 words of real text — fully client-rendered SPA. Not IG-native the way Clooza/Partyverse are (Selar is a broader digital-products platform, tickets are one feature) — deferred rather than routed to IG scan.",
+      "627KB page, ~10 words of real text — fully client-rendered SPA (not re-verified live, but same signature as Clooza/Tickethub before verification). Not IG-native the way Clooza/Partyverse are (Selar is a broader digital-products platform, tickets are one feature) — a real-browser check (same as Clooza) would likely confirm this is extension-buildable too; not yet prioritized.",
     listingUrls: ["https://selar.co/"],
   },
   {
     id: "tickethub",
     label: "Tickethub.ng",
-    status: "needs_browser",
+    status: "extension_needed",
     researchNote:
-      "Homepage HTML ships 30 repeated loading-shimmer skeleton divs with no real event data — Next.js app, content loads client-side after initial paint, no public API host discoverable in shipped JS chunk filenames. PENDING: scraping-API rendered-fetch once available — see scraping-api.ts.",
-    listingUrls: ["https://tickethub.ng/"],
+      "VERIFIED via real Chrome (2026-07-08): excellent real data once rendered — /discover shows real priced events (category, price, date, venue), and event detail pages show the organizer's real name directly ('by Justina Okafor'), not just a handle. curl only ever sees loading-shimmer skeletons (confirmed: 0 words of real content), so this absolutely needs a real browser. Arguably the single best extension-capture candidate of all 5 — organizer identity is literally printed on the page.",
+    listingUrls: ["https://tickethub.ng/discover"],
   },
   {
     id: "eventpadi",
     label: "Eventpadi",
-    status: "blocked",
+    status: "no_public_directory",
     researchNote:
-      "TLS handshake reset (curl error 35/56) on every attempt — anti-bot/WAF blocking non-browser TLS fingerprints at the network layer, before HTTP even starts. A real browser's TLS stack fixes this — PENDING: scraping-API rendered-fetch (ScraperAPI presents a real browser TLS fingerprint) — see scraping-api.ts.",
+      "VERIFIED via real Chrome (2026-07-08): loads fine in a real browser (the earlier curl TLS-reset was specifically a bot-detection response to non-browser clients, not a permanent block) — but it's a B2B event-CREATION tool (like a Typeform/Eventbrite-alternative for organizers to build their OWN registration page), not a public directory. Nav is Home/About/FAQ/Blog only — no 'Discover' or 'Explore Events' page exists anywhere. There is no browsable list of 'who is using Eventpadi' for any method (extension, scraping API, or otherwise) to find — this is a structural dead end, not a technical one. Recommend dropping entirely rather than pursuing further.",
     listingUrls: ["https://eventpadi.com/"],
   },
   {
@@ -80,7 +80,7 @@ export const RESEARCHED_NOT_BUILT: Array<{
     label: "NaijaTicketShop",
     status: "blocked",
     researchNote:
-      "Self-signed/broken TLS cert, an HTTP→HTTPS→HTTP redirect loop, and a 403 on the plain-HTTP fallback — broken infra plus active bot-blocking. Low-quality target even if reachable; worth an opportunistic retry through the scraping API once wired, but not a priority build.",
+      "VERIFIED via real Chrome (2026-07-08): fails to load even in a real browser (Chrome shows its own error page) — this is genuinely broken infrastructure, not bot-detection. Confirmed dead end regardless of method. Recommend dropping entirely.",
     listingUrls: ["https://naijaticketshop.com/"],
   },
   {
@@ -136,18 +136,33 @@ export const UNCONFIRMED_PLATFORM_IDS = RESEARCHED_NOT_BUILT.filter(
   (p) => p.status === "unconfirmed"
 );
 
-// Clooza and Partyverse are IG-native brands with no scrapable website
-// (see researchNote above) — organizers surface via branded-hashtag posts
-// instead, through the existing Apify Instagram hashtag scraper
-// (runIgMentionScan in event-scraper-runner.ts). Hashtags are best guesses
-// at what organizers actually tag when posting about an event on these
-// platforms — worth revisiting once real run data shows which tags surface
-// real organizers vs. noise.
+// Confirmed (via real-browser research, 2026-07-08) to have real,
+// worthwhile event/organizer data behind client-side rendering — these are
+// exactly the candidates for extension-based human-assisted capture, NOT
+// backend scraping (see conversation decision: extension over Playwright/
+// scraping-API, since it's free and can't be blocked). Not run by any
+// backend cron — captured only when a team member visits the page with
+// the extension installed.
+export const EXTENSION_NEEDED_PLATFORMS = RESEARCHED_NOT_BUILT.filter(
+  (p) => p.status === "extension_needed"
+);
+
+// Platforms with a real product but NO public directory of events/
+// organizers to browse at all (verified via real Chrome, 2026-07-08) —
+// TixTango and Eventpadi are structural dead ends regardless of method.
+// Partyverse is the one exception that still has an automatable fallback:
+// it's IG-native, so organizers surface via branded-hashtag posts through
+// the existing Apify Instagram hashtag scraper (runIgMentionScan in
+// event-scraper-runner.ts). Hashtags are best guesses at what organizers
+// actually tag when posting about an event on this platform — worth
+// revisiting once real run data shows which tags surface real organizers
+// vs. noise. Clooza was removed from this list once real-browser research
+// confirmed it has a much better, free, extension-based path instead (see
+// EXTENSION_NEEDED_PLATFORMS above).
 export const IG_MENTION_PLATFORMS: Array<{
   id: string;
   label: string;
   hashtags: string[];
 }> = [
-  { id: "clooza", label: "Clooza", hashtags: ["clooza", "cloozaevents"] },
   { id: "partyverse", label: "Partyverse", hashtags: ["partyverse", "partyverseapp"] },
 ];

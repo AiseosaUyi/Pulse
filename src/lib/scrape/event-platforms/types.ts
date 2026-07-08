@@ -16,8 +16,9 @@ export interface EventCandidate {
 
 export type EventPlatformStatus =
   | "active" // confirmed real server-rendered listing with price signal — safe to crawl
-  | "needs_browser" // confirmed client-rendered (SPA) — needs JS execution, not built (cost constraint)
-  | "blocked" // anti-bot / broken TLS or infra at the network level — unreachable via plain fetch
+  | "extension_needed" // confirmed real web app with real event/organizer data, but client-rendered — needs a real browser (extension capture), not backend-scrapable
+  | "no_public_directory" // has a real product (web or app) but no browsable public feed of events/organizers exists at all — not fixable by any scraping method
+  | "blocked" // anti-bot / broken TLS or infra at the network level — unreachable via plain fetch, confirmed unreachable even via a real browser
   | "unconfirmed"; // real page content exists but no listing page with a direct price signal was found
 
 export interface EventPlatformConfig {
