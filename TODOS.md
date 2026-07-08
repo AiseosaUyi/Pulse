@@ -148,6 +148,28 @@ Captured during /plan-eng-review on 2026-05-08. Plan file: `~/.gstack/projects/P
 
 ---
 
+## P9 — Individual Persona Content Calendar (post-office-hours follow-ups)
+
+Captured during /office-hours + /plan-eng-review on 2026-07-08. Design doc: `~/.gstack/projects/Pulse/aiseosauyi-idahor-main-design-20260708-164316.md`.
+
+### Generalize the content calendar beyond the founder's own tenant
+- **What:** Open the individual-persona content calendar (topic queue + daily briefing engine) to other individual-persona signups, not just the founder's own tenant.
+- **Why:** V1 is tenant-allowlist-gated to validate the mechanism first. If it works for the founder, it's a real product-line expansion for the "individual" persona, which currently has almost no dedicated features.
+- **Pros:** Unlocks individual-persona monetization; the daily-briefing mechanism is the actual moat, already built.
+- **Cons:** Needs the manual interest-tag settings field to become self-serve UX; needs UI polish beyond founder-dogfood quality; building this before validation risks exactly the premature-scope problem this whole design process was built to avoid.
+- **Context:** Gate lives at the tenant-allowlist check (same pattern as `isEventScraperEnabledForTenant`) — removing/expanding it is the actual unlock, not a rebuild.
+- **Depends on:** V1 shipped + a few weeks of the founder's own real usage confirming the mechanism actually works.
+
+### Close the loop from post performance back into topic selection
+- **What:** Correlate posted slots against `own_post_metrics` (likes/comments/shares/saves) to learn which topics/angles actually perform, feeding that signal back into future topic selection.
+- **Why:** The feature's whole pitch is AI-driven quality, but v1 has no feedback loop — it can't tell a topic that flopped from one that landed. `own_post_metrics` already exists and is populated by the existing metrics-sync cron.
+- **Pros:** Cheap to add once there's data (the metrics table and sync cron already exist); turns the feature from "AI guesses" into "AI learns."
+- **Cons:** Needs real posted-slot history to correlate against — no signal exists until the founder has actually posted for a few weeks.
+- **Context:** Surfaced by the outside-voice cross-model review during `/plan-eng-review` (2026-07-08) — not part of the original design doc.
+- **Depends on:** V1 shipped + real posting history to correlate.
+
+---
+
 ## Suggested build order
 
 1. **Today/tomorrow:** finish P0 (security hygiene) + P1 polish (close F2 loop cleanly)

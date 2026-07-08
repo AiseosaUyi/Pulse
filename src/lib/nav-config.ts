@@ -49,6 +49,7 @@ export const navGroups: NavGroup[] = [
         ],
       },
       { label: "Video studio", href: "/video", iconName: "Film", surfaces: ["startup"] },
+      { label: "Content calendar", href: "/content-calendar", iconName: "CalendarCheck", surfaces: ["individual"] },
     ],
   },
   {

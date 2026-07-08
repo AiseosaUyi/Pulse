@@ -92,6 +92,10 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/cron/content-calendar-email",
+      "schedule": "5 8 * * *"
+    },
+    {
       "path": "/api/cron/spike-alert-email",
       "schedule": "0 * * * *"
     }
