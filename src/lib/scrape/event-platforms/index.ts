@@ -68,6 +68,14 @@ export const RESEARCHED_NOT_BUILT: Array<{
     listingUrls: ["https://app.eventpadi.com/dashboard/discover/events"],
   },
   {
+    id: "tixvnt",
+    label: "Tixvnt",
+    status: "extension_needed",
+    researchNote:
+      "VERIFIED via real Chrome (2026-07-08): real 'Events' feed at /events with priced events (title, location, price, date) — curl only sees 311 words of real text (no real titles), confirmed client-rendered. Event detail pages show the organizer directly ('Organized by: TedxUniAbuja'), plus real ticket tiers/prices. Same category as Clooza/Tickethub/Eventpadi/EventPorte.",
+    listingUrls: ["https://tixvnt.com/events"],
+  },
+  {
     id: "ariiyatickets",
     label: "Ariiya Tickets",
     status: "unconfirmed",
@@ -78,42 +86,34 @@ export const RESEARCHED_NOT_BUILT: Array<{
   {
     id: "syticks",
     label: "Syticks",
-    status: "unconfirmed",
+    status: "no_public_directory",
     researchNote:
-      "Real server-rendered homepage (419 words) but no dedicated event-listing page with a direct price/ticket signal was found in this pass. Wired to the generic JSON-LD fallback; needs real selector work to become 'active'.",
+      "VERIFIED via real Chrome (2026-07-08): nav has Home/Community/About/Blog/Products — no discover/explore page exists. 'Community' just redirects to a WhatsApp group invite link (chat.whatsapp.com), not an events feed. No public directory to scrape by any method. Corrected from an earlier 'unconfirmed' read.",
     listingUrls: ["https://syticks.com/"],
   },
   {
     id: "obodo",
     label: "Obodo",
-    status: "unconfirmed",
+    status: "no_public_directory",
     researchNote:
-      "Real server-rendered content (1370 words) but the homepage doesn't surface individual priced events directly. Wired to the generic JSON-LD fallback.",
+      "VERIFIED via real Chrome (2026-07-08): a B2B event-creation/community tool (like Eventpadi's marketing site) — /product/events is a feature-description page, not a listing. /discover redirects straight back to the homepage; no such page exists. No public directory found. Corrected from an earlier 'unconfirmed' read.",
     listingUrls: ["https://www.obo.do/"],
   },
   {
     id: "unboxd",
     label: "Unboxd",
-    status: "unconfirmed",
+    status: "no_public_directory",
     researchNote:
-      "Real content on both homepage and /events, no direct price signal found. Wired to the generic JSON-LD fallback.",
-    listingUrls: ["https://unboxd.co/", "https://unboxd.co/events"],
+      "VERIFIED via real Chrome (2026-07-08): pure B2B sign-up/demo funnel (Features / Contact Sales / Log In / Sign Up only, app.unboxd.co is their private dashboard). No public event directory exists anywhere on the marketing site. Corrected from an earlier 'unconfirmed' read.",
+    listingUrls: ["https://unboxd.co/"],
   },
   {
     id: "tiqbuy",
     label: "Tiqbuy",
-    status: "unconfirmed",
+    status: "no_public_directory",
     researchNote:
-      "Real content, no direct price signal found; company may be inactive (founded 2018, described as unfunded in landscape research). Wired to the generic JSON-LD fallback.",
-    listingUrls: ["https://www.tiqbuy.com/"],
-  },
-  {
-    id: "tixvnt",
-    label: "Tixvnt",
-    status: "unconfirmed",
-    researchNote:
-      "Real content on homepage, intermittent connection issues on deeper paths during research, no direct price signal confirmed. Wired to the generic JSON-LD fallback.",
-    listingUrls: ["https://tixvnt.com/"],
+      "VERIFIED (2026-07-08): tiqbuy.com now redirects to a HugeDomains \"this domain is for sale — $995\" parking page. The company is confirmed inactive/dead, not just under-researched — matches the earlier landscape-research note that it was founded 2018 and unfunded. Drop entirely.",
+    listingUrls: [],
   },
 ];
 
