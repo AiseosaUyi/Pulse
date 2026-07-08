@@ -47,8 +47,13 @@ export async function crawlSources(
     console.warn("[platform-discovery] APIFY_API_TOKEN not set — skipping");
     return [];
   }
+  // "||" not "??": an env var present-but-set-to-empty-string (a real
+  // footgun found live in .env.local) must also fall through to the
+  // default — "??" only catches null/undefined, not "". Actor ID uses
+  // "~" not "/" — apify-rest.ts's URL builder requires the
+  // "username~actor-name" REST API format, not the store-page slug.
   const actorId =
-    process.env.APIFY_WCC_ACTOR_ID ?? "apify/website-content-crawler";
+    process.env.APIFY_WCC_ACTOR_ID || "apify~website-content-crawler";
 
   const jobs = sources.map(async (src) => {
     try {

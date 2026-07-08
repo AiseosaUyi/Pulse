@@ -4,7 +4,8 @@
 //   - Env: APIFY_API_TOKEN
 
 const APIFY_BASE = "https://api.apify.com/v2";
-const TWEET_SCRAPER_ACTOR = process.env.APIFY_X_ACTOR_ID ?? "apidojo~tweet-scraper";
+// "||" not "??" — an env var present-but-empty must also fall through.
+const TWEET_SCRAPER_ACTOR = process.env.APIFY_X_ACTOR_ID || "apidojo~tweet-scraper";
 
 export interface ApifyTweet {
   id: string;

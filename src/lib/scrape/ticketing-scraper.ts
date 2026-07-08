@@ -125,8 +125,9 @@ export async function enrichHandlesWithIg(
   handles: string[]
 ): Promise<Map<string, IgProfileItem>> {
   const token = process.env.APIFY_API_TOKEN;
+  // "||" not "??" — see platform-discovery.ts crawlSources for why.
   const actorId =
-    process.env.APIFY_IG_PROFILE_ACTOR_ID ?? "apify/instagram-profile-scraper";
+    process.env.APIFY_IG_PROFILE_ACTOR_ID || "apify~instagram-profile-scraper";
   const out = new Map<string, IgProfileItem>();
 
   if (!token || handles.length === 0) return out;

@@ -59,7 +59,7 @@ export const PLATFORM_CONFIGS: PlatformConfig[] = [
   {
     id: "jetron",
     label: "Jetron",
-    actorId: process.env.APIFY_WCC_ACTOR_ID ?? "apify/website-content-crawler",
+    actorId: process.env.APIFY_WCC_ACTOR_ID || "apify~website-content-crawler",
     buildInput: ({ limitPerRun }) => ({
       startUrls: [{ url: "https://jetron.ng/events" }],
       maxCrawlPages: limitPerRun,
@@ -94,7 +94,7 @@ export const PLATFORM_CONFIGS: PlatformConfig[] = [
   {
     id: "eventbrite",
     label: "Eventbrite",
-    actorId: process.env.APIFY_EVENTBRITE_ACTOR_ID ?? "apify/website-content-crawler",
+    actorId: process.env.APIFY_EVENTBRITE_ACTOR_ID || "apify~website-content-crawler",
     buildInput: ({ limitPerRun }) => ({
       startUrls: [
         { url: "https://www.eventbrite.com/d/nigeria/events/" },
@@ -129,7 +129,7 @@ export const PLATFORM_CONFIGS: PlatformConfig[] = [
   {
     id: "luma",
     label: "Luma",
-    actorId: process.env.APIFY_WCC_ACTOR_ID ?? "apify/website-content-crawler",
+    actorId: process.env.APIFY_WCC_ACTOR_ID || "apify~website-content-crawler",
     buildInput: ({ limitPerRun }) => ({
       startUrls: [
         { url: "https://lu.ma/discover?location=lagos" },
@@ -165,7 +165,7 @@ export const PLATFORM_CONFIGS: PlatformConfig[] = [
   {
     id: "tix_africa",
     label: "Tix.africa",
-    actorId: process.env.APIFY_WCC_ACTOR_ID ?? "apify/website-content-crawler",
+    actorId: process.env.APIFY_WCC_ACTOR_ID || "apify~website-content-crawler",
     buildInput: ({ limitPerRun }) => ({
       startUrls: [{ url: "https://tix.africa" }],
       maxCrawlPages: limitPerRun,
