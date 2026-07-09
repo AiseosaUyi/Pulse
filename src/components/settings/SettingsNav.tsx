@@ -116,6 +116,12 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         href: "/settings/cadence",
         icon: CalendarCheck,
       },
+      {
+        label: "Content calendar",
+        href: "/settings/content-calendar",
+        icon: Sparkles,
+        surfaces: ["individual"],
+      },
     ],
   },
   {

@@ -17,6 +17,12 @@ export interface ContentSlotBrief {
   contrarianAngle: string | null;
   referenceLinks: ContentSlotReferenceLink[];
   noReferencesFound: boolean;
+  // Real posts/videos other creators made about this topic (TikTok/YouTube
+  // Shorts/Instagram/X), separate from generic news/article referenceLinks —
+  // "what others are doing" so you can see how it's already being covered.
+  // Defaults to [] for slots generated before this field existed.
+  creatorExamples: ContentSlotReferenceLink[];
+  noCreatorExamplesFound: boolean;
 }
 
 export interface ContentSlotRecord {

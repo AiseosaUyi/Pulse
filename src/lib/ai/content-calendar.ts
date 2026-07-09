@@ -31,14 +31,19 @@ const topicSelectSchema = z.object({
 
 const briefingSchema = z.object({
   talkingPoints: z.array(z.string()).describe("3-5 concrete talking points for a 30-90s short-form video on this topic. Empty array if truly nothing usable."),
-  stat: z.string().nullable().describe("One surprising, specific stat or fact drawn from the provided sources, or null if none of the sources contain one."),
-  statSourceUrl: z.string().nullable().describe("Must be exactly one of the provided source URLs that the stat came from. Null if stat is null."),
+  stat: z.string().nullable().describe("One surprising, specific stat or fact drawn from the provided ARTICLE sources, or null if none of the sources contain one."),
+  statSourceUrl: z.string().nullable().describe("Must be exactly one of the provided ARTICLE source URLs that the stat came from. Null if stat is null."),
   contrarianAngle: z.string().nullable().describe("A genuine counter-take or contrarian angle on the topic, or null if none fits."),
   referenceLinks: z.array(z.object({
-    url: z.string().describe("Must be one of the provided source URLs."),
+    url: z.string().describe("Must be one of the provided ARTICLE source URLs."),
     title: z.string(),
-  })).describe("Up to 2 of the provided sources worth reading/watching before filming. Empty array if none are usable."),
-  noReferencesFound: z.boolean().describe("true if none of the provided sources were usable for this topic."),
+  })).describe("Up to 2 of the provided ARTICLE sources worth reading before filming. Empty array if none are usable."),
+  noReferencesFound: z.boolean().describe("true if none of the provided ARTICLE sources were usable for this topic."),
+  creatorExamples: z.array(z.object({
+    url: z.string().describe("Must be one of the provided CREATOR/SOCIAL source URLs."),
+    title: z.string(),
+  })).describe("Up to 2 of the provided CREATOR/SOCIAL sources — real posts/videos other creators made about this topic. Empty array if none are usable."),
+  noCreatorExamplesFound: z.boolean().describe("true if none of the provided CREATOR/SOCIAL sources were usable — common, since social platforms are weakly indexed by search; not an error."),
 });
 
 export interface GenerateSlotContentInput {
@@ -156,29 +161,55 @@ async function generateBriefing(input: {
     console.warn(`[content-calendar] reference search failed for "${input.searchQuery}"`, err);
   }
 
+  // "What others are doing" — a SEPARATE, explicitly site-restricted pass
+  // targeting real creator posts/videos, not generic web articles. Search
+  // engines index short-form video/social content weakly (confirmed live
+  // during eng review — expect this to come back thin or empty often;
+  // that's normal, not a bug, hence noCreatorExamplesFound rather than an
+  // error state).
+  let creatorSources: Array<{ url: string; title: string; snippet: string }> = [];
+  try {
+    const results = await scrapeGoogleSerp({
+      query: `${input.topicTitle} (site:tiktok.com OR site:youtube.com/shorts OR site:instagram.com/reel OR site:x.com)`,
+      region: "us",
+      limit: 5,
+    });
+    creatorSources = results.map((r) => ({ url: r.url, title: r.title, snippet: r.snippet }));
+  } catch (err) {
+    console.warn(`[content-calendar] creator-content search failed for "${input.topicTitle}"`, err);
+  }
+
   const model = getModel("synthesis");
   const modelId = getModelId("synthesis");
   const started = Date.now();
 
   const sourceLines = sources.length
-    ? sources.map((s, i) => `[${i + 1}] ${s.title} — ${s.url}\n${s.snippet}`).join("\n\n")
-    : "(no sources found)";
+    ? sources.map((s, i) => `[A${i + 1}] ${s.title} — ${s.url}\n${s.snippet}`).join("\n\n")
+    : "(no article sources found)";
+  const creatorSourceLines = creatorSources.length
+    ? creatorSources.map((s, i) => `[C${i + 1}] ${s.title} — ${s.url}\n${s.snippet}`).join("\n\n")
+    : "(no creator/social sources found)";
 
   const systemLines = [
     "You write a short pre-filming research briefing for a solo creator's short-form video.",
     "Rules:",
-    "- Base talking points, the stat, and reference links ONLY on the provided sources below — never invent a fact, stat, or URL not present in them.",
-    "- If a stat isn't clearly present in any source, set stat and statSourceUrl to null rather than guessing.",
-    "- statSourceUrl, if not null, MUST be exactly one of the provided source URLs.",
-    "- referenceLinks entries MUST be chosen from the provided sources, not invented.",
-    "- If none of the sources are usable for this topic, set noReferencesFound to true and return empty arrays.",
+    "- Base talking points, the stat, and reference links ONLY on the provided ARTICLE sources below — never invent a fact, stat, or URL not present in them.",
+    "- If a stat isn't clearly present in any article source, set stat and statSourceUrl to null rather than guessing.",
+    "- statSourceUrl, if not null, MUST be exactly one of the provided ARTICLE source URLs.",
+    "- referenceLinks entries MUST be chosen from the provided ARTICLE sources, not invented.",
+    "- If none of the article sources are usable for this topic, set noReferencesFound to true and return an empty referenceLinks array.",
+    "- creatorExamples MUST be chosen from the provided CREATOR/SOCIAL sources only, not invented and not article sources.",
+    "- If none of the creator/social sources are usable, set noCreatorExamplesFound to true and return an empty creatorExamples array — this is common and fine, do not force a match.",
   ];
 
   const userLines = [
     `Topic: ${input.topicTitle}`,
     "",
-    "Sources:",
+    "ARTICLE sources:",
     sourceLines,
+    "",
+    "CREATOR/SOCIAL sources (real posts/videos, if any were found):",
+    creatorSourceLines,
   ];
 
   try {

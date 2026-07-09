@@ -13,10 +13,13 @@ import {
   Link as LinkIcon,
   ChevronLeft,
   ChevronRight,
+  CalendarClock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/Toaster";
+import { useDialogs } from "@/components/ui/Dialog";
 import {
   generateNextBatch,
   regenerateSlot,
@@ -25,13 +28,21 @@ import {
   markSlotOpened,
   createSignedSlotVideoUpload,
   registerSlotVideo,
+  rescheduleSlot,
 } from "@/lib/actions/content-calendar";
 import {
   MAX_BATCH_SIZE,
+  MAX_QUEUE_DEPTH,
   isSlotStale,
   type ContentSlotRecord,
   type ContentSlotStatus,
 } from "@/lib/types/content-calendar";
+
+const POST_PLATFORM_OPTIONS: { value: string; label: string }[] = [
+  { value: "tiktok", label: "TikTok" },
+  { value: "instagram_reels", label: "Instagram Reels" },
+  { value: "youtube_shorts", label: "YouTube Shorts" },
+];
 
 const STATUS_LABELS: Record<ContentSlotStatus, string> = {
   assigned: "New",
@@ -112,6 +123,10 @@ export default function ContentCalendarClient({
   const monthLabel = viewDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   const selectedSlot = slots.find((s) => s.id === selectedSlotId) ?? null;
+  const openCount = slots.filter(
+    (s) => s.status === "assigned" || s.status === "in_progress"
+  ).length;
+  const nearCap = openCount >= MAX_QUEUE_DEPTH - MAX_BATCH_SIZE;
 
   const handleGenerate = () => {
     startGenerate(async () => {
@@ -148,10 +163,16 @@ export default function ContentCalendarClient({
             AI picks the topic and briefs you on it. You film, upload, mark it posted.
           </p>
         </div>
-        <Button size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5">
-          {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-          Generate my next {MAX_BATCH_SIZE}
-        </Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5">
+            {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            Generate my next {MAX_BATCH_SIZE}
+          </Button>
+          <span className={`text-[11px] ${nearCap ? "text-status-yellow" : "text-text-muted"}`}>
+            {openCount}/{MAX_QUEUE_DEPTH} in queue
+            {nearCap && " — work through some before generating more"}
+          </span>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-2.5 sm:p-4 md:p-5">
@@ -269,14 +290,23 @@ function SlotPanel({
   onChange: (patch: Partial<ContentSlotRecord>) => void;
 }) {
   const router = useRouter();
+  const dialogs = useDialogs();
   const [notes, setNotes] = useState(slot.notes ?? "");
   const [savingNotes, startSaveNotes] = useTransition();
   const [busy, setBusy] = useState(false);
+  const [showPostPicker, setShowPostPicker] = useState(false);
+  const [postPlatforms, setPostPlatforms] = useState<string[]>([]);
+  const [showReschedule, setShowReschedule] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState(slot.scheduledDate);
   const stale = isSlotStale(slot);
 
   useEffect(() => {
     setNotes(slot.notes ?? "");
-  }, [slot.id, slot.notes]);
+    setShowPostPicker(false);
+    setPostPlatforms([]);
+    setShowReschedule(false);
+    setRescheduleDate(slot.scheduledDate);
+  }, [slot.id, slot.notes, slot.scheduledDate]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -305,15 +335,54 @@ function SlotPanel({
     router.refresh();
   };
 
-  const handleStatus = async (status: "posted" | "skipped") => {
+  const handleStatus = async (status: "posted" | "skipped", platforms?: string[]) => {
     setBusy(true);
-    const res = await updateSlotStatus(slot.id, status);
+    const res = await updateSlotStatus(slot.id, status, platforms);
     setBusy(false);
     if (!res.success) {
       toast.error(res.error);
       return;
     }
-    onChange({ status });
+    onChange({ status, ...(platforms ? { platforms } : {}) });
+    router.refresh();
+  };
+
+  const handleConfirmPosted = () => {
+    if (postPlatforms.length === 0) {
+      toast.error("Pick at least one platform.");
+      return;
+    }
+    handleStatus("posted", postPlatforms);
+  };
+
+  const handleSkip = async () => {
+    const ok = await dialogs.confirm({
+      title: "Skip this topic?",
+      subtitle: `"${slot.topicTitle}" will be marked skipped and won't count toward your open queue.`,
+      tone: "destructive",
+      confirmLabel: "Skip",
+    });
+    if (!ok) return;
+    handleStatus("skipped");
+  };
+
+  const togglePostPlatform = (value: string) => {
+    setPostPlatforms((prev) =>
+      prev.includes(value) ? prev.filter((p) => p !== value) : [...prev, value]
+    );
+  };
+
+  const handleReschedule = async () => {
+    setBusy(true);
+    const res = await rescheduleSlot(slot.id, rescheduleDate);
+    setBusy(false);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    onChange({ scheduledDate: rescheduleDate });
+    setShowReschedule(false);
+    toast.success("Moved");
     router.refresh();
   };
 
@@ -362,13 +431,18 @@ function SlotPanel({
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${STATUS_TONE[slot.status]}`}>
                 {STATUS_LABELS[slot.status]}
               </span>
-              <span className="text-xs text-text-muted shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowReschedule((v) => !v)}
+                className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-primary-500 shrink-0"
+              >
+                <CalendarClock size={11} />
                 {new Date(`${slot.scheduledDate}T00:00:00`).toLocaleDateString("en-US", {
                   weekday: "short",
                   month: "short",
                   day: "numeric",
                 })}
-              </span>
+              </button>
               {stale && (
                 <span className="inline-flex items-center gap-1 text-[10px] text-status-yellow shrink-0">
                   <AlertTriangle size={11} /> may be stale
@@ -385,6 +459,19 @@ function SlotPanel({
             </button>
           </div>
           <h2 className="text-sm font-semibold text-foreground">{slot.topicTitle}</h2>
+          {showReschedule && (
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={rescheduleDate}
+                onChange={(e) => setRescheduleDate(e.target.value)}
+                className="h-8 text-xs"
+              />
+              <Button size="xs" onClick={handleReschedule} disabled={busy}>
+                Move
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
@@ -445,6 +532,32 @@ function SlotPanel({
             )
           )}
 
+          {slot.topicBrief.creatorExamples.length > 0 ? (
+            <div>
+              <p className="text-xs font-semibold text-foreground mb-1">How others are covering this</p>
+              <ul className="space-y-0.5">
+                {slot.topicBrief.creatorExamples.map((link, i) => (
+                  <li key={i}>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary-500 hover:underline"
+                    >
+                      {link.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            slot.topicBrief.noCreatorExamplesFound && (
+              <p className="text-xs text-text-muted italic">
+                No creator posts found for this topic — social platforms are weakly indexed by search, so this is common.
+              </p>
+            )
+          )}
+
           <div>
             <p className="text-xs font-semibold text-foreground mb-1">Your notes</p>
             <Textarea
@@ -478,17 +591,55 @@ function SlotPanel({
           )}
         </div>
 
+        {showPostPicker && (
+          <div className="shrink-0 border-t border-border/60 px-4 py-3 space-y-2">
+            <p className="text-xs font-semibold text-foreground">Posted to:</p>
+            <div className="flex flex-wrap gap-2">
+              {POST_PLATFORM_OPTIONS.map((opt) => {
+                const checked = postPlatforms.includes(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => togglePostPlatform(opt.value)}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                      checked
+                        ? "border-primary-500 bg-primary-500/10 text-primary-500"
+                        : "border-border/60 text-text-muted hover:border-border"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Button size="sm" onClick={handleConfirmPosted} disabled={busy} className="gap-1">
+                <Check size={11} /> Confirm posted
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowPostPicker(false)} disabled={busy}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="shrink-0 border-t border-border/60 px-4 py-3 flex items-center gap-2">
           <Button size="sm" variant="ghost" onClick={handleRegenerate} disabled={busy} className="gap-1">
             <RefreshCw size={11} /> Regenerate
           </Button>
-          <Button size="sm" onClick={() => handleStatus("posted")} disabled={busy} className="gap-1">
+          <Button
+            size="sm"
+            onClick={() => setShowPostPicker((v) => !v)}
+            disabled={busy}
+            className="gap-1"
+          >
             <Check size={11} /> Mark posted
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => handleStatus("skipped")}
+            onClick={handleSkip}
             disabled={busy}
             className="gap-1"
           >

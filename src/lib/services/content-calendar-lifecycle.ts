@@ -30,13 +30,19 @@ function rowToSlot(row: Record<string, unknown>): ContentSlotRecord {
     scheduledDate: row.scheduled_date as string,
     status: row.status as ContentSlotRecord["status"],
     topicTitle: row.topic_title as string,
-    topicBrief: (row.topic_brief as ContentSlotRecord["topicBrief"]) ?? {
+    // Merge with defaults (not just `?? {}`) so slots generated before a
+    // brief field existed — e.g. creatorExamples, added 2026-07-09 — don't
+    // render as undefined.
+    topicBrief: {
       talkingPoints: [],
       stat: null,
       statSourceUrl: null,
       contrarianAngle: null,
       referenceLinks: [],
       noReferencesFound: true,
+      creatorExamples: [],
+      noCreatorExamplesFound: true,
+      ...((row.topic_brief as Partial<ContentSlotRecord["topicBrief"]>) ?? {}),
     },
     notes: (row.notes as string) ?? null,
     videoAssetUrl: (row.video_asset_url as string) ?? null,
