@@ -9,15 +9,16 @@ import { getNextUnpostedSlot } from "@/lib/services/content-calendar-lifecycle";
 function makeFakeAdmin(rows: Array<Record<string, unknown>>) {
   return {
     from(_table: string) {
-      const state: { filters: Array<(r: Record<string, unknown>) => boolean> } = {
-        filters: [],
-      };
+      const state: {
+        filters: Array<(r: Record<string, unknown>) => boolean>;
+        sorts: Array<{ field: string; ascending: boolean }>;
+      } = { filters: [], sorts: [] };
       const builder = {
+        // retireStaleSlots' and rolloverOverdueSlots' update chain — no
+        // rows in these tests are old/overdue enough to match either
+        // `.lt(...)` filter, so this is a no-op; the select chain below
+        // is what these tests actually assert on.
         update(_patch: Record<string, unknown>) {
-          // retireStaleSlots' update chain — no rows in these tests are
-          // ever old enough to match its `.lt("generated_at", cutoff)`,
-          // so it's a no-op here; the important assertion is the select
-          // chain below.
           return {
             eq: () => ({ in: () => ({ lt: async () => ({ error: null }) }) }),
           };
@@ -33,22 +34,25 @@ function makeFakeAdmin(rows: Array<Record<string, unknown>>) {
               return this;
             },
             order(field: string, opts: { ascending: boolean }) {
-              return {
-                limit: () => ({
-                  maybeSingle: async () => {
-                    const matched = rows.filter((r) =>
-                      state.filters.every((f) => f(r))
-                    );
-                    matched.sort((a, b) =>
-                      opts.ascending
-                        ? (a[field] as number) - (b[field] as number)
-                        : (b[field] as number) - (a[field] as number)
-                    );
-                    return { data: matched[0] ?? null, error: null };
-                  },
-                }),
-              };
+              state.sorts.push({ field, ascending: opts.ascending });
+              return this;
             },
+            limit: () => ({
+              maybeSingle: async () => {
+                const matched = rows.filter((r) => state.filters.every((f) => f(r)));
+                matched.sort((a, b) => {
+                  for (const { field, ascending } of state.sorts) {
+                    const av = a[field] as string | number;
+                    const bv = b[field] as string | number;
+                    if (av === bv) continue;
+                    const cmp = av < bv ? -1 : 1;
+                    return ascending ? cmp : -cmp;
+                  }
+                  return 0;
+                });
+                return { data: matched[0] ?? null, error: null };
+              },
+            }),
           };
         },
       };
@@ -60,6 +64,7 @@ function makeFakeAdmin(rows: Array<Record<string, unknown>>) {
 
 const BASE = {
   tenant_slug: "aiseosa-space",
+  scheduled_date: new Date().toISOString().slice(0, 10),
   topic_title: "t",
   topic_brief: {},
   notes: null,
@@ -105,5 +110,18 @@ describe("getNextUnpostedSlot rollover", () => {
     const admin = makeFakeAdmin(rows);
     const next = await getNextUnpostedSlot(admin, "aiseosa-space");
     expect(next?.id).toBe("1");
+  });
+
+  it("orders by scheduled_date first, position only as a same-day tiebreaker", async () => {
+    const rows = [
+      { ...BASE, id: "1", position: 1, scheduled_date: "2026-08-01", status: "assigned" },
+      { ...BASE, id: "2", position: 5, scheduled_date: "2026-07-15", status: "assigned" },
+      { ...BASE, id: "3", position: 3, scheduled_date: "2026-07-15", status: "assigned" },
+    ];
+    const admin = makeFakeAdmin(rows);
+    const next = await getNextUnpostedSlot(admin, "aiseosa-space");
+    // Earliest date wins (2 and 3 beat 1); within that date, lower
+    // position wins (3 beats 2).
+    expect(next?.id).toBe("3");
   });
 });

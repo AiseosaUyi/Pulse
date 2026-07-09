@@ -23,6 +23,10 @@ export interface ContentSlotRecord {
   id: string;
   tenantSlug: string;
   position: number;
+  // Calendar placement — provisional, not fixed: rolls forward to today if
+  // it passes unposted (see content-calendar-lifecycle.ts). `position`
+  // stays as the stable secondary sort key for same-day ordering.
+  scheduledDate: string; // YYYY-MM-DD
   status: ContentSlotStatus;
   topicTitle: string;
   topicBrief: ContentSlotBrief;

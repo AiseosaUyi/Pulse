@@ -10,6 +10,7 @@ import { generateSlotContent } from "@/lib/ai/content-calendar";
 import { mapWithConcurrency } from "@/lib/utils/concurrency";
 import {
   getNextPosition,
+  getNextScheduledDate,
   getOpenQueueDepth,
   retireStaleSlots,
 } from "@/lib/services/content-calendar-lifecycle";
@@ -20,6 +21,12 @@ import { randomUUID } from "crypto";
 type ActionResult<T = unknown> =
   | ({ success: true } & T)
   | { success: false; error: string };
+
+function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 async function requireEnabledTenant(): Promise<
   { ok: true; tenantSlug: string; userId: string } | { ok: false; error: string }
@@ -123,9 +130,14 @@ export async function generateNextBatch(
   }
 
   const startPosition = await getNextPosition(admin, tenantSlug);
+  const startDate = await getNextScheduledDate(admin, tenantSlug);
   const rows = succeeded.map((r, i) => ({
     tenant_slug: tenantSlug,
     position: startPosition + i,
+    // One slot per day, continuing forward from wherever the queue
+    // currently ends — fills the calendar with consecutive days rather
+    // than stacking everything on one date.
+    scheduled_date: addDays(startDate, i),
     status: "assigned",
     topic_title: r.topicTitle,
     topic_brief: r.brief,
@@ -217,6 +229,27 @@ export async function updateSlotStatus(
   const { error } = await admin
     .from("content_slots")
     .update(update)
+    .eq("id", slotId)
+    .eq("tenant_slug", gate.tenantSlug);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/content-calendar");
+  return { success: true };
+}
+
+// Manually move a slot to a different calendar day — e.g. drag-and-drop or
+// a date picker in the detail panel. Doesn't touch position/status.
+export async function rescheduleSlot(slotId: string, scheduledDate: string): Promise<ActionResult> {
+  const gate = await requireEnabledTenant();
+  if (!gate.ok) return { success: false, error: gate.error };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
+    return { success: false, error: "Invalid date" };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("content_slots")
+    .update({ scheduled_date: scheduledDate, updated_at: new Date().toISOString() })
     .eq("id", slotId)
     .eq("tenant_slug", gate.tenantSlug);
   if (error) return { success: false, error: error.message };

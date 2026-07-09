@@ -4,15 +4,11 @@
 // its own — no RLS involved here by design, same as other admin-driven
 // lifecycle code in this repo).
 //
-// Rollover has NO stored "scheduled date" to shift — `position` (assigned
-// once at creation, never mutated) is the only ordering key. "Next" is
-// computed lazily, at read time, as the lowest-position slot still in
-// `assigned`/`in_progress` — anything `posted` or `skipped` is naturally
-// excluded, so the effective "day" a slot represents is just whichever
-// slot is next when opened, not a mutated date column. Worked example
-// (flagged as needed by the design doc's adversarial review): positions
-// 1-3 posted, 4 skipped, 5 in_progress → next = 5 (1-3 excluded by status,
-// 4 excluded by status, 5 is the lowest remaining position).
+// `scheduled_date` is provisional, not fixed (migration 087): any slot
+// still `assigned`/`in_progress` whose date has passed rolls forward to
+// today automatically — computed lazily on any read path that needs an
+// up-to-date queue, not via a separate cron. `position` stays as the
+// stable secondary sort key for ordering multiple slots on the same day.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -22,11 +18,16 @@ import {
 
 type AdminClient = SupabaseClient;
 
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function rowToSlot(row: Record<string, unknown>): ContentSlotRecord {
   return {
     id: row.id as string,
     tenantSlug: row.tenant_slug as string,
     position: row.position as number,
+    scheduledDate: row.scheduled_date as string,
     status: row.status as ContentSlotRecord["status"],
     topicTitle: row.topic_title as string,
     topicBrief: (row.topic_brief as ContentSlotRecord["topicBrief"]) ?? {
@@ -68,17 +69,39 @@ export async function retireStaleSlots(
     .lt("generated_at", cutoff);
 }
 
+// Bumps any open slot whose scheduled_date has already passed forward to
+// today — the literal "date rollover" the design doc's adversarial review
+// asked for a concrete algorithm for. Idempotent; safe to call on every
+// read path (mirrors retireStaleSlots).
+export async function rolloverOverdueSlots(
+  admin: AdminClient,
+  tenantSlug: string
+): Promise<void> {
+  await admin
+    .from("content_slots")
+    .update({ scheduled_date: todayIso() })
+    .eq("tenant_slug", tenantSlug)
+    .in("status", ["assigned", "in_progress"])
+    .lt("scheduled_date", todayIso());
+}
+
+async function syncQueue(admin: AdminClient, tenantSlug: string): Promise<void> {
+  await retireStaleSlots(admin, tenantSlug);
+  await rolloverOverdueSlots(admin, tenantSlug);
+}
+
 export async function getNextUnpostedSlot(
   admin: AdminClient,
   tenantSlug: string
 ): Promise<ContentSlotRecord | null> {
-  await retireStaleSlots(admin, tenantSlug);
+  await syncQueue(admin, tenantSlug);
 
   const { data, error } = await admin
     .from("content_slots")
     .select("*")
     .eq("tenant_slug", tenantSlug)
     .in("status", ["assigned", "in_progress"])
+    .order("scheduled_date", { ascending: true })
     .order("position", { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -91,7 +114,7 @@ export async function getOpenQueueDepth(
   admin: AdminClient,
   tenantSlug: string
 ): Promise<number> {
-  await retireStaleSlots(admin, tenantSlug);
+  await syncQueue(admin, tenantSlug);
 
   const { count } = await admin
     .from("content_slots")
@@ -117,4 +140,33 @@ export async function getNextPosition(
   return ((data?.position as number) ?? 0) + 1;
 }
 
-export { rowToSlot };
+// Next available calendar date for a freshly generated batch — continues
+// forward from the latest already-scheduled OPEN slot (so a new batch
+// fills the days right after wherever the queue currently ends), or today
+// if the queue is empty.
+export async function getNextScheduledDate(
+  admin: AdminClient,
+  tenantSlug: string
+): Promise<string> {
+  await syncQueue(admin, tenantSlug);
+
+  const { data } = await admin
+    .from("content_slots")
+    .select("scheduled_date")
+    .eq("tenant_slug", tenantSlug)
+    .in("status", ["assigned", "in_progress"])
+    .order("scheduled_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const latest = data?.scheduled_date as string | undefined;
+  if (!latest) return todayIso();
+
+  const next = new Date(`${latest}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  const today = todayIso();
+  const nextIso = next.toISOString().slice(0, 10);
+  return nextIso > today ? nextIso : today;
+}
+
+export { rowToSlot, todayIso };
