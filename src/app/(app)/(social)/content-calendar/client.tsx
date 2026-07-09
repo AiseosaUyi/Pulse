@@ -35,8 +35,9 @@ import {
   rescheduleSlot,
 } from "@/lib/actions/content-calendar";
 import {
-  MAX_BATCH_SIZE,
   MAX_QUEUE_DEPTH,
+  BATCH_SIZE_OPTIONS,
+  DEFAULT_BATCH_SIZE,
   isSlotStale,
   type ContentSlotRecord,
   type ContentSlotStatus,
@@ -111,6 +112,7 @@ export default function ContentCalendarClient({
   const [generating, startGenerate] = useTransition();
   const [showInstruction, setShowInstruction] = useState(false);
   const [instruction, setInstruction] = useState("");
+  const [batchSize, setBatchSize] = useState<number>(DEFAULT_BATCH_SIZE);
 
   useEffect(() => {
     setSlots(initialSlots);
@@ -136,11 +138,11 @@ export default function ContentCalendarClient({
   const openCount = slots.filter(
     (s) => s.status === "assigned" || s.status === "in_progress"
   ).length;
-  const nearCap = openCount >= MAX_QUEUE_DEPTH - MAX_BATCH_SIZE;
+  const nearCap = openCount >= MAX_QUEUE_DEPTH - batchSize;
 
   const handleGenerate = () => {
     startGenerate(async () => {
-      const res = await generateNextBatch(MAX_BATCH_SIZE, instruction.trim() || undefined);
+      const res = await generateNextBatch(batchSize, instruction.trim() || undefined);
       if (!res.success) {
         toast.error(res.error);
         return;
@@ -187,9 +189,22 @@ export default function ContentCalendarClient({
             >
               <SlidersHorizontal size={14} />
             </Button>
+            <select
+              value={batchSize}
+              onChange={(e) => setBatchSize(Number(e.target.value))}
+              disabled={generating}
+              aria-label="How many topics to generate"
+              className="h-9 rounded-lg border border-border bg-transparent px-2 text-sm text-foreground disabled:opacity-50"
+            >
+              {BATCH_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
             <Button size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5">
               {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              Generate my next {MAX_BATCH_SIZE}
+              Generate my next {batchSize}
             </Button>
           </div>
           <span className={`text-[11px] ${nearCap ? "text-status-yellow" : "text-text-muted"}`}>

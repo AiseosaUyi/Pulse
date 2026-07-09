@@ -89,10 +89,7 @@ export function ContentCalendarSettingsEditor({
       <div>
         <Label htmlFor="cc-niche">Content pillars</Label>
         <p className="text-xs text-text-muted mb-1.5">
-          The broad categories you rotate through — e.g. &ldquo;AI tools&rdquo;, &ldquo;AI in design&rdquo;, &ldquo;startups&rdquo;.
-          Add as many as you actually cover; one is fine if you&apos;re not that broad. Each generated
-          topic is picked from one of these, and the AI spreads a batch across all of them rather
-          than clustering on whichever is trending hardest that day.
+          The categories you rotate through — e.g. &ldquo;AI tools&rdquo;, &ldquo;AI in design&rdquo;, &ldquo;startups&rdquo;. The AI spreads each batch across all of them.
         </p>
         <div className="flex gap-2 mb-2">
           <Input
@@ -111,7 +108,7 @@ export function ContentCalendarSettingsEditor({
             {niches.map((n) => (
               <span
                 key={n}
-                className="inline-flex items-center gap-1 text-xs bg-sidebar border border-border/60 rounded-full pl-2.5 pr-1.5 py-1"
+                className="inline-flex items-center gap-1 text-xs text-foreground bg-gray-100 border border-border rounded-full pl-2.5 pr-1.5 py-1"
               >
                 {n}
                 <button
@@ -131,9 +128,7 @@ export function ContentCalendarSettingsEditor({
       <div>
         <Label htmlFor="cc-tags">Interests &amp; people you follow</Label>
         <p className="text-xs text-text-muted mb-1.5">
-          Specific topics, sub-niches, or named accounts/creators you actually care about — the
-          AI weighs these when picking a topic instead of just grabbing whatever&apos;s generically
-          trending. Leave empty and it falls back to trend-only selection.
+          Specific topics or people you follow — the AI weighs these over generic trends. Optional.
         </p>
         <div className="flex gap-2 mb-2">
           <Input
@@ -152,7 +147,7 @@ export function ContentCalendarSettingsEditor({
             {tags.map((tag) => (
               <span
                 key={tag}
-                className="inline-flex items-center gap-1 text-xs bg-sidebar border border-border/60 rounded-full pl-2.5 pr-1.5 py-1"
+                className="inline-flex items-center gap-1 text-xs text-foreground bg-gray-100 border border-border rounded-full pl-2.5 pr-1.5 py-1"
               >
                 {tag}
                 <button

@@ -56,7 +56,16 @@ export interface ContentSlotRecord {
 export const STALE_AFTER_DAYS = 8;
 export const AUTO_RETIRE_AFTER_DAYS = 21;
 export const MAX_QUEUE_DEPTH = 20;
-export const MAX_BATCH_SIZE = 5;
+// Per-click ceiling on generateNextBatch — bounded by the route's
+// maxDuration (300s): topic-selection is sequential (dedup requires each
+// pick to see prior picks) so this is the real cost driver, ~2-5s/topic;
+// briefing generation is concurrency-3. 15 stays well under budget even in
+// a slow-call scenario. Raised from 5 (2026-07-09): a fixed batch of 5
+// assumes the user already knows their direction — when they don't, they
+// want more raw options to browse before committing to what to film.
+export const MAX_BATCH_SIZE = 15;
+export const BATCH_SIZE_OPTIONS = [5, 10, 15] as const;
+export const DEFAULT_BATCH_SIZE = 10;
 
 export function isSlotStale(slot: Pick<ContentSlotRecord, "generatedAt" | "status">): boolean {
   if (slot.status === "posted" || slot.status === "skipped") return false;
