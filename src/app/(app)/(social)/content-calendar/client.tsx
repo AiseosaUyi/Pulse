@@ -19,6 +19,8 @@ import {
   Tag,
   TrendingUp,
   ExternalLink,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,6 +39,8 @@ import {
   rescheduleSlot,
   getTrendPreview,
   createSlotFromTrend,
+  createSlotForDate,
+  deleteSlot,
 } from "@/lib/actions/content-calendar";
 import type { TrendCandidate } from "@/lib/scrape/trend-pull";
 import {
@@ -134,6 +138,9 @@ export default function ContentCalendarClient({
   const [loadingTrends, startLoadTrends] = useTransition();
   const [addingTrend, setAddingTrend] = useState<number | null>(null);
   const [addedTrends, setAddedTrends] = useState<Set<number>>(new Set());
+  const [addForDate, setAddForDate] = useState<string | null>(null);
+  const [addInstruction, setAddInstruction] = useState("");
+  const [addingForDate, startAddForDate] = useTransition();
 
   useEffect(() => {
     setSlots(initialSlots);
@@ -212,6 +219,34 @@ export default function ContentCalendarClient({
     }
     toast.success("Added to tomorrow");
     setAddedTrends((prev) => new Set(prev).add(index));
+    router.refresh();
+  };
+
+  const handleAddForDate = () => {
+    if (!addForDate) return;
+    startAddForDate(async () => {
+      const res = await createSlotForDate(addForDate, addInstruction.trim() || undefined);
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Added");
+      setAddForDate(null);
+      setAddInstruction("");
+      router.refresh();
+    });
+  };
+
+  const handleDeleteSlot = async (slotId: string) => {
+    setSlots((prev) => prev.filter((s) => s.id !== slotId));
+    setSelectedSlotId(null);
+    const res = await deleteSlot(slotId);
+    if (!res.success) {
+      toast.error(res.error);
+      router.refresh();
+      return;
+    }
+    toast.success("Deleted");
     router.refresh();
   };
 
@@ -367,6 +402,44 @@ export default function ContentCalendarClient({
         </div>
       )}
 
+      {addForDate && (
+        <div className="mb-6 rounded-xl border border-border/60 bg-card p-3">
+          <p className="text-xs font-medium text-foreground mb-1.5">
+            Add for{" "}
+            {new Date(`${addForDate}T00:00:00`).toLocaleDateString("en-US", {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            })}
+          </p>
+          <Textarea
+            value={addInstruction}
+            onChange={(e) => setAddInstruction(e.target.value)}
+            placeholder="What do you want to talk about? (optional — leave blank and the AI picks from trends)"
+            rows={2}
+            className="text-sm"
+            autoFocus
+          />
+          <div className="flex items-center gap-2 mt-2">
+            <Button size="sm" onClick={handleAddForDate} disabled={addingForDate} className="gap-1.5">
+              {addingForDate ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+              Add
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setAddForDate(null);
+                setAddInstruction("");
+              }}
+              disabled={addingForDate}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-border bg-card p-2.5 sm:p-4 md:p-5">
         <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2 flex-wrap px-1 sm:px-0">
           <h2 className="text-base sm:text-lg font-semibold text-foreground">{monthLabel}</h2>
@@ -419,13 +492,27 @@ export default function ContentCalendarClient({
                   inMonth ? "" : "opacity-40"
                 }`}
               >
-                <span
-                  className={`text-[10px] sm:text-[11px] w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center rounded-full shrink-0 ${
-                    isToday ? "bg-primary-500 text-white font-semibold" : "text-text-muted"
-                  }`}
-                >
-                  {day.getDate()}
-                </span>
+                <div className="flex items-center justify-between">
+                  <span
+                    className={`text-[10px] sm:text-[11px] w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center rounded-full shrink-0 ${
+                      isToday ? "bg-primary-500 text-white font-semibold" : "text-text-muted"
+                    }`}
+                  >
+                    {day.getDate()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddForDate(key);
+                      setAddInstruction("");
+                    }}
+                    aria-label="Add content for this date"
+                    title="Add content for this date"
+                    className="p-0.5 rounded text-text-muted/60 hover:text-primary-500 transition-colors shrink-0"
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
                 <div className="flex-1 min-h-0 overflow-y-auto max-h-[110px] space-y-1">
                   {daySlots.map((slot) => (
                     <button
@@ -466,6 +553,7 @@ export default function ContentCalendarClient({
               prev.map((s) => (s.id === selectedSlot.id ? { ...s, ...patch } : s))
             )
           }
+          onDelete={() => handleDeleteSlot(selectedSlot.id)}
         />
       )}
     </div>
@@ -476,10 +564,12 @@ function SlotPanel({
   slot,
   onClose,
   onChange,
+  onDelete,
 }: {
   slot: ContentSlotRecord;
   onClose: () => void;
   onChange: (patch: Partial<ContentSlotRecord>) => void;
+  onDelete: () => void;
 }) {
   const router = useRouter();
   const dialogs = useDialogs();
@@ -587,6 +677,17 @@ function SlotPanel({
     handleStatus("skipped");
   };
 
+  const handleDelete = async () => {
+    const ok = await dialogs.confirm({
+      title: "Delete this slot?",
+      subtitle: `"${slot.topicTitle}" and its brief, notes, and video will be permanently removed from the calendar. This can't be undone — use Skip instead if you just want to keep a record.`,
+      tone: "destructive",
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
+    onDelete();
+  };
+
   const togglePostPlatform = (value: string) => {
     setPostPlatforms((prev) =>
       prev.includes(value) ? prev.filter((p) => p !== value) : [...prev, value]
@@ -675,14 +776,25 @@ function SlotPanel({
                 </span>
               )}
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-sidebar text-text-muted hover:text-foreground shrink-0"
-              aria-label="Close panel"
-            >
-              <X size={16} />
-            </button>
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="p-1.5 rounded-lg hover:bg-status-red/10 text-text-muted hover:text-status-red"
+                aria-label="Delete this slot"
+                title="Delete this slot"
+              >
+                <Trash2 size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 rounded-lg hover:bg-sidebar text-text-muted hover:text-foreground"
+                aria-label="Close panel"
+              >
+                <X size={16} />
+              </button>
+            </div>
           </div>
           {editingTitle ? (
             <div className="flex items-center gap-2">

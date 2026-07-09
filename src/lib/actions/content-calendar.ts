@@ -459,6 +459,96 @@ export async function createSlotFromTrend(input: {
   }
 }
 
+// Manually add ONE slot pinned to a specific date, chosen by clicking "+"
+// on that day cell — for when the founder already knows they want
+// something scheduled there and doesn't want to wait for it to reach the
+// front of the normal sequential queue. `instruction` is optional free
+// text ("talk about the new EU AI Act") that steers topic selection same
+// as the batch-level and regenerate-reason instructions; left blank, it
+// behaves like a single ordinary pick from trends/interests.
+export async function createSlotForDate(
+  scheduledDate: string,
+  instruction?: string
+): Promise<ActionResult> {
+  const gate = await requireEnabledTenant();
+  if (!gate.ok) return { success: false, error: gate.error };
+  const { tenantSlug, userId } = gate;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
+    return { success: false, error: "Invalid date" };
+  }
+
+  const admin = createAdminClient();
+  await retireStaleSlots(admin, tenantSlug);
+  const openDepth = await getOpenQueueDepth(admin, tenantSlug);
+  if (openDepth >= MAX_QUEUE_DEPTH) {
+    return {
+      success: false,
+      error: `Queue is at its cap (${MAX_QUEUE_DEPTH} open slots) — work through some before adding more.`,
+    };
+  }
+
+  const config = await getContentCalendarConfig(tenantSlug);
+  const trendsPerNiche = await Promise.all(config.niches.map((niche) => fetchTrendCandidates(niche)));
+  const trends = trendsPerNiche.flat();
+
+  const { data: existingOpenSlots } = await admin
+    .from("content_slots")
+    .select("topic_title")
+    .eq("tenant_slug", tenantSlug)
+    .in("status", ["assigned", "in_progress"]);
+  const excludeTitles = (existingOpenSlots ?? []).map((s) => s.topic_title as string);
+
+  try {
+    const { topicTitle, brief } = await generateSlotContent({
+      tenantSlug,
+      niches: config.niches,
+      interestTags: config.interestTags,
+      trends,
+      excludeTitles,
+      instruction,
+      recentFeedback: config.recentFeedback,
+    });
+
+    const position = await getNextPosition(admin, tenantSlug);
+    const { error } = await admin.from("content_slots").insert({
+      tenant_slug: tenantSlug,
+      position,
+      scheduled_date: scheduledDate,
+      status: "assigned",
+      topic_title: topicTitle,
+      topic_brief: brief,
+      platforms: [],
+      created_by: userId,
+    });
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/content-calendar");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to add this topic" };
+  }
+}
+
+// Hard-deletes a slot entirely — distinct from Skip, which keeps a
+// (deliberately visible) record on the calendar. Skip is "I chose not to
+// do this one"; Delete is "get rid of it, no trace on this date."
+export async function deleteSlot(slotId: string): Promise<ActionResult> {
+  const gate = await requireEnabledTenant();
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("content_slots")
+    .delete()
+    .eq("id", slotId)
+    .eq("tenant_slug", gate.tenantSlug);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/content-calendar");
+  return { success: true };
+}
+
 // Called when the founder opens a slot's detail view for the first time —
 // fires the assigned → in_progress transition automatically (design doc
 // ENG REVIEW: no separate manual button for this).
