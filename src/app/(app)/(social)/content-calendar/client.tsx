@@ -17,6 +17,8 @@ import {
   SlidersHorizontal,
   Pencil,
   Tag,
+  TrendingUp,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,7 +35,9 @@ import {
   createSignedSlotVideoUpload,
   registerSlotVideo,
   rescheduleSlot,
+  getTrendPreview,
 } from "@/lib/actions/content-calendar";
+import type { TrendCandidate } from "@/lib/scrape/trend-pull";
 import {
   MAX_QUEUE_DEPTH,
   BATCH_SIZE_OPTIONS,
@@ -47,6 +51,17 @@ const POST_PLATFORM_OPTIONS: { value: string; label: string }[] = [
   { value: "tiktok", label: "TikTok" },
   { value: "instagram_reels", label: "Instagram Reels" },
   { value: "youtube_shorts", label: "YouTube Shorts" },
+];
+
+// Tap-to-select reasons for Regenerate — the honest reason is usually not
+// "give me a different topic," it's "I can't confidently talk about this
+// one" (senior-uiux audit stage 04). A chip removes a second writing task
+// from someone who's already stuck on the first one.
+const REGEN_REASON_CHIPS = [
+  "Too technical",
+  "Don't know enough about this yet",
+  "Not interested in this one",
+  "Want something simpler",
 ];
 
 const STATUS_LABELS: Record<ContentSlotStatus, string> = {
@@ -113,6 +128,9 @@ export default function ContentCalendarClient({
   const [showInstruction, setShowInstruction] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [batchSize, setBatchSize] = useState<number>(DEFAULT_BATCH_SIZE);
+  const [showTrends, setShowTrends] = useState(false);
+  const [trends, setTrends] = useState<Array<TrendCandidate & { niche: string }> | null>(null);
+  const [loadingTrends, startLoadTrends] = useTransition();
 
   useEffect(() => {
     setSlots(initialSlots);
@@ -158,6 +176,22 @@ export default function ContentCalendarClient({
     });
   };
 
+  const handleToggleTrends = () => {
+    const next = !showTrends;
+    setShowTrends(next);
+    if (next && trends === null) {
+      startLoadTrends(async () => {
+        const res = await getTrendPreview();
+        if (!res.success) {
+          toast.error(res.error);
+          setTrends([]);
+          return;
+        }
+        setTrends(res.trends);
+      });
+    }
+  };
+
   const handleSelectSlot = async (slot: ContentSlotRecord) => {
     setSelectedSlotId(slot.id);
     if (slot.status === "assigned") {
@@ -179,6 +213,16 @@ export default function ContentCalendarClient({
         </div>
         <div className="flex flex-col items-end gap-1 w-full sm:w-auto">
           <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant={showTrends ? "default" : "tertiary"}
+              size="icon"
+              onClick={handleToggleTrends}
+              aria-label="See what's trending in your niche"
+              title="See what's trending in your niche"
+            >
+              <TrendingUp size={14} />
+            </Button>
             <Button
               type="button"
               variant={showInstruction ? "default" : "tertiary"}
@@ -214,6 +258,45 @@ export default function ContentCalendarClient({
         </div>
       </div>
 
+      {showTrends && (
+        <div className="mb-6 -mt-3 rounded-xl border border-border/60 bg-card p-3">
+          <p className="text-xs font-medium text-foreground mb-1.5">
+            What&apos;s trending in your niche right now
+          </p>
+          {loadingTrends ? (
+            <div className="flex items-center gap-2 text-xs text-text-muted py-2">
+              <Loader2 size={12} className="animate-spin" /> Looking...
+            </div>
+          ) : trends && trends.length > 0 ? (
+            <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+              {trends.slice(0, 25).map((t, i) => (
+                <li key={i}>
+                  <a
+                    href={t.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-start gap-1.5 text-xs text-foreground hover:text-primary-500"
+                  >
+                    <ExternalLink size={11} className="shrink-0 mt-0.5 text-text-muted group-hover:text-primary-500" />
+                    <span>
+                      {t.title}{" "}
+                      <span className="text-text-muted">— {t.niche}</span>
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-text-muted italic py-1">
+              Nothing surfaced right now — try again later, or generate directly and let the AI weigh trends for you.
+            </p>
+          )}
+          <p className="text-[11px] text-text-muted mt-2">
+            No AI involved here — this is the raw feed the AI itself reads from before picking a topic.
+          </p>
+        </div>
+      )}
+
       {showInstruction && (
         <div className="mb-6 -mt-3 rounded-xl border border-border/60 bg-card p-3">
           <p className="text-xs font-medium text-foreground mb-1.5">
@@ -229,6 +312,21 @@ export default function ContentCalendarClient({
           <p className="text-[11px] text-text-muted mt-1">
             Doesn&apos;t change your saved content pillars or interests — just steers this one batch.
           </p>
+        </div>
+      )}
+
+      {openCount === 0 && (
+        <div className="mb-6 rounded-2xl border border-border bg-card p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-foreground mb-1">Nothing queued right now</p>
+            <p className="text-sm text-text-secondary">
+              Generate your next batch whenever you&apos;re ready to figure out what to film.
+            </p>
+          </div>
+          <Button size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5 shrink-0">
+            {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            Generate my next {batchSize}
+          </Button>
         </div>
       )}
 
@@ -609,6 +707,12 @@ function SlotPanel({
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          {slot.topicBrief.whyItMatters && (
+            <p className="text-sm text-foreground italic border-l-2 border-primary-500/40 pl-2.5">
+              {slot.topicBrief.whyItMatters}
+            </p>
+          )}
+
           <div>
             <p className="text-xs font-semibold text-foreground mb-1">Talking points</p>
             <ul className="list-disc list-inside text-sm text-foreground space-y-0.5">
@@ -617,6 +721,32 @@ function SlotPanel({
               ))}
             </ul>
           </div>
+
+          {slot.topicBrief.creatorExamples.length > 0 ? (
+            <div>
+              <p className="text-xs font-semibold text-foreground mb-1">How others are covering this</p>
+              <ul className="space-y-0.5">
+                {slot.topicBrief.creatorExamples.map((link, i) => (
+                  <li key={i}>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary-500 hover:underline"
+                    >
+                      {link.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            slot.topicBrief.noCreatorExamplesFound && (
+              <p className="text-xs text-text-muted italic">
+                No creator posts found for this topic — social platforms are weakly indexed by search, so this is common.
+              </p>
+            )
+          )}
 
           {slot.topicBrief.stat && (
             <div className="text-sm">
@@ -663,32 +793,6 @@ function SlotPanel({
           ) : (
             slot.topicBrief.noReferencesFound && (
               <p className="text-xs text-text-muted italic">No references found for this topic.</p>
-            )
-          )}
-
-          {slot.topicBrief.creatorExamples.length > 0 ? (
-            <div>
-              <p className="text-xs font-semibold text-foreground mb-1">How others are covering this</p>
-              <ul className="space-y-0.5">
-                {slot.topicBrief.creatorExamples.map((link, i) => (
-                  <li key={i}>
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary-500 hover:underline"
-                    >
-                      {link.title}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            slot.topicBrief.noCreatorExamplesFound && (
-              <p className="text-xs text-text-muted italic">
-                No creator posts found for this topic — social platforms are weakly indexed by search, so this is common.
-              </p>
             )
           )}
 
@@ -761,13 +865,28 @@ function SlotPanel({
         {showRegenReason && (
           <div className="shrink-0 border-t border-border/60 px-4 py-3 space-y-2">
             <p className="text-xs font-semibold text-foreground">What should change? (optional)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {REGEN_REASON_CHIPS.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setRegenReason(chip)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                    regenReason === chip
+                      ? "border-primary-500 bg-primary-500/10 text-primary-500"
+                      : "border-border/60 text-text-muted hover:border-border"
+                  }`}
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
             <Textarea
               value={regenReason}
               onChange={(e) => setRegenReason(e.target.value)}
-              placeholder="e.g. Too generic, want something more contrarian / about X instead"
+              placeholder="Or write your own reason..."
               rows={2}
               className="text-sm"
-              autoFocus
             />
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={handleRegenerate} disabled={busy} className="gap-1">

@@ -31,6 +31,7 @@ const topicSelectSchema = z.object({
 });
 
 const briefingSchema = z.object({
+  whyItMatters: z.string().describe("ONE plain-language sentence on why this topic is worth talking about right now. Write for someone who may be new to this specific topic — orient them before the talking points below assume any context."),
   talkingPoints: z.array(z.string()).describe("3-5 concrete talking points for a 30-90s short-form video on this topic. Empty array if truly nothing usable."),
   stat: z.string().nullable().describe("One surprising, specific stat or fact drawn from the provided ARTICLE sources, or null if none of the sources contain one."),
   statSourceUrl: z.string().nullable().describe("Must be exactly one of the provided ARTICLE source URLs that the stat came from. Null if stat is null."),
@@ -55,6 +56,11 @@ export interface GenerateSlotContentInput {
   excludeTitles: string[]; // already-picked topics earlier in this same batch (locked decision #4)
   usedPillars?: string[]; // pillars already used this batch/queue — nudges rotation, not a hard exclude
   instruction?: string; // one-off steering from the creator (batch-level "generate with instructions", or a stated reason on regenerate)
+  // Rolling log of past regenerate reasons — the immediate half of the
+  // "learning loop" (senior-uiux audit stage 05): lets topic selection
+  // notice a pattern ("too technical" said twice for AI tools) without
+  // waiting on post-performance data that doesn't exist yet.
+  recentFeedback?: Array<{ reason: string; pillar: string | null }>;
 }
 
 export interface GenerateSlotContentResult {
@@ -115,6 +121,16 @@ export async function selectTopic(
   }
   if (input.usedPillars && input.usedPillars.length > 0) {
     systemLines.push("", `Pillars already used recently (prefer a different one if it fits): ${input.usedPillars.join(", ")}`);
+  }
+  if (input.recentFeedback && input.recentFeedback.length > 0) {
+    systemLines.push(
+      "",
+      "Creator's recent feedback on past topics — weigh this in (e.g. if they keep saying a pillar is too technical, favor a simpler entry point in it this time):",
+      input.recentFeedback
+        .slice(-5)
+        .map((f) => `- "${f.reason}"${f.pillar ? ` (pillar: ${f.pillar})` : ""}`)
+        .join("\n")
+    );
   }
   if (input.instruction && input.instruction.trim()) {
     systemLines.push("", `Creator's instruction for this pick — follow it even if it overrides the above: ${input.instruction.trim()}`);
@@ -195,15 +211,37 @@ export async function generateBriefing(input: {
   // that's normal, not a bug, hence noCreatorExamplesFound rather than an
   // error state).
   let creatorSources: Array<{ url: string; title: string; snippet: string }> = [];
+  const creatorSiteFilter = "(site:tiktok.com OR site:youtube.com/shorts OR site:instagram.com/reel OR site:x.com)";
   try {
     const results = await scrapeGoogleSerp({
-      query: `${input.topicTitle} (site:tiktok.com OR site:youtube.com/shorts OR site:instagram.com/reel OR site:x.com)`,
+      query: `${input.topicTitle} ${creatorSiteFilter}`,
       region: "us",
       limit: 5,
     });
     creatorSources = results.map((r) => ({ url: r.url, title: r.title, snippet: r.snippet }));
   } catch (err) {
     console.warn(`[content-calendar] creator-content search failed for "${input.topicTitle}"`, err);
+  }
+
+  // Fallback: the exact topic title (often "X: Y" phrasing) is frequently
+  // too specific for weakly-indexed social platforms to match. Retry once
+  // with just the leading clause instead — a broader phrase has better
+  // odds of surfacing something, rather than leaving this the least
+  // reliable section of the panel for the exact person who needs it most.
+  if (creatorSources.length === 0) {
+    const broaderPhrase = input.topicTitle.split(":")[0].trim();
+    if (broaderPhrase && broaderPhrase !== input.topicTitle) {
+      try {
+        const results = await scrapeGoogleSerp({
+          query: `${broaderPhrase} ${creatorSiteFilter}`,
+          region: "us",
+          limit: 5,
+        });
+        creatorSources = results.map((r) => ({ url: r.url, title: r.title, snippet: r.snippet }));
+      } catch (err) {
+        console.warn(`[content-calendar] broader creator-content search failed for "${broaderPhrase}"`, err);
+      }
+    }
   }
 
   const model = getModel("synthesis");
@@ -220,6 +258,7 @@ export async function generateBriefing(input: {
   const systemLines = [
     "You write a short pre-filming research briefing for a solo creator's short-form video.",
     "Rules:",
+    "- whyItMatters must be ONE sentence, plain language, assuming the viewer AND the creator may be new to this specific topic — orient before informing.",
     "- Base talking points, the stat, and reference links ONLY on the provided ARTICLE sources below — never invent a fact, stat, or URL not present in them.",
     "- If a stat isn't clearly present in any article source, set stat and statSourceUrl to null rather than guessing.",
     "- statSourceUrl, if not null, MUST be exactly one of the provided ARTICLE source URLs.",

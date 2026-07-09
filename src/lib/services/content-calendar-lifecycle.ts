@@ -34,6 +34,7 @@ function rowToSlot(row: Record<string, unknown>): ContentSlotRecord {
     // brief field existed — e.g. creatorExamples, added 2026-07-09 — don't
     // render as undefined.
     topicBrief: {
+      whyItMatters: "",
       talkingPoints: [],
       stat: null,
       statSourceUrl: null,

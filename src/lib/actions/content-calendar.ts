@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireUser, getCurrentTenant } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isContentCalendarEnabledForTenant } from "@/lib/content-calendar/tenant-config";
-import { getContentCalendarConfig } from "@/lib/content-calendar/config";
-import { fetchTrendCandidates } from "@/lib/scrape/trend-pull";
+import { getContentCalendarConfig, appendContentCalendarFeedback } from "@/lib/content-calendar/config";
+import { fetchTrendCandidates, type TrendCandidate } from "@/lib/scrape/trend-pull";
 import { generateSlotContent, selectTopic, generateBriefing } from "@/lib/ai/content-calendar";
 import { mapWithConcurrency } from "@/lib/utils/concurrency";
 import {
@@ -113,6 +113,7 @@ export async function generateNextBatch(
         excludeTitles: [...pickedTitles],
         usedPillars: [...usedPillars],
         instruction,
+        recentFeedback: config.recentFeedback,
       });
       pickedTitles.push(pick.topicTitle);
       usedPillars.push(pick.pillar);
@@ -193,11 +194,18 @@ export async function regenerateSlot(slotId: string, reason?: string): Promise<A
   const admin = createAdminClient();
   const { data: slot } = await admin
     .from("content_slots")
-    .select("id, tenant_slug")
+    .select("id, tenant_slug, topic_brief")
     .eq("id", slotId)
     .eq("tenant_slug", tenantSlug)
     .maybeSingle();
   if (!slot) return { success: false, error: "Slot not found" };
+
+  // Log a stated reason before regenerating — closes the loop for the NEXT
+  // pick, not just this one (see recentFeedback in config.ts).
+  if (reason && reason.trim()) {
+    const currentPillar = (slot.topic_brief as { pillar?: string | null } | null)?.pillar ?? null;
+    await appendContentCalendarFeedback(tenantSlug, { reason: reason.trim(), pillar: currentPillar });
+  }
 
   const config = await getContentCalendarConfig(tenantSlug);
   const trendsPerNiche = await Promise.all(config.niches.map((niche) => fetchTrendCandidates(niche)));
@@ -218,6 +226,7 @@ export async function regenerateSlot(slotId: string, reason?: string): Promise<A
       trends,
       excludeTitles,
       instruction: reason,
+      recentFeedback: config.recentFeedback,
     });
 
     const { error } = await admin
@@ -366,6 +375,28 @@ export async function registerSlotVideo(slotId: string, key: string): Promise<Ac
 
   revalidatePath("/content-calendar");
   return { success: true, url };
+}
+
+// Raw trending headlines per configured pillar — NO AI call, just the same
+// free HN/Serper fetch generateNextBatch already uses, surfaced directly to
+// the creator so they can see the landscape themselves before generating
+// (senior-uiux audit stage 01: today's flow hands them AI-filtered picks
+// with zero visibility into what actually fed them).
+export async function getTrendPreview(): Promise<
+  ActionResult<{ trends: Array<TrendCandidate & { niche: string }> }>
+> {
+  const gate = await requireEnabledTenant();
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const config = await getContentCalendarConfig(gate.tenantSlug);
+  const perNiche = await Promise.all(
+    config.niches.map(async (niche) => {
+      const trends = await fetchTrendCandidates(niche);
+      return trends.map((t) => ({ ...t, niche }));
+    })
+  );
+
+  return { success: true, trends: perNiche.flat() };
 }
 
 // Called when the founder opens a slot's detail view for the first time —

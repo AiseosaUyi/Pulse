@@ -9,6 +9,21 @@ import { toast } from "@/components/ui/Toaster";
 import { saveContentCalendarConfig } from "@/lib/actions/content-calendar-settings";
 import type { ContentCalendarConfig } from "@/lib/content-calendar/config";
 
+// Deliberately broad, not tech-specific — this settings page can't assume
+// the tenant's niche. For someone who genuinely doesn't know what to put
+// here yet (senior-uiux audit stage 00), clicking a starting point beats
+// typing an example answer from a blank box.
+const EXAMPLE_PILLARS = [
+  "AI tools",
+  "Startups & business",
+  "Personal finance",
+  "Fitness & health",
+  "Productivity",
+  "Marketing & growth",
+  "Career advice",
+  "Tech news",
+];
+
 export function ContentCalendarSettingsEditor({
   tenantSlug,
   initial,
@@ -22,14 +37,14 @@ export function ContentCalendarSettingsEditor({
   const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
 
-  const addNiche = () => {
-    const value = nicheDraft.trim();
-    if (!value) return;
-    if (niches.some((n) => n.toLowerCase() === value.toLowerCase())) {
+  const addNiche = (value: string = nicheDraft) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (niches.some((n) => n.toLowerCase() === trimmed.toLowerCase())) {
       setNicheDraft("");
       return;
     }
-    setNiches((prev) => [...prev, value]);
+    setNiches((prev) => [...prev, trimmed]);
     setNicheDraft("");
   };
 
@@ -99,12 +114,12 @@ export function ContentCalendarSettingsEditor({
             onKeyDown={handleNicheKeyDown}
             placeholder="e.g. AI tools"
           />
-          <Button type="button" size="sm" variant="tertiary" onClick={addNiche} className="gap-1 shrink-0">
+          <Button type="button" size="sm" variant="tertiary" onClick={() => addNiche()} className="gap-1 shrink-0">
             <Plus size={14} /> Add
           </Button>
         </div>
         {niches.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 mb-3">
             {niches.map((n) => (
               <span
                 key={n}
@@ -123,12 +138,37 @@ export function ContentCalendarSettingsEditor({
             ))}
           </div>
         )}
+        {(() => {
+          const suggestions = EXAMPLE_PILLARS.filter(
+            (ex) => !niches.some((n) => n.toLowerCase() === ex.toLowerCase())
+          );
+          if (suggestions.length === 0) return null;
+          return (
+            <div>
+              <p className="text-[11px] text-text-muted mb-1">
+                Not sure yet? Start with one of these:
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {suggestions.map((ex) => (
+                  <button
+                    key={ex}
+                    type="button"
+                    onClick={() => addNiche(ex)}
+                    className="inline-flex items-center gap-1 text-xs text-text-muted bg-transparent border border-dashed border-border rounded-full pl-2.5 pr-2 py-1 hover:text-primary-500 hover:border-primary-500 transition-colors"
+                  >
+                    <Plus size={11} /> {ex}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <div>
         <Label htmlFor="cc-tags">Interests &amp; people you follow</Label>
         <p className="text-xs text-text-muted mb-1.5">
-          Specific topics or people you follow — the AI weighs these over generic trends. Optional.
+          Specific topics or people you follow — the AI weighs these over generic trends. Not sure? Leave it empty, trends alone work fine.
         </p>
         <div className="flex gap-2 mb-2">
           <Input

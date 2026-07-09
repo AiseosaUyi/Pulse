@@ -11,6 +11,12 @@ export interface ContentSlotReferenceLink {
 }
 
 export interface ContentSlotBrief {
+  // One plain-language orientation sentence — why this is worth talking
+  // about right now, written for someone who may be new to this specific
+  // topic. Sits above talkingPoints so a beginner isn't dropped straight
+  // into bullets assuming context they don't have yet. Defaults to "" for
+  // slots generated before this field existed.
+  whyItMatters: string;
   talkingPoints: string[];
   stat: string | null;
   statSourceUrl: string | null;
