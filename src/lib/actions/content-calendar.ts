@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isContentCalendarEnabledForTenant } from "@/lib/content-calendar/tenant-config";
 import { getContentCalendarConfig } from "@/lib/content-calendar/config";
 import { fetchTrendCandidates } from "@/lib/scrape/trend-pull";
-import { generateSlotContent } from "@/lib/ai/content-calendar";
+import { generateSlotContent, selectTopic, generateBriefing } from "@/lib/ai/content-calendar";
 import { mapWithConcurrency } from "@/lib/utils/concurrency";
 import {
   getNextPosition,
@@ -76,18 +76,11 @@ export async function generateNextBatch(
     };
   }
 
-  // In-batch dedup: each slot's topic-selection call excludes titles
-  // already picked earlier in THIS batch (locked decision from the
-  // cross-model review — a single shared trend pull risks repetition
-  // otherwise). Accumulated as slots complete, in position order, so
-  // concurrency doesn't race the exclude list non-deterministically in a
-  // way that matters (best-effort dedup, not a hard guarantee across
-  // concurrent slots — acceptable for a personal-use queue of this size).
-  // Seeded with titles already in the open queue from a PRIOR batch call —
-  // confirmed live (2026-07-09): without this, two separate "Generate my
-  // next N" calls produced 3 duplicate copies of the same two topics,
-  // since in-batch-only dedup has no memory of what a previous batch
-  // already picked.
+  // Dedup: seeded with titles already in the open queue from a PRIOR batch
+  // call — confirmed live (2026-07-09): without this, two separate
+  // "Generate my next N" calls produced duplicate copies of the same
+  // topics, since in-batch-only dedup has no memory of what a previous
+  // batch already picked.
   const { data: existingOpenSlots } = await admin
     .from("content_slots")
     .select("topic_title")
@@ -95,29 +88,50 @@ export async function generateNextBatch(
     .in("status", ["assigned", "in_progress"]);
   const pickedTitles: string[] = (existingOpenSlots ?? []).map((s) => s.topic_title as string);
 
-  const results = await mapWithConcurrency(
-    Array.from({ length: n }, (_, i) => i),
-    3,
-    async () => {
-      try {
-        const { topicTitle, brief } = await generateSlotContent({
-          tenantSlug,
-          niche: config.niche,
-          interestTags: config.interestTags,
-          trends,
-          excludeTitles: [...pickedTitles],
-        });
-        pickedTitles.push(topicTitle);
-        return { topicTitle, brief, error: null as string | null };
-      } catch (err) {
-        return {
-          topicTitle: null,
-          brief: null,
-          error: err instanceof Error ? err.message : "Generation failed",
-        };
-      }
+  // Phase 1: pick all N topics SEQUENTIALLY (not concurrently). This is
+  // deliberate, not an oversight — confirmed live (2026-07-09): with
+  // concurrency, multiple topic-selection calls fire in parallel before
+  // any of them can see each other's pick, so the exclude list is stale
+  // for all but the first, and duplicate/rephrased topics slip through
+  // (3 of 5 slots in one real batch were the same story rephrased 3
+  // ways). Cheap to do sequentially — "scoring" tier, ~1-3s each.
+  const picks: Array<{ topicTitle: string; searchQuery: string } | null> = [];
+  for (let i = 0; i < n; i++) {
+    try {
+      const pick = await selectTopic({
+        tenantSlug,
+        niche: config.niche,
+        interestTags: config.interestTags,
+        trends,
+        excludeTitles: [...pickedTitles],
+      });
+      pickedTitles.push(pick.topicTitle);
+      picks.push(pick);
+    } catch (err) {
+      console.warn("[content-calendar] topic selection failed for one slot", err);
+      picks.push(null);
     }
-  );
+  }
+
+  // Phase 2: generate briefings for all selected topics CONCURRENTLY — no
+  // cross-slot dependency here, safe (and fast) to parallelize.
+  const results = await mapWithConcurrency(picks, 3, async (pick) => {
+    if (!pick) return { topicTitle: null, brief: null, error: "Topic selection failed" };
+    try {
+      const brief = await generateBriefing({
+        tenantSlug,
+        topicTitle: pick.topicTitle,
+        searchQuery: pick.searchQuery,
+      });
+      return { topicTitle: pick.topicTitle, brief, error: null as string | null };
+    } catch (err) {
+      return {
+        topicTitle: null,
+        brief: null,
+        error: err instanceof Error ? err.message : "Generation failed",
+      };
+    }
+  });
 
   const succeeded = results.filter(
     (r): r is { topicTitle: string; brief: NonNullable<typeof r.brief>; error: null } =>

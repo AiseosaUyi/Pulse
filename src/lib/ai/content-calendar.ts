@@ -71,7 +71,14 @@ export async function generateSlotContent(
   return { topicTitle, brief };
 }
 
-async function selectTopic(
+// Exported for reuse by generateNextBatch, which calls this SEQUENTIALLY
+// (not through mapWithConcurrency) so each pick genuinely sees every prior
+// pick before choosing — see the note at that call site for why: with
+// concurrency, multiple topic-selection calls fire in parallel before any
+// of them can see each other's pick, and duplicate/rephrased topics slip
+// through (confirmed live, 2026-07-09 — 3 of 5 slots in one batch were the
+// same underlying story rephrased 3 ways).
+export async function selectTopic(
   input: GenerateSlotContentInput
 ): Promise<{ topicTitle: string; searchQuery: string }> {
   const model = getModel("scoring");
@@ -148,7 +155,10 @@ async function selectTopic(
   }
 }
 
-async function generateBriefing(input: {
+// Exported so generateNextBatch can fan this out CONCURRENTLY across all
+// N already-selected topics — safe to parallelize, unlike topic selection,
+// since briefing generation has no cross-slot dependency.
+export async function generateBriefing(input: {
   tenantSlug: string;
   topicTitle: string;
   searchQuery: string;
