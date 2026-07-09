@@ -17,7 +17,7 @@ alter table content_slots add column if not exists scheduled_date date;
 -- landed with no date) by spreading them across upcoming days from today,
 -- ordered by position.
 with ordered as (
-  select id, row_number() over (partition by tenant_slug order by position) - 1 as offset
+  select id, (row_number() over (partition by tenant_slug order by position) - 1)::int as offset
   from content_slots
   where scheduled_date is null
 )
