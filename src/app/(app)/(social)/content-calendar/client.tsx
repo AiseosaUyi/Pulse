@@ -154,9 +154,9 @@ export default function ContentCalendarClient({
         </Button>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-4 md:p-5">
-        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-          <h2 className="text-lg font-semibold text-foreground">{monthLabel}</h2>
+      <div className="rounded-2xl border border-border bg-card p-2.5 sm:p-4 md:p-5">
+        <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2 flex-wrap px-1 sm:px-0">
+          <h2 className="text-base sm:text-lg font-semibold text-foreground">{monthLabel}</h2>
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -188,9 +188,10 @@ export default function ContentCalendarClient({
           {WEEKDAY_LABELS.map((label) => (
             <div
               key={label}
-              className="bg-sidebar px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted text-center"
+              className="bg-sidebar px-0.5 sm:px-2 py-1 sm:py-1.5 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-text-muted text-center"
             >
-              {label}
+              <span className="sm:hidden">{label.slice(0, 1)}</span>
+              <span className="hidden sm:inline">{label}</span>
             </div>
           ))}
           {monthGrid.map((day) => {
@@ -201,12 +202,12 @@ export default function ContentCalendarClient({
             return (
               <div
                 key={key}
-                className={`bg-card min-h-[92px] p-1.5 flex flex-col gap-1 ${
+                className={`bg-card min-h-[64px] sm:min-h-[92px] p-1 sm:p-1.5 flex flex-col gap-1 ${
                   inMonth ? "" : "opacity-40"
                 }`}
               >
                 <span
-                  className={`text-[11px] w-5 h-5 flex items-center justify-center rounded-full shrink-0 ${
+                  className={`text-[10px] sm:text-[11px] w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center rounded-full shrink-0 ${
                     isToday ? "bg-primary-500 text-white font-semibold" : "text-text-muted"
                   }`}
                 >
@@ -219,13 +220,18 @@ export default function ContentCalendarClient({
                       type="button"
                       data-testid="slot-card"
                       onClick={() => handleSelectSlot(slot)}
-                      className="w-full text-left rounded-md border border-border/60 bg-sidebar/60 hover:bg-sidebar px-1.5 py-1 transition-colors"
+                      title={slot.topicTitle}
+                      className="w-full text-left rounded-md border border-border/60 bg-sidebar/60 hover:bg-sidebar px-1 sm:px-1.5 py-1 transition-colors"
                     >
                       <div className="flex items-center gap-1">
                         <span
                           className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[slot.status]}`}
                         />
-                        <span className="text-[10px] text-foreground truncate leading-tight">
+                        {/* Below sm: too narrow for readable truncated text
+                            (7 columns on a ~375px screen) — the dot alone
+                            signals "something's scheduled here", tap opens
+                            the panel with the full title. */}
+                        <span className="hidden sm:inline text-[10px] text-foreground truncate leading-tight">
                           {slot.topicTitle}
                         </span>
                       </div>
