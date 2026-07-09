@@ -23,6 +23,10 @@ export interface ContentSlotBrief {
   // Defaults to [] for slots generated before this field existed.
   creatorExamples: ContentSlotReferenceLink[];
   noCreatorExamplesFound: boolean;
+  // Which of the tenant's configured content pillars this topic was picked
+  // from (see content-calendar/config.ts `niches`) — null for slots
+  // generated before pillars existed, or if the AI didn't report one.
+  pillar: string | null;
 }
 
 export interface ContentSlotRecord {

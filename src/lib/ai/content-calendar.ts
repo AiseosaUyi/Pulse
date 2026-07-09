@@ -27,6 +27,7 @@ export class ContentCalendarAiError extends Error {
 const topicSelectSchema = z.object({
   topicTitle: z.string().min(3).describe("A specific, compelling topic framed as something to talk about on camera — not a generic category."),
   searchQuery: z.string().min(3).describe("A search query to find real reference articles/discussion about this exact topic."),
+  pillar: z.string().describe("Exactly one of the creator's given content pillars — verbatim — that this topic belongs to."),
 });
 
 const briefingSchema = z.object({
@@ -48,10 +49,12 @@ const briefingSchema = z.object({
 
 export interface GenerateSlotContentInput {
   tenantSlug: string;
-  niche: string;
+  niches: string[]; // content pillars — the AI picks one per topic and spreads a batch across them
   interestTags: string[]; // empty array → trend-only fallback (locked decision #9)
   trends: TrendCandidate[];
   excludeTitles: string[]; // already-picked topics earlier in this same batch (locked decision #4)
+  usedPillars?: string[]; // pillars already used this batch/queue — nudges rotation, not a hard exclude
+  instruction?: string; // one-off steering from the creator (batch-level "generate with instructions", or a stated reason on regenerate)
 }
 
 export interface GenerateSlotContentResult {
@@ -62,11 +65,13 @@ export interface GenerateSlotContentResult {
 export async function generateSlotContent(
   input: GenerateSlotContentInput
 ): Promise<GenerateSlotContentResult> {
-  const { topicTitle, searchQuery } = await selectTopic(input);
+  const { topicTitle, searchQuery, pillar } = await selectTopic(input);
   const brief = await generateBriefing({
     tenantSlug: input.tenantSlug,
     topicTitle,
     searchQuery,
+    pillar,
+    instruction: input.instruction,
   });
   return { topicTitle, brief };
 }
@@ -80,7 +85,7 @@ export async function generateSlotContent(
 // same underlying story rephrased 3 ways).
 export async function selectTopic(
   input: GenerateSlotContentInput
-): Promise<{ topicTitle: string; searchQuery: string }> {
+): Promise<{ topicTitle: string; searchQuery: string; pillar: string }> {
   const model = getModel("scoring");
   const modelId = getModelId("scoring");
   const started = Date.now();
@@ -91,25 +96,35 @@ export async function selectTopic(
     .join("\n");
 
   const systemLines = [
-    `You pick ONE topic per call for a solo creator's daily short-form video in the ${input.niche} niche.`,
+    `You pick ONE topic per call for a solo creator's daily short-form video, whose content spans these pillars: ${input.niches.join(", ")}.`,
     "Rules:",
+    "- Pick exactly one pillar from that list for this topic and report it verbatim in `pillar`.",
     "- Prefer a topic from the trending candidates list below when one fits the creator's interests.",
     "- If the interest list is empty, pick straight from trends — a real, specific trend beats a generic one.",
     "- Never repeat or closely rephrase a topic already picked earlier in this batch (listed below).",
     "- The topic must be specific enough to talk about for 30-90s, not a vague category.",
   ];
+  if (input.niches.length > 1) {
+    systemLines.push("- Spread coverage across pillars over a batch — don't default to the same pillar every time just because it trends more.");
+  }
   if (input.interestTags.length > 0) {
     systemLines.push("", `Creator's stated interests: ${input.interestTags.join(", ")}`);
   }
   if (input.excludeTitles.length > 0) {
     systemLines.push("", "Already picked this batch — do NOT repeat or closely rephrase these:", input.excludeTitles.map((t) => `- ${t}`).join("\n"));
   }
+  if (input.usedPillars && input.usedPillars.length > 0) {
+    systemLines.push("", `Pillars already used recently (prefer a different one if it fits): ${input.usedPillars.join(", ")}`);
+  }
+  if (input.instruction && input.instruction.trim()) {
+    systemLines.push("", `Creator's instruction for this pick — follow it even if it overrides the above: ${input.instruction.trim()}`);
+  }
 
   const userLines = [
     "Trending candidates:",
     trendLines || "(none found)",
     "",
-    "Pick one topic and a search query to find reference material for it.",
+    "Pick one topic, its pillar, and a search query to find reference material for it.",
   ];
 
   try {
@@ -162,6 +177,8 @@ export async function generateBriefing(input: {
   tenantSlug: string;
   topicTitle: string;
   searchQuery: string;
+  pillar?: string;
+  instruction?: string;
 }): Promise<ContentSlotBrief> {
   let sources: Array<{ url: string; title: string; snippet: string }> = [];
   try {
@@ -211,6 +228,9 @@ export async function generateBriefing(input: {
     "- creatorExamples MUST be chosen from the provided CREATOR/SOCIAL sources only, not invented and not article sources.",
     "- If none of the creator/social sources are usable, set noCreatorExamplesFound to true and return an empty creatorExamples array — this is common and fine, do not force a match.",
   ];
+  if (input.instruction && input.instruction.trim()) {
+    systemLines.push("", `Creator's instruction for this briefing — follow it: ${input.instruction.trim()}`);
+  }
 
   const userLines = [
     `Topic: ${input.topicTitle}`,
@@ -246,7 +266,7 @@ export async function generateBriefing(input: {
       success: true,
     });
 
-    return result.output;
+    return { ...result.output, pillar: input.pillar ?? null };
   } catch (err) {
     await logAiCall({
       tenantSlug: input.tenantSlug,

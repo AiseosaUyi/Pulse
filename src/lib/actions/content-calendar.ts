@@ -45,7 +45,8 @@ async function requireEnabledTenant(): Promise<
 // capped, concurrency-limited, and the route this is called from should
 // set an explicit maxDuration sized to real measured per-slot latency.
 export async function generateNextBatch(
-  requestedN: number
+  requestedN: number,
+  instruction?: string
 ): Promise<ActionResult<{ candidatesFound: number; generated: number; errors: number }>> {
   const gate = await requireEnabledTenant();
   if (!gate.ok) return { success: false, error: gate.error };
@@ -65,9 +66,12 @@ export async function generateNextBatch(
   const n = Math.max(1, Math.min(requestedN, MAX_BATCH_SIZE, MAX_QUEUE_DEPTH - openDepth));
   const config = await getContentCalendarConfig(tenantSlug);
 
-  // Fetched ONCE, shared across all N slots (locked decision #4) — not
-  // re-fetched per slot.
-  const trends = await fetchTrendCandidates(config.niche);
+  // Fetched ONCE per pillar, shared across all N slots (locked decision
+  // #4) — not re-fetched per slot. Fetched per-pillar (not one blended
+  // query) so a batch's trend pool actually has candidates for every
+  // pillar, not just whichever single niche string used to dominate.
+  const trendsPerNiche = await Promise.all(config.niches.map((niche) => fetchTrendCandidates(niche)));
+  const trends = trendsPerNiche.flat();
   if (trends.length === 0 && config.interestTags.length === 0) {
     return {
       success: false,
@@ -76,17 +80,20 @@ export async function generateNextBatch(
     };
   }
 
-  // Dedup: seeded with titles already in the open queue from a PRIOR batch
-  // call — confirmed live (2026-07-09): without this, two separate
-  // "Generate my next N" calls produced duplicate copies of the same
-  // topics, since in-batch-only dedup has no memory of what a previous
-  // batch already picked.
+  // Dedup: seeded with titles (and pillars, for rotation) already in the
+  // open queue from a PRIOR batch call — confirmed live (2026-07-09):
+  // without this, two separate "Generate my next N" calls produced
+  // duplicate copies of the same topics, since in-batch-only dedup has no
+  // memory of what a previous batch already picked.
   const { data: existingOpenSlots } = await admin
     .from("content_slots")
-    .select("topic_title")
+    .select("topic_title, topic_brief")
     .eq("tenant_slug", tenantSlug)
     .in("status", ["assigned", "in_progress"]);
   const pickedTitles: string[] = (existingOpenSlots ?? []).map((s) => s.topic_title as string);
+  const usedPillars: string[] = (existingOpenSlots ?? [])
+    .map((s) => (s.topic_brief as { pillar?: string | null } | null)?.pillar)
+    .filter((p): p is string => !!p);
 
   // Phase 1: pick all N topics SEQUENTIALLY (not concurrently). This is
   // deliberate, not an oversight — confirmed live (2026-07-09): with
@@ -95,17 +102,20 @@ export async function generateNextBatch(
   // for all but the first, and duplicate/rephrased topics slip through
   // (3 of 5 slots in one real batch were the same story rephrased 3
   // ways). Cheap to do sequentially — "scoring" tier, ~1-3s each.
-  const picks: Array<{ topicTitle: string; searchQuery: string } | null> = [];
+  const picks: Array<{ topicTitle: string; searchQuery: string; pillar: string } | null> = [];
   for (let i = 0; i < n; i++) {
     try {
       const pick = await selectTopic({
         tenantSlug,
-        niche: config.niche,
+        niches: config.niches,
         interestTags: config.interestTags,
         trends,
         excludeTitles: [...pickedTitles],
+        usedPillars: [...usedPillars],
+        instruction,
       });
       pickedTitles.push(pick.topicTitle);
+      usedPillars.push(pick.pillar);
       picks.push(pick);
     } catch (err) {
       console.warn("[content-calendar] topic selection failed for one slot", err);
@@ -122,6 +132,8 @@ export async function generateNextBatch(
         tenantSlug,
         topicTitle: pick.topicTitle,
         searchQuery: pick.searchQuery,
+        pillar: pick.pillar,
+        instruction,
       });
       return { topicTitle: pick.topicTitle, brief, error: null as string | null };
     } catch (err) {
@@ -173,7 +185,7 @@ export async function generateNextBatch(
   };
 }
 
-export async function regenerateSlot(slotId: string): Promise<ActionResult> {
+export async function regenerateSlot(slotId: string, reason?: string): Promise<ActionResult> {
   const gate = await requireEnabledTenant();
   if (!gate.ok) return { success: false, error: gate.error };
   const { tenantSlug } = gate;
@@ -188,7 +200,8 @@ export async function regenerateSlot(slotId: string): Promise<ActionResult> {
   if (!slot) return { success: false, error: "Slot not found" };
 
   const config = await getContentCalendarConfig(tenantSlug);
-  const trends = await fetchTrendCandidates(config.niche);
+  const trendsPerNiche = await Promise.all(config.niches.map((niche) => fetchTrendCandidates(niche)));
+  const trends = trendsPerNiche.flat();
 
   const { data: siblings } = await admin
     .from("content_slots")
@@ -200,10 +213,11 @@ export async function regenerateSlot(slotId: string): Promise<ActionResult> {
   try {
     const { topicTitle, brief } = await generateSlotContent({
       tenantSlug,
-      niche: config.niche,
+      niches: config.niches,
       interestTags: config.interestTags,
       trends,
       excludeTitles,
+      instruction: reason,
     });
 
     const { error } = await admin
@@ -264,6 +278,27 @@ export async function rescheduleSlot(slotId: string, scheduledDate: string): Pro
   const { error } = await admin
     .from("content_slots")
     .update({ scheduled_date: scheduledDate, updated_at: new Date().toISOString() })
+    .eq("id", slotId)
+    .eq("tenant_slug", gate.tenantSlug);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/content-calendar");
+  return { success: true };
+}
+
+// Direct manual override of the topic title — bypasses the AI entirely,
+// for when the founder just wants to retitle what they're filming rather
+// than ask the AI to regenerate a new one.
+export async function updateSlotTopic(slotId: string, topicTitle: string): Promise<ActionResult> {
+  const gate = await requireEnabledTenant();
+  if (!gate.ok) return { success: false, error: gate.error };
+  const trimmed = topicTitle.trim();
+  if (!trimmed) return { success: false, error: "Topic can't be empty" };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("content_slots")
+    .update({ topic_title: trimmed, updated_at: new Date().toISOString() })
     .eq("id", slotId)
     .eq("tenant_slug", gate.tenantSlug);
   if (error) return { success: false, error: error.message };

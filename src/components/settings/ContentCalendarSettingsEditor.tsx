@@ -16,10 +16,33 @@ export function ContentCalendarSettingsEditor({
   tenantSlug: string;
   initial: ContentCalendarConfig;
 }) {
-  const [niche, setNiche] = useState(initial.niche);
+  const [niches, setNiches] = useState(initial.niches);
+  const [nicheDraft, setNicheDraft] = useState("");
   const [tags, setTags] = useState(initial.interestTags);
   const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
+
+  const addNiche = () => {
+    const value = nicheDraft.trim();
+    if (!value) return;
+    if (niches.some((n) => n.toLowerCase() === value.toLowerCase())) {
+      setNicheDraft("");
+      return;
+    }
+    setNiches((prev) => [...prev, value]);
+    setNicheDraft("");
+  };
+
+  const removeNiche = (value: string) => {
+    setNiches((prev) => prev.filter((n) => n !== value));
+  };
+
+  const handleNicheKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addNiche();
+    }
+  };
 
   const addTag = () => {
     const value = draft.trim();
@@ -44,13 +67,13 @@ export function ContentCalendarSettingsEditor({
   };
 
   const handleSave = () => {
-    if (!niche.trim()) {
-      toast.error("Niche can't be empty.");
+    if (niches.length === 0) {
+      toast.error("Add at least one content pillar.");
       return;
     }
     startTransition(async () => {
       const res = await saveContentCalendarConfig(tenantSlug, {
-        niche: niche.trim(),
+        niches,
         interestTags: tags,
       });
       if (!res.success) {
@@ -64,23 +87,52 @@ export function ContentCalendarSettingsEditor({
   return (
     <div className="space-y-6">
       <div>
-        <Label htmlFor="cc-niche">Niche</Label>
+        <Label htmlFor="cc-niche">Content pillars</Label>
         <p className="text-xs text-text-muted mb-1.5">
-          What your content is broadly about — steers both trend-sourcing and topic selection.
+          The broad categories you rotate through — e.g. &ldquo;AI tools&rdquo;, &ldquo;AI in design&rdquo;, &ldquo;startups&rdquo;.
+          Add as many as you actually cover; one is fine if you&apos;re not that broad. Each generated
+          topic is picked from one of these, and the AI spreads a batch across all of them rather
+          than clustering on whichever is trending hardest that day.
         </p>
-        <Input
-          id="cc-niche"
-          value={niche}
-          onChange={(e) => setNiche(e.target.value)}
-          placeholder="AI/tech"
-        />
+        <div className="flex gap-2 mb-2">
+          <Input
+            id="cc-niche"
+            value={nicheDraft}
+            onChange={(e) => setNicheDraft(e.target.value)}
+            onKeyDown={handleNicheKeyDown}
+            placeholder="e.g. AI tools"
+          />
+          <Button type="button" size="sm" variant="tertiary" onClick={addNiche} className="gap-1 shrink-0">
+            <Plus size={14} /> Add
+          </Button>
+        </div>
+        {niches.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {niches.map((n) => (
+              <span
+                key={n}
+                className="inline-flex items-center gap-1 text-xs bg-sidebar border border-border/60 rounded-full pl-2.5 pr-1.5 py-1"
+              >
+                {n}
+                <button
+                  type="button"
+                  onClick={() => removeNiche(n)}
+                  className="text-text-muted hover:text-status-red"
+                  aria-label={`Remove ${n}`}
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div>
         <Label htmlFor="cc-tags">Interests &amp; people you follow</Label>
         <p className="text-xs text-text-muted mb-1.5">
           Specific topics, sub-niches, or named accounts/creators you actually care about — the
-          AI weighs these when picking a topic instead of just grabbing whatever's generically
+          AI weighs these when picking a topic instead of just grabbing whatever&apos;s generically
           trending. Leave empty and it falls back to trend-only selection.
         </p>
         <div className="flex gap-2 mb-2">

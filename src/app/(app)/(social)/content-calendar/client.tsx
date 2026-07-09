@@ -14,6 +14,9 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarClock,
+  SlidersHorizontal,
+  Pencil,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +28,7 @@ import {
   regenerateSlot,
   updateSlotStatus,
   updateSlotNotes,
+  updateSlotTopic,
   markSlotOpened,
   createSignedSlotVideoUpload,
   registerSlotVideo,
@@ -101,6 +105,8 @@ export default function ContentCalendarClient({
   const [viewDate, setViewDate] = useState(() => new Date());
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [generating, startGenerate] = useTransition();
+  const [showInstruction, setShowInstruction] = useState(false);
+  const [instruction, setInstruction] = useState("");
 
   useEffect(() => {
     setSlots(initialSlots);
@@ -130,7 +136,7 @@ export default function ContentCalendarClient({
 
   const handleGenerate = () => {
     startGenerate(async () => {
-      const res = await generateNextBatch(MAX_BATCH_SIZE);
+      const res = await generateNextBatch(MAX_BATCH_SIZE, instruction.trim() || undefined);
       if (!res.success) {
         toast.error(res.error);
         return;
@@ -140,6 +146,8 @@ export default function ContentCalendarClient({
           res.errors > 0 ? ` (${res.errors} failed)` : ""
         }`
       );
+      setInstruction("");
+      setShowInstruction(false);
       router.refresh();
     });
   };
@@ -163,17 +171,50 @@ export default function ContentCalendarClient({
             AI picks the topic and briefs you on it. You film, upload, mark it posted.
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <Button size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5">
-            {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-            Generate my next {MAX_BATCH_SIZE}
-          </Button>
+        <div className="flex flex-col items-end gap-1 w-full sm:w-auto">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowInstruction((v) => !v)}
+              className={`p-2 rounded-lg border transition-colors ${
+                showInstruction
+                  ? "border-primary-500 text-primary-500 bg-primary-500/10"
+                  : "border-border/60 text-text-muted hover:text-foreground hover:border-border"
+              }`}
+              aria-label="Add a one-off direction for this batch"
+              title="Add a one-off direction for this batch"
+            >
+              <SlidersHorizontal size={14} />
+            </button>
+            <Button size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5">
+              {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              Generate my next {MAX_BATCH_SIZE}
+            </Button>
+          </div>
           <span className={`text-[11px] ${nearCap ? "text-status-yellow" : "text-text-muted"}`}>
             {openCount}/{MAX_QUEUE_DEPTH} in queue
             {nearCap && " — work through some before generating more"}
           </span>
         </div>
       </div>
+
+      {showInstruction && (
+        <div className="mb-6 -mt-3 rounded-xl border border-border/60 bg-card p-3">
+          <p className="text-xs font-medium text-foreground mb-1.5">
+            One-off direction for this batch (optional)
+          </p>
+          <Textarea
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value)}
+            placeholder="e.g. Focus on AI coding tools today, skip anything about big-model releases"
+            rows={2}
+            className="text-sm"
+          />
+          <p className="text-[11px] text-text-muted mt-1">
+            Doesn&apos;t change your saved content pillars or interests — just steers this one batch.
+          </p>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-border bg-card p-2.5 sm:p-4 md:p-5">
         <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2 flex-wrap px-1 sm:px-0">
@@ -298,6 +339,11 @@ function SlotPanel({
   const [postPlatforms, setPostPlatforms] = useState<string[]>([]);
   const [showReschedule, setShowReschedule] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState(slot.scheduledDate);
+  const [showRegenReason, setShowRegenReason] = useState(false);
+  const [regenReason, setRegenReason] = useState("");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(slot.topicTitle);
+  const [savingTitle, setSavingTitle] = useState(false);
   const stale = isSlotStale(slot);
 
   useEffect(() => {
@@ -306,7 +352,11 @@ function SlotPanel({
     setPostPlatforms([]);
     setShowReschedule(false);
     setRescheduleDate(slot.scheduledDate);
-  }, [slot.id, slot.notes, slot.scheduledDate]);
+    setShowRegenReason(false);
+    setRegenReason("");
+    setEditingTitle(false);
+    setTitleDraft(slot.topicTitle);
+  }, [slot.id, slot.notes, slot.scheduledDate, slot.topicTitle]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -325,13 +375,33 @@ function SlotPanel({
 
   const handleRegenerate = async () => {
     setBusy(true);
-    const res = await regenerateSlot(slot.id);
+    const res = await regenerateSlot(slot.id, regenReason.trim() || undefined);
     setBusy(false);
     if (!res.success) {
       toast.error(res.error);
       return;
     }
     toast.success("Regenerated");
+    setShowRegenReason(false);
+    setRegenReason("");
+    router.refresh();
+  };
+
+  const handleSaveTitle = async () => {
+    const trimmed = titleDraft.trim();
+    if (!trimmed) {
+      toast.error("Topic can't be empty");
+      return;
+    }
+    setSavingTitle(true);
+    const res = await updateSlotTopic(slot.id, trimmed);
+    setSavingTitle(false);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    onChange({ topicTitle: trimmed });
+    setEditingTitle(false);
     router.refresh();
   };
 
@@ -443,6 +513,11 @@ function SlotPanel({
                   day: "numeric",
                 })}
               </button>
+              {slot.topicBrief.pillar && (
+                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-sidebar border border-border/60 text-text-muted shrink-0">
+                  <Tag size={10} /> {slot.topicBrief.pillar}
+                </span>
+              )}
               {stale && (
                 <span className="inline-flex items-center gap-1 text-[10px] text-status-yellow shrink-0">
                   <AlertTriangle size={11} /> may be stale
@@ -458,7 +533,50 @@ function SlotPanel({
               <X size={16} />
             </button>
           </div>
-          <h2 className="text-sm font-semibold text-foreground">{slot.topicTitle}</h2>
+          {editingTitle ? (
+            <div className="flex items-center gap-2">
+              <Input
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                className="h-8 text-sm"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveTitle();
+                  if (e.key === "Escape") {
+                    setEditingTitle(false);
+                    setTitleDraft(slot.topicTitle);
+                  }
+                }}
+              />
+              <Button size="xs" onClick={handleSaveTitle} disabled={savingTitle}>
+                Save
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => {
+                  setEditingTitle(false);
+                  setTitleDraft(slot.topicTitle);
+                }}
+                disabled={savingTitle}
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-start gap-1.5 group">
+              <h2 className="text-sm font-semibold text-foreground">{slot.topicTitle}</h2>
+              <button
+                type="button"
+                onClick={() => setEditingTitle(true)}
+                className="p-0.5 rounded text-text-muted hover:text-primary-500 shrink-0 mt-0.5"
+                aria-label="Edit topic"
+                title="Edit topic directly"
+              >
+                <Pencil size={12} />
+              </button>
+            </div>
+          )}
           {showReschedule && (
             <div className="flex items-center gap-2">
               <Input
@@ -624,8 +742,44 @@ function SlotPanel({
           </div>
         )}
 
+        {showRegenReason && (
+          <div className="shrink-0 border-t border-border/60 px-4 py-3 space-y-2">
+            <p className="text-xs font-semibold text-foreground">What should change? (optional)</p>
+            <Textarea
+              value={regenReason}
+              onChange={(e) => setRegenReason(e.target.value)}
+              placeholder="e.g. Too generic, want something more contrarian / about X instead"
+              rows={2}
+              className="text-sm"
+              autoFocus
+            />
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={handleRegenerate} disabled={busy} className="gap-1">
+                {busy ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />} Regenerate
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setShowRegenReason(false);
+                  setRegenReason("");
+                }}
+                disabled={busy}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="shrink-0 border-t border-border/60 px-4 py-3 flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={handleRegenerate} disabled={busy} className="gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowRegenReason((v) => !v)}
+            disabled={busy}
+            className="gap-1"
+          >
             <RefreshCw size={11} /> Regenerate
           </Button>
           <Button

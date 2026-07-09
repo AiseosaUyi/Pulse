@@ -6,14 +6,34 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const contentCalendarConfigSchema = z.object({
-  niche: z.string().default("AI/tech"),
-  interestTags: z.array(z.string()).default([]),
-});
+// `niches` (plural — "content pillars") replaced the original single
+// `niche` string (2026-07-09): a solo creator covering e.g. "AI tools",
+// "AI in design", and "startups" needs distinct rotating pillars, not one
+// blended free-text category. `migrateLegacyShape` upgrades any
+// already-saved `{ niche: string }` row on read so existing tenants don't
+// lose their config.
+function migrateLegacyShape(val: unknown): unknown {
+  if (val && typeof val === "object" && !Array.isArray(val)) {
+    const v = val as Record<string, unknown>;
+    if (typeof v.niche === "string" && !("niches" in v)) {
+      const { niche, ...rest } = v;
+      return { ...rest, niches: [niche] };
+    }
+  }
+  return val;
+}
+
+const contentCalendarConfigSchema = z.preprocess(
+  migrateLegacyShape,
+  z.object({
+    niches: z.array(z.string()).min(1).default(["AI/tech"]),
+    interestTags: z.array(z.string()).default([]),
+  })
+);
 
 export type ContentCalendarConfig = z.infer<typeof contentCalendarConfigSchema>;
 
-const DEFAULT_CONFIG: ContentCalendarConfig = { niche: "AI/tech", interestTags: [] };
+const DEFAULT_CONFIG: ContentCalendarConfig = { niches: ["AI/tech"], interestTags: [] };
 
 export async function getContentCalendarConfig(
   tenantSlug: string

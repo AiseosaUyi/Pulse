@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { ContentCalendarConfig } from "@/lib/content-calendar/config";
 
 const inputSchema = z.object({
-  niche: z.string().trim().min(1).max(80),
+  niches: z.array(z.string().trim().min(1).max(60)).min(1).max(10),
   interestTags: z.array(z.string().trim().min(1).max(60)).max(30),
 });
 
@@ -15,7 +15,7 @@ type ActionResult =
   | { success: true }
   | { success: false; error: string };
 
-/** Persist niche + interest tags into settings.contentCalendar (read-modify-write merge, same pattern as saveCadenceConfig). RLS gates write to owner/admin. */
+/** Persist content pillars + interest tags into settings.contentCalendar (read-modify-write merge, same pattern as saveCadenceConfig). RLS gates write to owner/admin. */
 export async function saveContentCalendarConfig(
   tenantSlug: string,
   input: ContentCalendarConfig

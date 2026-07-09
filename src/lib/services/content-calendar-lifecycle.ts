@@ -42,6 +42,7 @@ function rowToSlot(row: Record<string, unknown>): ContentSlotRecord {
       noReferencesFound: true,
       creatorExamples: [],
       noCreatorExamplesFound: true,
+      pillar: null,
       ...((row.topic_brief as Partial<ContentSlotRecord["topicBrief"]>) ?? {}),
     },
     notes: (row.notes as string) ?? null,
