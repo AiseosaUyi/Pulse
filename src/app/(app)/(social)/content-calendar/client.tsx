@@ -56,8 +56,12 @@ const STATUS_LABELS: Record<ContentSlotStatus, string> = {
   skipped: "Skipped",
 };
 
+// `assigned` deliberately does NOT use bg-primary-500/text-primary-500—
+// brand maroon is reserved for the one "act here" CTA (Generate). Reusing
+// it as one of five status colors, repeated across every day cell, diluted
+// that signal (senior-uiux review, 2026-07-09).
 const STATUS_TONE: Record<ContentSlotStatus, string> = {
-  assigned: "bg-primary-500/10 text-primary-500",
+  assigned: "bg-status-teal/10 text-status-teal",
   in_progress: "bg-status-yellow/10 text-status-yellow",
   filmed: "bg-status-green/10 text-status-green",
   posted: "bg-status-green/10 text-status-green",
@@ -65,7 +69,7 @@ const STATUS_TONE: Record<ContentSlotStatus, string> = {
 };
 
 const STATUS_DOT: Record<ContentSlotStatus, string> = {
-  assigned: "bg-primary-500",
+  assigned: "bg-status-teal",
   in_progress: "bg-status-yellow",
   filmed: "bg-status-green",
   posted: "bg-status-green",
@@ -173,19 +177,16 @@ export default function ContentCalendarClient({
         </div>
         <div className="flex flex-col items-end gap-1 w-full sm:w-auto">
           <div className="flex items-center gap-1.5">
-            <button
+            <Button
               type="button"
+              variant={showInstruction ? "default" : "tertiary"}
+              size="icon"
               onClick={() => setShowInstruction((v) => !v)}
-              className={`p-2 rounded-lg border transition-colors ${
-                showInstruction
-                  ? "border-primary-500 text-primary-500 bg-primary-500/10"
-                  : "border-border/60 text-text-muted hover:text-foreground hover:border-border"
-              }`}
               aria-label="Add a one-off direction for this batch"
               title="Add a one-off direction for this batch"
             >
               <SlidersHorizontal size={14} />
-            </button>
+            </Button>
             <Button size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5">
               {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
               Generate my next {MAX_BATCH_SIZE}
