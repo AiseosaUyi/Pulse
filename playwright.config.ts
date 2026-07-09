@@ -1,9 +1,28 @@
+import fs from "fs";
 import { defineConfig, devices } from "@playwright/test";
 
 // Playwright config — spins up `pnpm dev` for the duration of the run
-// and hits http://localhost:3000 with chromium. Keep the first run to
-// the smoke layer (auth gate + a couple unauthed pages). Authed flows
-// need a seed-user login helper, which we'll add in a follow-up pass.
+// and hits http://localhost:3000 with chromium.
+//
+// Authed flows (see tests/e2e/helpers/auth.ts) need SEED_EMAIL/
+// SEED_PASSWORD in process.env. The Next dev server (spawned below) loads
+// .env.local for itself automatically, but the Playwright test-runner
+// process does not — and shell `export`/`source` of these specific names
+// doesn't reliably propagate through this environment's sandboxing, so
+// load them directly from the file instead of relying on either.
+for (const key of ["SEED_EMAIL", "SEED_PASSWORD"]) {
+  if (process.env[key]) continue;
+  try {
+    const match = fs
+      .readFileSync(".env.local", "utf8")
+      .split("\n")
+      .find((line) => line.startsWith(`${key}=`));
+    if (match) process.env[key] = match.slice(key.length + 1).trim();
+  } catch {
+    // .env.local missing entirely — authed e2e specs will report their own
+    // clear error when SEED_EMAIL/SEED_PASSWORD turn out to be unset.
+  }
+}
 
 export default defineConfig({
   testDir: "./tests/e2e",

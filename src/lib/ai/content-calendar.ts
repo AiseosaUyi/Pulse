@@ -106,6 +106,11 @@ async function selectTopic(
       output: Output.object({ schema: topicSelectSchema }),
       system: systemLines.join("\n"),
       prompt: userLines.join("\n"),
+      // Bounds a single slow/stuck LLM call so it can't consume the whole
+      // batch's runtime budget (confirmed live, 2026-07-09: without this,
+      // a batch could exceed the route's maxDuration and the platform
+      // killed the whole request with a 503, before anything was saved).
+      timeout: 45_000,
     });
 
     const usage = result.usage ?? { inputTokens: 0, outputTokens: 0 };
@@ -182,6 +187,7 @@ async function generateBriefing(input: {
       output: Output.object({ schema: briefingSchema }),
       system: systemLines.join("\n"),
       prompt: userLines.join("\n"),
+      timeout: 45_000,
     });
 
     const usage = result.usage ?? { inputTokens: 0, outputTokens: 0 };
