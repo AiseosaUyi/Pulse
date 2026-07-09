@@ -34,6 +34,12 @@ const contentCalendarConfigSchema = z.preprocess(
   z.object({
     niches: z.array(z.string()).min(1).default(["AI/tech"]),
     interestTags: z.array(z.string()).default([]),
+    // How many slots a fresh batch packs onto each calendar day before
+    // moving to the next one. Default 1 (one slot per day). Raised from an
+    // implicit hardcoded 1 (2026-07-09) — some days a creator can film
+    // multiple, other days none, and a rigid one-per-day spread didn't
+    // match that.
+    postsPerDay: z.number().int().min(1).max(5).default(1),
     // Rolling log of stated regenerate reasons — the immediate half of the
     // "learning loop" (senior-uiux audit, 2026-07-09, stage 05): closes the
     // loop from what the creator said didn't work back into future topic
@@ -50,6 +56,7 @@ export type ContentCalendarFeedbackEntry = z.infer<typeof feedbackEntrySchema>;
 const DEFAULT_CONFIG: ContentCalendarConfig = {
   niches: ["AI/tech"],
   interestTags: [],
+  postsPerDay: 1,
   recentFeedback: [],
 };
 

@@ -158,13 +158,15 @@ export async function generateNextBatch(
 
   const startPosition = await getNextPosition(admin, tenantSlug);
   const startDate = await getNextScheduledDate(admin, tenantSlug);
+  const perDay = Math.max(1, config.postsPerDay);
   const rows = succeeded.map((r, i) => ({
     tenant_slug: tenantSlug,
     position: startPosition + i,
-    // One slot per day, continuing forward from wherever the queue
-    // currently ends — fills the calendar with consecutive days rather
-    // than stacking everything on one date.
-    scheduled_date: addDays(startDate, i),
+    // `postsPerDay` slots land on each day before moving to the next one,
+    // continuing forward from wherever the queue currently ends — not a
+    // rigid one-per-day spread (some days are for filming multiple,
+    // others none).
+    scheduled_date: addDays(startDate, Math.floor(i / perDay)),
     status: "assigned",
     topic_title: r.topicTitle,
     topic_brief: r.brief,
@@ -397,6 +399,64 @@ export async function getTrendPreview(): Promise<
   );
 
   return { success: true, trends: perNiche.flat() };
+}
+
+// Pins a trend the creator spotted themselves straight onto a specific
+// date — bypassing the normal "next available slot in sequence" queue
+// placement. Breaking news needs to be talked about on the day it broke,
+// not queued behind whatever else is already scheduled. Skips the
+// topic-selection AI call entirely (the human already picked the topic) —
+// only the briefing call runs, grounded on this exact trend.
+export async function createSlotFromTrend(input: {
+  title: string;
+  url: string;
+  niche: string;
+  scheduledDate: string;
+}): Promise<ActionResult> {
+  const gate = await requireEnabledTenant();
+  if (!gate.ok) return { success: false, error: gate.error };
+  const { tenantSlug, userId } = gate;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.scheduledDate)) {
+    return { success: false, error: "Invalid date" };
+  }
+
+  const admin = createAdminClient();
+  await retireStaleSlots(admin, tenantSlug);
+  const openDepth = await getOpenQueueDepth(admin, tenantSlug);
+  if (openDepth >= MAX_QUEUE_DEPTH) {
+    return {
+      success: false,
+      error: `Queue is at its cap (${MAX_QUEUE_DEPTH} open slots) — work through some before adding more.`,
+    };
+  }
+
+  try {
+    const brief = await generateBriefing({
+      tenantSlug,
+      topicTitle: input.title,
+      searchQuery: input.title,
+      pillar: input.niche,
+    });
+
+    const position = await getNextPosition(admin, tenantSlug);
+    const { error } = await admin.from("content_slots").insert({
+      tenant_slug: tenantSlug,
+      position,
+      scheduled_date: input.scheduledDate,
+      status: "assigned",
+      topic_title: input.title,
+      topic_brief: brief,
+      platforms: [],
+      created_by: userId,
+    });
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/content-calendar");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to add this topic" };
+  }
 }
 
 // Called when the founder opens a slot's detail view for the first time —

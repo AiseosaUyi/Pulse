@@ -8,6 +8,7 @@ import { z } from "zod";
 const inputSchema = z.object({
   niches: z.array(z.string().trim().min(1).max(60)).min(1).max(10),
   interestTags: z.array(z.string().trim().min(1).max(60)).max(30),
+  postsPerDay: z.number().int().min(1).max(5),
 });
 
 type ContentCalendarSettingsInput = z.infer<typeof inputSchema>;

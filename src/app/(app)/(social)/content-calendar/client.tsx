@@ -36,6 +36,7 @@ import {
   registerSlotVideo,
   rescheduleSlot,
   getTrendPreview,
+  createSlotFromTrend,
 } from "@/lib/actions/content-calendar";
 import type { TrendCandidate } from "@/lib/scrape/trend-pull";
 import {
@@ -131,6 +132,8 @@ export default function ContentCalendarClient({
   const [showTrends, setShowTrends] = useState(false);
   const [trends, setTrends] = useState<Array<TrendCandidate & { niche: string }> | null>(null);
   const [loadingTrends, startLoadTrends] = useTransition();
+  const [addingTrend, setAddingTrend] = useState<number | null>(null);
+  const [addedTrends, setAddedTrends] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     setSlots(initialSlots);
@@ -190,6 +193,26 @@ export default function ContentCalendarClient({
         setTrends(res.trends);
       });
     }
+  };
+
+  const handleAddTrendTomorrow = async (t: TrendCandidate & { niche: string }, index: number) => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    setAddingTrend(index);
+    const res = await createSlotFromTrend({
+      title: t.title,
+      url: t.url,
+      niche: t.niche,
+      scheduledDate: localDateKey(tomorrow),
+    });
+    setAddingTrend(null);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Added to tomorrow");
+    setAddedTrends((prev) => new Set(prev).add(index));
+    router.refresh();
   };
 
   const handleSelectSlot = async (slot: ContentSlotRecord) => {
@@ -270,19 +293,33 @@ export default function ContentCalendarClient({
           ) : trends && trends.length > 0 ? (
             <ul className="space-y-1.5 max-h-64 overflow-y-auto">
               {trends.slice(0, 25).map((t, i) => (
-                <li key={i}>
+                <li key={i} className="flex items-start gap-2">
                   <a
                     href={t.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group flex items-start gap-1.5 text-xs text-foreground hover:text-primary-500"
+                    className="group flex items-start gap-1.5 text-xs text-foreground hover:text-primary-500 flex-1 min-w-0"
                   >
                     <ExternalLink size={11} className="shrink-0 mt-0.5 text-text-muted group-hover:text-primary-500" />
-                    <span>
+                    <span className="min-w-0">
                       {t.title}{" "}
                       <span className="text-text-muted">— {t.niche}</span>
                     </span>
                   </a>
+                  {addedTrends.has(i) ? (
+                    <span className="shrink-0 text-[10px] text-status-green inline-flex items-center gap-1 py-0.5">
+                      <Check size={10} /> Added
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleAddTrendTomorrow(t, i)}
+                      disabled={addingTrend === i}
+                      className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border border-border/60 text-text-muted hover:text-primary-500 hover:border-primary-500 transition-colors disabled:opacity-50"
+                    >
+                      {addingTrend === i ? "Adding…" : "+ Tomorrow"}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

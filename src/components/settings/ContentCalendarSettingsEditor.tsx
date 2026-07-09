@@ -35,6 +35,7 @@ export function ContentCalendarSettingsEditor({
   const [nicheDraft, setNicheDraft] = useState("");
   const [tags, setTags] = useState(initial.interestTags);
   const [draft, setDraft] = useState("");
+  const [postsPerDay, setPostsPerDay] = useState(initial.postsPerDay);
   const [pending, startTransition] = useTransition();
 
   const addNiche = (value: string = nicheDraft) => {
@@ -90,6 +91,7 @@ export function ContentCalendarSettingsEditor({
       const res = await saveContentCalendarConfig(tenantSlug, {
         niches,
         interestTags: tags,
+        postsPerDay,
       });
       if (!res.success) {
         toast.error(res.error);
@@ -202,6 +204,25 @@ export function ContentCalendarSettingsEditor({
             ))}
           </div>
         )}
+      </div>
+
+      <div>
+        <Label htmlFor="cc-posts-per-day">Posts per day</Label>
+        <p className="text-xs text-text-muted mb-1.5">
+          How many slots a fresh batch packs onto each day before moving to the next. Most days are one; bump it up for days you know you&apos;ll film more than once.
+        </p>
+        <select
+          id="cc-posts-per-day"
+          value={postsPerDay}
+          onChange={(e) => setPostsPerDay(Number(e.target.value))}
+          className="h-9 rounded-lg border border-border bg-transparent px-2 text-sm text-foreground"
+        >
+          {[1, 2, 3, 4, 5].map((n) => (
+            <option key={n} value={n}>
+              {n} {n === 1 ? "post" : "posts"}/day
+            </option>
+          ))}
+        </select>
       </div>
 
       <Button size="sm" onClick={handleSave} disabled={pending}>
