@@ -76,7 +76,17 @@ export async function generateNextBatch(
   // concurrency doesn't race the exclude list non-deterministically in a
   // way that matters (best-effort dedup, not a hard guarantee across
   // concurrent slots — acceptable for a personal-use queue of this size).
-  const pickedTitles: string[] = [];
+  // Seeded with titles already in the open queue from a PRIOR batch call —
+  // confirmed live (2026-07-09): without this, two separate "Generate my
+  // next N" calls produced 3 duplicate copies of the same two topics,
+  // since in-batch-only dedup has no memory of what a previous batch
+  // already picked.
+  const { data: existingOpenSlots } = await admin
+    .from("content_slots")
+    .select("topic_title")
+    .eq("tenant_slug", tenantSlug)
+    .in("status", ["assigned", "in_progress"]);
+  const pickedTitles: string[] = (existingOpenSlots ?? []).map((s) => s.topic_title as string);
 
   const results = await mapWithConcurrency(
     Array.from({ length: n }, (_, i) => i),
