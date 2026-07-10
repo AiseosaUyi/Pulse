@@ -143,6 +143,10 @@ Pulse just gained native social OAuth + tool execution via Composio. The integra
 | Weekly Review | Module counts → narrative banner | `src/lib/ai/weekly-review.ts` |
 | Composio engagement + publishing | IG/LinkedIn/TikTok native OAuth + execution | `src/lib/composio/`, `connected_accounts` table |
 
+## API v1 + MCP server
+
+`/api/v1/*` is a versioned, scoped, token-authenticated REST API — separate from `/api/ext/*` (which stays Chrome-extension-only, unscoped, untouched) — built so external AI "operator" skills (sales, content, SEO, social, analytics) can drive Pulse server-to-server without a browser session. Auth: `Authorization: Bearer pulse_ext_...` against a `tenant_api_tokens` row, least-privilege scopes (`sales:read`, `publish:write`, etc.) enforced per route via `requireApiContext()`. `GET /api/v1/manifest` is machine-readable self-discovery for every endpoint. A parallel **remote MCP server** at `/api/mcp` (`src/app/api/[transport]/route.ts`, built on `mcp-handler`) exposes the identical capabilities as MCP tools sharing the same auth/service layer, for AI sandboxes (Anthropic Cowork) with no outbound internet — the MCP transport is required there, plain HTTP isn't reachable. Full reference: **`docs/API-V1.md`**. Shipped so far: Meta + Sales/outbound + Publishing + Engagement, both as REST and as 20 MCP tools. Content, SEO, Intelligence, and Analytics groups ship as follow-up PRs (REST + MCP together per group). Building/testing the Publishing group surfaced and fixed two pre-existing production bugs — see `docs/API-V1.md`'s "Production bugs found and fixed" section.
+
 ## Engineering footguns to remember
 
 1. **Factory clients only** — never instantiate Supabase or Composio at module load. Vercel's page-data collection runs before env vars are guaranteed; top-level `createClient()` calls break the build.
