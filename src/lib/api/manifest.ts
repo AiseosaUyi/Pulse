@@ -1,8 +1,8 @@
 // Single source of truth for every /api/v1 endpoint. GET /api/v1/manifest
 // serializes this array; docs/API-V1.md is written by hand from it and
 // must be kept in sync manually. Append to this array — never rewrite
-// past entries' `path`/`method` — as later PRs (Publishing, Engagement,
-// Content, SEO, Intel, Analytics) land.
+// past entries' `path`/`method` — as later PRs (Part 3: notifications +
+// mobile approvals) land.
 
 export interface ManifestEntry {
   method: "GET" | "POST";
@@ -40,4 +40,28 @@ export const API_V1_MANIFEST: ManifestEntry[] = [
   { method: "GET", path: "/api/v1/inbox", scope: "engage:read", description: "Comments/DMs needing a response (filter platform, unanswered)." },
   { method: "POST", path: "/api/v1/inbox/:id/reply-draft", scope: "engage:write", description: "Generate an on-brand reply draft for an inbox item." },
   { method: "POST", path: "/api/v1/inbox/:id/replied", scope: "engage:write", description: "Mark an inbox item handled." },
+
+  // Intelligence
+  { method: "GET", path: "/api/v1/intel/feed", scope: "intel:read", description: "Competitor intel signals (filter contentType/since)." },
+  { method: "GET", path: "/api/v1/trends", scope: "intel:read", description: "Current viral/trend signals (filter platform/source)." },
+  { method: "GET", path: "/api/v1/competitors", scope: "intel:read", description: "The tenant's tracked competitor set (static snapshot, no computed deltas)." },
+
+  // SEO
+  { method: "GET", path: "/api/v1/seo/recommendations", scope: "seo:read", description: "Open SEO recommendations, ranked by score (default status=surfaced)." },
+  { method: "GET", path: "/api/v1/seo/rank", scope: "seo:read", description: "Tracked-keyword ranks." },
+  { method: "GET", path: "/api/v1/seo/topical-map", scope: "seo:read", description: "The tenant's latest generated topical map (pre-stored, no LLM call on read)." },
+
+  // Analytics
+  { method: "GET", path: "/api/v1/analytics/overview", scope: "analytics:read", description: "Dashboard KPIs: reach/engagement this week vs last, prospect pipeline counts, active campaign spend, connected platforms." },
+  { method: "GET", path: "/api/v1/analytics/posts", scope: "analytics:read", description: "Per-post engagement metrics (filter platform/since) — reads own_post_metrics, the same table publish:write's metrics endpoint writes to." },
+  { method: "GET", path: "/api/v1/weekly-review", scope: "analytics:read", description: "The latest generated weekly business-review narrative (pre-stored, no LLM call on read)." },
+
+  // Content
+  { method: "GET", path: "/api/v1/briefs", scope: "content:read", description: "List content briefs (filter status)." },
+  { method: "POST", path: "/api/v1/briefs", scope: "content:write", description: "Generate a content brief from an existing intel card." },
+  { method: "GET", path: "/api/v1/content-calendar", scope: "content:read", description: "Upcoming content_slots for the tenant (individual-persona feature — allowlist-gated, same as the app)." },
+  { method: "GET", path: "/api/v1/blog-posts", scope: "content:read", description: "List blog posts (filter status)." },
+  { method: "GET", path: "/api/v1/blog-posts/:id", scope: "content:read", description: "Single blog post + its latest version." },
+  { method: "POST", path: "/api/v1/blog-posts", scope: "content:write", description: "Create a draft blog post (title and/or targetKeyword and/or extraContext — at least one required). AI-generated." },
+  { method: "POST", path: "/api/v1/captions/compose", scope: "content:write", description: "AI-compose a multi-platform caption take from a source URL or angle." },
 ];

@@ -35,10 +35,10 @@ Comma-separated on the token; `admin` implies every scope.
 | Scope | Grants |
 |---|---|
 | `sales:read` / `sales:write` | Prospects, DMs, outbound templates/filters, follow-ups, event leads |
-| `content:read` / `content:write` | Briefs, content calendar, blog posts, captions *(not yet shipped)* |
-| `seo:read` / `seo:write` | SEO recommendations, rank tracking, topical map *(not yet shipped)* |
-| `intel:read` | Intel feed, trends, competitors *(not yet shipped)* |
-| `analytics:read` | Analytics overview, per-post insights, weekly review *(not yet shipped)* |
+| `content:read` / `content:write` | Briefs, content calendar, blog posts, captions |
+| `seo:read` / `seo:write` | SEO recommendations, rank tracking, topical map (`seo:write` is reserved — no write endpoint exists yet) |
+| `intel:read` | Intel feed, trends, competitors |
+| `analytics:read` | Analytics overview, per-post insights, weekly review |
 | `publish:read` / `publish:write` | Publish queue, media, recording published posts + metrics |
 | `engage:read` / `engage:write` | Inbox, reply drafts, marking replies handled |
 | `admin` | Everything above |
@@ -293,11 +293,123 @@ the `sync-post-metrics` cron already has).
 **`POST /api/v1/inbox/:id/replied`** — no body. `{"success": true}`, or 404 if the item isn't
 found for this tenant.
 
+### Intelligence
+
+| Method | Path | Scope | Description |
+|---|---|---|---|
+| GET | `/api/v1/intel/feed` | `intel:read` | Competitor intel signals (filter `contentType`/`since`). |
+| GET | `/api/v1/trends` | `intel:read` | Current viral/trend signals (filter `platform`/`source`). |
+| GET | `/api/v1/competitors` | `intel:read` | The tenant's tracked competitor set. |
+
+**`GET /api/v1/intel/feed?contentType=reel&since=2026-07-01T00:00:00Z&limit=25&offset=0`**
+
+```json
+{ "data": [{ "id": "...", "competitorName": "...", "platform": "instagram", "contentType": "reel", "summary": "...", "metrics": { "engagement": 120, "engagementRate": 0.04, "vsAverage": 1.8 } }], "nextCursor": null }
+```
+
+**`GET /api/v1/trends?platform=tiktok&source=hashtag_scout&limit=25&offset=0`** — same
+paginated `{data, nextCursor}` shape.
+
+**`GET /api/v1/competitors`** — a static snapshot (no computed deltas), no pagination.
+
+### SEO
+
+| Method | Path | Scope | Description |
+|---|---|---|---|
+| GET | `/api/v1/seo/recommendations` | `seo:read` | Open SEO recommendations, ranked by score (default `status=surfaced`). |
+| GET | `/api/v1/seo/rank` | `seo:read` | Tracked-keyword ranks. |
+| GET | `/api/v1/seo/topical-map` | `seo:read` | The tenant's latest generated topical map. |
+
+**`GET /api/v1/seo/recommendations?status=surfaced&limit=25&offset=0`** — `status` is one of
+`surfaced`/`applied`/`dismissed`/`snoozed`.
+
+**`GET /api/v1/seo/rank?limit=25&offset=0`** — tracked keywords, paginated.
+
+**`GET /api/v1/seo/topical-map`** — pre-stored, no LLM call on read (generating a fresh map costs
+a real `gpt-4.1` call and isn't wired to this GET, same exclusion as `draft-dm`). 404 if the
+tenant has never generated one.
+
+### Analytics
+
+| Method | Path | Scope | Description |
+|---|---|---|---|
+| GET | `/api/v1/analytics/overview` | `analytics:read` | Dashboard KPIs: reach/engagement this week vs last, prospect pipeline, active campaign spend, connected platforms. |
+| GET | `/api/v1/analytics/posts` | `analytics:read` | Per-post engagement metrics (filter `platform`/`since`) — reads `own_post_metrics`, the same table `publish:write`'s metrics endpoint writes to. |
+| GET | `/api/v1/weekly-review` | `analytics:read` | The latest generated weekly business-review narrative. |
+
+**`GET /api/v1/analytics/overview`** — no pagination, no filters, returns the same shape the
+in-app dashboard widget renders (`socialReach`, `activeLeads`, `adSpend`, `connectedPlatforms`, ...).
+
+**`GET /api/v1/analytics/posts?platform=instagram&since=2026-07-01T00:00:00Z&limit=25&offset=0`**
+
+**`GET /api/v1/weekly-review`** — pre-stored, no LLM call on read (generation is a separate cron).
+404 if no review has been generated yet.
+
+### Content
+
+| Method | Path | Scope | Description |
+|---|---|---|---|
+| GET | `/api/v1/briefs` | `content:read` | List content briefs (filter `status`). |
+| POST | `/api/v1/briefs` | `content:write` | Generate a content brief from an existing intel card. |
+| GET | `/api/v1/content-calendar` | `content:read` | Upcoming `content_slots` for the tenant (individual-persona feature — allowlist-gated, same as the app). |
+| GET | `/api/v1/blog-posts` | `content:read` | List blog posts (filter `status`). |
+| GET | `/api/v1/blog-posts/:id` | `content:read` | Single blog post + its latest saved version. |
+| POST | `/api/v1/blog-posts` | `content:write` | Create a draft blog post (title and/or targetKeyword and/or extraContext — at least one required). AI-generated. |
+| POST | `/api/v1/captions/compose` | `content:write` | AI-compose a multi-platform caption take from a source URL or angle. |
+
+**`GET /api/v1/briefs?status=draft&limit=25&offset=0`** — `status` is one of
+`draft`/`approved`/`published`/`dismissed`.
+
+**`POST /api/v1/briefs`**
+
+```json
+// request
+{ "cardId": "<intel_cards.id>" }
+// response
+{ "briefId": "..." }
+```
+
+404 if `cardId` doesn't resolve to a real intel card for this tenant. Real `gpt-5` call — not free.
+
+**`GET /api/v1/content-calendar`** — 404 for any tenant not on the `content_slots` allowlist
+(currently a single dogfood tenant — see `src/lib/content-calendar/tenant-config.ts`), same as the
+in-app page would show.
+
+**`GET /api/v1/blog-posts/:id`**
+
+```json
+{ "post": { "id": "...", "title": "...", "status": "draft", "content": "...", "wordCount": 812 }, "latestVersion": null }
+```
+
+**`POST /api/v1/blog-posts`**
+
+```json
+// request — at least one of title/targetKeyword/extraContext required
+{ "title": "Why event ticketing platforms are broken", "targetWordCount": 1200 }
+// response
+{ "postId": "...", "wordCount": 1180, "targetWordCount": 1200, "wordCountWarning": false, "contentScore": 78, "scoreWarning": false }
+```
+
+Real multi-pass `gpt-4.1` generation — not free, not fast.
+
+**`POST /api/v1/captions/compose`**
+
+```json
+// request — sourceUrl or angle required
+{ "mode": "original", "angle": "our take on the ticketing platform outage today" }
+// response
+{ "draft": { "id": "...", "mode": "original", "x": "...", "linkedin": "...", "instagram": "...", "tiktok": "...", "youtube": "...", "hooks": ["...", "...", "..."] } }
+```
+
+Real `gpt-4.1` call — not free.
+
 ## Not yet shipped
 
-Content, SEO, Intelligence, and Analytics endpoint groups are planned follow-up PRs (see the
-build spec). `GET /api/v1/manifest` is the source of truth for what's actually live at any given
-time — check it rather than trusting this doc's endpoint table to be current.
+Every endpoint group in the original build spec (Sales, Publishing, Engagement, Content, SEO,
+Intelligence, Analytics) has shipped. `GET /api/v1/manifest` is the source of truth for what's
+actually live at any given time — check it rather than trusting this doc's endpoint table to be
+current. Notifications + mobile approvals (Part 3 of the build spec) is a separate, later
+follow-up and is not part of `/api/v1` as scoped here.
 
 ## Deviations from the original build spec
 
@@ -354,6 +466,22 @@ time — check it rather than trusting this doc's endpoint table to be current.
     inbox/reply-needed semantics). `engagement-reply.ts` is what the existing in-app approval
     queue actually uses for this exact "draft a reply to an inbound comment/DM" job, and is the
     correct fit.
+12. **No SEO write endpoint exists yet** despite `seo:write` being a grantable scope —
+    `seo_recommendations`' `applied`/`dismissed`/`snoozed` transitions are currently in-app-only.
+    The scope is reserved for a future `POST /api/v1/seo/recommendations/:id/status`-shaped
+    endpoint, not dead.
+13. **`GET /api/v1/content-calendar` is allowlist-gated, not just persona-gated** — it 404s for
+    every tenant except the single dogfood tenant on `isContentCalendarEnabledForTenant()`'s
+    allowlist, mirroring the in-app page's own gate exactly (see `CLAUDE.md`'s Content Calendar
+    section). A token minted for any other tenant gets the same 404 the page would show.
+14. **`POST /api/v1/captions/compose` and `POST /api/v1/blog-posts` attribute `created_by` to the
+    token's owner** (`tenant_api_tokens.created_by`), not a session user — same pattern as
+    `POST /api/v1/prospects/:id/notes`. Their underlying `"use server"` actions
+    (`actions/compose.ts`'s `generateDraft`, `actions/blog-posts.ts`'s `createManualBlogPost`)
+    couldn't be reused directly (Server Actions can't take a `SupabaseClient` param), so their
+    logic was duplicated into new client-injected service functions
+    (`composeAndSaveApi` in a new `src/lib/services/social-drafts.ts`, `createManualBlogPostApi`
+    in `src/lib/services/blog-posts.ts`) rather than modifying the actions.
 
 ## Production bugs found and fixed while building this group
 
@@ -458,8 +586,44 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 | `pulse_reply_draft` | `POST /inbox/:id/reply-draft` | `engage:write` |
 | `pulse_mark_replied` | `POST /inbox/:id/replied` | `engage:write` |
 
-**Not yet shipped**: Content, SEO, Intelligence, Analytics tools — ship alongside their REST
-groups per the revised build order (REST + MCP together per remaining group).
+**Intelligence**
+
+| Tool | REST twin | Scope |
+|---|---|---|
+| `pulse_intel_feed` | `GET /intel/feed` | `intel:read` |
+| `pulse_trends` | `GET /trends` | `intel:read` |
+| `pulse_competitors` | `GET /competitors` | `intel:read` |
+
+**SEO**
+
+| Tool | REST twin | Scope |
+|---|---|---|
+| `pulse_seo_recommendations` | `GET /seo/recommendations` | `seo:read` |
+| `pulse_seo_ranks` | `GET /seo/rank` | `seo:read` |
+| `pulse_seo_topical_map` | `GET /seo/topical-map` | `seo:read` |
+
+**Analytics**
+
+| Tool | REST twin | Scope |
+|---|---|---|
+| `pulse_analytics_overview` | `GET /analytics/overview` | `analytics:read` |
+| `pulse_post_insights` | `GET /analytics/posts` | `analytics:read` |
+| `pulse_weekly_review` | `GET /weekly-review` | `analytics:read` |
+
+**Content**
+
+| Tool | REST twin | Scope |
+|---|---|---|
+| `pulse_list_briefs` | `GET /briefs` | `content:read` |
+| `pulse_generate_brief` | `POST /briefs` | `content:write` |
+| `pulse_content_calendar` | `GET /content-calendar` | `content:read` |
+| `pulse_list_blog_posts` | `GET /blog-posts` | `content:read` |
+| `pulse_get_blog_post` | `GET /blog-posts/:id` | `content:read` |
+| `pulse_create_blog_post` | `POST /blog-posts` | `content:write` |
+| `pulse_compose_caption` | `POST /captions/compose` | `content:write` |
+
+37 tools total across all 8 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
+Analytics, Content) — every group in the original build spec.
 
 ### Deviations (MCP)
 

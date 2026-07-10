@@ -106,7 +106,12 @@ describe("MCP server smoke test", () => {
     expect(names).toContain("pulse_list_prospects");
     expect(names).toContain("pulse_publish_queue");
     expect(names).toContain("pulse_inbox");
-    expect(tools.length).toBeGreaterThanOrEqual(20);
+    expect(names).toContain("pulse_intel_feed");
+    expect(names).toContain("pulse_seo_recommendations");
+    expect(names).toContain("pulse_analytics_overview");
+    expect(names).toContain("pulse_list_blog_posts");
+    expect(names).toContain("pulse_compose_caption");
+    expect(tools.length).toBeGreaterThanOrEqual(37);
 
     await client.close();
   });
