@@ -7,7 +7,10 @@ import { NextResponse, type NextRequest } from "next/server";
 // pass through here un-gated or it 307s to /login.
 // `/r` is the public short-link redirector (trackable campaign links) — it must
 // be hittable by anyone, including logged-out customers on IG/WhatsApp.
-const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/invite", "/forgot-password", "/api/cron", "/.well-known", "/r", "/pricing"];
+// `/approve` is the mobile approval page (Part 3 of the /api/v1 + MCP build
+// spec) — reached via a signed one-time link in an email/WhatsApp message,
+// no session exists. Auth is the JWT in the URL, verified by the page itself.
+const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/invite", "/forgot-password", "/api/cron", "/.well-known", "/r", "/pricing", "/approve"];
 
 // Refreshes the Supabase session and gates unauthenticated routes.
 // Called from middleware.ts on every request.
