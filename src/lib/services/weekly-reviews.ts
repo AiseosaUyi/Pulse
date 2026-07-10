@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { WeeklyReview } from "@/lib/ai/weekly-review";
 
 export interface WeeklyReviewRecord {
@@ -25,6 +26,33 @@ export async function getLatestWeeklyReview(
     .select(
       "id, tenant_slug, week_of, narrative, business_review, generated_at, email_sent_at"
     )
+    .eq("tenant_slug", tenantSlug)
+    .not("narrative", "is", null)
+    .order("week_of", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+
+  const reviewPayload = (data.business_review as { review?: WeeklyReview }) ?? {};
+  return {
+    id: data.id,
+    tenantSlug: data.tenant_slug,
+    weekOf: data.week_of,
+    narrative: data.narrative,
+    review: reviewPayload.review ?? null,
+    generatedAt: data.generated_at,
+    emailSentAt: data.email_sent_at,
+  };
+}
+
+/** Client-injected twin of getLatestWeeklyReview() for /api/v1 + MCP. */
+export async function getLatestWeeklyReviewApi(
+  client: SupabaseClient,
+  tenantSlug: string
+): Promise<WeeklyReviewRecord | null> {
+  const { data, error } = await client
+    .from("weekly_digests")
+    .select("id, tenant_slug, week_of, narrative, business_review, generated_at, email_sent_at")
     .eq("tenant_slug", tenantSlug)
     .not("narrative", "is", null)
     .order("week_of", { ascending: false })
