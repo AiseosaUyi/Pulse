@@ -8,10 +8,25 @@ import {
   hashToken,
   type ApiTokenRecord,
 } from "@/lib/api-tokens";
+import { API_V1_SCOPES, DEFAULT_API_V1_SCOPES } from "@/lib/api/scopes";
 
 type ActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
   | { success: false; error: string };
+
+/** Validates + normalizes a requested scope list; falls back to the
+ * default all-*:read set when none is given. Invalid scope strings are
+ * silently dropped rather than erroring — a skill/UI bug shouldn't be
+ * able to brick token creation. */
+function resolveScopes(requested: string[] | undefined): string {
+  if (!requested || requested.length === 0) {
+    return DEFAULT_API_V1_SCOPES.join(",");
+  }
+  const valid = requested.filter((s): s is (typeof API_V1_SCOPES)[number] =>
+    (API_V1_SCOPES as readonly string[]).includes(s)
+  );
+  return (valid.length > 0 ? valid : DEFAULT_API_V1_SCOPES).join(",");
+}
 
 export async function listApiTokens(
   tenantSlug: string
@@ -38,7 +53,7 @@ export async function listApiTokens(
 
 export async function createApiToken(
   tenantSlug: string,
-  input: { name: string; scope?: string }
+  input: { name: string; scopes?: string[] }
 ): Promise<ActionResult<{ token: string; record: ApiTokenRecord }>> {
   const user = await requireUser();
   const name = input.name.trim();
@@ -54,7 +69,7 @@ export async function createApiToken(
       token_hash: hashToken(token),
       token_prefix: token.slice(0, 14),
       token_last4: token.slice(-4),
-      scope: input.scope ?? "extension",
+      scope: resolveScopes(input.scopes),
       created_by: user.id,
     })
     .select("*")

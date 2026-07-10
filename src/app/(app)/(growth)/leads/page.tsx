@@ -6,6 +6,7 @@
 // follow-up can delete it once the outbound flow has production data.
 
 import { getCurrentTenant } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import {
   listInbox,
   listProspects,
@@ -37,6 +38,7 @@ export default async function LeadsPage() {
     );
   }
 
+  const supabase = await createClient();
   const [
     prospectsResult,
     searches,
@@ -48,13 +50,13 @@ export default async function LeadsPage() {
     campaigns,
     eventScraperRuns,
   ] = await Promise.all([
-      listProspects(tenant.slug, { page: 0, pageSize: 50 }),
+      listProspects(supabase, tenant.slug, { page: 0, pageSize: 50 }),
       listSearches(tenant.slug),
       listInbox(tenant.slug, 30),
       countOutboundKpis(tenant.slug),
       listAllDmsByProspect(tenant.slug),
-      listTemplates(tenant.slug),
-      getOutreachToday(tenant.slug),
+      listTemplates(supabase, tenant.slug),
+      getOutreachToday(supabase, tenant.slug),
       listOutreachCampaigns(tenant.slug),
       listEventScraperRuns(tenant.slug),
     ]);

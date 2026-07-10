@@ -31,20 +31,30 @@ export function generateToken(): string {
   return `${PREFIX}${randomBytes(32).toString("hex")}`;
 }
 
+export interface ResolvedApiToken {
+  tenantSlug: string;
+  tokenId: string;
+  /** Split from the comma-separated `scope` column. */
+  scopes: string[];
+  /** The user who minted the token — used to attribute writes made
+   * under token auth (no session user exists) back to a real person. */
+  createdBy: string | null;
+}
+
 /**
  * Look up a token, confirm it's valid + un-revoked, and return the
- * tenant slug. Bumps last_used_at. Admin-scoped lookup so the table
- * isn't RLS-gated out from under us.
+ * tenant slug + scopes. Bumps last_used_at. Admin-scoped lookup so the
+ * table isn't RLS-gated out from under us.
  */
 export async function resolveApiToken(
   raw: string
-): Promise<{ tenantSlug: string; tokenId: string } | null> {
+): Promise<ResolvedApiToken | null> {
   if (!raw || !raw.startsWith(PREFIX)) return null;
   const admin = createAdminClient();
   const hash = hashToken(raw);
   const { data, error } = await admin
     .from("tenant_api_tokens")
-    .select("id, tenant_slug, revoked_at")
+    .select("id, tenant_slug, revoked_at, scope, created_by")
     .eq("token_hash", hash)
     .maybeSingle();
   if (error || !data) return null;
@@ -57,7 +67,12 @@ export async function resolveApiToken(
     .eq("id", data.id)
     .then(() => undefined);
 
-  return { tenantSlug: data.tenant_slug, tokenId: data.id };
+  return {
+    tenantSlug: data.tenant_slug,
+    tokenId: data.id,
+    scopes: (data.scope as string).split(",").map((s) => s.trim()).filter(Boolean),
+    createdBy: data.created_by,
+  };
 }
 
 export function extractBearer(req: Request): string | null {

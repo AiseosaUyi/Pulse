@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Tenant, AudienceConfig, PlatformConnection } from "@/lib/types/tenant";
 
 interface TenantSettings {
@@ -47,6 +48,23 @@ export async function getTenants(): Promise<Tenant[]> {
     .order("created_at", { ascending: true });
   if (error || !data) return [];
   return data.map(hydrate);
+}
+
+/** Sparse `{slug, name}` lookup for callers that only need those two
+ * fields under token auth — `getTenant()` itself hardcodes the SSR/RLS
+ * client and has ~30 call sites across the app, too invasive to
+ * refactor for client injection in this PR. Shared by /api/v1/me,
+ * draft-dm, reply-draft, and their MCP tool equivalents. */
+export async function getTenantMeta(
+  client: SupabaseClient,
+  slug: string
+): Promise<{ slug: string; name: string } | null> {
+  const { data } = await client
+    .from("tenants")
+    .select("slug, name")
+    .eq("slug", slug)
+    .maybeSingle();
+  return data ?? null;
 }
 
 export async function getTenant(slug: string): Promise<Tenant | null> {

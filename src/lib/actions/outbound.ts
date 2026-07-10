@@ -6,7 +6,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { getTenant } from "@/lib/services/tenants";
 import { getBrandContext } from "@/lib/ai/brand-positioning";
 import { getOutboundFilters } from "@/lib/server/outbound-filters";
-import { getProspect, listProspects } from "@/lib/services/outbound";
+import {
+  getProspect,
+  listProspects,
+  setProspectStatus,
+  recordInboundMessage,
+} from "@/lib/services/outbound";
 import {
   draftOutboundDmAi,
   qualifyProspectAi,
@@ -163,10 +168,10 @@ export async function qualifyProspect(
 ): Promise<ActionResult<{ score: number; status: ProspectStatus }>> {
   const tenant = await getTenant(tenantSlug);
   if (!tenant) return { success: false, error: "Tenant not found" };
-  const prospect = await getProspect(tenantSlug, prospectId);
+  const supabase = await createClient();
+  const prospect = await getProspect(supabase, tenantSlug, prospectId);
   if (!prospect) return { success: false, error: "Prospect not found" };
 
-  const supabase = await createClient();
   // Mark qualifying immediately so the UI can show a spinner.
   await supabase
     .from("prospects")
@@ -229,7 +234,8 @@ export async function draftProspectDm(
   if (!user) return { success: false, error: "Not authenticated" };
   const tenant = await getTenant(tenantSlug);
   if (!tenant) return { success: false, error: "Tenant not found" };
-  const prospect = await getProspect(tenantSlug, prospectId);
+  const supabase = await createClient();
+  const prospect = await getProspect(supabase, tenantSlug, prospectId);
   if (!prospect) return { success: false, error: "Prospect not found" };
 
   try {
@@ -243,7 +249,6 @@ export async function draftProspectDm(
       context,
     });
 
-    const supabase = await createClient();
     const { data: existing } = await supabase
       .from("outbound_dms")
       .select("version")
@@ -359,17 +364,8 @@ export async function updateProspectStatus(
   notes?: string
 ): Promise<ActionResult> {
   const supabase = await createClient();
-  const patch: Record<string, unknown> = {
-    status,
-    last_touched_at: new Date().toISOString(),
-  };
-  if (notes !== undefined) patch.notes = notes;
-  const { error } = await supabase
-    .from("prospects")
-    .update(patch)
-    .eq("tenant_slug", tenantSlug)
-    .eq("id", id);
-  if (error) return { success: false, error: error.message };
+  const res = await setProspectStatus(supabase, tenantSlug, id, status, notes);
+  if (!res.ok) return { success: false, error: res.error };
   revalidatePath("/leads");
   return { success: true };
 }
@@ -440,7 +436,8 @@ export async function fetchProspectsPage(
 ): Promise<{ data: import("@/lib/types/outbound").ProspectRecord[]; total: number }> {
   const user = await getCurrentUser();
   if (!user) return { data: [], total: 0 };
-  return listProspects(tenantSlug, {
+  const supabase = await createClient();
+  return listProspects(supabase, tenantSlug, {
     page,
     pageSize: 50,
     status: (statusFilter === "all" ? undefined : statusFilter) as import("@/lib/types/outbound").ProspectStatus | undefined,
@@ -510,37 +507,9 @@ export async function recordInboundReply(
   prospectId: string,
   input: { body: string; inReplyToDmId?: string }
 ): Promise<ActionResult> {
-  if (!input.body.trim()) return { success: false, error: "Body required" };
-  const prospect = await getProspect(tenantSlug, prospectId);
-  if (!prospect) return { success: false, error: "Prospect not found" };
-
   const supabase = await createClient();
-  const { error } = await supabase.from("inbound_messages").insert({
-    tenant_slug: tenantSlug,
-    prospect_id: prospectId,
-    in_reply_to_dm_id: input.inReplyToDmId ?? null,
-    platform: prospect.platform,
-    body: input.body.trim(),
-  });
-  if (error) return { success: false, error: error.message };
-
-  // Advance the prospect + the related DM.
-  await supabase
-    .from("prospects")
-    .update({
-      status: "replied",
-      last_touched_at: new Date().toISOString(),
-    })
-    .eq("tenant_slug", tenantSlug)
-    .eq("id", prospectId);
-  if (input.inReplyToDmId) {
-    await supabase
-      .from("outbound_dms")
-      .update({ status: "replied" })
-      .eq("tenant_slug", tenantSlug)
-      .eq("id", input.inReplyToDmId);
-  }
-
+  const res = await recordInboundMessage(supabase, tenantSlug, prospectId, input);
+  if (!res.ok) return { success: false, error: res.error };
   revalidatePath("/leads");
   return { success: true };
 }

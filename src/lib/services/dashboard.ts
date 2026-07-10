@@ -3,6 +3,7 @@ import { getTenant } from "@/lib/services/tenants";
 import type { DashboardStats, Suggestion } from "@/lib/types/dashboard";
 import type { PlatformConnection } from "@/lib/types/tenant";
 import type { OwnMetricsPayload } from "@/lib/types/own-metrics";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Outbound pipeline states that count as "active" for the dashboard
 // stat — anything pre-close/pre-dismiss. Mirrors /leads KPIs.
@@ -156,6 +157,133 @@ export async function getDashboardStats(
         const reach = reachFromMetrics(m);
         return reach > 0 ? ((likes + comments) / reach) * 100 : null;
       }).filter((v): v is number => v !== null);
+      const avg = rows.length > 0 ? rows.reduce((a, b) => a + b, 0) / rows.length : null;
+      return {
+        label: "Avg. engagement",
+        value: avg !== null ? `${avg.toFixed(1)}%` : "—",
+        subtitle: avg !== null ? "likes + comments / reach" : "Connect platforms to see",
+      };
+    })(),
+  };
+}
+
+/** Client-injected twin of getDashboardStats() for /api/v1 + MCP.
+ * getDashboardStats() itself calls getTenant() (hardcoded SSR client,
+ * ~30 call sites, deliberately not refactored — see docs/API-V1.md
+ * deviation #4), so this duplicates its aggregation logic with a thin
+ * admin-scoped tenant.platforms lookup instead of calling getTenant(). */
+export async function getDashboardStatsApi(
+  client: SupabaseClient,
+  tenantSlug: string
+): Promise<DashboardStats | null> {
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+  const [ownThisWeek, ownPriorWeek, activeLeadsRes, adSpendRes, tenantRow] =
+    await Promise.all([
+      client
+        .from("own_post_metrics")
+        .select("metrics")
+        .eq("tenant_slug", tenantSlug)
+        .gte("captured_at", weekAgo.toISOString())
+        .lte("captured_at", now.toISOString()),
+      client
+        .from("own_post_metrics")
+        .select("metrics")
+        .eq("tenant_slug", tenantSlug)
+        .gte("captured_at", twoWeeksAgo.toISOString())
+        .lt("captured_at", weekAgo.toISOString()),
+      client
+        .from("prospects")
+        .select("id, status", { count: "exact", head: false })
+        .eq("tenant_slug", tenantSlug)
+        .in("status", ACTIVE_PROSPECT_STATUSES as unknown as string[]),
+      client
+        .from("campaigns")
+        .select("spend")
+        .eq("tenant_slug", tenantSlug)
+        .eq("status", "active"),
+      client.from("tenants").select("settings").eq("slug", tenantSlug).maybeSingle(),
+    ]);
+
+  if (!tenantRow.data) return null;
+  const platforms = ((tenantRow.data.settings as { platforms?: PlatformConnection[] } | null)
+    ?.platforms ?? []) as PlatformConnection[];
+
+  const thisWeekReach = (ownThisWeek.data ?? []).reduce(
+    (sum, r) => sum + reachFromMetrics(r.metrics as OwnMetricsPayload),
+    0
+  );
+  const priorWeekReach = (ownPriorWeek.data ?? []).reduce(
+    (sum, r) => sum + reachFromMetrics(r.metrics as OwnMetricsPayload),
+    0
+  );
+  const postsThisWeek = ownThisWeek.data?.length ?? 0;
+
+  const activeLeadsCount = activeLeadsRes.count ?? 0;
+  const needsFollowup =
+    activeLeadsRes.data?.filter((l) => l.status === "qualified" || l.status === "new").length ?? 0;
+
+  const adSpendTotal = adSpendRes.data?.reduce((sum, c) => sum + Number(c.spend ?? 0), 0) ?? 0;
+  const activeCampaigns = adSpendRes.data?.length ?? 0;
+
+  const connected = platforms.filter((p) => p.connected).length;
+  const profileScore = Math.round((connected / 4) * 100);
+
+  return {
+    socialReach: {
+      label: "Social reach",
+      value: formatReach(thisWeekReach),
+      subtitle:
+        postsThisWeek > 0
+          ? `${postsThisWeek} post${postsThisWeek === 1 ? "" : "s"}, last 7 days`
+          : "Import metrics on /own-analytics",
+      change:
+        priorWeekReach > 0
+          ? {
+              value: `${pct(thisWeekReach, priorWeekReach)} vs prior week`,
+              direction:
+                thisWeekReach > priorWeekReach ? "up" : thisWeekReach < priorWeekReach ? "down" : "neutral",
+            }
+          : undefined,
+    },
+    profileScore: {
+      label: "Profile score",
+      value: String(profileScore),
+      subtitle: `${connected}/4 platforms connected`,
+    },
+    activeLeads: {
+      label: "Active prospects",
+      value: String(activeLeadsCount),
+      subtitle:
+        needsFollowup > 0
+          ? `${needsFollowup} need follow-up`
+          : activeLeadsCount === 0
+            ? "Add via Outbound → Add prospect"
+            : "All caught up",
+    },
+    adSpend: {
+      label: "Ad spend (active)",
+      value: String(adSpendTotal),
+      subtitle:
+        activeCampaigns > 0 ? `${activeCampaigns} campaign${activeCampaigns === 1 ? "" : "s"} active` : "No active campaigns",
+    },
+    postsThisWeek: {
+      label: "Posts this week",
+      value: String(postsThisWeek),
+      subtitle: postsThisWeek > 0 ? "last 7 days" : "Schedule via Composer",
+    },
+    avgEngagement: (() => {
+      const rows = (ownThisWeek.data ?? [])
+        .map((r) => {
+          const m = r.metrics as OwnMetricsPayload;
+          const likes = m?.likes ?? 0;
+          const comments = m?.comments ?? 0;
+          const reach = reachFromMetrics(m);
+          return reach > 0 ? ((likes + comments) / reach) * 100 : null;
+        })
+        .filter((v): v is number => v !== null);
       const avg = rows.length > 0 ? rows.reduce((a, b) => a + b, 0) / rows.length : null;
       return {
         label: "Avg. engagement",

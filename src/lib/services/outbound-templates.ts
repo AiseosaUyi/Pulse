@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   OutboundTemplateRecord,
   TemplateCritique,
@@ -52,13 +53,13 @@ export function rowToTemplate(row: Row): OutboundTemplateRecord {
 }
 
 export async function listTemplates(
+  client: SupabaseClient,
   tenantSlug: string,
   options: { status?: TemplateStatus | "all" } = {}
 ): Promise<OutboundTemplateRecord[]> {
-  const supabase = await createClient();
   // Return tenant-specific templates AND globals together.
   // Tenant-specific ones sort first so they visually override globals.
-  let query = supabase
+  let query = client
     .from("outbound_templates")
     .select("*")
     .or(`tenant_slug.eq.${tenantSlug},is_global.eq.true`)

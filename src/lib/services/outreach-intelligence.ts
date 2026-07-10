@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProspectRecord } from "@/lib/types/outbound";
 import type {
   ConversationAnalysisRecord,
@@ -76,10 +77,10 @@ function prospectRowTo(row: Record<string, unknown>): ProspectRecord {
 // ── Latest analysis per prospect ─────────────────────────────────────────────
 
 export async function getLatestAnalysis(
+  client: SupabaseClient,
   prospectId: string
 ): Promise<ConversationAnalysisRecord | null> {
-  const supabase = await createClient();
-  const { data } = await supabase
+  const { data } = await client
     .from("conversation_analyses")
     .select("*")
     .eq("prospect_id", prospectId)
@@ -93,29 +94,33 @@ export async function getLatestAnalysis(
 // ── Full conversation thread for a prospect ──────────────────────────────────
 
 export async function getConversationThread(
+  client: SupabaseClient,
+  tenantSlug: string,
   prospectId: string
 ): Promise<ThreadEvent[]> {
-  const supabase = await createClient();
-
   const [dmsRes, inboundRes, notesRes, analysesRes] = await Promise.all([
-    supabase
+    client
       .from("outbound_dms")
       .select("id, body, status, version, created_at")
+      .eq("tenant_slug", tenantSlug)
       .eq("prospect_id", prospectId)
       .order("created_at", { ascending: true }),
-    supabase
+    client
       .from("inbound_messages")
       .select("id, body, received_at")
+      .eq("tenant_slug", tenantSlug)
       .eq("prospect_id", prospectId)
       .order("received_at", { ascending: true }),
-    supabase
+    client
       .from("prospect_notes")
       .select("id, body, created_at")
+      .eq("tenant_slug", tenantSlug)
       .eq("prospect_id", prospectId)
       .order("created_at", { ascending: true }),
-    supabase
+    client
       .from("conversation_analyses")
       .select("*")
+      .eq("tenant_slug", tenantSlug)
       .eq("prospect_id", prospectId)
       .order("created_at", { ascending: true })
       .limit(20),
@@ -192,9 +197,10 @@ export interface OutreachTodayData {
 const COLD_DAYS = 7;
 
 export async function getOutreachToday(
+  client: SupabaseClient,
   tenantSlug: string
 ): Promise<OutreachTodayData> {
-  const supabase = await createClient();
+  const supabase = client;
   const now = new Date();
   const todayStart = now.toISOString().slice(0, 10);
   const todayEnd = new Date(now);

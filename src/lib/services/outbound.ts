@@ -1,8 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { BrandVoice } from "@/lib/ai/brand-voice";
+import type { BrandPositioning } from "@/lib/ai/brand-positioning";
+import { draftOutboundDmAi, OutboundAiError } from "@/lib/ai/outbound";
 import type {
   InboundMessageRecord,
   OutboundDmRecord,
   OutboundDmStatus,
+  OutboundPlatform,
   ProspectRecord,
   ProspectSearchRecord,
   ProspectStatus,
@@ -76,16 +81,23 @@ function prospectRowTo(row: ProspectRow): ProspectRecord {
 }
 
 export async function listProspects(
+  client: SupabaseClient,
   tenantSlug: string,
-  filter: { status?: ProspectStatus | "all"; page?: number; pageSize?: number } = {}
+  filter: {
+    status?: ProspectStatus | "all";
+    platform?: OutboundPlatform;
+    qualificationScoreMin?: number;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}
 ): Promise<{ data: ProspectRecord[]; total: number }> {
-  const supabase = await createClient();
   const pageSize = filter.pageSize ?? 50;
   const page = filter.page ?? 0;
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
-  let query = supabase
+  let query = client
     .from("prospects")
     .select("*", { count: "exact" })
     .eq("tenant_slug", tenantSlug)
@@ -94,17 +106,36 @@ export async function listProspects(
   if (filter.status && filter.status !== "all") {
     query = query.eq("status", filter.status);
   }
+  if (filter.platform) {
+    query = query.eq("platform", filter.platform);
+  }
+  if (filter.qualificationScoreMin !== undefined) {
+    query = query.gte("qualification_score", filter.qualificationScoreMin);
+  }
+  if (filter.search) {
+    // Spliced into a raw PostgREST `.or(...)` filter string below — strip
+    // characters with special meaning in that grammar (,.()"%*) so a
+    // search term can't inject additional filter clauses or malform the
+    // query. None of these are meaningful in a fuzzy handle/name/bio search.
+    const sanitized = filter.search.replace(/[,.()"%*]/g, "").trim();
+    if (sanitized) {
+      const like = `%${sanitized}%`;
+      query = query.or(
+        `handle.ilike.${like},display_name.ilike.${like},bio.ilike.${like}`
+      );
+    }
+  }
   const { data, error, count } = await query;
   if (error || !data) return { data: [], total: 0 };
   return { data: (data as ProspectRow[]).map(prospectRowTo), total: count ?? 0 };
 }
 
 export async function getProspect(
+  client: SupabaseClient,
   tenantSlug: string,
   id: string
 ): Promise<ProspectRecord | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from("prospects")
     .select("*")
     .eq("tenant_slug", tenantSlug)
@@ -140,36 +171,310 @@ export async function listSearches(
   }));
 }
 
+function dmRowTo(row: Record<string, unknown>): OutboundDmRecord {
+  return {
+    id: row.id as string,
+    tenantSlug: row.tenant_slug as string,
+    prospectId: row.prospect_id as string,
+    version: row.version as number,
+    body: row.body as string,
+    followupBody: (row.followup_body as string) ?? null,
+    status: row.status as OutboundDmStatus,
+    approvedBy: (row.approved_by as string) ?? null,
+    approvedAt: (row.approved_at as string) ?? null,
+    sentAt: (row.sent_at as string) ?? null,
+    externalId: (row.external_id as string) ?? null,
+    error: (row.error as string) ?? null,
+    generatorModel: (row.generator_model as string) ?? null,
+    generatorCostUsd: Number(row.generator_cost_usd ?? 0),
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
+}
+
 export async function listDmsForProspect(
+  client: SupabaseClient,
   tenantSlug: string,
   prospectId: string
 ): Promise<OutboundDmRecord[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from("outbound_dms")
     .select("*")
     .eq("tenant_slug", tenantSlug)
     .eq("prospect_id", prospectId)
     .order("version", { ascending: false });
   if (error || !data) return [];
-  return data.map((row) => ({
-    id: row.id,
-    tenantSlug: row.tenant_slug,
-    prospectId: row.prospect_id,
-    version: row.version,
-    body: row.body,
-    followupBody: row.followup_body,
-    status: row.status as OutboundDmStatus,
-    approvedBy: row.approved_by,
-    approvedAt: row.approved_at,
-    sentAt: row.sent_at,
-    externalId: row.external_id,
-    error: row.error,
-    generatorModel: row.generator_model,
-    generatorCostUsd: Number(row.generator_cost_usd ?? 0),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+  return (data as Record<string, unknown>[]).map(dmRowTo);
+}
+
+async function latestDm(
+  client: SupabaseClient,
+  tenantSlug: string,
+  prospectId: string
+): Promise<OutboundDmRecord | null> {
+  const { data, error } = await client
+    .from("outbound_dms")
+    .select("*")
+    .eq("tenant_slug", tenantSlug)
+    .eq("prospect_id", prospectId)
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return dmRowTo(data as Record<string, unknown>);
+}
+
+function normalizeHandle(raw: string): string {
+  return raw.trim().replace(/^@/, "").toLowerCase();
+}
+
+export interface UpsertProspectInput {
+  platform: OutboundPlatform;
+  handle: string;
+  displayName?: string | null;
+  profileUrl?: string | null;
+  bio?: string | null;
+  followerCount?: number | null;
+  signalSummary?: string | null;
+  signalData?: Record<string, unknown>;
+}
+
+/** Upsert-by-(tenant, platform, handle), mirroring the logic inline in
+ * `/api/ext/prospect` (POST) — extracted here so /api/v1 shares it
+ * without touching the extension route's own copy. */
+export async function upsertProspect(
+  client: SupabaseClient,
+  tenantSlug: string,
+  input: UpsertProspectInput
+): Promise<{ prospect: ProspectRecord; dm: OutboundDmRecord | null } | null> {
+  const handle = normalizeHandle(input.handle);
+  if (!handle) return null;
+  const { data, error } = await client
+    .from("prospects")
+    .upsert(
+      {
+        tenant_slug: tenantSlug,
+        platform: input.platform,
+        handle,
+        display_name: input.displayName ?? null,
+        profile_url: input.profileUrl ?? null,
+        bio: input.bio ?? null,
+        follower_count: input.followerCount ?? null,
+        signal_summary: input.signalSummary ?? null,
+        signal_data: input.signalData ?? undefined,
+      },
+      { onConflict: "tenant_slug,platform,handle" }
+    )
+    .select("*")
+    .single();
+  if (error || !data) return null;
+  const prospect = prospectRowTo(data as ProspectRow);
+  const dm = await latestDm(client, tenantSlug, prospect.id);
+  return { prospect, dm };
+}
+
+/** AI-draft a DM for a prospect and save it as the next version,
+ * cascading the prospect's status. Mirrors `/api/ext/draft-dm`. */
+export async function draftAndSaveDm(
+  client: SupabaseClient,
+  tenantSlug: string,
+  prospectId: string,
+  opts: {
+    tenantName: string;
+    voice: BrandVoice | null;
+    positioning: BrandPositioning | null;
+    context?: string;
+  }
+): Promise<{ prospect: ProspectRecord; dm: OutboundDmRecord; rationale: string } | { error: string } | null> {
+  const prospect = await getProspect(client, tenantSlug, prospectId);
+  if (!prospect) return null;
+
+  try {
+    const { result, model, costUsd } = await draftOutboundDmAi({
+      tenantSlug,
+      tenantName: opts.tenantName,
+      voice: opts.voice,
+      positioning: opts.positioning,
+      prospect,
+      context: opts.context,
+    });
+
+    const { data: last } = await client
+      .from("outbound_dms")
+      .select("version")
+      .eq("tenant_slug", tenantSlug)
+      .eq("prospect_id", prospectId)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextVersion = ((last?.version as number | null) ?? 0) + 1;
+
+    const { data: dmRow, error: dmError } = await client
+      .from("outbound_dms")
+      .insert({
+        tenant_slug: tenantSlug,
+        prospect_id: prospectId,
+        version: nextVersion,
+        body: result.body,
+        followup_body: result.followup_body,
+        status: "drafted",
+        generator_model: model,
+        generator_cost_usd: costUsd,
+      })
+      .select("*")
+      .single();
+    if (dmError || !dmRow) return { error: dmError?.message ?? "DM save failed" };
+
+    await client
+      .from("prospects")
+      .update({ status: "drafted", last_touched_at: new Date().toISOString() })
+      .eq("tenant_slug", tenantSlug)
+      .eq("id", prospectId);
+
+    return {
+      prospect: { ...prospect, status: "drafted" },
+      dm: dmRowTo(dmRow as Record<string, unknown>),
+      rationale: result.rationale,
+    };
+  } catch (err) {
+    const msg =
+      err instanceof OutboundAiError
+        ? "DM draft failed. Please try again."
+        : err instanceof Error
+          ? err.message
+          : "Unknown error";
+    return { error: msg };
+  }
+}
+
+/** Mark a DM sent, cascading the prospect's pipeline stage. Mirrors
+ * `/api/ext/dm/[id]/sent`. Returns null if the DM doesn't belong to
+ * the tenant. */
+export async function markDmSent(
+  client: SupabaseClient,
+  tenantSlug: string,
+  dmId: string
+): Promise<{ prospectId: string } | null> {
+  const { data: dm, error } = await client
+    .from("outbound_dms")
+    .select("id, prospect_id")
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", dmId)
+    .maybeSingle();
+  if (error || !dm) return null;
+
+  const nowIso = new Date().toISOString();
+  await client
+    .from("outbound_dms")
+    .update({ status: "sent", sent_at: nowIso })
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", dm.id);
+  await client
+    .from("prospects")
+    .update({ status: "sent", last_touched_at: nowIso })
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", dm.prospect_id);
+
+  return { prospectId: dm.prospect_id as string };
+}
+
+/** Shared implementation behind `updateProspectStatus` (the
+ * `"use server"` action, which stays thin and keeps its stable
+ * signature for existing client-component callers) and the
+ * `/api/v1/prospects/:id/stage` route. */
+export async function setProspectStatus(
+  client: SupabaseClient,
+  tenantSlug: string,
+  id: string,
+  status: ProspectStatus,
+  notes?: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const patch: Record<string, unknown> = {
+    status,
+    last_touched_at: new Date().toISOString(),
+  };
+  if (notes !== undefined) patch.notes = notes;
+  const { error } = await client
+    .from("prospects")
+    .update(patch)
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Insert a prospect note directly (no session user exists under token
+ * auth, so `addProspectNote()` in actions/prospect-notes.ts — which
+ * requires `getCurrentUser()` — can't be reused as-is). Attributes
+ * `created_by` to whoever the caller resolves (e.g. the token's own
+ * `created_by` user). Shared by /api/v1/prospects/:id/notes and the
+ * pulse_add_prospect_note MCP tool. */
+export async function addProspectNoteAdmin(
+  client: SupabaseClient,
+  tenantSlug: string,
+  prospectId: string,
+  body: string,
+  createdBy: string | null
+): Promise<{ id: string; createdAt: string } | { error: string }> {
+  const { data: prospect } = await client
+    .from("prospects")
+    .select("id")
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", prospectId)
+    .maybeSingle();
+  if (!prospect) return { error: "Prospect not found" };
+
+  const { data, error } = await client
+    .from("prospect_notes")
+    .insert({
+      tenant_slug: tenantSlug,
+      prospect_id: prospectId,
+      body: body.trim(),
+      created_by: createdBy,
+    })
+    .select("id, created_at")
+    .single();
+  if (error || !data) return { error: error?.message ?? "Insert failed" };
+
+  return { id: data.id, createdAt: data.created_at };
+}
+
+/** Shared implementation behind `recordInboundReply` (the
+ * `"use server"` action) and `/api/v1/prospects/:id/inbound`. */
+export async function recordInboundMessage(
+  client: SupabaseClient,
+  tenantSlug: string,
+  prospectId: string,
+  input: { body: string; inReplyToDmId?: string }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const body = input.body.trim();
+  if (!body) return { ok: false, error: "Body required" };
+  const prospect = await getProspect(client, tenantSlug, prospectId);
+  if (!prospect) return { ok: false, error: "Prospect not found" };
+
+  const { error } = await client.from("inbound_messages").insert({
+    tenant_slug: tenantSlug,
+    prospect_id: prospectId,
+    in_reply_to_dm_id: input.inReplyToDmId ?? null,
+    platform: prospect.platform,
+    body,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  await client
+    .from("prospects")
+    .update({ status: "replied", last_touched_at: new Date().toISOString() })
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", prospectId);
+  if (input.inReplyToDmId) {
+    await client
+      .from("outbound_dms")
+      .update({ status: "replied" })
+      .eq("tenant_slug", tenantSlug)
+      .eq("id", input.inReplyToDmId);
+  }
+
+  return { ok: true };
 }
 
 export async function listInbox(

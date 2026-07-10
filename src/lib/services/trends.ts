@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   TrendScout,
   TrendPlatform,
@@ -68,6 +69,36 @@ export async function listTrendScouts(
   const { data, error } = await query;
   if (error || !data) return [];
   return (data as Row[]).map(rowTo);
+}
+
+/** Client-injected, offset-paginated twin of listTrendScouts() for
+ * /api/v1 + MCP — listTrendScouts() itself is left untouched (its 3
+ * existing callers only need a `limit`, not a real total/offset). */
+export async function listTrendScoutsApi(
+  client: SupabaseClient,
+  tenantSlug: string,
+  filter: {
+    includeDismissed?: boolean;
+    platform?: TrendPlatform;
+    source?: TrendSource;
+    limit?: number;
+    offset?: number;
+  } = {}
+): Promise<{ data: TrendScout[]; total: number }> {
+  const limit = filter.limit ?? 25;
+  const offset = filter.offset ?? 0;
+  let query = client
+    .from("trend_scouts")
+    .select("*", { count: "exact" })
+    .eq("tenant_slug", tenantSlug)
+    .order("captured_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (!filter.includeDismissed) query = query.is("dismissed_at", null);
+  if (filter.platform) query = query.eq("platform", filter.platform);
+  if (filter.source) query = query.eq("source", filter.source);
+  const { data, error, count } = await query;
+  if (error || !data) return { data: [], total: 0 };
+  return { data: (data as Row[]).map(rowTo), total: count ?? 0 };
 }
 
 export async function getTrendScout(

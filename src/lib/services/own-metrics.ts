@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   OwnPostMetric,
   OwnMetricsPlatform,
@@ -80,6 +81,32 @@ export async function listOwnMetrics(
   const { data, error } = await query;
   if (error || !data) return [];
   return (data as Row[]).map(rowTo);
+}
+
+/** Client-injected, offset-paginated + date-filterable twin of
+ * listOwnMetrics() for /api/v1 + MCP's "per-post insights" endpoint.
+ * Deliberately reads own_post_metrics (not the separate `posts` table
+ * services/posts.ts backs /post-history with) — this is the same table
+ * POST /api/v1/posts/:id/metrics writes into, so metrics the
+ * browser-driven social manager just recorded show up here immediately. */
+export async function listOwnMetricsApi(
+  client: SupabaseClient,
+  tenantSlug: string,
+  filter: { platform?: OwnMetricsPlatform; since?: string; limit?: number; offset?: number } = {}
+): Promise<{ data: OwnPostMetric[]; total: number }> {
+  const limit = filter.limit ?? 25;
+  const offset = filter.offset ?? 0;
+  let query = client
+    .from("own_post_metrics")
+    .select("*", { count: "exact" })
+    .eq("tenant_slug", tenantSlug)
+    .order("captured_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (filter.platform) query = query.eq("platform", filter.platform);
+  if (filter.since) query = query.gte("captured_at", filter.since);
+  const { data, error, count } = await query;
+  if (error || !data) return { data: [], total: 0 };
+  return { data: (data as Row[]).map(rowTo), total: count ?? 0 };
 }
 
 export async function listImportSessions(
