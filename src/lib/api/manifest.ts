@@ -64,4 +64,10 @@ export const API_V1_MANIFEST: ManifestEntry[] = [
   { method: "GET", path: "/api/v1/blog-posts/:id", scope: "content:read", description: "Single blog post + its latest version." },
   { method: "POST", path: "/api/v1/blog-posts", scope: "content:write", description: "Create a draft blog post (title and/or targetKeyword and/or extraContext — at least one required). AI-generated." },
   { method: "POST", path: "/api/v1/captions/compose", scope: "content:write", description: "AI-compose a multi-platform caption take from a source URL or angle." },
+
+  // Notifications / mobile approvals (Part 3)
+  { method: "POST", path: "/api/v1/briefings/send", scope: "publish:write | content:write", description: "Send a scheduled post or content brief for human approval via a signed link, delivered by email or WhatsApp. Scope depends on targetType." },
+  { method: "GET", path: "/api/v1/approvals/pending", scope: "content:read", description: "Approval requests sent but not yet approved/rejected/expired." },
+  { method: "POST", path: "/api/v1/approvals/:token/approve", scope: null, description: "Approve a pending request. Auth is the signed token itself, not a bearer tenant_api_token — called only by the public /approve/[token] page." },
+  { method: "POST", path: "/api/v1/approvals/:token/reject", scope: null, description: "Reject a pending request, with an optional reason. Same token-in-path auth as approve." },
 ];

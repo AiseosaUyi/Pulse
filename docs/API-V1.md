@@ -403,13 +403,65 @@ Real multi-pass `gpt-4.1` generation — not free, not fast.
 
 Real `gpt-4.1` call — not free.
 
+### Notifications / mobile approvals (Part 3)
+
+Lets a founder/manager approve, edit, or reject a scheduled post or content brief from their
+phone — reached via a signed, one-time link delivered by email or WhatsApp, no login required.
+Approving a scheduled post is what actually triggers "auto-publish": the target row is created
+with `status='draft'` (invisible to the due-post query, which only ever selects `status='scheduled'`)
+and promoted to `scheduled` — with an immediate QStash enqueue if it's already due, or the normal
+`notBefore`-delayed enqueue otherwise — only once approved. Rejecting sets `status='failed'` with
+a `Rejected via approval link: <reason>` error message, the same convention `cancelScheduledPost`
+already uses. Approving/rejecting a brief just transitions `content_briefs.status` the same way
+the in-app buttons do (`approved` / `dismissed` with a reason).
+
+| Method | Path | Scope | Description |
+|---|---|---|---|
+| POST | `/api/v1/briefings/send` | `publish:write` (scheduled_post) or `content:write` (content_brief) | Create an approval request for a target and deliver its link. |
+| GET | `/api/v1/approvals/pending` | `content:read` | Approval requests sent but not yet approved/rejected/expired. |
+| POST | `/api/v1/approvals/:token/approve` | none — the token itself is the auth | Approve, optionally with edited content. |
+| POST | `/api/v1/approvals/:token/reject` | none — the token itself is the auth | Reject, optionally with a reason. |
+
+**`POST /api/v1/briefings/send`**
+
+```json
+// request
+{ "targetType": "scheduled_post", "targetId": "<scheduled_posts.id>", "deliveredVia": "email", "deliveredTo": "founder@example.com" }
+// response
+{ "requestId": "...", "expiresAt": "2026-07-13T12:00:00.000Z" }
+```
+
+404 if the target doesn't exist for this tenant. 502 if the request row was created but delivery
+(Brevo/WhatsApp) failed — the row still exists (so it can be retried or inspected), only the send
+failed. Links expire after 72 hours and work once — the `approval_requests` row's own `status`
+column is the one-time-use gate (no separate replay ledger).
+
+**`POST /api/v1/approvals/:token/approve`** — `{"editedContent"?: "..."}`. Returns
+`{"target": {...the post or brief's row after the transition...}}`. 410 if the link expired, 409
+if it was already actioned (by anyone — a second tap on the same link, or a race between two
+people opening it).
+
+**`POST /api/v1/approvals/:token/reject`** — `{"reason"?: "..."}`. Same response/error shape as
+approve.
+
+**The page itself** lives at `/approve/[token]` (not under `(app)`, no sidebar, no session —
+exempted from the proxy auth gate via `PUBLIC_PATHS` in `src/lib/supabase/middleware.ts`, same
+mechanism as `/invite/[token]`). Server component resolves the token + renders one of: the
+interactive approve/edit/reject card, or a terminal state (expired / invalid / already
+approved / already rejected, the last two showing a read-only copy of what was decided).
+
+**Env vars this group needs:** `APPROVAL_TOKEN_SECRET` (HS256 signing secret for approval links —
+`POST /briefings/send` 503s without it) and, only if WhatsApp delivery is used,
+`WHATSAPP_APPROVAL_TEMPLATE_NAME` (a Meta-approved WhatsApp template name with one body
+placeholder for the link — proactive WhatsApp messages outside the 24h customer-service window
+require a template, plain text isn't deliverable).
+
 ## Not yet shipped
 
-Every endpoint group in the original build spec (Sales, Publishing, Engagement, Content, SEO,
-Intelligence, Analytics) has shipped. `GET /api/v1/manifest` is the source of truth for what's
-actually live at any given time — check it rather than trusting this doc's endpoint table to be
-current. Notifications + mobile approvals (Part 3 of the build spec) is a separate, later
-follow-up and is not part of `/api/v1` as scoped here.
+Every endpoint group in the original build spec — Sales, Publishing, Engagement, Content, SEO,
+Intelligence, Analytics, and Notifications/mobile approvals — has shipped. `GET /api/v1/manifest`
+is the source of truth for what's actually live at any given time — check it rather than trusting
+this doc's endpoint table to be current.
 
 ## Deviations from the original build spec
 
@@ -482,6 +534,31 @@ follow-up and is not part of `/api/v1` as scoped here.
     logic was duplicated into new client-injected service functions
     (`composeAndSaveApi` in a new `src/lib/services/social-drafts.ts`, `createManualBlogPostApi`
     in `src/lib/services/blog-posts.ts`) rather than modifying the actions.
+15. **The approve/reject routes don't go through `requireApiContext()`** — they're the one
+    deliberate exception to "every /api/v1 route is bearer-token-authed." The signed token in the
+    path *is* the credential (see `src/lib/approvals/token.ts`); there is no tenant_api_token and
+    no session on the public approval page. `manifest.ts` lists their scope as `null` for the same
+    reason `/me` and `/manifest` do, but for a different underlying reason (those need *any*
+    valid bearer token; these need *no* bearer token at all, a signed path token instead).
+16. **`POST /api/v1/briefings/send` isn't gated by a single fixed scope** — the required scope
+    depends on the request body's `targetType` (parsed before the scope check runs), so it can't
+    use `requireApiContext()`'s single-scope signature. The route re-implements
+    `requireApiContext`'s pre-auth rate limit + token resolution + post-auth rate limit steps
+    inline, then checks `hasScope()` manually once `targetType` is known. `pulse_send_briefing`
+    does the equivalent with `requireToolScope(extra, null)` (any valid token) followed by a
+    manual `hasScope()` check.
+17. **No `approval_jti` replay-ledger table** — unlike `seo_preview_jti` (the other JWT-issuing
+    module in this codebase), approval tokens have no separate one-time-use ledger. The
+    `approval_requests` row's own `status` column (flipped away from `pending` by the first
+    approve/reject) *is* the ledger — a second attempt lands on the "already actioned" branch via
+    a conditional `UPDATE ... WHERE status = 'pending'`, not a jti lookup. One fewer table, same
+    guarantee, because every token here is already 1:1 with a real row (unlike the preview
+    tokens, which don't correspond to a mutable row at all).
+18. **Expiry is computed at read time (`token_expires_at < now()`), not swept by a cron** — a
+    stale `approval_requests` row just stays `status='pending'` forever; there's no
+    `sweep-expired-approvals` job. `seo_preview_jti` has a cron sweep because its ledger rows
+    accumulate and need periodic deletion; `approval_requests` rows are few, permanent audit
+    records (who was asked what, when, and what they decided), not a ledger to be cleaned up.
 
 ## Production bugs found and fixed while building this group
 
@@ -622,8 +699,18 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 | `pulse_create_blog_post` | `POST /blog-posts` | `content:write` |
 | `pulse_compose_caption` | `POST /captions/compose` | `content:write` |
 
-37 tools total across all 8 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
-Analytics, Content) — every group in the original build spec.
+**Notifications / mobile approvals**
+
+| Tool | REST twin | Scope |
+|---|---|---|
+| `pulse_send_briefing` | `POST /briefings/send` | `publish:write` (scheduled_post) or `content:write` (content_brief) |
+| `pulse_list_pending_approvals` | `GET /approvals/pending` | `content:read` |
+
+No `pulse_approve`/`pulse_reject` tools — approval must be a deliberate human action taken via the
+signed link, not something an AI agent can call on the tenant's behalf.
+
+39 tools total across all 9 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
+Analytics, Content, Notifications) — every group in the original build spec.
 
 ### Deviations (MCP)
 
