@@ -26,6 +26,7 @@ import { registerIntelTools } from "@/lib/mcp/tools/intel";
 import { registerSeoTools } from "@/lib/mcp/tools/seo";
 import { registerAnalyticsTools } from "@/lib/mcp/tools/analytics";
 import { registerContentTools } from "@/lib/mcp/tools/content";
+import { registerNotificationsTools } from "@/lib/mcp/tools/notifications";
 
 // [transport] is a literal dynamic segment mcp-handler resolves itself
 // (it becomes "mcp" for streamable HTTP, "sse"/"message" for SSE) — it
@@ -43,6 +44,7 @@ const handler = createMcpHandler(
     registerSeoTools(server);
     registerAnalyticsTools(server);
     registerContentTools(server);
+    registerNotificationsTools(server);
   },
   {},
   {
