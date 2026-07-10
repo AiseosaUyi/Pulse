@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BlogPostVersionRecord } from "@/lib/types/blog-posts";
 
 interface Row {
@@ -61,4 +62,22 @@ export async function getBlogPostVersion(
     .maybeSingle();
   if (error || !data) return null;
   return rowTo(data as Row);
+}
+
+/** Client-injected twin of listBlogPostVersions() for /api/v1 + MCP. */
+export async function listBlogPostVersionsApi(
+  client: SupabaseClient,
+  tenantSlug: string,
+  blogPostId: string,
+  limit = 1
+): Promise<BlogPostVersionRecord[]> {
+  const { data, error } = await client
+    .from("blog_post_versions")
+    .select("*")
+    .eq("tenant_slug", tenantSlug)
+    .eq("blog_post_id", blogPostId)
+    .order("version_number", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return (data as Row[]).map(rowTo);
 }

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { rowToSlot } from "@/lib/services/content-calendar-lifecycle";
 import type { ContentSlotRecord } from "@/lib/types/content-calendar";
 
@@ -17,6 +18,23 @@ export async function listContentSlots(
     .eq("tenant_slug", tenantSlug)
     .order("position", { ascending: true });
 
+  if (error || !data) return [];
+  return data.map(rowToSlot);
+}
+
+/** Client-injected twin for /api/v1 + MCP. Callers must run
+ * rolloverOverdueSlots(admin, tenantSlug) first if "upcoming" should
+ * reflect today's rolled-forward dates — this function is a pure read,
+ * same as listContentSlots(). */
+export async function listContentSlotsApi(
+  client: SupabaseClient,
+  tenantSlug: string
+): Promise<ContentSlotRecord[]> {
+  const { data, error } = await client
+    .from("content_slots")
+    .select("*")
+    .eq("tenant_slug", tenantSlug)
+    .order("position", { ascending: true });
   if (error || !data) return [];
   return data.map(rowToSlot);
 }
