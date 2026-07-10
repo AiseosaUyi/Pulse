@@ -24,6 +24,11 @@ import {
   revokeApiToken,
 } from "@/lib/actions/api-tokens";
 import type { ApiTokenRecord } from "@/lib/api-tokens";
+import {
+  API_V1_SCOPE_GROUPS,
+  DEFAULT_API_V1_SCOPES,
+  type ApiV1Scope,
+} from "@/lib/api/scopes";
 
 export function ApiTokensSection({
   tenantSlug,
@@ -36,6 +41,9 @@ export function ApiTokensSection({
   const [tokens, setTokens] = useState(initial);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
+  const [scopes, setScopes] = useState<Set<ApiV1Scope>>(
+    () => new Set(DEFAULT_API_V1_SCOPES)
+  );
   const [freshToken, setFreshToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +53,10 @@ export function ApiTokensSection({
     if (!name.trim()) return;
     setError(null);
     startTransition(async () => {
-      const res = await createApiToken(tenantSlug, { name });
+      const res = await createApiToken(tenantSlug, {
+        name,
+        scopes: Array.from(scopes),
+      });
       if (!res.success) {
         setError(res.error);
         return;
@@ -53,7 +64,17 @@ export function ApiTokensSection({
       setFreshToken(res.token);
       setTokens((prev) => [res.record, ...prev]);
       setName("");
+      setScopes(new Set(DEFAULT_API_V1_SCOPES));
       setCreating(false);
+    });
+  };
+
+  const toggleScope = (scope: ApiV1Scope) => {
+    setScopes((prev) => {
+      const next = new Set(prev);
+      if (next.has(scope)) next.delete(scope);
+      else next.add(scope);
+      return next;
     });
   };
 
@@ -151,15 +172,47 @@ export function ApiTokensSection({
       )}
 
       {creating && !freshToken && (
-        <div className="mb-4 rounded-lg border border-border p-4 space-y-2">
-          <Label htmlFor="token-name">Token name</Label>
-          <Input
-            id="token-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Priye's Chrome extension"
-            autoFocus
-          />
+        <div className="mb-4 rounded-lg border border-border p-4 space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="token-name">Token name</Label>
+            <Input
+              id="token-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Priye's Chrome extension"
+              autoFocus
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Scopes</Label>
+            <p className="text-[11px] text-text-muted">
+              What this token can do. Defaults to read-only across every
+              module — check write to let it act (draft DMs, publish, etc).
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-2 pt-1">
+              {API_V1_SCOPE_GROUPS.map((group) => (
+                <div key={group.label} className="space-y-1">
+                  <p className="text-[10px] font-medium text-text-muted uppercase tracking-wide">
+                    {group.label}
+                  </p>
+                  {group.scopes.map((scope) => (
+                    <label
+                      key={scope}
+                      className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={scopes.has(scope)}
+                        onChange={() => toggleScope(scope)}
+                        className="accent-primary-500"
+                      />
+                      {scope}
+                    </label>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="flex justify-end gap-2">
             <Button
               variant="ghost"
@@ -218,6 +271,9 @@ export function ApiTokensSection({
                   {t.lastUsedAt
                     ? ` · last used ${formatDateTime(t.lastUsedAt)}`
                     : " · never used"}
+                </p>
+                <p className="text-[10px] text-text-muted mt-0.5 font-mono truncate">
+                  {t.scope}
                 </p>
               </div>
               <Button

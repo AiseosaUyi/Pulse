@@ -25,9 +25,10 @@ export async function analyzeProspectConversation(
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Not authenticated" };
 
+  const supabase = await createClient();
   const [tenant, prospect] = await Promise.all([
     getTenant(tenantSlug),
-    getProspect(tenantSlug, prospectId),
+    getProspect(supabase, tenantSlug, prospectId),
   ]);
   if (!tenant) return { success: false, error: "Tenant not found" };
   if (!prospect) return { success: false, error: "Prospect not found" };
@@ -202,8 +203,8 @@ export async function loadProspectPanelData(
   if (!row) return { success: false, error: "Prospect not found" };
 
   const [thread, latestAnalysis, campaignIds] = await Promise.all([
-    getConversationThread(prospectId),
-    getLatestAnalysis(prospectId),
+    getConversationThread(supabase, tenantSlug, prospectId),
+    getLatestAnalysis(supabase, prospectId),
     getProspectCampaignIds(prospectId),
   ]);
 
