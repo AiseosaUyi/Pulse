@@ -12,6 +12,141 @@ import {
   mockContentScores,
 } from "@/lib/data/mock-seo";
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+function keywordRankingRowTo(row: Record<string, unknown>): KeywordRanking {
+  return {
+    id: row.id as string,
+    tenantSlug: row.tenant_slug as string,
+    keyword: row.keyword as string,
+    url: (row.url as string) ?? null,
+    position: (row.position as number) ?? null,
+    previousPosition: (row.previous_position as number) ?? null,
+    positionSource: (row.position_source as KeywordRanking["positionSource"]) ?? null,
+    volume: row.volume as number,
+    difficulty: row.difficulty as KeywordDifficulty,
+    lastChecked: (row.last_checked as string) ?? null,
+    notes: (row.notes as string) ?? null,
+    createdAt: row.created_at as string,
+  };
+}
+
+/** Client-injected, offset-paginated twin of getKeywordRankings() for
+ * /api/v1 + MCP — getKeywordRankings() itself is left untouched (its 6
+ * existing callers all want the full unpaginated list). */
+export async function listKeywordRankingsApi(
+  client: SupabaseClient,
+  tenantSlug: string,
+  filter: { limit?: number; offset?: number } = {}
+): Promise<{ data: KeywordRanking[]; total: number }> {
+  const limit = filter.limit ?? 25;
+  const offset = filter.offset ?? 0;
+  const { data, error, count } = await client
+    .from("keyword_rankings")
+    .select("*", { count: "exact" })
+    .eq("tenant_slug", tenantSlug)
+    .order("volume", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error || !data) return { data: [], total: 0 };
+  return { data: data.map(keywordRankingRowTo), total: count ?? 0 };
+}
+
+export interface SeoRecommendation {
+  id: string;
+  tenantSlug: string;
+  blogPostId: string | null;
+  slug: string | null;
+  type: string;
+  payload: Record<string, unknown>;
+  score: number | null;
+  status: string;
+  surfacedAt: string;
+  appliedAt: string | null;
+  dismissedAt: string | null;
+  snoozedUntil: string | null;
+  notes: string | null;
+}
+
+function seoRecommendationRowTo(row: Record<string, unknown>): SeoRecommendation {
+  return {
+    id: row.id as string,
+    tenantSlug: row.tenant_slug as string,
+    blogPostId: (row.blog_post_id as string) ?? null,
+    slug: (row.slug as string) ?? null,
+    type: row.type as string,
+    payload: (row.payload as Record<string, unknown>) ?? {},
+    score: (row.score as number) ?? null,
+    status: row.status as string,
+    surfacedAt: row.surfaced_at as string,
+    appliedAt: (row.applied_at as string) ?? null,
+    dismissedAt: (row.dismissed_at as string) ?? null,
+    snoozedUntil: (row.snoozed_until as string) ?? null,
+    notes: (row.notes as string) ?? null,
+  };
+}
+
+/** No SSR read function exists for seo_recommendations at all (only
+ * session-gated write actions in actions/seo-recommendations.ts) — this
+ * is new, not a refactor. Defaults to status='surfaced' (the "open
+ * recommendations" the composite index `idx_seo_recs_tenant_status_score`
+ * is built for), ordered by score desc. */
+export async function listSeoRecommendations(
+  client: SupabaseClient,
+  tenantSlug: string,
+  filter: { status?: string; limit?: number; offset?: number } = {}
+): Promise<{ data: SeoRecommendation[]; total: number }> {
+  const limit = filter.limit ?? 25;
+  const offset = filter.offset ?? 0;
+  const { data, error, count } = await client
+    .from("seo_recommendations")
+    .select("*", { count: "exact" })
+    .eq("tenant_slug", tenantSlug)
+    .eq("status", filter.status ?? "surfaced")
+    .order("score", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error || !data) return { data: [], total: 0 };
+  return { data: data.map(seoRecommendationRowTo), total: count ?? 0 };
+}
+
+export interface TopicalMapApi {
+  clustering: unknown;
+  generatedAt: string;
+  drafts: Record<string, string>;
+}
+
+/** Client-injected twin of getLatestTopicalMap() (actions/topical-map.ts)
+ * — that file is `"use server"`, so every export must have serializable
+ * params; a SupabaseClient can't be one. This duplicates its exact
+ * (LLM-free) read logic rather than reshaping the action. */
+export async function getTopicalMapApi(
+  client: SupabaseClient,
+  tenantSlug: string
+): Promise<TopicalMapApi | null> {
+  const { data: map } = await client
+    .from("topical_maps")
+    .select("clustering, generated_at")
+    .eq("tenant_slug", tenantSlug)
+    .maybeSingle();
+  if (!map) return null;
+
+  const { data: drafts } = await client
+    .from("topical_map_drafts")
+    .select("cluster_name, article_title, blog_post_id")
+    .eq("tenant_slug", tenantSlug);
+
+  const draftMap: Record<string, string> = {};
+  for (const d of drafts ?? []) {
+    if (d.blog_post_id) {
+      draftMap[`${d.cluster_name}::${d.article_title}`] = d.blog_post_id;
+    }
+  }
+
+  return {
+    clustering: map.clustering,
+    generatedAt: map.generated_at as string,
+    drafts: draftMap,
+  };
+}
 
 export async function getKeywordRankings(tenantSlug: string): Promise<KeywordRanking[]> {
   const supabase = await createClient();
