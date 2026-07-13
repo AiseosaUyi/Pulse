@@ -57,8 +57,14 @@ export async function updateSession(request: NextRequest) {
     // Build the redirect URL from scratch — nextUrl.clone() in Next.js 16
     // doesn't always serialize search params correctly when used with
     // NextResponse.redirect, so we construct the absolute URL manually.
+    // `next` carries pathname + search (not just pathname) — a bare
+    // pathname silently drops query params, which broke the /oauth/authorize
+    // flow (client_id/redirect_uri/code_challenge/state all vanish on the
+    // login round-trip). login/actions.ts's `redirect(next)` already
+    // handles an arbitrary path+query string safely.
     const origin = request.nextUrl.origin;
-    const loginUrl = new URL(`/login?next=${encodeURIComponent(pathname)}`, origin);
+    const nextTarget = pathname + request.nextUrl.search;
+    const loginUrl = new URL(`/login?next=${encodeURIComponent(nextTarget)}`, origin);
     return NextResponse.redirect(loginUrl);
   }
 

@@ -597,24 +597,82 @@ dependency.
 
 ### Connecting from Cowork
 
-Add Pulse as a custom MCP connector:
+Two ways to add Pulse as a custom MCP connector, both hitting the same `/api/mcp` endpoint:
+
+**URL only (recommended)** — leave Cowork's Client ID/Secret fields blank:
+- **URL**: `https://pulse-ashy-kappa.vercel.app/api/mcp`
+
+Cowork auto-discovers everything else: it fetches `/.well-known/oauth-protected-resource` to find
+the authorization server, then `/.well-known/oauth-authorization-server` for its endpoints,
+dynamically registers itself via `POST /api/oauth/register` (no manual client setup), and drives
+the user through a normal browser login + tenant-consent screen. See "OAuth 2.1 for MCP clients"
+below for the full flow.
+
+**Static bearer token** — paste a token directly, no OAuth round-trip:
 - **URL**: `https://pulse-ashy-kappa.vercel.app/api/mcp`
 - **Auth**: Bearer token — the same `pulse_ext_...` token minted at Settings → Integrations →
   API tokens (identical tokens/scopes power both `/api/v1` and the MCP tools; mint once, use on
   either surface).
 
-A token with no scopes beyond the default `*:read` set can call every read-only tool below; add
-`sales:write`/`publish:write`/`engage:write` etc. for the mutating ones a skill needs.
+A token/session with no scopes beyond the default `*:read` set can call every read-only tool
+below; add `sales:write`/`publish:write`/`engage:write` etc. for the mutating ones a skill needs.
 
 ### Auth model
 
-`withMcpAuth()` wraps the whole handler and calls `resolveApiToken()` — the exact same function
-`/api/v1`'s `requireApiContext()` calls — once per request, before any tool runs. The resolved
-`{tenantSlug, tokenId, scopes, createdBy}` is stashed on `extra.authInfo.extra` and every tool
-re-derives a scoped context from it via `requireToolScope()` (`src/lib/api/mcp-context.ts`), the
-MCP-transport twin of `requireApiContext()`. **No tool accepts a tenant argument from the
-model** — a missing/revoked/scope-less token gets a real MCP tool error (`isError: true`), never
-silent cross-tenant access.
+`withMcpAuth()` wraps the whole handler and calls `verifyToken()` once per request, before any
+tool runs. `verifyToken()` branches on the bearer token's shape: a `pulse_ext_...` token goes
+through `resolveApiToken()` (the exact same function `/api/v1`'s `requireApiContext()` calls); any
+other token is tried as an OAuth access token via `verifyAccessToken()` (`src/lib/oauth/tokens.ts`).
+Both branches produce the identical `AuthInfo` shape — `{tenantSlug, tokenId, scopes,
+createdBy}` stashed on `extra.authInfo.extra` — so every tool re-derives a scoped context from it
+via `requireToolScope()` (`src/lib/api/mcp-context.ts`) without knowing or caring which auth path
+was used. **No tool accepts a tenant argument from the model** — a missing/revoked/scope-less
+token or session gets a real MCP tool error (`isError: true`), never silent cross-tenant access.
+
+### OAuth 2.1 for MCP clients
+
+A full OAuth 2.1 authorization server, added so Cowork (and any other MCP client that only takes
+a URL) can connect without a manually-minted static token. This is **MCP-route-only** — `/api/v1`
+REST and the Chrome extension keep using `pulse_ext_...` tokens exactly as before; nothing about
+that path changed.
+
+**Endpoints:**
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /.well-known/oauth-protected-resource` | RFC 9728 — tells clients where the authorization server lives (rewrites to `/api/oauth/protected-resource-metadata`, built on `mcp-handler`'s own helper) |
+| `GET /.well-known/oauth-authorization-server` | RFC 8414 — authorization/token/registration endpoint URLs, supported scopes, PKCE methods (rewrites to `/api/oauth/authorization-server-metadata`, hand-rolled — `mcp-handler` doesn't provide this) |
+| `POST /api/oauth/register` | RFC 7591 Dynamic Client Registration — public clients only, no `client_secret` issued (`token_endpoint_auth_method: "none"`) |
+| `GET /oauth/authorize` | Browser-facing consent page — goes through the normal Supabase Auth login gate, then lets the signed-in user pick which tenant to authorize |
+| `POST /api/oauth/token` | Token endpoint — `authorization_code` grant (PKCE-verified) and `refresh_token` grant (rotates on every use) |
+
+**Flow:** client registers via DCR → redirects the user to `/oauth/authorize?client_id=...&
+redirect_uri=...&code_challenge=...&code_challenge_method=S256&state=...` → user logs in (if not
+already) → consent screen lists every tenant where the user is `owner` or `admin` → user picks one
+and approves → redirected back to the client with a one-time authorization code → client exchanges
+the code + PKCE verifier at `/api/oauth/token` for a short-lived access token (1 hour, self-
+contained HS256 JWT — no DB lookup per request) and a refresh token (opaque, DB-stored, hashed,
+rotated on every use).
+
+**Tenant-selection UX:** there is no separate "which tenant" step baked into the URL — the
+consent page itself is where tenant selection happens, scoped to memberships where the user's
+role is `owner` or `admin` (the same bar as minting a `tenant_api_tokens` row today). If the user
+has exactly one eligible tenant it's pre-selected, but the explicit "Authorize '<client name>' for
+'<tenant>'?" confirmation always shows — never silently skipped. Zero eligible tenants renders an
+explicit empty state, not a silent failure.
+
+**PKCE is mandatory, S256 only** — no plain-text challenge method, matching current OAuth 2.1
+best practice for public clients that can't hold a secret.
+
+**Env var:** `MCP_OAUTH_JWT_SECRET` — HS256 signing secret for access tokens, a dedicated key
+separate from `PULSE_JWKS_PRIVATE_KEY` (that key is a different trust boundary: Pulse signs,
+Gruve verifies, for the Pulse→Gruve publish path). Required in `.env.local` and every Vercel
+environment before this flow works; `isMcpOAuthConfigured()` graceful-degrades to a clean 500 if
+unset rather than silently minting unverifiable tokens.
+
+**Not implemented:** `POST /api/oauth/revoke` (RFC 7009) — not required for Cowork to connect.
+Today the only way to revoke a refresh token early is deleting its `oauth_refresh_tokens` row
+directly. Tracked in `TODOS.md`.
 
 ### Tool list
 
