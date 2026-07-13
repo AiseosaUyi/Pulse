@@ -55,8 +55,7 @@ export function AuthorizeConsent({
           Nothing to connect
         </h1>
         <p className="text-sm text-gray-1000 max-w-sm">
-          {clientName} needs owner or admin access to a Pulse workspace. {userEmail} isn&apos;t an
-          owner or admin of any workspace yet.
+          {`${clientName} needs owner or admin access to a Pulse workspace. ${userEmail} isn't an owner or admin of any workspace yet.`}
         </p>
       </div>
     );
@@ -95,8 +94,7 @@ export function AuthorizeConsent({
       </Card>
 
       <p className="text-xs text-gray-1000 mb-6">
-        This grants {clientName} the ability to read and manage data in the selected workspace
-        through Pulse&apos;s API, on your behalf, until you revoke access.
+        {`This grants ${clientName} the ability to read and manage data in the selected workspace through Pulse's API, on your behalf, until you revoke access.`}
       </p>
 
       <div className="flex items-center gap-3">
