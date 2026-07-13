@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils/format";
+import { truncateSafe } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
 import {
   deleteEngagementItem,
@@ -222,7 +223,7 @@ export function EngagementInbox({ items }: { items: EngagementItem[] }) {
 
                   {!canReplyVia(item.platform, item.type) && !item.replied && (
                     <Link
-                      href={`/composer?angle=${encodeURIComponent(`Reply to ${item.fromName} on ${ENGAGEMENT_PLATFORM_LABELS[item.platform]}: "${item.content.slice(0, 120)}"`)}`}
+                      href={`/composer?angle=${encodeURIComponent(`Reply to ${item.fromName} on ${ENGAGEMENT_PLATFORM_LABELS[item.platform]}: "${truncateSafe(item.content, 120)}"`)}`}
                       className="text-[10px] px-2 py-1 rounded bg-primary-500/10 text-primary-500 hover:bg-primary-500/20 transition-colors font-medium"
                     >
                       ✨ Draft in voice

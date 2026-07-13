@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { dismissXSignal, suggestXEngagement } from "@/lib/actions/x-intel";
 import type { XSignalCard as XSignalCardType } from "@/lib/types/x-intel";
 import type { XEngagementSuggestion } from "@/lib/ai/x-engage";
+import { truncateSafe } from "@/lib/utils";
 
 interface Props {
   card: XSignalCardType;
@@ -103,10 +104,10 @@ export function XSignalCard({ card }: Props) {
   const replyAngle = encodeURIComponent(
     suggestion?.reply
       ? suggestion.reply
-      : `Reply to @${card.authorHandle}: ${card.tweetText.slice(0, 200)}`
+      : `Reply to @${card.authorHandle}: ${truncateSafe(card.tweetText, 200)}`
   );
   const quoteAngle = encodeURIComponent(
-    suggestion?.quoteTweet ?? card.tweetText.slice(0, 300)
+    suggestion?.quoteTweet ?? truncateSafe(card.tweetText, 300)
   );
 
   if (dismissed) return null;
@@ -268,13 +269,13 @@ export function XSignalCard({ card }: Props) {
         {!suggestion && (
           <>
             <Link
-              href={`/composer?angle=${encodeURIComponent(`Reply to @${card.authorHandle}: ${card.tweetText.slice(0, 200)}`)}`}
+              href={`/composer?angle=${encodeURIComponent(`Reply to @${card.authorHandle}: ${truncateSafe(card.tweetText, 200)}`)}`}
               className="inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-semibold border border-border text-text-muted hover:text-foreground hover:border-gray-400 transition-colors"
             >
               Reply →
             </Link>
             <Link
-              href={`/composer?angle=${encodeURIComponent(card.tweetText.slice(0, 300))}`}
+              href={`/composer?angle=${encodeURIComponent(truncateSafe(card.tweetText, 300))}`}
               className="inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-semibold border border-border text-text-muted hover:text-foreground hover:border-gray-400 transition-colors"
             >
               Use angle →
