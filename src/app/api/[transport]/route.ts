@@ -5,19 +5,26 @@
 // for session state, deferred until that's provisioned (see
 // docs/API-V1.md).
 //
-// Auth reuses the exact same token system as /api/v1: withMcpAuth()
-// calls resolveApiToken() once per request (identical to
-// requireApiContext()'s REST-side gate) and stashes the result on
-// every tool call's `extra.authInfo`. Tools never accept a tenant
-// argument from the model — src/lib/api/mcp-context.ts's
-// requireToolScope() is the only way a tool resolves its tenant.
+// Auth accepts TWO bearer token shapes, dual-checked by prefix in
+// verifyToken() below: the existing static `pulse_ext_` token (via
+// resolveApiToken(), identical to requireApiContext()'s REST-side gate —
+// completely unchanged), and a self-issued OAuth 2.1 access token (via
+// verifyAccessToken(), src/lib/oauth/tokens.ts — see docs/API-V1.md's
+// "OAuth 2.1 for MCP clients" section). Both branches produce the exact
+// same AuthInfo shape, so every tool's requireToolScope() call
+// (src/lib/api/mcp-context.ts) works unmodified regardless of which auth
+// path a given request took. Tools never accept a tenant argument from
+// the model — requireToolScope() is the only way a tool resolves its
+// tenant, from whichever token shape authenticated the request.
 
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { resolveApiToken } from "@/lib/api-tokens";
 import { checkPreAuthRateLimit } from "@/lib/api/rate-limit";
 import { getClientIp } from "@/lib/api/context";
+import { appUrl } from "@/lib/integrations/platform-oauth";
 import type { McpTokenExtra } from "@/lib/api/mcp-context";
+import { verifyAccessToken } from "@/lib/oauth/tokens";
 import { registerMetaTools } from "@/lib/mcp/tools/meta";
 import { registerSalesTools } from "@/lib/mcp/tools/sales";
 import { registerPublishingTools } from "@/lib/mcp/tools/publishing";
@@ -59,31 +66,50 @@ const verifyToken = async (
   bearerToken?: string
 ): Promise<AuthInfo | undefined> => {
   if (!bearerToken) return undefined;
-  // Gate ahead of the token lookup — same reasoning as REST's
+  // Gate ahead of any token lookup/verification — same reasoning as REST's
   // requireApiContext(): any well-formed bearer costs a real Supabase
-  // admin-client round-trip whether or not it turns out to be valid.
-  // withMcpAuth only distinguishes "auth failed" (this return type) from
-  // success, so a rate-limited request surfaces as the same 401 shape a
-  // bad token would — a minor simplification, not a 429.
+  // admin-client round-trip (or a JWT verify) whether or not it turns out
+  // to be valid. withMcpAuth only distinguishes "auth failed" (this
+  // return type) from success, so a rate-limited request surfaces as the
+  // same 401 shape a bad token would — a minor simplification, not a 429.
   if (!checkPreAuthRateLimit(getClientIp(req)).ok) return undefined;
-  const resolved = await resolveApiToken(bearerToken);
-  if (!resolved) return undefined;
 
+  if (bearerToken.startsWith("pulse_ext_")) {
+    const resolved = await resolveApiToken(bearerToken);
+    if (!resolved) return undefined;
+    const extra: McpTokenExtra = {
+      tenantSlug: resolved.tenantSlug,
+      tokenId: resolved.tokenId,
+      createdBy: resolved.createdBy,
+    };
+    return {
+      token: bearerToken,
+      scopes: resolved.scopes,
+      clientId: resolved.tenantSlug,
+      extra: extra as unknown as Record<string, unknown>,
+    };
+  }
+
+  // Not a static pulse_ext_ token — try it as an OAuth 2.1 access token
+  // (src/lib/oauth/tokens.ts, minted by POST /api/oauth/token).
+  const verified = await verifyAccessToken(bearerToken);
+  if (!verified.ok) return undefined;
   const extra: McpTokenExtra = {
-    tenantSlug: resolved.tenantSlug,
-    tokenId: resolved.tokenId,
-    createdBy: resolved.createdBy,
+    tenantSlug: verified.claims.tenant_slug,
+    tokenId: verified.claims.jti,
+    createdBy: verified.claims.sub,
   };
   return {
     token: bearerToken,
-    scopes: resolved.scopes,
-    clientId: resolved.tenantSlug,
+    scopes: verified.claims.scopes.split(","),
+    clientId: verified.claims.client_id,
     extra: extra as unknown as Record<string, unknown>,
   };
 };
 
 const authHandler = withMcpAuth(handler, verifyToken, {
   required: true,
+  resourceUrl: appUrl("/api/mcp"),
 });
 
 export { authHandler as GET, authHandler as POST };
