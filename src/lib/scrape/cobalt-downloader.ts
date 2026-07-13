@@ -95,7 +95,24 @@ export async function resolveViaCobalt(url: string): Promise<ResolvedCobalt> {
       signal: controller.signal,
     });
 
-    if (!res.ok) {
+    // cobalt sends its structured `{status:"error", error:{code}}` body
+    // over HTTP 400/etc — NOT 200 — so `!res.ok` alone can't distinguish
+    // "cobalt understood the request and rejected this specific URL"
+    // (private/deleted post, unsupported link, ...) from "the HTTP layer
+    // itself failed" (Render cold-start/gateway error, real outage). Try
+    // to parse the body FIRST, on every response regardless of status —
+    // a real infra failure (Render's proxy returning HTML/plain-text)
+    // won't parse as JSON and falls through to the generic HTTP-status
+    // classification below; a well-formed cobalt error body is handled
+    // with its actual reason, whatever the HTTP status was.
+    let body: CobaltResponse | null = null;
+    try {
+      body = (await res.json()) as CobaltResponse;
+    } catch {
+      body = null;
+    }
+
+    if (!res.ok && body?.status !== "error") {
       if (res.status === 429) {
         throw new CobaltResolveError(
           "cobalt rate-limited — try again shortly",
@@ -114,7 +131,12 @@ export async function resolveViaCobalt(url: string): Promise<ResolvedCobalt> {
       );
     }
 
-    const body = (await res.json()) as CobaltResponse;
+    if (!body) {
+      throw new CobaltResolveError(
+        `cobalt returned HTTP ${res.status} with an unparseable body`,
+        "upstream_error"
+      );
+    }
 
     if (body.status === "error") {
       const code = body.error?.code ?? "unknown";
