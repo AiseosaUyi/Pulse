@@ -169,7 +169,15 @@ export function TiptapEditor({
     onUpdate: ({ editor }) => {
       const md = getMarkdown(editor);
       onChangeRef.current?.({
-        json: editor.getJSON(),
+        // Deep-clone: ProseMirror/tiptap-markdown can intern the same mark
+        // attrs object across multiple nodes (e.g. several links parsed from
+        // the initial markdown share one `attrs` reference). Passing that
+        // aliasing through the Server Action boundary makes Next.js's action
+        // serializer emit a backreference for every repeat occurrence, which
+        // resolves server-side to an empty attrs object — silently dropping
+        // every link's href on save. A deep clone gives each mark its own
+        // independent, fully-inlined attrs object before it leaves the client.
+        json: JSON.parse(JSON.stringify(editor.getJSON())),
         markdown: md,
         wordCount: countWords(md),
       });
