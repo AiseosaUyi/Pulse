@@ -390,20 +390,38 @@ export function VideoStudioClient({
 
 function GenerationTile({ generation: g }: { generation: GenerationSummary }) {
   const [videoErrored, setVideoErrored] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // A broken/unresponsive CDN asset doesn't always fire a MediaError — it can
+  // just sit at readyState 0 forever. Time-box the wait so the tile falls
+  // back instead of staying blank indefinitely.
+  useEffect(() => {
+    if (!g.outputUrl || videoReady) return;
+    const timer = setTimeout(() => {
+      if ((videoRef.current?.readyState ?? 0) < 2) setVideoErrored(true);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [g.outputUrl, videoReady]);
+
+  const showVideo = Boolean(g.outputUrl) && !videoErrored;
 
   return (
     <Link href={`/video/${g.id}`} className="group bg-card border border-border rounded-2xl overflow-hidden hover:border-primary-500/40 transition-colors">
       <div className="relative bg-background" style={{ aspectRatio: g.aspectRatio.replace(":", " / ") }}>
-        {g.outputUrl && !videoErrored ? (
+        {showVideo && (
           <video
-            src={g.outputUrl}
+            ref={videoRef}
+            src={g.outputUrl ?? undefined}
             muted
             loop
             playsInline
             onError={() => setVideoErrored(true)}
-            className="absolute inset-0 h-full w-full object-cover"
+            onLoadedData={() => setVideoReady(true)}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${videoReady ? "opacity-100" : "opacity-0"}`}
           />
-        ) : (
+        )}
+        {(!showVideo || !videoReady) && (
           <div className="absolute inset-0 flex items-center justify-center">
             {videoErrored ? (
               <span className="inline-flex flex-col items-center gap-1.5 text-xs text-text-muted">
@@ -414,6 +432,8 @@ function GenerationTile({ generation: g }: { generation: GenerationSummary }) {
               <span className="inline-flex items-center gap-1.5 text-xs text-primary-500"><Loader2 size={14} className="animate-spin" /> Generating…</span>
             ) : g.status === "generation_failed" ? (
               <span className="inline-flex items-center gap-1.5 text-xs text-error-500"><VideoOff size={14} /> Failed</span>
+            ) : showVideo ? (
+              <Loader2 size={16} className="animate-spin text-text-muted opacity-50" />
             ) : (
               <span className="text-xs text-text-muted capitalize">{g.status.replace(/_/g, " ")}</span>
             )}
