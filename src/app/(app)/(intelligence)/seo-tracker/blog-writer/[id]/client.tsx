@@ -527,11 +527,14 @@ export function BlogEditorPageClient({
               )}
             </div>
             <TiptapEditor
+              key={post.updatedAt}
               initialJson={initialJson}
               initialMarkdown={post.content}
               placeholder="Start writing. Markdown shortcuts work: ## heading, - list, > quote…"
               disabled={isSaving || isDeleting}
               onChange={setEditorState}
+              tenantSlug={tenantSlug}
+              postId={post.id}
             />
           </div>
 

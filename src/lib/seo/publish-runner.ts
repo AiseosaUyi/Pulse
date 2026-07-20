@@ -360,8 +360,10 @@ export async function runPublish(args: {
     // upsert_entry — idempotent by pulseId.
     const upsertPayload = await runStep("upsert_entry", async () => {
       // Auto-compute read time from word count when not explicitly set.
+      // `minuteRead` is an Integer field on the gruveBlog content type — send
+      // a plain number, not a formatted string like "8 mins read".
       const estimatedReadTime = (() => {
-        if (post.read_minutes != null) return `${post.read_minutes} mins read`;
+        if (post.read_minutes != null) return post.read_minutes;
         const richText = post.body_rich_text as { content?: unknown[] } | null;
         if (!richText?.content) return null;
         let words = 0;
@@ -374,8 +376,7 @@ export async function runPublish(args: {
           }
         };
         countWords(richText.content);
-        const mins = Math.max(1, Math.ceil(words / 200));
-        return `${mins} mins read`;
+        return Math.max(1, Math.ceil(words / 200));
       })();
 
       const draft: GruveBlogDraft = {

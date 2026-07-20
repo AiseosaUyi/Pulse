@@ -283,6 +283,7 @@ export async function updateBlogPost(
     .eq("tenant_slug", tenantSlug);
   if (error) return { success: false, error: error.message };
   revalidatePath("/seo-tracker/blog-writer");
+  revalidatePath(`/seo-tracker/blog-writer/${id}`);
   revalidatePath("/seo-tracker");
   return { success: true };
 }
