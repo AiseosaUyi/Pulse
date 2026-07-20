@@ -122,7 +122,7 @@ export async function runPublish(args: {
   const { data: post, error: postErr } = await supabase
     .from("blog_posts")
     .select(
-      "id, tenant_slug, status, version, title, slug, question, excerpt, body_rich_text, author, author_image, read_minutes, seo_meta_title, seo_meta_description, canonical_override, faq_items, json_ld_overrides, pulse_metadata, cover_image, thumbnail, inline_images, tags, category, author_bio, author_title, author_url, published_date, updated_date, noindex"
+      "id, tenant_slug, status, version, title, slug, question, excerpt, meta_description, body_rich_text, author, author_image, read_minutes, seo_meta_title, seo_meta_description, canonical_override, faq_items, json_ld_overrides, pulse_metadata, cover_image, thumbnail, inline_images, tags, category, author_bio, author_title, author_url, published_date, updated_date, noindex"
     )
     .eq("id", blogPostId)
     .maybeSingle();
@@ -384,7 +384,12 @@ export async function runPublish(args: {
         title: post.title,
         slug: post.slug,
         question: post.question ?? null,
-        excerpt: post.excerpt ?? null,
+        // gruveBlog's `description` field (sourced from excerpt) is required.
+        // Posts created before excerpt was persisted at generation time (or
+        // any other gap) would otherwise hit a raw Contentful 422 at publish
+        // time — fall back to the editor's own Meta description field
+        // (blog_posts.meta_description, always populated) rather than null.
+        excerpt: post.excerpt ?? post.meta_description ?? null,
         bodyRichText: post.body_rich_text,
         author: post.author ?? null,
         readMinutes: estimatedReadTime,

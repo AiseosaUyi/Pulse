@@ -37,7 +37,7 @@ export async function syncBlogDraftToContentful(
   const { data: post, error } = await supabase
     .from("blog_posts")
     .select(
-      "id, tenant_slug, slug, title, question, content, excerpt, body_rich_text, author, author_image, read_minutes, seo_meta_title, seo_meta_description, canonical_override, faq_items, json_ld_overrides, pulse_metadata, tags, category, author_bio, author_title, author_url, published_date, updated_date, noindex"
+      "id, tenant_slug, slug, title, question, content, excerpt, meta_description, body_rich_text, author, author_image, read_minutes, seo_meta_title, seo_meta_description, canonical_override, faq_items, json_ld_overrides, pulse_metadata, tags, category, author_bio, author_title, author_url, published_date, updated_date, noindex"
     )
     .eq("id", postId)
     .maybeSingle();
@@ -59,7 +59,8 @@ export async function syncBlogDraftToContentful(
     title: post.title,
     slug: post.slug,
     question: post.question ?? null,
-    excerpt: post.excerpt ?? null,
+    // Same required-field fallback as the full publish runner — see there.
+    excerpt: post.excerpt ?? post.meta_description ?? null,
     bodyRichText,
     author: post.author ?? null,
     readMinutes: post.read_minutes ?? null,

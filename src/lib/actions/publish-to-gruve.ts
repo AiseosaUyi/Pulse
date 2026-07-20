@@ -56,6 +56,23 @@ function missingFields(p: PostRow): string[] {
   return missing;
 }
 
+// Contentful's gruveBlog.question field enforces a 12-30 char length (a
+// content-model constraint, not documented anywhere in this codebase before
+// now — a too-long question 422s at publish time with a raw Contentful
+// validation dump instead of a readable message). Catch it here so the
+// failure is legible before we ever call the API.
+const QUESTION_MIN = 12;
+const QUESTION_MAX = 30;
+
+function questionLengthError(question: string | null): string | null {
+  const len = question?.trim().length ?? 0;
+  if (len === 0) return null; // already covered by missingFields
+  if (len < QUESTION_MIN || len > QUESTION_MAX) {
+    return `Question / hook must be ${QUESTION_MIN}-${QUESTION_MAX} characters (currently ${len}). Shorten it before publishing.`;
+  }
+  return null;
+}
+
 export type PublishResult =
   | { success: true; gammaUrl: string; liveUrl: string }
   | { success: false; error: string; missing?: string[] };
@@ -97,6 +114,11 @@ export async function publishBlogToGruve(
       error: `Add the following before publishing: ${missing.join(", ")}.`,
       missing,
     };
+  }
+
+  const questionError = questionLengthError(post.question);
+  if (questionError) {
+    return { success: false, error: questionError };
   }
 
   // Convert markdown → Contentful RichText and move the post into
