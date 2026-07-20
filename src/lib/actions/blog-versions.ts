@@ -162,6 +162,7 @@ export async function saveBlogContent(
   }
 
   revalidatePath("/seo-tracker/blog-writer");
+  revalidatePath(`/seo-tracker/blog-writer/${postId}`);
 
   return {
     success: true,
@@ -238,5 +239,6 @@ export async function revertToVersion(
   });
 
   revalidatePath("/seo-tracker/blog-writer");
+  revalidatePath(`/seo-tracker/blog-writer/${postId}`);
   return { success: true, versionNumber: nextVersion };
 }

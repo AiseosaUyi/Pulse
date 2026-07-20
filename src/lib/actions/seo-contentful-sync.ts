@@ -14,7 +14,7 @@ import {
   resolveContentfulConfig,
   type GruveBlogDraft,
 } from "@/lib/integrations/contentful";
-import { markdownToRichText, isRichTextDocument } from "@/lib/seo/markdown-to-richtext";
+import { markdownToRichText } from "@/lib/seo/markdown-to-richtext";
 
 export type SyncResult =
   | { success: true; entryId: string; version: number; skipped?: false }
@@ -48,12 +48,11 @@ export async function syncBlogDraftToContentful(
   if (!post.slug)
     return { success: false, error: "Set a URL slug before previewing." };
 
-  // Derive RichText from the stored markdown when body_rich_text isn't set yet,
-  // so preview (and publish) work straight from the editor without a manual
-  // conversion step.
-  const bodyRichText = isRichTextDocument(post.body_rich_text)
-    ? post.body_rich_text
-    : await markdownToRichText((post.content as string) ?? "");
+  // Always derive RichText fresh from the current markdown — never reuse a
+  // previously-cached body_rich_text, or the preview would keep showing
+  // stale content after every edit. Assets are uploaded by the publish-runner
+  // at full publish; a preview draft syncs text/structure only.
+  const bodyRichText = await markdownToRichText((post.content as string) ?? "");
 
   const draft: GruveBlogDraft = {
     pulseId: post.id,

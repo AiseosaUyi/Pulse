@@ -11,7 +11,7 @@ import { requireUser, getCurrentTenant } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runPublish } from "@/lib/seo/publish-runner";
-import { markdownToRichText, isRichTextDocument } from "@/lib/seo/markdown-to-richtext";
+import { markdownToRichText } from "@/lib/seo/markdown-to-richtext";
 import { resolveContentfulConfig, type PublishTarget } from "@/lib/integrations/contentful";
 import { getTenantSeoConfig } from "@/lib/seo/tenant-seo-config";
 
@@ -99,14 +99,19 @@ export async function publishBlogToGruve(
     };
   }
 
-  // Convert markdown → Contentful RichText (the previously-unwired step) and
-  // move the post into 'publishing' so the runner proceeds. Admin client: this
-  // is an explicit, validated user action that intentionally bypasses the
-  // review/approval chain ("push straight to Gruve").
+  // Convert markdown → Contentful RichText and move the post into
+  // 'publishing' so the runner proceeds. Admin client: this is an explicit,
+  // validated user action that intentionally bypasses the review/approval
+  // chain ("push straight to Gruve").
+  //
+  // Always regenerate from the current `content` — never reuse a
+  // previously-cached body_rich_text. Otherwise every edit made after the
+  // first publish (a fixed typo, an added link) is silently dropped because
+  // the stale cached RichText document keeps winning. This mirrors the
+  // upload_cover step in publish-runner.ts, which already re-uploads
+  // cover/thumbnail/author images fresh on every publish.
   const admin = createAdminClient();
-  const bodyRichText = isRichTextDocument(post.body_rich_text)
-    ? post.body_rich_text
-    : await markdownToRichText(post.content ?? "");
+  const bodyRichText = await markdownToRichText(post.content ?? "", cfg, post.title ?? undefined);
 
   const { error: upErr } = await admin
     .from("blog_posts")
