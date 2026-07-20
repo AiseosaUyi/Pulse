@@ -24,6 +24,8 @@ function statusBadge(status: BlogPostStatus) {
       return "published" as const;
     case "archived":
       return "dismissed" as const;
+    case "publish_failed":
+      return "publish_failed" as const;
   }
 }
 

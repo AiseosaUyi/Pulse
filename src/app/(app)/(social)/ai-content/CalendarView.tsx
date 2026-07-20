@@ -14,11 +14,11 @@ const PLATFORM_COLORS: Record<string, string> = {
 };
 
 const STATUS_DOT: Record<string, string> = {
-  draft: "bg-yellow-400",
-  scheduled: "bg-green-500",
+  draft: "bg-warning-500",
+  scheduled: "bg-secondary-500",
   publishing: "bg-blue-400",
-  published: "bg-primary-500",
-  failed: "bg-red-500",
+  published: "bg-success-500",
+  failed: "bg-error-500",
 };
 
 function getMondayOf(dateStr: string): Date {
@@ -173,10 +173,10 @@ export function CalendarView({
       {/* Legend */}
       <div className="flex items-center gap-4 mt-4 pt-3 border-t border-border/30 flex-wrap">
         {[
-          { dot: "bg-yellow-400", label: "Draft" },
-          { dot: "bg-green-500", label: "Scheduled" },
-          { dot: "bg-primary-500", label: "Published" },
-          { dot: "bg-red-500", label: "Failed" },
+          { dot: "bg-warning-500", label: "Draft" },
+          { dot: "bg-secondary-500", label: "Scheduled" },
+          { dot: "bg-success-500", label: "Published" },
+          { dot: "bg-error-500", label: "Failed" },
         ].map(({ dot, label }) => (
           <div key={label} className="flex items-center gap-1.5">
             <span className={`size-2 rounded-full ${dot}`} />

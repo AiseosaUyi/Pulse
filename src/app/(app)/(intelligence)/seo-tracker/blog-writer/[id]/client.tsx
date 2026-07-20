@@ -57,6 +57,38 @@ function toDateInput(v: string | null): string {
   return v.slice(0, 10);
 }
 
+// publishBlogToGruve surfaces failed-step errors as
+// `Publish failed at "STEP": { ...raw Contentful API error JSON... }` —
+// readable to a developer, not to the person who just clicked Publish.
+// Extract Contentful's validation messages when present; fall back to the
+// raw string for anything this doesn't recognize rather than hiding it.
+function friendlyPublishError(raw: string): string {
+  const match = raw.match(/^Publish failed at "([^"]+)":\s*(\{[\s\S]*\})$/);
+  if (!match) return raw;
+  const [, step, jsonPart] = match;
+  try {
+    const parsed = JSON.parse(jsonPart) as {
+      details?: { errors?: Array<{ path?: string[]; details?: string; name?: string }> };
+      message?: string;
+    };
+    const validationErrors = parsed.details?.errors;
+    if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+      const lines = validationErrors.map((e) => {
+        const field = e.path?.filter((p) => p !== "fields" && p !== "en-US").join(" ");
+        return field && e.details ? `${field}: ${e.details}` : (e.details ?? e.name ?? "invalid field");
+      });
+      return `Publish failed (${step}): ${lines.join("; ")}`;
+    }
+    if (typeof parsed.message === "string") {
+      return `Publish failed (${step}): ${parsed.message}`;
+    }
+  } catch {
+    // Not JSON (or a shape we don't recognize) — show the raw message rather
+    // than swallowing it silently.
+  }
+  return raw;
+}
+
 export function BlogEditorPageClient({
   post,
   tenantSlug,
@@ -852,8 +884,8 @@ export function BlogEditorPageClient({
                 </p>
               )}
               {publishError && (
-                <p className="text-[12px] text-red-500" role="alert">
-                  {publishError}
+                <p className="text-[12px] text-error-500" role="alert">
+                  {friendlyPublishError(publishError)}
                 </p>
               )}
               {publishResult && (

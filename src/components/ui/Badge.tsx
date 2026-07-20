@@ -12,6 +12,7 @@ type BadgeVariant =
   | "opportunity"
   | "published"
   | "draft_status"
+  | "publish_failed"
   | "approved"
   | "dismissed"
   | "planned"
@@ -39,6 +40,7 @@ const variantStyles: Record<BadgeVariant, string> = {
   opportunity:     "bg-secondary-100 text-secondary-700 border border-secondary-500/20",
   published:       "bg-success-1000 text-success-500 border border-success-500/20",
   draft_status:    "bg-warning-50 text-warning-500 border border-warning-500/20",
+  publish_failed:  "bg-error-500/10 text-error-500 border border-error-500/20",
   approved:        "bg-success-1000 text-success-500 border border-success-500/20",
   dismissed:       "bg-gray-50 text-gray-500 border border-gray-500/20",
   planned:         "bg-secondary-100 text-secondary-700 border border-secondary-500/20",

@@ -51,7 +51,19 @@ async function persistGeneratedPost(
 ): Promise<ActionResult<CreateBlogResult>> {
   const { post: draft, meta, score } = generation;
 
-  const finalWordCount = countWords(draft.content);
+  // The model occasionally appends a <script type="application/ld+json"> block
+  // to the body instead of using the dedicated faq_items/json_ld_overrides
+  // fields — strip it so raw schema markup never renders as visible article
+  // text. It shows up HTML-entity-escaped (&lt;script&gt;...&lt;/script&gt;)
+  // since the model treats the body as markdown, not literal <script> tags.
+  const cleanedContent = draft.content
+    .replace(
+      /(?:<script[^>]*application\/ld\+json[^>]*>|&lt;script[^&]*application\/ld\+json[^&]*&gt;)[\s\S]*?(?:<\/script>|&lt;\/script&gt;)/gi,
+      ""
+    )
+    .trim();
+
+  const finalWordCount = countWords(cleanedContent);
   const wordCountWarning = meta.stopped_reason === "max_passes_reached";
   const scoreWarning = meta.score_warning === true;
 
@@ -74,8 +86,12 @@ async function persistGeneratedPost(
       target_keyword: targetKeyword || null,
       secondary_keywords: draft.secondary_keywords,
       meta_description: draft.meta_description,
+      // The generator doesn't produce a distinct excerpt — reuse the meta
+      // description so blog_posts.excerpt (Contentful's required
+      // `description` field) is never null for a freshly generated post.
+      excerpt: draft.meta_description,
       outline: draft.outline,
-      content: draft.content,
+      content: cleanedContent,
       word_count: finalWordCount,
       status: "draft",
       generator_model: "openai/gpt-4.1",
