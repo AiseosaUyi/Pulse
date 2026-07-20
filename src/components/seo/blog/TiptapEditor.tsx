@@ -6,7 +6,7 @@
 // export mirror means anything downstream that reads `content` (RSS,
 // SEO preview, external publishers) keeps working.
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -30,9 +30,19 @@ import {
   Quote,
   Undo2,
   Redo2,
+  ImagePlus,
+  Loader2,
 } from "lucide-react";
 import { countWords } from "@/lib/blog/word-count";
 import { useDialogs } from "@/components/ui/Dialog";
+import { toast } from "@/components/ui/Toaster";
+import { createClient } from "@/lib/supabase/client";
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
+function slugifyFileName(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-+|-+$/g, "");
+}
 
 export interface TiptapChange {
   json: JSONContent;
@@ -84,6 +94,9 @@ interface Props {
   placeholder?: string;
   disabled?: boolean;
   onChange?: (c: TiptapChange) => void;
+  /** Needed to scope inline-image uploads to `{tenantSlug}/{postId}/...` in the blog-assets bucket. */
+  tenantSlug?: string;
+  postId?: string;
 }
 
 // tiptap-markdown augments the editor's storage; we reach into it
@@ -103,6 +116,8 @@ export function TiptapEditor({
   placeholder,
   disabled,
   onChange,
+  tenantSlug,
+  postId,
 }: Props) {
   // Keep the latest callback in a ref so the editor config doesn't
   // need to re-initialize on every parent re-render.
@@ -175,7 +190,7 @@ export function TiptapEditor({
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <Toolbar editor={editor} disabled={disabled} />
+      <Toolbar editor={editor} disabled={disabled} tenantSlug={tenantSlug} postId={postId} />
       <EditorContent editor={editor} />
     </div>
   );
@@ -184,11 +199,17 @@ export function TiptapEditor({
 function Toolbar({
   editor,
   disabled,
+  tenantSlug,
+  postId,
 }: {
   editor: NonNullable<ReturnType<typeof useEditor>>;
   disabled?: boolean;
+  tenantSlug?: string;
+  postId?: string;
 }) {
   const dialogs = useDialogs();
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const btn = (active: boolean) =>
     `h-8 w-8 inline-flex items-center justify-center rounded-md transition-colors ${
       active
@@ -226,6 +247,39 @@ function Toolbar({
       .focus()
       .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
       .run();
+  };
+
+  const handleImageFile = async (file: File) => {
+    if (!tenantSlug || !postId) {
+      toast.error("Save the post before adding images.");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      toast.error("Image must be under 10 MB.");
+      return;
+    }
+    setUploadingImage(true);
+    try {
+      const supabase = createClient();
+      const path = `${tenantSlug}/${postId}/content-${Date.now()}-${slugifyFileName(file.name)}`;
+      const { error } = await supabase.storage
+        .from("blog-assets")
+        .upload(path, file, { upsert: true, cacheControl: "3600", contentType: file.type });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      const { data } = supabase.storage.from("blog-assets").getPublicUrl(path);
+      editor.chain().focus().setImage({ src: data.publicUrl, alt: file.name }).run();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   return (
@@ -309,6 +363,30 @@ function Toolbar({
       >
         <TableIconLucide size={15} />
       </button>
+      <button
+        type="button"
+        className={btn(false)}
+        onClick={() => imageInputRef.current?.click()}
+        disabled={uploadingImage}
+        title="Insert image"
+      >
+        {uploadingImage ? (
+          <Loader2 size={15} className="animate-spin" />
+        ) : (
+          <ImagePlus size={15} />
+        )}
+      </button>
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleImageFile(file);
+          e.target.value = "";
+        }}
+      />
       <div className="flex-1" />
       <button
         type="button"

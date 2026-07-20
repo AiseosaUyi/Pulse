@@ -334,7 +334,7 @@ export async function publishProgrammaticPage(
   const canonical = `${siteBase}${seo.landingRoutePrefix}/${page.slug}`;
 
   try {
-    const bodyRichText = await markdownToRichText(page.body_md);
+    const bodyRichText = await markdownToRichText(page.body_md, cfg, page.title ?? undefined);
     const upserted = await upsertSeoLandingPage(
       {
         pulseId: page.id,
