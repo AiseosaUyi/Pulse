@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, Send } from "lucide-react";
+import { Plus, Send, Users, Radio } from "lucide-react";
 import {
   createBroadcastList,
   addBroadcastMembers,
@@ -96,8 +96,12 @@ export function BroadcastsClient({
                 </li>
               ))}
               {lists.length === 0 && (
-                <li className="text-sm text-text-muted px-3 py-2">
-                  No lists yet.
+                <li className="py-5 text-center">
+                  <Users size={20} className="mx-auto mb-2 text-text-muted opacity-40" />
+                  <p className="text-sm font-medium text-foreground">No lists yet</p>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    Create one below to start grouping opted-in numbers.
+                  </p>
                 </li>
               )}
             </ul>
@@ -180,7 +184,13 @@ export function BroadcastsClient({
                 </li>
               ))}
               {messages.length === 0 && (
-                <li className="text-sm text-text-muted">No broadcasts yet.</li>
+                <li className="py-5 text-center">
+                  <Radio size={20} className="mx-auto mb-2 text-text-muted opacity-40" />
+                  <p className="text-sm font-medium text-foreground">No broadcasts yet</p>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    Send your first weekend deal above — it&apos;ll show up here.
+                  </p>
+                </li>
               )}
             </ul>
           </div>

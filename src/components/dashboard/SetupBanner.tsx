@@ -12,12 +12,15 @@ import {
 } from "lucide-react";
 import type { SetupStatus } from "@/lib/services/setup-status";
 
-// Launch-readiness banner. Stays on the dashboard until every setup task is
-// done (then it renders nothing), so the remaining steps are always visible.
-// Items tick off automatically — the state is recomputed server-side on each
-// dashboard load, no manual checking off.
+// Account/integration connection banner ("Connect your accounts") — distinct
+// from the sidebar's OnboardingChecklist ("Content setup"), which tracks
+// content-strategy activation instead. Collapsed by default so the tenant's
+// real stat cards above lead the Dashboard; stays on the page until every
+// setup task is done (then it renders nothing). Items tick off automatically
+// — the state is recomputed server-side on each dashboard load, no manual
+// checking off.
 export function SetupBanner({ status }: { status: SetupStatus }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
 
   if (status.allDone) return null;
 
@@ -34,7 +37,7 @@ export function SetupBanner({ status }: { status: SetupStatus }) {
           <Rocket size={18} className="text-primary-500 shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">
-              Finish setting up Pulse
+              Connect your accounts
             </p>
             <p className="text-xs text-text-muted">
               {status.doneCount} of {status.total} done · {remaining} to go

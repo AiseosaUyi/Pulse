@@ -1,6 +1,8 @@
 "use client";
 
-// "Get started · N/M steps" sidebar widget with a collapsible panel.
+// "Content setup · N/M steps" sidebar widget with a collapsible panel.
+// Named to disambiguate from the Dashboard's separate SetupBanner (accounts
+// & integrations) — this one tracks content-strategy activation instead.
 // Each step clicks into a focused modal — the tenant can fill everything
 // without ever leaving the sidebar. Auto-hides once all 4 steps are
 // done (the user shouldn't have to keep looking at it forever).
@@ -85,7 +87,7 @@ export function OnboardingChecklist({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[12.5px] font-semibold text-foreground leading-none">
-                Get started
+                Content setup
               </p>
               <div className="mt-1.5 flex items-center gap-2">
                 <div className="flex-1 h-1 rounded-full bg-sidebar overflow-hidden">

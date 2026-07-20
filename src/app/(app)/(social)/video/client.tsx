@@ -17,6 +17,7 @@ import {
   X,
   ChevronRight,
   Plus,
+  VideoOff,
 } from "lucide-react";
 import { createGeneration, createSignedVideoUpload, registerVideoAsset } from "@/lib/actions/video-generate";
 import { estimateSeedanceCredits } from "@/lib/video/providers/seedance-constraints";
@@ -377,45 +378,65 @@ export function VideoStudioClient({
           ) : (
             <div className="grid sm:grid-cols-2 gap-3">
               {generations.map((g) => (
-                <Link key={g.id} href={`/video/${g.id}`} className="group bg-card border border-border rounded-2xl overflow-hidden hover:border-primary-500/40 transition-colors">
-                  <div className="relative bg-background" style={{ aspectRatio: g.aspectRatio.replace(":", " / ") }}>
-                    {g.outputUrl ? (
-                      <video src={g.outputUrl} muted loop playsInline className="absolute inset-0 h-full w-full object-cover" />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        {g.status === "generating" ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs text-primary-500"><Loader2 size={14} className="animate-spin" /> Generating…</span>
-                        ) : g.status === "generation_failed" ? (
-                          <span className="text-xs text-primary-500">Failed</span>
-                        ) : (
-                          <span className="text-xs text-text-muted capitalize">{g.status.replace(/_/g, " ")}</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <p className="text-sm text-foreground line-clamp-2">{g.prompt ?? g.title}</p>
-                    <div className="flex items-center gap-1.5 flex-wrap mt-2 text-[11px] text-text-muted">
-                      {g.mode && <Badge>{g.mode}</Badge>}
-                      {g.durationS != null && <Badge>{g.durationS}s</Badge>}
-                      <Badge>{g.resolution}</Badge>
-                      <Badge>{g.aspectRatio}</Badge>
-                      {g.creditEstimate != null && <Badge>~{g.creditEstimate} cr</Badge>}
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-[11px] text-text-muted">
-                        {new Date(g.createdAt).toLocaleString("en-GB", { timeZone: APP_TIME_ZONE, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                      <ChevronRight size={14} className="text-text-muted group-hover:text-primary-500" />
-                    </div>
-                  </div>
-                </Link>
+                <GenerationTile key={g.id} generation={g} />
               ))}
             </div>
           )}
         </section>
       </div>
     </div>
+  );
+}
+
+function GenerationTile({ generation: g }: { generation: GenerationSummary }) {
+  const [videoErrored, setVideoErrored] = useState(false);
+
+  return (
+    <Link href={`/video/${g.id}`} className="group bg-card border border-border rounded-2xl overflow-hidden hover:border-primary-500/40 transition-colors">
+      <div className="relative bg-background" style={{ aspectRatio: g.aspectRatio.replace(":", " / ") }}>
+        {g.outputUrl && !videoErrored ? (
+          <video
+            src={g.outputUrl}
+            muted
+            loop
+            playsInline
+            onError={() => setVideoErrored(true)}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            {videoErrored ? (
+              <span className="inline-flex flex-col items-center gap-1.5 text-xs text-text-muted">
+                <VideoOff size={18} className="opacity-40" />
+                Preview unavailable
+              </span>
+            ) : g.status === "generating" ? (
+              <span className="inline-flex items-center gap-1.5 text-xs text-primary-500"><Loader2 size={14} className="animate-spin" /> Generating…</span>
+            ) : g.status === "generation_failed" ? (
+              <span className="inline-flex items-center gap-1.5 text-xs text-error-500"><VideoOff size={14} /> Failed</span>
+            ) : (
+              <span className="text-xs text-text-muted capitalize">{g.status.replace(/_/g, " ")}</span>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="p-3">
+        <p className="text-sm text-foreground line-clamp-2">{g.prompt ?? g.title}</p>
+        <div className="flex items-center gap-1.5 flex-wrap mt-2 text-[11px] text-text-muted">
+          {g.mode && <Badge>{g.mode}</Badge>}
+          {g.durationS != null && <Badge>{g.durationS}s</Badge>}
+          <Badge>{g.resolution}</Badge>
+          <Badge>{g.aspectRatio}</Badge>
+          {g.creditEstimate != null && <Badge>~{g.creditEstimate} cr</Badge>}
+        </div>
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-[11px] text-text-muted">
+            {new Date(g.createdAt).toLocaleString("en-GB", { timeZone: APP_TIME_ZONE, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+          </span>
+          <ChevronRight size={14} className="text-text-muted group-hover:text-primary-500" />
+        </div>
+      </div>
+    </Link>
   );
 }
 

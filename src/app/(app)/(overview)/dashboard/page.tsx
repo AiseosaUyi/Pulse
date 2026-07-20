@@ -81,9 +81,6 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Launch readiness — stays until every setup task is done */}
-      <SetupBanner status={setupStatus} />
-
       {/* Stat Cards — startup sees prospects + ad spend; individual sees posts + engagement */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <StatCard data={stats.socialReach} />
@@ -100,6 +97,11 @@ export default async function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* Launch readiness — collapsed by default so the tenant's real numbers
+          above lead the page; stays visible (not dismissed) until every
+          setup task is done */}
+      <SetupBanner status={setupStatus} />
 
       {/* Weekly business review — synthesis of what Pulse shipped this week */}
       <div className="mb-4">

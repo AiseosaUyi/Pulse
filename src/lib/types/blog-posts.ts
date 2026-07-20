@@ -3,7 +3,8 @@ export type BlogPostStatus =
   | "editing"
   | "review"
   | "published"
-  | "archived";
+  | "archived"
+  | "publish_failed";
 
 export interface BlogPostOutlineItem {
   heading: string;

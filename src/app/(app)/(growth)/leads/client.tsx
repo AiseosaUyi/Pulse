@@ -686,16 +686,10 @@ export function OutboundClient({
 
                         {/* Col 1: Identity — display name headline, handle + status secondary, event title */}
                         <div className="min-w-0">
-                          {/* Display Name — primary */}
-                          {p.displayName ? (
-                            <p className="text-sm font-semibold text-foreground leading-snug truncate">
-                              {p.displayName}
-                            </p>
-                          ) : (
-                            <p className="text-sm font-semibold text-foreground leading-snug truncate">
-                              @{p.handle}
-                            </p>
-                          )}
+                          {/* Display Name — primary (never a raw scraped slug) */}
+                          <p className="text-sm font-semibold text-foreground leading-snug truncate">
+                            {primaryTitleFor(p)}
+                          </p>
                           {/* Handle + status — secondary */}
                           <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                             {p.displayName && (
@@ -715,8 +709,8 @@ export function OutboundClient({
                               </span>
                             )}
                           </div>
-                          {/* Event title */}
-                          {p.eventTitle && (
+                          {/* Event title — only when it isn't already shown as the primary title above */}
+                          {p.eventTitle && p.eventTitle !== primaryTitleFor(p) && (
                             <p className="text-[11px] text-text-muted italic mt-0.5 truncate">
                               {p.eventTitle}
                             </p>
@@ -1043,6 +1037,26 @@ function ProspectRowActions({
       </button>
     </div>
   );
+}
+
+// Some sources (scraped event platforms, manual entry) store a raw slug —
+// e.g. "event-egotickets-summer-on-the-hills-luxury-lifestyle-accra-edition-with-our-"
+// — as displayName. Never let that render as the primary title: prefer the
+// human-written event title when the name is shaped like a slug.
+function looksLikeRawSlug(name: string): boolean {
+  return (
+    !/\s/.test(name) &&
+    name === name.toLowerCase() &&
+    (name.match(/-/g) ?? []).length >= 3
+  );
+}
+
+function primaryTitleFor(prospect: ProspectRecord): string {
+  if (prospect.displayName && !looksLikeRawSlug(prospect.displayName)) {
+    return prospect.displayName;
+  }
+  if (prospect.eventTitle) return prospect.eventTitle;
+  return prospect.displayName || `@${prospect.handle}`;
 }
 
 function platformProfileUrl(prospect: ProspectRecord): string {

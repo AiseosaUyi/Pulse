@@ -49,7 +49,7 @@ export default async function VaultSavedPage() {
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Used</p>
-          <p className="text-2xl font-bold text-primary-500 mt-1">{usedCount}</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{usedCount}</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border/50">
           <p className="text-text-secondary text-xs">Scheduled</p>

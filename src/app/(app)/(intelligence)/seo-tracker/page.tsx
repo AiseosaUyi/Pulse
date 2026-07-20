@@ -7,12 +7,13 @@ import { listBlogPosts } from "@/lib/services/blog-posts";
 import { KEYWORD_DIFFICULTY_LABELS } from "@/lib/types/seo";
 import type { BlogPostStatus } from "@/lib/types/blog-posts";
 
-const statusVariant: Record<BlogPostStatus, "published" | "draft_status" | "planned" | "dismissed"> = {
+const statusVariant: Record<BlogPostStatus, "published" | "draft_status" | "planned" | "dismissed" | "publish_failed"> = {
   draft: "draft_status",
   editing: "draft_status",
   review: "planned",
   published: "published",
   archived: "dismissed",
+  publish_failed: "publish_failed",
 };
 
 export default async function SEODashboardPage() {
