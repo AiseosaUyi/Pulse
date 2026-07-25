@@ -14,6 +14,7 @@ import { runPublish } from "@/lib/seo/publish-runner";
 import { markdownToRichText } from "@/lib/seo/markdown-to-richtext";
 import { resolveContentfulConfig, type PublishTarget } from "@/lib/integrations/contentful";
 import { getTenantSeoConfig } from "@/lib/seo/tenant-seo-config";
+import { QUESTION_MIN, QUESTION_MAX } from "@/lib/seo/question-constraints";
 
 export interface PublishReadiness {
   ready: boolean;
@@ -61,8 +62,6 @@ function missingFields(p: PostRow): string[] {
 // now — a too-long question 422s at publish time with a raw Contentful
 // validation dump instead of a readable message). Catch it here so the
 // failure is legible before we ever call the API.
-const QUESTION_MIN = 12;
-const QUESTION_MAX = 30;
 
 function questionLengthError(question: string | null): string | null {
   const len = question?.trim().length ?? 0;
