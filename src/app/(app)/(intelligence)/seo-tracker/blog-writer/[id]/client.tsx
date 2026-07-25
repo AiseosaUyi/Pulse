@@ -20,6 +20,10 @@ import { AuthorPicker } from "@/components/seo/blog/AuthorPicker";
 import { autofillBlogImageFromTopic } from "@/lib/actions/blog-images";
 import type { AuthorRecord } from "@/lib/types/authors";
 import { publishBlogToGruve } from "@/lib/actions/publish-to-gruve";
+import { QUESTION_MIN, QUESTION_MAX } from "@/lib/seo/question-constraints";
+import { buildBlogUrls } from "@/lib/seo/blog-urls";
+import type { TenantSeoConfig } from "@/lib/seo/tenant-seo-config";
+import type { SucceededPublishTargets } from "@/lib/services/seo-publish-runs";
 import { TiptapEditor, type TiptapChange } from "@/components/seo/blog/TiptapEditor";
 import { InlineFeedbackDock } from "@/components/seo/blog/InlineFeedbackDock";
 import { VersionHistory } from "@/components/seo/blog/VersionHistory";
@@ -99,6 +103,8 @@ export function BlogEditorPageClient({
   siteDomain,
   authors,
   categories = [],
+  seo,
+  succeededTargets,
 }: {
   post: BlogPostRecord;
   tenantSlug: string;
@@ -112,6 +118,13 @@ export function BlogEditorPageClient({
   authors: AuthorRecord[];
   /** Blog category options for this workspace (empty = free-text). */
   categories?: string[];
+  /** Tenant SEO config — used to derive durable staging/live post URLs. */
+  seo: TenantSeoConfig;
+  /** Which publish target(s) this post has an actual succeeded
+   *  seo_publish_runs row for — post.status alone can't tell us this since
+   *  mark_published sets it to "published" for either target. Gates
+   *  whether the live/staging link is shown at all. */
+  succeededTargets: SucceededPublishTargets;
 }) {
   const router = useRouter();
   const dialogs = useDialogs();
@@ -343,7 +356,16 @@ export function BlogEditorPageClient({
     { label: "Title", ok: title.trim().length > 0 },
     { label: "URL slug", ok: Boolean(post.slug) },
     { label: "Body content", ok: (current.wordCount ?? 0) > 0 },
-    { label: "Question / hook", ok: question.trim().length > 0 },
+    {
+      // Contentful's gruveBlog.question field enforces a 12-30 char length
+      // (see publish-to-gruve.ts questionLengthError) — a non-empty question
+      // outside that range still fails server-side. Check length here too so
+      // the checklist (and the disabled publish button) actually reflect
+      // whether the click will succeed, instead of letting a doomed publish
+      // through with the real reason only surfacing after the fact.
+      label: `Question / hook (${QUESTION_MIN}-${QUESTION_MAX} chars)`,
+      ok: question.trim().length >= QUESTION_MIN && question.trim().length <= QUESTION_MAX,
+    },
     { label: "Banner image", ok: Boolean(coverImage) },
     { label: "Thumbnail", ok: Boolean(thumbnail) },
     { label: "Author name", ok: author.trim().length > 0 },
@@ -404,6 +426,27 @@ export function BlogEditorPageClient({
   };
 
   const pendingFeedback = feedback.filter((f) => f.status === "pending").length;
+
+  // Durable staging/live links — derived from the post's own slug, NOT from
+  // the one-time publishBlogToGruve response, so they survive a reload
+  // instead of vanishing once `publishResult` resets on next render/session.
+  //
+  // Gated per-target on `succeededTargets` (from seo_publish_runs), NOT on
+  // post.status: mark_published (publish-runner.ts) flips blog_posts.status
+  // to "published" identically for target "test" AND "live" — it never
+  // branches on target — so status alone can't tell a staging-only post
+  // from a live one. The editor also defaults publishTarget to "test" so a
+  // normal click never accidentally goes live, meaning most published
+  // posts have only ever succeeded on staging. Showing a "live" link that
+  // was never actually pushed live would point at a 404/stale page.
+  const urlsBySlug = buildBlogUrls(post.slug, seo);
+  const publishedUrls = {
+    liveUrl: succeededTargets.live ? urlsBySlug.liveUrl : null,
+    stagingUrl: succeededTargets.test ? urlsBySlug.stagingUrl : null,
+  };
+  const hasPublishedLink = Boolean(
+    publishedUrls.liveUrl || publishedUrls.stagingUrl
+  );
 
   return (
     <div className="max-w-[1400px] mx-auto">
@@ -889,24 +932,38 @@ export function BlogEditorPageClient({
                 </p>
               )}
               {publishResult && (
+                <p className="text-[12px] text-status-green font-medium">
+                  Published ✓
+                </p>
+              )}
+              {/* Persistent view links — shown whenever this post has ever
+                  been published (post.status === "published"), sourced from
+                  the post's own slug + tenant SEO config so they survive a
+                  reload instead of vanishing once `publishResult` resets on
+                  next render/session. See buildBlogUrls in
+                  lib/seo/tenant-seo-config.ts. */}
+              {hasPublishedLink && (
                 <div className="text-[12px] space-y-1">
-                  <p className="text-status-green font-medium">Published ✓</p>
-                  <a
-                    href={publishResult.liveUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1 text-primary-500 hover:underline"
-                  >
-                    <ExternalLink size={12} /> View live (www)
-                  </a>
-                  <a
-                    href={publishResult.gammaUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1 text-primary-500 hover:underline"
-                  >
-                    <ExternalLink size={12} /> View on staging
-                  </a>
+                  {publishedUrls.liveUrl && (
+                    <a
+                      href={publishedUrls.liveUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 text-primary-500 hover:underline"
+                    >
+                      <ExternalLink size={12} /> View live (www)
+                    </a>
+                  )}
+                  {publishedUrls.stagingUrl && (
+                    <a
+                      href={publishedUrls.stagingUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 text-primary-500 hover:underline"
+                    >
+                      <ExternalLink size={12} /> View on staging
+                    </a>
+                  )}
                 </div>
               )}
             </div>

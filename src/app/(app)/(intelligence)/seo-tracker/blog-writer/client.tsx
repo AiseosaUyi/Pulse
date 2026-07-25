@@ -7,6 +7,8 @@ import { NewBlogPostModal } from "@/components/seo/NewBlogPostModal";
 import { BlogCard } from "@/components/seo/blog/BlogCard";
 import { BlogSidePanel } from "@/components/seo/blog/BlogSidePanel";
 import type { BlogPostRecord } from "@/lib/types/blog-posts";
+import type { TenantSeoConfig } from "@/lib/seo/tenant-seo-config";
+import type { SucceededPublishTargets } from "@/lib/services/seo-publish-runs";
 
 /**
  * Phase D.1 flow:
@@ -18,16 +20,27 @@ import type { BlogPostRecord } from "@/lib/types/blog-posts";
  * the user can scan the post while leaving feedback in a pinned
  * sidebar instead of switching modal tabs.
  */
+const NO_SUCCEEDED_TARGETS: SucceededPublishTargets = { live: false, test: false };
+
 export function BlogWriterClient({
   posts,
   tenantSlug,
   tenantDomain,
   trackedKeywords,
+  seo,
+  succeededTargetsByPost,
 }: {
   posts: BlogPostRecord[];
   tenantSlug: string;
   tenantDomain: string;
   trackedKeywords: string[];
+  /** Tenant SEO config — passed through to BlogSidePanel to derive a
+   *  durable staging/live link for already-published posts. */
+  seo: TenantSeoConfig;
+  /** blog_post_id → which target(s) actually succeeded (seo_publish_runs).
+   *  Gates which link BlogSidePanel is allowed to show — post.status alone
+   *  can't distinguish a staging-only publish from a live one. */
+  succeededTargetsByPost: Record<string, SucceededPublishTargets>;
 }) {
   const [showNew, setShowNew] = useState(false);
   const [panelId, setPanelId] = useState<string | null>(null);
@@ -83,6 +96,8 @@ export function BlogWriterClient({
         <BlogSidePanel
           post={panelPost}
           tenantDomain={tenantDomain}
+          seo={seo}
+          succeededTargets={succeededTargetsByPost[panelPost.id] ?? NO_SUCCEEDED_TARGETS}
           onClose={() => setPanelId(null)}
         />
       )}

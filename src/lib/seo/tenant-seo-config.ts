@@ -6,6 +6,12 @@
 import { getTenant } from "@/lib/services/tenants";
 import type { AudienceConfig } from "@/lib/types/tenant";
 
+// Re-exported for server-side callers that already import from this module —
+// the actual implementation lives in the dependency-free `blog-urls.ts` so
+// client components can use it without pulling in `getTenant`'s
+// `next/headers` dependency chain. See that file for the rationale.
+export { buildBlogUrls, type BlogPublicUrls } from "./blog-urls";
+
 export interface TenantSeoConfig {
   /** Public site base URL, e.g. https://sippy.life. Null if unset. */
   siteBaseUrl: string | null;
