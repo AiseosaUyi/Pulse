@@ -270,6 +270,20 @@ function Toolbar({
       toast.error("Image must be under 10 MB.");
       return;
     }
+    // tiptap-markdown's table-cell serializer only extracts plain text —
+    // an image nested inside a cell silently serializes to an empty cell
+    // in the markdown mirror (verified directly against the library).
+    // Since `content` (not content_json) is what publishing actually
+    // converts to Contentful RichText, an in-cell image would vanish from
+    // the published post while still looking fine in the editor. Block it
+    // here instead of losing it silently — the image can go right after
+    // the table just as well.
+    if (editor.isActive("table")) {
+      toast.error(
+        "Images can't be added inside a table cell — they'll disappear when published. Place your cursor outside the table first."
+      );
+      return;
+    }
     setUploadingImage(true);
     try {
       const supabase = createClient();
