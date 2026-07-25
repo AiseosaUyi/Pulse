@@ -249,6 +249,7 @@ function buildSystemPrompt(
     "",
     "Output rules:",
     "- body_markdown uses GitHub-flavored Markdown. Use H2 (##) and H3 (###) only — no H1 (the page title is rendered separately).",
+    "- When the angle or content calls for a feature/price/spec comparison, write a real GitHub-flavored Markdown table (`| Column | Column |` with a `| --- | --- |` separator row) — it renders as a proper bordered table on the live site. Don't fall back to a bulleted list for comparison content just because it's the more familiar format.",
     "- seo_meta_title 40-65 chars; lead with the primary keyword when natural.",
     "- seo_meta_description 120-160 chars with a CTA verb; never clickbait.",
     "- excerpt 50-200 chars; first-person plural OK when it matches voice.",
