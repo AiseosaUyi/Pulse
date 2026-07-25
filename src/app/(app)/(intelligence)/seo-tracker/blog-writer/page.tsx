@@ -2,6 +2,8 @@ import { getCurrentTenant } from "@/lib/auth";
 import { listBlogPosts } from "@/lib/services/blog-posts";
 import { getKeywordRankings } from "@/lib/services/seo";
 import { getTenant } from "@/lib/services/tenants";
+import { getTenantSeoConfig } from "@/lib/seo/tenant-seo-config";
+import { getSucceededPublishTargetsForTenant } from "@/lib/services/seo-publish-runs";
 import { BlogWriterClient } from "./client";
 
 // The server action that creates a blog post runs the iterate-to-90
@@ -15,10 +17,12 @@ export default async function BlogWriterPage() {
   const currentTenant = await getCurrentTenant();
   const tenantSlug = currentTenant?.slug ?? "";
 
-  const [posts, keywords, tenant] = await Promise.all([
+  const [posts, keywords, tenant, seo, succeededTargetsByPost] = await Promise.all([
     listBlogPosts(tenantSlug),
     getKeywordRankings(tenantSlug),
     getTenant(tenantSlug),
+    getTenantSeoConfig(tenantSlug),
+    getSucceededPublishTargetsForTenant(tenantSlug),
   ]);
 
   const trackedKeywords = keywords.map((k) => k.keyword);
@@ -29,6 +33,8 @@ export default async function BlogWriterPage() {
       tenantSlug={tenantSlug}
       tenantDomain={tenant?.domain ?? ""}
       trackedKeywords={trackedKeywords}
+      seo={seo}
+      succeededTargetsByPost={succeededTargetsByPost}
     />
   );
 }

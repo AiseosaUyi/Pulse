@@ -8,11 +8,14 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { X, Pencil, AlertTriangle } from "lucide-react";
+import { X, Pencil, AlertTriangle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/Badge";
 import type { BlogPostRecord } from "@/lib/types/blog-posts";
 import { buildGooglePreview } from "@/lib/blog/google-preview";
+import { buildBlogUrls } from "@/lib/seo/blog-urls";
+import type { TenantSeoConfig } from "@/lib/seo/tenant-seo-config";
+import type { SucceededPublishTargets } from "@/lib/services/seo-publish-runs";
 import { GoogleSerpPreview } from "./GoogleSerpPreview";
 import { FaqSchemaBadge } from "./FaqSchemaBadge";
 import { ScoreBreakdown } from "./ScoreBreakdown";
@@ -21,10 +24,20 @@ import { extractFaqFromMarkdown } from "@/lib/ai/score-subscores/faq";
 export function BlogSidePanel({
   post,
   tenantDomain,
+  seo,
+  succeededTargets,
   onClose,
 }: {
   post: BlogPostRecord;
   tenantDomain: string;
+  /** Tenant SEO config — used to derive a durable staging/live link for
+   *  posts that have already been published, without opening the editor. */
+  seo: TenantSeoConfig;
+  /** Which publish target(s) this post has an actual succeeded
+   *  seo_publish_runs row for. post.status alone can't tell a staging-only
+   *  publish from a live one (mark_published sets "published" for either
+   *  target) — this gates which link is actually safe to show. */
+  succeededTargets: SucceededPublishTargets;
   onClose: () => void;
 }) {
   // Close on Escape — common drawer UX.
@@ -44,6 +57,20 @@ export function BlogSidePanel({
     });
 
   const faqs = extractFaqFromMarkdown(post.content).questions;
+
+  // Durable staging/live links for an already-published post, so the user
+  // can jump straight to it from the list without opening the editor.
+  // Computed from the post's slug (see buildBlogUrls) and gated per-target
+  // by succeededTargets — NOT post.status, which is identical for a
+  // staging-only publish and a live one.
+  const urlsBySlug = buildBlogUrls(post.slug, seo);
+  const publishedUrls = {
+    liveUrl: succeededTargets.live ? urlsBySlug.liveUrl : null,
+    stagingUrl: succeededTargets.test ? urlsBySlug.stagingUrl : null,
+  };
+  const hasPublishedLink = Boolean(
+    publishedUrls.liveUrl || publishedUrls.stagingUrl
+  );
 
   return (
     <div
@@ -93,6 +120,32 @@ export function BlogSidePanel({
                 day: "numeric",
               })}
             </p>
+            {hasPublishedLink && (
+              <div className="flex items-center gap-3 mt-1.5">
+                {publishedUrls.liveUrl && (
+                  <a
+                    href={publishedUrls.liveUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1 text-xs text-primary-500 hover:underline"
+                  >
+                    <ExternalLink size={11} /> Live
+                  </a>
+                )}
+                {publishedUrls.stagingUrl && (
+                  <a
+                    href={publishedUrls.stagingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1 text-xs text-primary-500 hover:underline"
+                  >
+                    <ExternalLink size={11} /> Staging
+                  </a>
+                )}
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}
