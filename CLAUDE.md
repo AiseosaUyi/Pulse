@@ -127,6 +127,8 @@ All AI calls go through `src/lib/ai/gateway.ts`:
 
 **Brand voice + positioning layer on every AI call.** `getBrandContext(tenantSlug)` in `src/lib/ai/brand-positioning.ts` returns `{voice, positioning}` from `tenants.settings`. `buildPositioningBlock(positioning)` renders a consistent prompt block. AI call paths pull these, stringify into the system prompt, and pass Zod schemas that match the output shape.
 
+**FAQ / structured-SEO-data gotcha.** AI blog generators must never write FAQ (or other schema-only) content directly into the visible body — it renders as an ugly Q&A dump to real readers. FAQ belongs solely in the `faq` field of `generate-seo-blog.ts`'s output → `blog_posts.faq_items` → Contentful's `faqItems` field, which the Gruve frontend already renders as invisible `FAQPage` JSON-LD. `src/lib/seo/strip-inline-faq.ts` is a defensive backstop that strips any inline FAQ block a model still writes and folds it into `faq_items` instead.
+
 ## Modules shipped (at a glance)
 
 - **Brand Audit** (Slice 1-2): `/onboarding/audit` — site scrape → brand voice + positioning + competitors + keywords + briefs in one flow.

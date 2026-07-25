@@ -157,6 +157,9 @@ export interface BlogPostRecord {
   scoreWarning: boolean;
   /** JSON-LD FAQPage object or null. Populated later in Phase D; for now scored from content. */
   faqSchema: unknown | null;
+  /** Structured FAQ Q/A pairs — pushed to Contentful's faqItems field, rendered
+   *  as invisible FAQPage schema on the live site. Not shown in the article body. */
+  faqItems: Array<{ question: string; answer: string }>;
   /** Cached Google preview {title_display, url_display, meta_display}. */
   googlePreview: BlogGooglePreview | null;
   createdAt: string;
