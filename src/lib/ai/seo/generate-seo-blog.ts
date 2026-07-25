@@ -254,6 +254,7 @@ function buildSystemPrompt(
     "- excerpt 50-200 chars; first-person plural OK when it matches voice.",
     "- internal_link_targets: suggest anchor text + topic hint; the platform resolves the actual slug.",
     "- schema_candidates: include 'Article' or 'BlogPosting' always; add 'FAQPage' when faq[] is non-empty; add 'HowTo' only if body is procedural with numbered steps.",
+    "- FAQ content goes ONLY in the faq[] field — never in body_markdown. Do not write a 'Frequently Asked Questions' heading, an FAQ section, or any Q&A-style pairs into the body. faq[] is rendered as invisible FAQPage schema for search engines, not as visible article text; readers should never see a Q&A block in the post. End body_markdown with a natural closing paragraph or CTA instead.",
     "- If voice forbids a topic, refuse to cover it in body_markdown.",
     "- Never invent statistics. Cite sources by linking out only when the source is visible in the SERP context provided.",
   ].join("\n");
@@ -301,6 +302,6 @@ function buildUserPrompt(
     "",
     serpBlock,
     "",
-    "Task: produce a full SEO blog draft. Aim for the SERP's average word count +15%, capped at 2500 words. Differentiate from the top 10 with a specific stance grounded in our positioning. Use H2/H3 hierarchy; include at least one FAQ block at the end if the SERP shows a People Also Ask box.",
+    "Task: produce a full SEO blog draft. Aim for the SERP's average word count +15%, capped at 2500 words. Differentiate from the top 10 with a specific stance grounded in our positioning. Use H2/H3 hierarchy. If the SERP shows a People Also Ask box, populate faq[] with at least 3 relevant Q&A pairs — but keep body_markdown free of any FAQ heading or Q&A content.",
   ].join("\n");
 }

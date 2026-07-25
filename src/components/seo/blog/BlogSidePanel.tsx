@@ -56,7 +56,13 @@ export function BlogSidePanel({
       tenantDomain,
     });
 
-  const faqs = extractFaqFromMarkdown(post.content).questions;
+  // Prefer the structured FAQ field (what actually publishes as schema) —
+  // fall back to parsing the body for older posts generated before FAQ was
+  // pulled out of the article text.
+  const faqs =
+    post.faqItems.length > 0
+      ? post.faqItems.map((f) => ({ q: f.question, a: f.answer }))
+      : extractFaqFromMarkdown(post.content).questions;
 
   // Durable staging/live links for an already-published post, so the user
   // can jump straight to it from the list without opening the editor.

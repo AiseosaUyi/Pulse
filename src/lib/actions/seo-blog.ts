@@ -19,6 +19,7 @@ import {
 import { BudgetExceededError } from "@/lib/ai/ai-budget";
 import { heuristicMap } from "@/lib/seo/gruve-discovery";
 import { getTenantSeoConfig } from "@/lib/seo/tenant-seo-config";
+import { extractAndStripFaqSection } from "@/lib/seo/strip-inline-faq";
 
 export type SeoBlogActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -116,27 +117,35 @@ export async function generateSeoBlogForPost(
           .filter(Boolean)
       )
     ).slice(0, 10);
-    const firstFaqQuestion = draft.faq?.[0]?.question ?? null;
+    // Safety net: the model is instructed to keep FAQ out of body_markdown
+    // entirely, but if it still writes an inline "Frequently Asked
+    // Questions" block anyway, strip it here and fold any Q&A it contains
+    // into faq_items rather than letting it render as visible article text.
+    const { cleanedContent, extractedFaq } = extractAndStripFaqSection(
+      draft.body_markdown
+    );
+    const faqItems = draft.faq && draft.faq.length > 0 ? draft.faq : extractedFaq;
+    const firstFaqQuestion = faqItems[0]?.question ?? null;
     const suggestedCategory = heuristicMap(draft.primary_keyword).category;
 
     const { data: updated, error: updateErr } = await supabase
       .from("blog_posts")
       .update({
         title: draft.title,
-        content: draft.body_markdown,
+        content: cleanedContent,
         target_keyword: draft.primary_keyword,
         secondary_keywords: draft.secondary_keywords,
         meta_description: draft.seo_meta_description,
         seo_meta_title: draft.seo_meta_title,
         seo_meta_description: draft.seo_meta_description,
         outline: outlineJsonb,
-        word_count: quickWordCount(draft.body_markdown),
+        word_count: quickWordCount(cleanedContent),
         version: post.version + 1,
         // Auto-populated SEO fields (slice 2/3).
         excerpt: draft.excerpt,
         slug: post.slug ?? draft.slug,
         tags,
-        faq_items: draft.faq ?? [],
+        faq_items: faqItems,
         question: post.question ?? firstFaqQuestion,
         category: post.category ?? suggestedCategory,
         // Author defaults from the signed-in user's profile, then the brand.

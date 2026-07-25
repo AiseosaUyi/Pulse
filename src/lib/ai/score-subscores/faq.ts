@@ -85,7 +85,7 @@ export function scoreFaq(inp: FaqInputs): SubScoreResult {
       severity: qCount === 0 ? "high" : "med",
       message: `Only ${qCount} FAQ question${qCount === 1 ? "" : "s"} found — Google's FAQ rich result wants ≥3.`,
       suggestedFix:
-        "Add a FAQ section with 3-5 common questions under their own H3 headings.",
+        "Add 3-5 common questions to the post's FAQ field — not as headings in the article body, which readers see as an odd Q&A dump. FAQ entries render as invisible schema for search engines only.",
     });
   }
 
@@ -136,7 +136,7 @@ export function scoreFaq(inp: FaqInputs): SubScoreResult {
       severity: qCount >= 3 ? "med" : "low",
       message: "No JSON-LD FAQPage schema.",
       suggestedFix:
-        "Add a schema block so Google can show your FAQ as a rich result (click 'Generate FAQ schema' in the side panel).",
+        "Add entries to the post's FAQ field so Google can show your FAQ as a rich result — the schema is generated automatically from it at publish time.",
     });
   }
 

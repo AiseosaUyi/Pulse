@@ -49,6 +49,7 @@ interface Row {
   score_issues: BlogScoreIssue[] | null;
   score_warning: boolean | null;
   faq_schema: unknown | null;
+  faq_items: Array<{ question: string; answer: string }> | null;
   google_preview: BlogGooglePreview | null;
   created_at: string;
   updated_at: string;
@@ -88,6 +89,7 @@ function rowTo(row: Row): BlogPostRecord {
     scoreIssues: row.score_issues ?? [],
     scoreWarning: row.score_warning ?? false,
     faqSchema: row.faq_schema ?? null,
+    faqItems: row.faq_items ?? [],
     googlePreview: row.google_preview ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
