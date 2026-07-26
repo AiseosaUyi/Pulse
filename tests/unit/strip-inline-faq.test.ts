@@ -130,6 +130,67 @@ describe("extractAndStripFaqSection", () => {
     ]);
   });
 
+  it("strips a ```json fenced FAQ array leaked into the body (regression: live production incident)", () => {
+    // Reproduces the exact shape found on a real published post: a
+    // "**FAQ**" bold-pseudo-heading followed by a fenced ```json code
+    // block containing a raw [{question, answer}] array — from a
+    // generator with no dedicated faq[] output field, so the model had
+    // nowhere else to put it.
+    const raw = [
+      "Some real article content here.",
+      "",
+      "---",
+      "",
+      "**FAQ**",
+      "",
+      "```json",
+      "[",
+      '  {',
+      '    "question": "What are the best ticket sales strategies?",',
+      '    "answer": "Use early bird pricing and local influencer collabs."',
+      '  },',
+      '  {',
+      '    "question": "Which platforms work best for Nigerian events?",',
+      '    "answer": "Gruve, Tix Africa, and EventPorte all support local payments."',
+      '  }',
+      "]",
+      "```",
+    ].join("\n");
+
+    const result = extractAndStripFaqSection(raw);
+    expect(result.stripped).toBe(true);
+    expect(result.extractedFaq).toEqual([
+      {
+        question: "What are the best ticket sales strategies?",
+        answer: "Use early bird pricing and local influencer collabs.",
+      },
+      {
+        question: "Which platforms work best for Nigerian events?",
+        answer: "Gruve, Tix Africa, and EventPorte all support local payments.",
+      },
+    ]);
+    expect(result.cleanedContent).not.toMatch(/```json/);
+    expect(result.cleanedContent).not.toMatch(/"question"/);
+    expect(result.cleanedContent).not.toMatch(/\*\*FAQ\*\*/);
+    expect(result.cleanedContent).toMatch(/Some real article content here\./);
+  });
+
+  it("leaves a ```json fence alone when it isn't FAQ-shaped (a real code example)", () => {
+    const raw = [
+      "# How to use our API",
+      "",
+      "```json",
+      '{ "endpoint": "/v1/events", "method": "GET" }',
+      "```",
+    ].join("\n");
+
+    const result = extractAndStripFaqSection(raw);
+    expect(result.stripped).toBe(false);
+    expect(result.extractedFaq).toEqual([]);
+    expect(result.cleanedContent).toMatch(/```json/);
+    expect(result.cleanedContent).toMatch(/"endpoint"/);
+  });
+
   it("joins multi-line answers into a single answer string", () => {
     const raw = [
       "## Frequently Asked Questions",
