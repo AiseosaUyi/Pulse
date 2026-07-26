@@ -17,6 +17,7 @@ import { countWords } from "@/lib/blog/word-count";
 import { buildGooglePreview } from "@/lib/blog/google-preview";
 import { uniqueSlugFor } from "@/lib/blog/slug";
 import type { BlogPostStatus } from "@/lib/types/blog-posts";
+import { extractAndStripFaqSection } from "@/lib/seo/strip-inline-faq";
 
 type ActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -51,17 +52,22 @@ async function persistGeneratedPost(
 ): Promise<ActionResult<CreateBlogResult>> {
   const { post: draft, meta, score } = generation;
 
-  // The model occasionally appends a <script type="application/ld+json"> block
-  // to the body instead of using the dedicated faq_items/json_ld_overrides
-  // fields — strip it so raw schema markup never renders as visible article
-  // text. It shows up HTML-entity-escaped (&lt;script&gt;...&lt;/script&gt;)
-  // since the model treats the body as markdown, not literal <script> tags.
-  const cleanedContent = draft.content
-    .replace(
-      /(?:<script[^>]*application\/ld\+json[^>]*>|&lt;script[^&]*application\/ld\+json[^&]*&gt;)[\s\S]*?(?:<\/script>|&lt;\/script&gt;)/gi,
-      ""
-    )
-    .trim();
+  // This generator (unlike generate-seo-blog.ts) has no dedicated faq[]
+  // output field at all — blogPostSchema is title/meta_description/outline/
+  // content/secondary_keywords only. So when the model produces FAQ
+  // content, the body is the only place it CAN go: seen live as a
+  // <script type="application/ld+json"> block, and — a real production
+  // incident — a "**FAQ**" heading followed by a ```json fenced
+  // [{question, answer}] array rendered as literal text. Strip either
+  // shape and recover the Q&A into faq_items instead of losing it or
+  // (worse) leaving raw JSON visible in the published article.
+  const htmlEntityDecodedScriptTag = draft.content.replace(
+    /&lt;script([^&]*)&gt;/gi,
+    "<script$1>"
+  ).replace(/&lt;\/script&gt;/gi, "</script>");
+  const { cleanedContent, extractedFaq } = extractAndStripFaqSection(
+    htmlEntityDecodedScriptTag
+  );
 
   const finalWordCount = countWords(cleanedContent);
   const wordCountWarning = meta.stopped_reason === "max_passes_reached";
@@ -92,6 +98,7 @@ async function persistGeneratedPost(
       excerpt: draft.meta_description,
       outline: draft.outline,
       content: cleanedContent,
+      faq_items: extractedFaq,
       word_count: finalWordCount,
       status: "draft",
       generator_model: "openai/gpt-4.1",

@@ -169,6 +169,7 @@ export async function initialGenerate(
     "- outline is an array of { heading, bullets } objects covering the section structure.",
     "- content is the full markdown article, starting with the single `#` title on line 1.",
     "- secondary_keywords is 3-6 naturally related phrases the article should rank for.",
+    "- This schema has no separate FAQ field. Do NOT write a 'Frequently Asked Questions' section, a Q&A block, or any structured/schema data (JSON, JSON-LD, a fenced code block) into `content` — readers should never see raw data formatting in the article. If the topic calls for FAQ-style content, weave the answers into normal prose paragraphs instead.",
     "- Return ONLY JSON matching the schema.",
     `- **Final reminder: the finished \`content\` field must be approximately ${targetWordCount} words. Count your output before returning. If it's under, add genuine depth (examples, specifics, edge cases) until it hits the target.**`,
   ].join("\n");

@@ -10,16 +10,70 @@
 //
 // Tolerates real headings ("### Question?"), the bold-pseudo-heading style
 // ("**Question?**") the model sometimes uses instead of H2/H3, qualifier
-// text on the FAQ heading itself ("## FAQ About X"), and a raw
+// text on the FAQ heading itself ("## FAQ About X"), a raw
 // <script type="application/ld+json"> FAQPage block occasionally leaked
-// straight into the body (stripped outright — any Q/A it carries is almost
-// always duplicated as visible headings right after it).
+// straight into the body, and — seen live on a real generated post — a
+// ```json fenced code block containing a raw [{question, answer}, ...]
+// array under a "**FAQ**" heading (a different generator than the one this
+// module was originally written for, with no dedicated faq[] output field
+// at all, so the model had nowhere else to put it).
 
 const JSON_LD_SCRIPT_RE =
   /<script[^>]*application\/ld\+json[^>]*>[\s\S]*?<\/script>\n?/gi;
 
+// Only matches a fenced block whose content parses as JSON — a legitimate
+// ```json code example in an unrelated post won't parse as the FAQ shape
+// below and is left untouched.
+const JSON_FENCE_RE = /```(?:json)?[ \t]*\n(\[[\s\S]*?\])[ \t]*\n```\n?/gi;
+
 const FAQ_HEADING_RE =
   /^(?:#{2,4}\s+(?:Frequently Asked Questions|FAQs?)\b.*|\*\*\s*(?:Frequently Asked Questions|FAQs?)\b.*?\*\*)\s*$/im;
+
+interface RawFaqLikeEntry {
+  question?: unknown;
+  answer?: unknown;
+}
+
+/** Parses a fenced block's contents; returns entries only if it's genuinely
+ *  an array of {question, answer} string pairs — anything else (a real code
+ *  sample, an unrelated JSON array) is left alone. */
+function parseJsonFaqArray(text: string): ExtractedFaqEntry[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) return null;
+  const entries: ExtractedFaqEntry[] = [];
+  for (const item of parsed) {
+    const q = (item as RawFaqLikeEntry)?.question;
+    const a = (item as RawFaqLikeEntry)?.answer;
+    if (typeof q === "string" && q.trim() && typeof a === "string" && a.trim()) {
+      entries.push({ question: q.trim(), answer: a.trim() });
+    }
+  }
+  return entries.length > 0 ? entries : null;
+}
+
+/** Strips any ```json fenced FAQ array from the content, extracting its
+ *  entries. Leaves a heading directly above an emptied fence in place —
+ *  extractAndStripFaqSection's existing heading pass cleans that up, since
+ *  it already handles a heading with nothing but whitespace under it. */
+function stripJsonFaqFences(content: string): {
+  content: string;
+  extracted: ExtractedFaqEntry[];
+  stripped: boolean;
+} {
+  const extracted: ExtractedFaqEntry[] = [];
+  const cleaned = content.replace(JSON_FENCE_RE, (match, arrayText: string) => {
+    const parsed = parseJsonFaqArray(arrayText);
+    if (!parsed) return match;
+    extracted.push(...parsed);
+    return "";
+  });
+  return { content: cleaned, extracted, stripped: extracted.length > 0 };
+}
 
 export interface ExtractedFaqEntry {
   question: string;
@@ -58,15 +112,17 @@ export function extractAndStripFaqSection(
   rawContent: string
 ): ExtractAndStripFaqResult {
   const noJsonLd = rawContent.replace(JSON_LD_SCRIPT_RE, "");
-  const content = noJsonLd.replace(/\n{3,}/g, "\n\n");
   const jsonLdStripped = noJsonLd !== rawContent;
+
+  const fenceResult = stripJsonFaqFences(noJsonLd);
+  const content = fenceResult.content.replace(/\n{3,}/g, "\n\n");
 
   const headingMatch = FAQ_HEADING_RE.exec(content);
   if (!headingMatch) {
     return {
       cleanedContent: content.trim() + "\n",
-      extractedFaq: [],
-      stripped: jsonLdStripped,
+      extractedFaq: fenceResult.extracted,
+      stripped: jsonLdStripped || fenceResult.stripped,
     };
   }
 
@@ -128,5 +184,11 @@ export function extractAndStripFaqSection(
       .replace(/\n{3,}/g, "\n\n")
       .trim() + "\n";
 
-  return { cleanedContent, extractedFaq, stripped: true };
+  return {
+    cleanedContent,
+    // Fence-derived entries first — they're the more structured/reliable
+    // source when both are somehow present.
+    extractedFaq: [...fenceResult.extracted, ...extractedFaq],
+    stripped: true,
+  };
 }
