@@ -12,7 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runPublish } from "@/lib/seo/publish-runner";
 import { markdownToRichText } from "@/lib/seo/markdown-to-richtext";
-import { resolveContentfulConfig, type PublishTarget } from "@/lib/integrations/contentful";
+import { resolveContentfulConfig, type ContentfulConfig, type PublishTarget } from "@/lib/integrations/contentful";
 import { getTenantSeoConfig } from "@/lib/seo/tenant-seo-config";
 import { QUESTION_MIN, QUESTION_MAX } from "@/lib/seo/question-constraints";
 
@@ -44,12 +44,38 @@ type PostRow = {
   thumbnail: { url?: string } | null;
 };
 
-function missingFields(p: PostRow): string[] {
+// `question` is only actually required on Contentful content types that
+// have the field (gruveBlog does; sippyBlog does not — see the
+// fieldAliases doc on ContentfulConfig and scripts/migrate-sippy-contentful-model.ts,
+// which never adds a `question` field to sippyBlog). A tenant whose
+// integration config aliases "question" to null has told us the field
+// doesn't exist on their content type, so it must not be required here —
+// otherwise that tenant can never satisfy `missingFields()` and publishing
+// is permanently blocked.
+function isQuestionRequired(cfg: ContentfulConfig): boolean {
+  const aliases = cfg.fieldAliases;
+  if (!aliases || !("question" in aliases)) return true;
+  return aliases.question !== null;
+}
+
+// Server-callable mirror of isQuestionRequired, for the blog editor page to
+// thread down to the client so the publish-readiness checklist doesn't show
+// "Question / hook" as required for a tenant whose Contentful content type
+// has no such field (see isQuestionRequired above).
+export async function getBlogPublishRequirements(
+  tenantSlug: string,
+  target: PublishTarget = "live"
+): Promise<{ questionRequired: boolean }> {
+  const cfg = await resolveContentfulConfig(tenantSlug, target);
+  return { questionRequired: cfg ? isQuestionRequired(cfg) : true };
+}
+
+function missingFields(p: PostRow, questionRequired: boolean): string[] {
   const missing: string[] = [];
   if (!p.title?.trim()) missing.push(REQUIRED_LABELS.title);
   if (!p.slug?.trim()) missing.push(REQUIRED_LABELS.slug);
   if (!p.content?.trim()) missing.push(REQUIRED_LABELS.content);
-  if (!p.question?.trim()) missing.push(REQUIRED_LABELS.question);
+  if (questionRequired && !p.question?.trim()) missing.push(REQUIRED_LABELS.question);
   if (!p.cover_image?.url) missing.push(REQUIRED_LABELS.cover_image);
   if (!p.thumbnail?.url) missing.push(REQUIRED_LABELS.thumbnail);
   if (!p.author?.trim()) missing.push(REQUIRED_LABELS.author);
@@ -61,9 +87,11 @@ function missingFields(p: PostRow): string[] {
 // content-model constraint, not documented anywhere in this codebase before
 // now — a too-long question 422s at publish time with a raw Contentful
 // validation dump instead of a readable message). Catch it here so the
-// failure is legible before we ever call the API.
+// failure is legible before we ever call the API. Tenants whose content
+// type has no question field (questionRequired=false) skip this entirely.
 
-function questionLengthError(question: string | null): string | null {
+function questionLengthError(question: string | null, questionRequired: boolean): string | null {
+  if (!questionRequired) return null;
   const len = question?.trim().length ?? 0;
   if (len === 0) return null; // already covered by missingFields
   if (len < QUESTION_MIN || len > QUESTION_MAX) {
@@ -106,7 +134,8 @@ export async function publishBlogToGruve(
   if (post.tenant_slug !== tenant.slug)
     return { success: false, error: "Wrong tenant" };
 
-  const missing = missingFields(post as PostRow);
+  const questionRequired = isQuestionRequired(cfg);
+  const missing = missingFields(post as PostRow, questionRequired);
   if (missing.length > 0) {
     return {
       success: false,
@@ -115,7 +144,7 @@ export async function publishBlogToGruve(
     };
   }
 
-  const questionError = questionLengthError(post.question);
+  const questionError = questionLengthError(post.question, questionRequired);
   if (questionError) {
     return { success: false, error: questionError };
   }

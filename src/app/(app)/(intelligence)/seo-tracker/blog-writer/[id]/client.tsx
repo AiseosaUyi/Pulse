@@ -105,6 +105,7 @@ export function BlogEditorPageClient({
   categories = [],
   seo,
   succeededTargets,
+  questionRequired,
 }: {
   post: BlogPostRecord;
   tenantSlug: string;
@@ -125,6 +126,10 @@ export function BlogEditorPageClient({
    *  mark_published sets it to "published" for either target. Gates
    *  whether the live/staging link is shown at all. */
   succeededTargets: SucceededPublishTargets;
+  /** False when this tenant's Contentful content type has no question/hook
+   *  field (fieldAliases.question aliased to null) — see isQuestionRequired
+   *  in publish-to-gruve.ts, which this must stay consistent with. */
+  questionRequired: boolean;
 }) {
   const router = useRouter();
   const dialogs = useDialogs();
@@ -356,16 +361,22 @@ export function BlogEditorPageClient({
     { label: "Title", ok: title.trim().length > 0 },
     { label: "URL slug", ok: Boolean(post.slug) },
     { label: "Body content", ok: (current.wordCount ?? 0) > 0 },
-    {
-      // Contentful's gruveBlog.question field enforces a 12-30 char length
-      // (see publish-to-gruve.ts questionLengthError) — a non-empty question
-      // outside that range still fails server-side. Check length here too so
-      // the checklist (and the disabled publish button) actually reflect
-      // whether the click will succeed, instead of letting a doomed publish
-      // through with the real reason only surfacing after the fact.
-      label: `Question / hook (${QUESTION_MIN}-${QUESTION_MAX} chars)`,
-      ok: question.trim().length >= QUESTION_MIN && question.trim().length <= QUESTION_MAX,
-    },
+    // Contentful's gruveBlog.question field enforces a 12-30 char length
+    // (see publish-to-gruve.ts questionLengthError) — a non-empty question
+    // outside that range still fails server-side. Check length here too so
+    // the checklist (and the disabled publish button) actually reflect
+    // whether the click will succeed, instead of letting a doomed publish
+    // through with the real reason only surfacing after the fact. Tenants
+    // whose content type has no question field (questionRequired=false,
+    // e.g. Sippy's sippyBlog) don't get this item at all.
+    ...(questionRequired
+      ? [
+          {
+            label: `Question / hook (${QUESTION_MIN}-${QUESTION_MAX} chars)`,
+            ok: question.trim().length >= QUESTION_MIN && question.trim().length <= QUESTION_MAX,
+          },
+        ]
+      : []),
     { label: "Banner image", ok: Boolean(coverImage) },
     { label: "Thumbnail", ok: Boolean(thumbnail) },
     { label: "Author name", ok: author.trim().length > 0 },
@@ -835,7 +846,7 @@ export function BlogEditorPageClient({
                 hint="Card image on the blog index."
               />
               <div>
-                <Label htmlFor="bp-question">Question / hook *</Label>
+                <Label htmlFor="bp-question">Question / hook{questionRequired ? " *" : ""}</Label>
                 <Input
                   id="bp-question"
                   value={question}
