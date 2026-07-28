@@ -8,6 +8,8 @@ import { getContentCalendarConfig, appendContentCalendarFeedback } from "@/lib/c
 import { fetchTrendCandidates, type TrendCandidate } from "@/lib/scrape/trend-pull";
 import { generateSlotContent, selectTopic, generateBriefing } from "@/lib/ai/content-calendar";
 import { mapWithConcurrency } from "@/lib/utils/concurrency";
+import { findNearDuplicate } from "@/lib/utils/text-similarity";
+import { buildPillarAssignments } from "@/lib/content-calendar/pillar-rotation";
 import {
   getNextPosition,
   getNextScheduledDate,
@@ -27,6 +29,8 @@ function addDays(iso: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+const MAX_DEDUPE_ATTEMPTS = 3;
 
 async function requireEnabledTenant(): Promise<
   { ok: true; tenantSlug: string; userId: string } | { ok: false; error: string }
@@ -67,10 +71,13 @@ export async function generateNextBatch(
   const config = await getContentCalendarConfig(tenantSlug);
 
   // Fetched ONCE per pillar, shared across all N slots (locked decision
-  // #4) — not re-fetched per slot. Fetched per-pillar (not one blended
-  // query) so a batch's trend pool actually has candidates for every
-  // pillar, not just whichever single niche string used to dominate.
+  // #4) — not re-fetched per slot. Kept keyed BY pillar (not flattened
+  // immediately) so each pillar's own topic-selection calls can be grounded
+  // on its own trend pool — flattening-then-slicing-top-15 previously let
+  // whichever pillar had the richest fetch results crowd out every other
+  // pillar's material from what the model ever saw.
   const trendsPerNiche = await Promise.all(config.niches.map((niche) => fetchTrendCandidates(niche)));
+  const trendsByPillar = new Map(config.niches.map((niche, i) => [niche, trendsPerNiche[i]]));
   const trends = trendsPerNiche.flat();
   if (trends.length === 0 && config.interestTags.length === 0) {
     return {
@@ -84,16 +91,37 @@ export async function generateNextBatch(
   // open queue from a PRIOR batch call — confirmed live (2026-07-09):
   // without this, two separate "Generate my next N" calls produced
   // duplicate copies of the same topics, since in-batch-only dedup has no
-  // memory of what a previous batch already picked.
+  // memory of what a previous batch already picked. Also seeded with
+  // recently posted/filmed titles — a fresh batch shouldn't re-pitch
+  // something the creator already made, and the open-queue-only exclude
+  // list had no visibility into that at all.
   const { data: existingOpenSlots } = await admin
     .from("content_slots")
     .select("topic_title, topic_brief")
     .eq("tenant_slug", tenantSlug)
     .in("status", ["assigned", "in_progress"]);
-  const pickedTitles: string[] = (existingOpenSlots ?? []).map((s) => s.topic_title as string);
+  const { data: recentHistorySlots } = await admin
+    .from("content_slots")
+    .select("topic_title")
+    .eq("tenant_slug", tenantSlug)
+    .in("status", ["posted", "filmed"])
+    .order("updated_at", { ascending: false })
+    .limit(30);
+  const pickedTitles: string[] = [
+    ...(existingOpenSlots ?? []).map((s) => s.topic_title as string),
+    ...(recentHistorySlots ?? []).map((s) => s.topic_title as string),
+  ];
   const usedPillars: string[] = (existingOpenSlots ?? [])
     .map((s) => (s.topic_brief as { pillar?: string | null } | null)?.pillar)
     .filter((p): p is string => !!p);
+  const usedFormats: string[] = (existingOpenSlots ?? [])
+    .map((s) => (s.topic_brief as { format?: string | null } | null)?.format)
+    .filter((f): f is string => !!f);
+
+  // Guarantees every configured pillar gets representation instead of
+  // leaving coverage to a soft "spread pillars" instruction (see
+  // buildPillarAssignments above).
+  const pillarAssignments = buildPillarAssignments(config.niches, n);
 
   // Phase 1: pick all N topics SEQUENTIALLY (not concurrently). This is
   // deliberate, not an oversight — confirmed live (2026-07-09): with
@@ -102,24 +130,57 @@ export async function generateNextBatch(
   // for all but the first, and duplicate/rephrased topics slip through
   // (3 of 5 slots in one real batch were the same story rephrased 3
   // ways). Cheap to do sequentially — "scoring" tier, ~1-3s each.
-  const picks: Array<{ topicTitle: string; searchQuery: string; pillar: string } | null> = [];
+  const picks: Array<{ topicTitle: string; searchQuery: string; pillar: string; format: string } | null> = [];
   for (let i = 0; i < n; i++) {
-    try {
-      const pick = await selectTopic({
-        tenantSlug,
-        niches: config.niches,
-        interestTags: config.interestTags,
-        trends,
-        excludeTitles: [...pickedTitles],
-        usedPillars: [...usedPillars],
-        instruction,
-        recentFeedback: config.recentFeedback,
-      });
-      pickedTitles.push(pick.topicTitle);
-      usedPillars.push(pick.pillar);
-      picks.push(pick);
-    } catch (err) {
-      console.warn("[content-calendar] topic selection failed for one slot", err);
+    const assignedPillar = pillarAssignments[i];
+    const pillarTrends = trendsByPillar.get(assignedPillar);
+    const trendsForPick = pillarTrends && pillarTrends.length > 0 ? pillarTrends : trends;
+
+    // Post-generation similarity filter: prompt-only dedup instructions
+    // still let near-duplicates through in production (confirmed live —
+    // a regenerated title nearly identical to one already queued). Retry
+    // a bounded number of times against a real similarity check rather
+    // than trusting the model's compliance with "don't repeat this".
+    let accepted: { topicTitle: string; searchQuery: string; pillar: string; format: string } | null = null;
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < MAX_DEDUPE_ATTEMPTS; attempt++) {
+      try {
+        const candidate = await selectTopic({
+          tenantSlug,
+          niches: config.niches,
+          interestTags: config.interestTags,
+          trends: trendsForPick,
+          excludeTitles: [...pickedTitles],
+          usedPillars: [...usedPillars],
+          usedFormats: [...usedFormats],
+          assignedPillar,
+          instruction,
+          recentFeedback: config.recentFeedback,
+        });
+        const dup = findNearDuplicate(candidate.topicTitle, pickedTitles);
+        if (!dup) {
+          accepted = candidate;
+          break;
+        }
+        console.warn(
+          `[content-calendar] near-duplicate rejected (attempt ${attempt + 1}/${MAX_DEDUPE_ATTEMPTS}): "${candidate.topicTitle}" ~ "${dup}"`
+        );
+        // Last attempt: accept it anyway rather than silently dropping the
+        // slot — a near-duplicate the creator can manually regenerate beats
+        // shrinking the batch's yield without any indication why.
+        if (attempt === MAX_DEDUPE_ATTEMPTS - 1) accepted = candidate;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+
+    if (accepted) {
+      pickedTitles.push(accepted.topicTitle);
+      usedPillars.push(accepted.pillar);
+      usedFormats.push(accepted.format);
+      picks.push(accepted);
+    } else {
+      console.warn("[content-calendar] topic selection failed for one slot", lastErr);
       picks.push(null);
     }
   }
@@ -134,6 +195,7 @@ export async function generateNextBatch(
         topicTitle: pick.topicTitle,
         searchQuery: pick.searchQuery,
         pillar: pick.pillar,
+        format: pick.format,
         instruction,
       });
       return { topicTitle: pick.topicTitle, brief, error: null as string | null };

@@ -24,10 +24,22 @@ export class ContentCalendarAiError extends Error {
   }
 }
 
+const CONTENT_FORMATS = [
+  "teardown",
+  "how_to",
+  "hot_take",
+  "personal_story",
+  "listicle",
+  "news_reaction",
+] as const;
+
 const topicSelectSchema = z.object({
   topicTitle: z.string().min(3).describe("A specific, compelling topic framed as something to talk about on camera — not a generic category."),
   searchQuery: z.string().min(3).describe("A search query to find real reference articles/discussion about this exact topic."),
   pillar: z.string().describe("Exactly one of the creator's given content pillars — verbatim — that this topic belongs to."),
+  format: z.enum(CONTENT_FORMATS).describe(
+    "The video's content format: teardown (break down a specific example), how_to (step-by-step), hot_take (opinion/contrarian take), personal_story (your own build/experience), listicle (a numbered list), news_reaction (reacting to one specific news item)."
+  ),
 });
 
 const briefingSchema = z.object({
@@ -55,6 +67,14 @@ export interface GenerateSlotContentInput {
   trends: TrendCandidate[];
   excludeTitles: string[]; // already-picked topics earlier in this same batch (locked decision #4)
   usedPillars?: string[]; // pillars already used this batch/queue — nudges rotation, not a hard exclude
+  // When set, the caller has already round-robined this slot to a specific
+  // pillar (see buildPillarAssignments in actions/content-calendar.ts) and
+  // the model MUST use it — a hard lock, not a "prefer" nudge. Without this,
+  // pillar coverage was purely voluntary and drifted to whichever pillar
+  // had the richest trend material (confirmed live: some configured pillars
+  // never appeared in a batch at all).
+  assignedPillar?: string;
+  usedFormats?: string[]; // content formats already used this batch — nudges variety, same pattern as usedPillars
   instruction?: string; // one-off steering from the creator (batch-level "generate with instructions", or a stated reason on regenerate)
   // Rolling log of past regenerate reasons — the immediate half of the
   // "learning loop" (senior-uiux audit stage 05): lets topic selection
@@ -71,12 +91,13 @@ export interface GenerateSlotContentResult {
 export async function generateSlotContent(
   input: GenerateSlotContentInput
 ): Promise<GenerateSlotContentResult> {
-  const { topicTitle, searchQuery, pillar } = await selectTopic(input);
+  const { topicTitle, searchQuery, pillar, format } = await selectTopic(input);
   const brief = await generateBriefing({
     tenantSlug: input.tenantSlug,
     topicTitle,
     searchQuery,
     pillar,
+    format,
     instruction: input.instruction,
   });
   return { topicTitle, brief };
@@ -91,11 +112,18 @@ export async function generateSlotContent(
 // same underlying story rephrased 3 ways).
 export async function selectTopic(
   input: GenerateSlotContentInput
-): Promise<{ topicTitle: string; searchQuery: string; pillar: string }> {
+): Promise<{ topicTitle: string; searchQuery: string; pillar: string; format: (typeof CONTENT_FORMATS)[number] }> {
   const model = getModel("scoring");
   const modelId = getModelId("scoring");
   const started = Date.now();
 
+  // Callers doing batch generation pre-filter `trends` down to the
+  // assigned pillar's own trend pool before calling this (see
+  // buildPillarAssignments in actions/content-calendar.ts) — showing the
+  // model only relevant-pillar material instead of a globally flattened
+  // top-15 that structurally favored whichever pillar's fetch returned the
+  // most/richest results (confirmed live: pillars listed later, or with
+  // thinner trend coverage, never surfaced in generated batches at all).
   const trendLines = input.trends
     .slice(0, 15)
     .map((t) => `- ${t.title} (${t.source}${t.points ? `, ${t.points} pts` : ""})`)
@@ -104,23 +132,35 @@ export async function selectTopic(
   const systemLines = [
     `You pick ONE topic per call for a solo creator's daily short-form video, whose content spans these pillars: ${input.niches.join(", ")}.`,
     "Rules:",
-    "- Pick exactly one pillar from that list for this topic and report it verbatim in `pillar`.",
     "- Prefer a topic from the trending candidates list below when one fits the creator's interests.",
     "- If the interest list is empty, pick straight from trends — a real, specific trend beats a generic one.",
-    "- Never repeat or closely rephrase a topic already picked earlier in this batch (listed below).",
+    "- Never repeat or closely rephrase a topic already picked earlier in this batch, already sitting in the queue, or already posted (all listed below).",
     "- The topic must be specific enough to talk about for 30-90s, not a vague category.",
+    "- Avoid template phrasings like \"The Role of AI in Shaping X\" or \"The Evolution of AI-Native Y\" — vary sentence structure from pick to pick.",
+    "- Pick a `format` that fits the topic; favor a format different from ones already used recently (listed below) when it still fits naturally.",
   ];
-  if (input.niches.length > 1) {
-    systemLines.push("- Spread coverage across pillars over a batch — don't default to the same pillar every time just because it trends more.");
+  if (input.assignedPillar) {
+    systemLines.push(
+      "",
+      `HARD REQUIREMENT: this topic MUST belong to the pillar "${input.assignedPillar}" — report it verbatim in \`pillar\`. Do not substitute a different pillar even if another trends harder.`
+    );
+  } else {
+    systemLines.push("- Pick exactly one pillar from that list for this topic and report it verbatim in `pillar`.");
+    if (input.niches.length > 1) {
+      systemLines.push("- Spread coverage across pillars over a batch — don't default to the same pillar every time just because it trends more.");
+    }
   }
   if (input.interestTags.length > 0) {
     systemLines.push("", `Creator's stated interests: ${input.interestTags.join(", ")}`);
   }
   if (input.excludeTitles.length > 0) {
-    systemLines.push("", "Already picked this batch — do NOT repeat or closely rephrase these:", input.excludeTitles.map((t) => `- ${t}`).join("\n"));
+    systemLines.push("", "Already picked this batch, queued, or posted — do NOT repeat or closely rephrase these:", input.excludeTitles.map((t) => `- ${t}`).join("\n"));
   }
-  if (input.usedPillars && input.usedPillars.length > 0) {
+  if (!input.assignedPillar && input.usedPillars && input.usedPillars.length > 0) {
     systemLines.push("", `Pillars already used recently (prefer a different one if it fits): ${input.usedPillars.join(", ")}`);
+  }
+  if (input.usedFormats && input.usedFormats.length > 0) {
+    systemLines.push("", `Formats already used recently (prefer a different one if it fits): ${input.usedFormats.join(", ")}`);
   }
   if (input.recentFeedback && input.recentFeedback.length > 0) {
     systemLines.push(
@@ -171,6 +211,14 @@ export async function selectTopic(
       success: true,
     });
 
+    // Belt-and-suspenders: the hard-lock instruction above should already
+    // make the model report the assigned pillar verbatim, but a model quirk
+    // returning a paraphrase of it would silently break the coverage
+    // guarantee the caller is relying on — force it rather than trust prose
+    // compliance for something load-bearing.
+    if (input.assignedPillar) {
+      return { ...result.output, pillar: input.assignedPillar };
+    }
     return result.output;
   } catch (err) {
     await logAiCall({
@@ -194,6 +242,7 @@ export async function generateBriefing(input: {
   topicTitle: string;
   searchQuery: string;
   pillar?: string;
+  format?: string;
   instruction?: string;
 }): Promise<ContentSlotBrief> {
   let sources: Array<{ url: string; title: string; snippet: string }> = [];
@@ -273,6 +322,7 @@ export async function generateBriefing(input: {
 
   const userLines = [
     `Topic: ${input.topicTitle}`,
+    ...(input.format ? [`Format: ${input.format}`] : []),
     "",
     "ARTICLE sources:",
     sourceLines,
@@ -305,7 +355,7 @@ export async function generateBriefing(input: {
       success: true,
     });
 
-    return { ...result.output, pillar: input.pillar ?? null };
+    return { ...result.output, pillar: input.pillar ?? null, format: input.format ?? null };
   } catch (err) {
     await logAiCall({
       tenantSlug: input.tenantSlug,
