@@ -64,16 +64,16 @@ export interface ContentSlotRecord {
 // doc ENG REVIEW). Computed at read time, not stored as a mutating flag.
 export const STALE_AFTER_DAYS = 8;
 export const AUTO_RETIRE_AFTER_DAYS = 21;
-export const MAX_QUEUE_DEPTH = 20;
+// Lowered from 20 (2026-07-28) — 20 open slots was too large a queue to
+// realistically work through; 10 keeps the backlog approachable.
+export const MAX_QUEUE_DEPTH = 10;
 // Per-click ceiling on generateNextBatch — bounded by the route's
-// maxDuration (300s): topic-selection is sequential (dedup requires each
-// pick to see prior picks) so this is the real cost driver, ~2-5s/topic;
-// briefing generation is concurrency-3. 15 stays well under budget even in
-// a slow-call scenario. Raised from 5 (2026-07-09): a fixed batch of 5
-// assumes the user already knows their direction — when they don't, they
-// want more raw options to browse before committing to what to film.
-export const MAX_BATCH_SIZE = 15;
-export const BATCH_SIZE_OPTIONS = [5, 10, 15] as const;
+// maxDuration (300s) AND by MAX_QUEUE_DEPTH itself (a batch can never
+// usefully exceed the queue cap). Lowered from 15 alongside the
+// MAX_QUEUE_DEPTH cut (2026-07-28) — 15 was already unreachable once the
+// queue cap dropped to 10.
+export const MAX_BATCH_SIZE = 10;
+export const BATCH_SIZE_OPTIONS = [5, 10] as const;
 export const DEFAULT_BATCH_SIZE = 10;
 
 export function isSlotStale(slot: Pick<ContentSlotRecord, "generatedAt" | "status">): boolean {

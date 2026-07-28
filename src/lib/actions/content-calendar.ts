@@ -7,14 +7,17 @@ import { isContentCalendarEnabledForTenant } from "@/lib/content-calendar/tenant
 import { getContentCalendarConfig, appendContentCalendarFeedback } from "@/lib/content-calendar/config";
 import { fetchTrendCandidates, type TrendCandidate } from "@/lib/scrape/trend-pull";
 import { generateSlotContent, selectTopic, generateBriefing } from "@/lib/ai/content-calendar";
+import { judgeCandidates } from "@/lib/ai/content-calendar-judge";
 import { mapWithConcurrency } from "@/lib/utils/concurrency";
 import { findNearDuplicate } from "@/lib/utils/text-similarity";
+import { findStaleYear } from "@/lib/utils/year-check";
 import { buildPillarAssignments } from "@/lib/content-calendar/pillar-rotation";
 import {
   getNextPosition,
   getNextScheduledDate,
   getOpenQueueDepth,
   retireStaleSlots,
+  todayIso,
 } from "@/lib/services/content-calendar-lifecycle";
 import { MAX_BATCH_SIZE, MAX_QUEUE_DEPTH } from "@/lib/types/content-calendar";
 import { createR2PresignedPut, r2PublicUrl } from "@/lib/storage/r2";
@@ -30,7 +33,29 @@ function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Inner, per-slot, per-round retries against the cheap DETERMINISTIC checks
+// only (near-duplicate, stale year) — no LLM judge call spent until a
+// candidate clears these for free.
 const MAX_DEDUPE_ATTEMPTS = 3;
+// Outer self-correcting loop cap: generate → validate (deterministic +
+// judge) → regenerate ONLY the rejected slots → repeat. Bounds total cost
+// (design constraint) while still giving the loop room to converge on a
+// clean batch instead of shipping whatever the first attempt produced.
+const MAX_ROUNDS = 5;
+
+interface TopicCandidate {
+  topicTitle: string;
+  searchQuery: string;
+  pillar: string;
+  format: string;
+}
+
+interface BatchRejection {
+  round: number;
+  pillar: string;
+  title: string;
+  reason: string;
+}
 
 async function requireEnabledTenant(): Promise<
   { ok: true; tenantSlug: string; userId: string } | { ok: false; error: string }
@@ -48,10 +73,27 @@ async function requireEnabledTenant(): Promise<
 // runner tables — design doc ENG REVIEW, locked decision #1/#6): N is
 // capped, concurrency-limited, and the route this is called from should
 // set an explicit maxDuration sized to real measured per-slot latency.
+//
+// Self-correcting loop (2026-07-28 rework): generate → validate against the
+// full quality rubric (uniqueness, current year, on-lane + individual-brand
+// fit, format/skeleton variety) → regenerate ONLY the slots that failed,
+// telling the model exactly why → repeat, up to MAX_ROUNDS. A slot that
+// still can't pass by the cap is DROPPED, not padded with a failing
+// candidate — the batch yields fewer than N with the reason surfaced,
+// rather than silently shipping junk.
 export async function generateNextBatch(
   requestedN: number,
   instruction?: string
-): Promise<ActionResult<{ candidatesFound: number; generated: number; errors: number }>> {
+): Promise<
+  ActionResult<{
+    candidatesFound: number;
+    generated: number;
+    errors: number;
+    roundsUsed: number;
+    rejected: BatchRejection[];
+    missingPillars: string[];
+  }>
+> {
   const gate = await requireEnabledTenant();
   if (!gate.ok) return { success: false, error: gate.error };
   const { tenantSlug, userId } = gate;
@@ -69,6 +111,8 @@ export async function generateNextBatch(
 
   const n = Math.max(1, Math.min(requestedN, MAX_BATCH_SIZE, MAX_QUEUE_DEPTH - openDepth));
   const config = await getContentCalendarConfig(tenantSlug);
+  const currentYear = new Date().getUTCFullYear();
+  const today = todayIso();
 
   // Fetched ONCE per pillar, shared across all N slots (locked decision
   // #4) — not re-fetched per slot. Kept keyed BY pillar (not flattened
@@ -87,14 +131,12 @@ export async function generateNextBatch(
     };
   }
 
-  // Dedup: seeded with titles (and pillars, for rotation) already in the
-  // open queue from a PRIOR batch call — confirmed live (2026-07-09):
-  // without this, two separate "Generate my next N" calls produced
-  // duplicate copies of the same topics, since in-batch-only dedup has no
-  // memory of what a previous batch already picked. Also seeded with
-  // recently posted/filmed titles — a fresh batch shouldn't re-pitch
-  // something the creator already made, and the open-queue-only exclude
-  // list had no visibility into that at all.
+  // Dedup pool: seeded with titles (and pillars/formats, for rotation)
+  // already in the open queue from a PRIOR batch call, PLUS recently
+  // posted/filmed titles — a fresh batch shouldn't re-pitch something the
+  // creator already made, and the open-queue-only exclude list had no
+  // visibility into that at all. Grows as this round loop accepts new
+  // candidates, so later rounds/pillars see everything accepted so far.
   const { data: existingOpenSlots } = await admin
     .from("content_slots")
     .select("topic_title, topic_brief")
@@ -107,88 +149,158 @@ export async function generateNextBatch(
     .in("status", ["posted", "filmed"])
     .order("updated_at", { ascending: false })
     .limit(30);
-  const pickedTitles: string[] = [
+  const acceptedTitles: string[] = [
     ...(existingOpenSlots ?? []).map((s) => s.topic_title as string),
     ...(recentHistorySlots ?? []).map((s) => s.topic_title as string),
   ];
-  const usedPillars: string[] = (existingOpenSlots ?? [])
+  const acceptedPillars: string[] = (existingOpenSlots ?? [])
     .map((s) => (s.topic_brief as { pillar?: string | null } | null)?.pillar)
     .filter((p): p is string => !!p);
-  const usedFormats: string[] = (existingOpenSlots ?? [])
+  const acceptedFormats: string[] = (existingOpenSlots ?? [])
     .map((s) => (s.topic_brief as { format?: string | null } | null)?.format)
     .filter((f): f is string => !!f);
 
-  // Guarantees every configured pillar gets representation instead of
-  // leaving coverage to a soft "spread pillars" instruction (see
-  // buildPillarAssignments above).
+  // Guarantees every configured pillar gets an assigned slot instead of
+  // leaving coverage to a soft "spread pillars" instruction. Mathematically
+  // impossible to fully satisfy when n < pillar count — logged, not treated
+  // as a bug, in that case.
   const pillarAssignments = buildPillarAssignments(config.niches, n);
+  if (n < config.niches.length) {
+    console.warn(
+      `[content-calendar] batch size ${n} is smaller than pillar count ${config.niches.length} — full pillar coverage isn't possible this batch.`
+    );
+  }
 
-  // Phase 1: pick all N topics SEQUENTIALLY (not concurrently). This is
-  // deliberate, not an oversight — confirmed live (2026-07-09): with
-  // concurrency, multiple topic-selection calls fire in parallel before
-  // any of them can see each other's pick, so the exclude list is stale
-  // for all but the first, and duplicate/rephrased topics slip through
-  // (3 of 5 slots in one real batch were the same story rephrased 3
-  // ways). Cheap to do sequentially — "scoring" tier, ~1-3s each.
-  const picks: Array<{ topicTitle: string; searchQuery: string; pillar: string; format: string } | null> = [];
-  for (let i = 0; i < n; i++) {
-    const assignedPillar = pillarAssignments[i];
-    const pillarTrends = trendsByPillar.get(assignedPillar);
-    const trendsForPick = pillarTrends && pillarTrends.length > 0 ? pillarTrends : trends;
+  const slots: Array<TopicCandidate | null> = new Array(n).fill(null);
+  const correctionNotes: Array<string | undefined> = new Array(n).fill(undefined);
+  const rejectionLog: BatchRejection[] = [];
+  let roundsUsed = 0;
 
-    // Post-generation similarity filter: prompt-only dedup instructions
-    // still let near-duplicates through in production (confirmed live —
-    // a regenerated title nearly identical to one already queued). Retry
-    // a bounded number of times against a real similarity check rather
-    // than trusting the model's compliance with "don't repeat this".
-    let accepted: { topicTitle: string; searchQuery: string; pillar: string; format: string } | null = null;
-    let lastErr: unknown = null;
-    for (let attempt = 0; attempt < MAX_DEDUPE_ATTEMPTS; attempt++) {
-      try {
-        const candidate = await selectTopic({
-          tenantSlug,
-          niches: config.niches,
-          interestTags: config.interestTags,
-          trends: trendsForPick,
-          excludeTitles: [...pickedTitles],
-          usedPillars: [...usedPillars],
-          usedFormats: [...usedFormats],
-          assignedPillar,
-          instruction,
-          recentFeedback: config.recentFeedback,
-        });
-        const dup = findNearDuplicate(candidate.topicTitle, pickedTitles);
-        if (!dup) {
-          accepted = candidate;
-          break;
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    roundsUsed = round + 1;
+    const pendingIndices: number[] = [];
+    slots.forEach((s, i) => { if (s === null) pendingIndices.push(i); });
+    if (pendingIndices.length === 0) break;
+
+    // Phase 1: generate ONE candidate per still-pending slot, sequentially
+    // within the round (each pick must see every earlier pick THIS round —
+    // concurrency here let duplicate/rephrased topics slip through in
+    // production, since parallel calls can't see each other's pick).
+    // Cheap deterministic checks (near-duplicate, stale year) run inline,
+    // for free, before a candidate is even worth spending a judge call on.
+    const roundCandidates: Array<TopicCandidate & { index: number }> = [];
+    for (const i of pendingIndices) {
+      const assignedPillar = pillarAssignments[i];
+      const pillarTrends = trendsByPillar.get(assignedPillar);
+      const trendsForPick = pillarTrends && pillarTrends.length > 0 ? pillarTrends : trends;
+      const excludeSoFar = [...acceptedTitles, ...roundCandidates.map((c) => c.topicTitle)];
+
+      let cleared: TopicCandidate | null = null;
+      for (let attempt = 0; attempt < MAX_DEDUPE_ATTEMPTS && !cleared; attempt++) {
+        let candidate: TopicCandidate;
+        try {
+          candidate = await selectTopic({
+            tenantSlug,
+            niches: config.niches,
+            interestTags: config.interestTags,
+            trends: trendsForPick,
+            excludeTitles: excludeSoFar,
+            usedPillars: [...acceptedPillars],
+            usedFormats: [...acceptedFormats],
+            assignedPillar,
+            currentYear,
+            todayIso: today,
+            correctionNote: correctionNotes[i],
+            instruction,
+            recentFeedback: config.recentFeedback,
+          });
+        } catch (err) {
+          console.warn(`[content-calendar] topic selection failed for slot ${i} (round ${round + 1})`, err);
+          continue;
         }
-        console.warn(
-          `[content-calendar] near-duplicate rejected (attempt ${attempt + 1}/${MAX_DEDUPE_ATTEMPTS}): "${candidate.topicTitle}" ~ "${dup}"`
-        );
-        // Last attempt: accept it anyway rather than silently dropping the
-        // slot — a near-duplicate the creator can manually regenerate beats
-        // shrinking the batch's yield without any indication why.
-        if (attempt === MAX_DEDUPE_ATTEMPTS - 1) accepted = candidate;
-      } catch (err) {
-        lastErr = err;
+
+        const dup = findNearDuplicate(candidate.topicTitle, excludeSoFar);
+        if (dup) {
+          rejectionLog.push({ round: round + 1, pillar: assignedPillar, title: candidate.topicTitle, reason: `near-duplicate of "${dup}"` });
+          correctionNotes[i] = `"${candidate.topicTitle}" was rejected as a near-duplicate of an existing title — pick a genuinely different angle.`;
+          continue;
+        }
+        const staleYear = findStaleYear(candidate.topicTitle, currentYear);
+        if (staleYear) {
+          rejectionLog.push({ round: round + 1, pillar: assignedPillar, title: candidate.topicTitle, reason: `stale year ${staleYear} (current year is ${currentYear})` });
+          correctionNotes[i] = `"${candidate.topicTitle}" was rejected for citing ${staleYear} — the current year is ${currentYear}. Don't copy a year from a trending source's headline.`;
+          continue;
+        }
+        cleared = candidate;
+      }
+
+      if (cleared) {
+        roundCandidates.push({ index: i, ...cleared });
+      }
+      // else: slot stays pending, retried next round (or dropped at the cap)
+    }
+
+    if (roundCandidates.length === 0) {
+      console.log(`[content-calendar] round ${round + 1}/${MAX_ROUNDS}: 0 candidates cleared deterministic checks, nothing to judge`);
+      continue;
+    }
+
+    // Phase 2: ONE batched judge call for everything that cleared the
+    // deterministic filter this round — bounded LLM cost regardless of how
+    // many slots are still pending.
+    const verdicts = await judgeCandidates({
+      tenantSlug,
+      niches: config.niches,
+      currentYear,
+      candidates: roundCandidates.map((c) => ({ index: c.index, title: c.topicTitle, pillar: c.pillar, format: c.format })),
+      contextTitles: [...acceptedTitles, ...roundCandidates.map((c) => c.topicTitle)],
+    });
+
+    let acceptedThisRound = 0;
+    let rejectedThisRound = 0;
+    for (const c of roundCandidates) {
+      const verdict = verdicts.find((v) => v.index === c.index);
+      if (verdict?.pass) {
+        slots[c.index] = { topicTitle: c.topicTitle, searchQuery: c.searchQuery, pillar: c.pillar, format: c.format };
+        acceptedTitles.push(c.topicTitle);
+        acceptedPillars.push(c.pillar);
+        acceptedFormats.push(c.format);
+        acceptedThisRound++;
+      } else {
+        const reason = verdict?.reason || "judge rejected";
+        rejectionLog.push({ round: round + 1, pillar: c.pillar, title: c.topicTitle, reason });
+        correctionNotes[c.index] = `"${c.topicTitle}" was rejected: ${reason}`;
+        rejectedThisRound++;
       }
     }
 
-    if (accepted) {
-      pickedTitles.push(accepted.topicTitle);
-      usedPillars.push(accepted.pillar);
-      usedFormats.push(accepted.format);
-      picks.push(accepted);
-    } else {
-      console.warn("[content-calendar] topic selection failed for one slot", lastErr);
-      picks.push(null);
-    }
+    console.log(
+      `[content-calendar] round ${round + 1}/${MAX_ROUNDS}: ${roundCandidates.length} generated, ${acceptedThisRound} accepted, ${rejectedThisRound} rejected`
+    );
   }
 
-  // Phase 2: generate briefings for all selected topics CONCURRENTLY — no
+  const finalPicks = slots.filter((s): s is TopicCandidate => s !== null);
+  const missingPillars = config.niches.filter((niche) => !finalPicks.some((p) => p.pillar === niche));
+
+  if (rejectionLog.length > 0) {
+    console.warn(`[content-calendar] batch rejection log (${rejectionLog.length} entries)`, rejectionLog);
+  }
+  if (missingPillars.length > 0) {
+    console.warn(
+      `[content-calendar] batch could not cover every pillar within ${MAX_ROUNDS} rounds — missing: ${missingPillars.join(", ")}`
+    );
+  }
+
+  if (finalPicks.length === 0) {
+    return {
+      success: false,
+      error: "Every candidate this batch failed quality validation — try again, or adjust pillars/interests.",
+    };
+  }
+
+  // Phase 3: generate briefings for all ACCEPTED topics CONCURRENTLY — no
   // cross-slot dependency here, safe (and fast) to parallelize.
-  const results = await mapWithConcurrency(picks, 3, async (pick) => {
-    if (!pick) return { topicTitle: null, brief: null, error: "Topic selection failed" };
+  const results = await mapWithConcurrency(finalPicks, 3, async (pick) => {
     try {
       const brief = await generateBriefing({
         tenantSlug,
@@ -247,6 +359,9 @@ export async function generateNextBatch(
     candidatesFound: trends.length,
     generated: succeeded.length,
     errors: failedCount,
+    roundsUsed,
+    rejected: rejectionLog,
+    missingPillars,
   };
 }
 
@@ -289,6 +404,8 @@ export async function regenerateSlot(slotId: string, reason?: string): Promise<A
       interestTags: config.interestTags,
       trends,
       excludeTitles,
+      currentYear: new Date().getUTCFullYear(),
+      todayIso: todayIso(),
       instruction: reason,
       recentFeedback: config.recentFeedback,
     });
@@ -568,6 +685,8 @@ export async function createSlotForDate(
       interestTags: config.interestTags,
       trends,
       excludeTitles,
+      currentYear: new Date().getUTCFullYear(),
+      todayIso: todayIso(),
       instruction,
       recentFeedback: config.recentFeedback,
     });

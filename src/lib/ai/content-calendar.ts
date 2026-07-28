@@ -75,6 +75,20 @@ export interface GenerateSlotContentInput {
   // never appeared in a batch at all).
   assignedPillar?: string;
   usedFormats?: string[]; // content formats already used this batch — nudges variety, same pattern as usedPillars
+  // Current date, passed explicitly rather than left implicit — trend
+  // sources (HN/Serper) frequently carry a stale year baked into their own
+  // headline (e.g. "...Innovations for 2023" surfacing in a mid-2026
+  // batch); the model has no other way to know "today" isn't whatever year
+  // a scraped source happens to mention. A deterministic post-generation
+  // check backstops this (see findStaleYear), but front-loading it here
+  // cuts how often that check has to reject anything.
+  currentYear: number;
+  todayIso: string;
+  // Rejection reason from a PRIOR round's candidate for this exact slot
+  // (self-correcting loop, actions/content-calendar.ts) — tells the model
+  // specifically what to avoid repeating, instead of it re-generating the
+  // same rejected shape blind to why it failed.
+  correctionNote?: string;
   instruction?: string; // one-off steering from the creator (batch-level "generate with instructions", or a stated reason on regenerate)
   // Rolling log of past regenerate reasons — the immediate half of the
   // "learning loop" (senior-uiux audit stage 05): lets topic selection
@@ -131,6 +145,10 @@ export async function selectTopic(
 
   const systemLines = [
     `You pick ONE topic per call for a solo creator's daily short-form video, whose content spans these pillars: ${input.niches.join(", ")}.`,
+    "",
+    "This is PERSONAL-BRAND content for ONE individual building their own authority and reputation — NOT a company, product, or startup. Every topic must read as first-person creator content: an opinion, a walkthrough, a teardown, a \"how I do X\", a hot take, a build story. NEVER produce a company/product/startup marketing angle: no product launches, no \"we/our team\"/\"our company\" framing, no corporate announcements, no B2B startup-marketing pitches. NEVER drift into generic off-topic software-engineering, business, finance, or news content that isn't actually about one of this creator's own pillars.",
+    `Today's date is ${input.todayIso} (current year: ${input.currentYear}). If the topic mentions a year, it must be ${input.currentYear} or later. Trending sources below may have a stale year baked into their own original headline (e.g. "...for 2023") — never copy that verbatim; write the topic itself as if it's being filmed today.`,
+    "",
     "Rules:",
     "- Prefer a topic from the trending candidates list below when one fits the creator's interests.",
     "- If the interest list is empty, pick straight from trends — a real, specific trend beats a generic one.",
@@ -139,6 +157,12 @@ export async function selectTopic(
     "- Avoid template phrasings like \"The Role of AI in Shaping X\" or \"The Evolution of AI-Native Y\" — vary sentence structure from pick to pick.",
     "- Pick a `format` that fits the topic; favor a format different from ones already used recently (listed below) when it still fits naturally.",
   ];
+  if (input.correctionNote && input.correctionNote.trim()) {
+    systemLines.push(
+      "",
+      `Your previous pick for THIS EXACT slot was rejected — do not repeat the same mistake: ${input.correctionNote.trim()}`
+    );
+  }
   if (input.assignedPillar) {
     systemLines.push(
       "",

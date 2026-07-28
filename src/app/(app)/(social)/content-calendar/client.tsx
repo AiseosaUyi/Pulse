@@ -175,11 +175,19 @@ export default function ContentCalendarClient({
         toast.error(res.error);
         return;
       }
+      const rejectedCount = res.rejected?.length ?? 0;
       toast.success(
         `Generated ${res.generated} topic${res.generated === 1 ? "" : "s"}${
           res.errors > 0 ? ` (${res.errors} failed)` : ""
-        }`
+        }${rejectedCount > 0 ? ` — ${rejectedCount} candidate${rejectedCount === 1 ? "" : "s"} rejected for quality along the way` : ""}`
       );
+      // Surfaced rather than silently shipping a batch that couldn't fully
+      // cover every configured pillar within the self-correcting loop's
+      // round cap — the creator should know to try again or adjust pillars,
+      // not assume every pillar got a fresh topic this time.
+      if (res.missingPillars && res.missingPillars.length > 0) {
+        toast.error(`Couldn't find a passing topic for: ${res.missingPillars.join(", ")} — try generating again`);
+      }
       setInstruction("");
       setShowInstruction(false);
       router.refresh();
