@@ -332,7 +332,11 @@ export async function selectTopicsBatch(
     systemLines.push("", `Creator's stated interests: ${input.interestTags.join(", ")}`);
   }
   if (input.excludeTitles.length > 0) {
-    systemLines.push("", "Already picked this batch, queued, or posted — do NOT repeat or closely rephrase these:", input.excludeTitles.map((t) => `- ${t}`).join("\n"));
+    // Cap at 40 most-recent to keep the context window manageable — the
+    // near-duplicate detector (findNearDuplicate) still covers the full list
+    // at call time, so this only affects what the model sees in its prompt.
+    const recentExcludes = input.excludeTitles.slice(-40);
+    systemLines.push("", "Already picked this batch, queued, or posted — do NOT repeat or closely rephrase these:", recentExcludes.map((t) => `- ${t}`).join("\n"));
   }
   if (input.usedPillars && input.usedPillars.length > 0) {
     systemLines.push("", `Pillars already used recently: ${input.usedPillars.join(", ")}`);
@@ -367,7 +371,7 @@ export async function selectTopicsBatch(
       output: Output.object({ schema: topicSelectBatchSchema }),
       system: systemLines.join("\n"),
       prompt: userLines.join("\n"),
-      timeout: 45_000,
+      timeout: 60_000,
     });
 
     const usage = result.usage ?? { inputTokens: 0, outputTokens: 0 };

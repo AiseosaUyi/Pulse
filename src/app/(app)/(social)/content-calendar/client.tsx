@@ -316,7 +316,7 @@ export default function ContentCalendarClient({
             </Button>
           </div>
           <span className="text-[11px] text-text-muted">
-            {openCount} in queue
+            {openCount} upcoming {openCount === 1 ? 'post' : 'posts'}
           </span>
         </div>
       </div>

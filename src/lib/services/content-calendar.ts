@@ -216,6 +216,7 @@ export async function generateNextBatchApi(
     const excludeSoFar = [...acceptedTitles];
 
     let batchCandidates: Array<{ topicTitle: string; searchQuery: string; pillar: string; format: any }> = [];
+    let batchTimedOut = false;
     try {
       batchCandidates = await selectTopicsBatch({
         tenantSlug,
@@ -234,7 +235,11 @@ export async function generateNextBatchApi(
       });
     } catch (err) {
       console.warn(`[content-calendar] batched topic selection failed (round ${round + 1})`, err);
+      // If the batch timed out, further rounds will also time out — stop early
+      // rather than burning another 45 s per empty round.
+      batchTimedOut = true;
     }
+    if (batchTimedOut) break;
 
     // Process each candidate returned by the batch call through deterministic checks
     for (let batchIdx = 0; batchIdx < batchCandidates.length; batchIdx++) {
@@ -265,6 +270,12 @@ export async function generateNextBatchApi(
       console.log(`[content-calendar] round ${round + 1}/${MAX_ROUNDS}: 0 candidates cleared deterministic checks, nothing to judge`);
       continue;
     }
+
+    // Short-circuit: if all slots are already filled (e.g. some were
+    // accepted in this round and there are no more pending), skip judging
+    // and exit immediately — the loop condition will catch it on next
+    // iteration but this avoids an unnecessary judge LLM call.
+    if (slots.every((s) => s !== null)) break;
 
     // Phase 2: ONE batched judge call for everything that cleared the
     // deterministic filter this round — bounded LLM cost regardless of how
