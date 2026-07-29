@@ -64,14 +64,16 @@ export interface ContentSlotRecord {
 // doc ENG REVIEW). Computed at read time, not stored as a mutating flag.
 export const STALE_AFTER_DAYS = 8;
 export const AUTO_RETIRE_AFTER_DAYS = 21;
-// Lowered from 20 (2026-07-28) — 20 open slots was too large a queue to
-// realistically work through; 10 keeps the backlog approachable.
-export const MAX_QUEUE_DEPTH = 10;
+// Open-queue depth cap REMOVED (2026-07-29) — generateNextBatch and the
+// manual add-slot actions no longer block on how many open slots already
+// exist. Removed rather than raised: a hardcoded number kept being wrong in
+// one direction or the other (20 was too many to work through, 10 blocked
+// legitimate batches once the backlog already exceeded it) — staleness
+// auto-retirement (STALE_AFTER_DAYS/AUTO_RETIRE_AFTER_DAYS) is the actual
+// backpressure mechanism now.
 // Per-click ceiling on generateNextBatch — bounded by the route's
-// maxDuration (300s) AND by MAX_QUEUE_DEPTH itself (a batch can never
-// usefully exceed the queue cap). Lowered from 15 alongside the
-// MAX_QUEUE_DEPTH cut (2026-07-28) — 15 was already unreachable once the
-// queue cap dropped to 10.
+// maxDuration (300s): topic-selection is sequential (each pick must see
+// every earlier pick this round) so this is the real cost driver.
 export const MAX_BATCH_SIZE = 10;
 export const BATCH_SIZE_OPTIONS = [5, 10] as const;
 export const DEFAULT_BATCH_SIZE = 10;

@@ -30,16 +30,16 @@ test.describe("content calendar", () => {
 
     // Wait for either the success toast or an error toast — both are
     // real outcomes worth asserting on, not just "did it not crash".
-    const toast = page.locator("text=/Generated \\d+ topic|Couldn't find any trends|Generation failed|Queue is at its cap/i");
+    const toast = page.locator("text=/Generated \\d+ topic|Couldn't find any trends|Generation failed/i");
     await expect(toast).toBeVisible({ timeout: 90_000 });
 
     const toastText = (await toast.textContent()) ?? "";
     test.info().annotations.push({ type: "batch-result", description: toastText });
 
     if (/^Generated/.test(toastText.trim()) === false && !/Generated \d+/.test(toastText)) {
-      // A real, informative failure (empty sources / queue cap) is a valid
-      // outcome to document, not a test failure — the point of this pass
-      // is to observe what the live system actually does.
+      // A real, informative failure (e.g. empty trend/interest sources) is
+      // a valid outcome to document, not a test failure — the point of
+      // this pass is to observe what the live system actually does.
       test.info().annotations.push({
         type: "note",
         description: `Batch generation did not produce slots: "${toastText}"`,
