@@ -202,6 +202,7 @@ export async function generateNextBatchApi(
     slots.forEach((s, i) => { if (s === null) pendingIndices.push(i); });
     if (pendingIndices.length === 0) break;
 
+<<<<<<< HEAD
     // Phase 1: generate ALL candidates for still-pending slots in one batched LLM call
     // (a 10x speedup over the previous sequential O(N) calls). The batched call is instructed
     // to naturally avoid duplicates across the generated array, solving the concurrency issue
