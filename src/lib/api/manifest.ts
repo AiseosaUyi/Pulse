@@ -60,6 +60,7 @@ export const API_V1_MANIFEST: ManifestEntry[] = [
   { method: "GET", path: "/api/v1/briefs", scope: "content:read", description: "List content briefs (filter status)." },
   { method: "POST", path: "/api/v1/briefs", scope: "content:write", description: "Generate a content brief from an existing intel card." },
   { method: "GET", path: "/api/v1/content-calendar", scope: "content:read", description: "Upcoming content_slots for the tenant (individual-persona feature — allowlist-gated, same as the app)." },
+  { method: "POST", path: "/api/v1/content-calendar", scope: "content:write", description: "Generate the next batch of content_slots (batchSize 1-10, default 10; optional one-off instruction) via the self-correcting generation loop." },
   { method: "GET", path: "/api/v1/blog-posts", scope: "content:read", description: "List blog posts (filter status)." },
   { method: "GET", path: "/api/v1/blog-posts/:id", scope: "content:read", description: "Single blog post + its latest version." },
   { method: "POST", path: "/api/v1/blog-posts", scope: "content:write", description: "Create a draft blog post (title and/or targetKeyword and/or extraContext — at least one required). AI-generated." },
