@@ -15,11 +15,10 @@ import { buildPillarAssignments } from "@/lib/content-calendar/pillar-rotation";
 import {
   getNextPosition,
   getNextScheduledDate,
-  getOpenQueueDepth,
   retireStaleSlots,
   todayIso,
 } from "@/lib/services/content-calendar-lifecycle";
-import { MAX_BATCH_SIZE, MAX_QUEUE_DEPTH } from "@/lib/types/content-calendar";
+import { MAX_BATCH_SIZE } from "@/lib/types/content-calendar";
 import { createR2PresignedPut, r2PublicUrl } from "@/lib/storage/r2";
 import { randomUUID } from "crypto";
 
@@ -101,15 +100,7 @@ export async function generateNextBatch(
   const admin = createAdminClient();
   await retireStaleSlots(admin, tenantSlug);
 
-  const openDepth = await getOpenQueueDepth(admin, tenantSlug);
-  if (openDepth >= MAX_QUEUE_DEPTH) {
-    return {
-      success: false,
-      error: `Queue is at its cap (${MAX_QUEUE_DEPTH} open slots) — work through some before generating more.`,
-    };
-  }
-
-  const n = Math.max(1, Math.min(requestedN, MAX_BATCH_SIZE, MAX_QUEUE_DEPTH - openDepth));
+  const n = Math.max(1, Math.min(requestedN, MAX_BATCH_SIZE));
   const config = await getContentCalendarConfig(tenantSlug);
   const currentYear = new Date().getUTCFullYear();
   const today = todayIso();
@@ -602,13 +593,6 @@ export async function createSlotFromTrend(input: {
 
   const admin = createAdminClient();
   await retireStaleSlots(admin, tenantSlug);
-  const openDepth = await getOpenQueueDepth(admin, tenantSlug);
-  if (openDepth >= MAX_QUEUE_DEPTH) {
-    return {
-      success: false,
-      error: `Queue is at its cap (${MAX_QUEUE_DEPTH} open slots) — work through some before adding more.`,
-    };
-  }
 
   try {
     const brief = await generateBriefing({
@@ -659,13 +643,6 @@ export async function createSlotForDate(
 
   const admin = createAdminClient();
   await retireStaleSlots(admin, tenantSlug);
-  const openDepth = await getOpenQueueDepth(admin, tenantSlug);
-  if (openDepth >= MAX_QUEUE_DEPTH) {
-    return {
-      success: false,
-      error: `Queue is at its cap (${MAX_QUEUE_DEPTH} open slots) — work through some before adding more.`,
-    };
-  }
 
   const config = await getContentCalendarConfig(tenantSlug);
   const trendsPerNiche = await Promise.all(config.niches.map((niche) => fetchTrendCandidates(niche)));

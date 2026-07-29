@@ -44,7 +44,6 @@ import {
 } from "@/lib/actions/content-calendar";
 import type { TrendCandidate } from "@/lib/scrape/trend-pull";
 import {
-  MAX_QUEUE_DEPTH,
   BATCH_SIZE_OPTIONS,
   DEFAULT_BATCH_SIZE,
   isSlotStale,
@@ -166,7 +165,6 @@ export default function ContentCalendarClient({
   const openCount = slots.filter(
     (s) => s.status === "assigned" || s.status === "in_progress"
   ).length;
-  const nearCap = openCount >= MAX_QUEUE_DEPTH - batchSize;
 
   const handleGenerate = () => {
     startGenerate(async () => {
@@ -317,9 +315,8 @@ export default function ContentCalendarClient({
               Generate my next {batchSize}
             </Button>
           </div>
-          <span className={`text-[11px] ${nearCap ? "text-status-yellow" : "text-text-muted"}`}>
-            {openCount}/{MAX_QUEUE_DEPTH} in queue
-            {nearCap && " — work through some before generating more"}
+          <span className="text-[11px] text-text-muted">
+            {openCount} in queue
           </span>
         </div>
       </div>

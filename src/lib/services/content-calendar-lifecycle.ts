@@ -119,21 +119,6 @@ export async function getNextUnpostedSlot(
   return rowToSlot(data);
 }
 
-export async function getOpenQueueDepth(
-  admin: AdminClient,
-  tenantSlug: string
-): Promise<number> {
-  await syncQueue(admin, tenantSlug);
-
-  const { count } = await admin
-    .from("content_slots")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_slug", tenantSlug)
-    .in("status", ["assigned", "in_progress"]);
-
-  return count ?? 0;
-}
-
 export async function getNextPosition(
   admin: AdminClient,
   tenantSlug: string
