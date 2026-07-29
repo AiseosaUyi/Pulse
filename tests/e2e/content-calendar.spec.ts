@@ -22,7 +22,7 @@ test.describe("content calendar", () => {
   });
 
   test("generating a batch produces real slots with grounded briefings", async ({ page }) => {
-    test.setTimeout(120_000); // 5 slots x 2 AI calls + search — real external latency
+    test.setTimeout(150_000); // 10 slots x 1 AI call + search — real external latency
 
     await page.goto("/content-calendar");
     const generateButton = page.getByRole("button", { name: /generate my next/i });
@@ -30,8 +30,10 @@ test.describe("content calendar", () => {
 
     // Wait for either the success toast or an error toast — both are
     // real outcomes worth asserting on, not just "did it not crash".
+    // Increased timeout to 90s because generateNextBatchApi runs 1 batch AI call
+    // for Phase 1 + 4 parallel chunks for Phase 3, which takes ~30-45s total.
     const toast = page.locator("text=/Generated \\d+ topic|Couldn't find any trends|Generation failed/i");
-    await expect(toast).toBeVisible({ timeout: 90_000 });
+    await expect(toast).toBeVisible({ timeout: 150_000 });
 
     const toastText = (await toast.textContent()) ?? "";
     test.info().annotations.push({ type: "batch-result", description: toastText });

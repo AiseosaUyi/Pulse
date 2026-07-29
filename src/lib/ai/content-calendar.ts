@@ -42,6 +42,10 @@ const topicSelectSchema = z.object({
   ),
 });
 
+const topicSelectBatchSchema = z.object({
+  topics: z.array(topicSelectSchema)
+});
+
 const briefingSchema = z.object({
   whyItMatters: z.string().describe("ONE plain-language sentence on why this topic is worth talking about right now. Write for someone who may be new to this specific topic — orient them before the talking points below assume any context."),
   talkingPoints: z.array(z.string()).describe("3-5 concrete talking points for a 30-90s short-form video on this topic. Empty array if truly nothing usable."),
@@ -100,6 +104,22 @@ export interface GenerateSlotContentInput {
 export interface GenerateSlotContentResult {
   topicTitle: string;
   brief: ContentSlotBrief;
+}
+
+export interface GenerateTopicsBatchInput {
+  tenantSlug: string;
+  niches: string[]; // configured pillars
+  interestTags: string[];
+  trends: TrendCandidate[]; // all candidate trends (pool for the batch)
+  excludeTitles: string[]; // already-picked/posted
+  usedPillars?: string[];
+  usedFormats?: string[];
+  assignedPillars: string[]; // The required pillars, mapped 1:1 to the requested count (length = N topics requested)
+  currentYear: number;
+  todayIso: string;
+  correctionNotes: (string | undefined)[]; // Optional correction notes, mapped 1:1 to the requested count
+  instruction?: string;
+  recentFeedback?: Array<{ reason: string; pillar: string | null }>;
 }
 
 export async function generateSlotContent(
@@ -255,6 +275,137 @@ export async function selectTopic(
       errorMessage: err instanceof Error ? err.message : String(err),
     });
     throw new ContentCalendarAiError("Failed to select a topic", err);
+  }
+}
+
+// Generates an array of topics in a single LLM call to dramatically reduce Phase 1
+// latency (from ~40s to ~5-10s). Replaces sequential calls to selectTopic while
+// still allowing the model to see all its picks concurrently, which inherently 
+// prevents it from generating duplicated topics within the batch.
+export async function selectTopicsBatch(
+  input: GenerateTopicsBatchInput
+): Promise<Array<{ topicTitle: string; searchQuery: string; pillar: string; format: (typeof CONTENT_FORMATS)[number] }>> {
+  const model = getModel("scoring");
+  const modelId = getModelId("scoring");
+  const started = Date.now();
+  const n = input.assignedPillars.length;
+
+  if (n === 0) return [];
+
+  const trendLines = input.trends
+    .slice(0, 30)
+    .map((t) => `- ${t.title} (${t.source}${t.points ? `, ${t.points} pts` : ""})`)
+    .join("\n");
+
+  const systemLines = [
+    `You generate exactly ${n} topics in one batch for a solo creator's daily short-form videos. The creator's content spans these pillars: ${input.niches.join(", ")}.`,
+    "",
+    "This is PERSONAL-BRAND content for ONE individual building their own authority and reputation — NOT a company, product, or startup. Every topic must read as first-person creator content. NEVER produce a company/product/startup marketing angle. NEVER drift into generic off-topic content.",
+    `Today's date is ${input.todayIso} (current year: ${input.currentYear}). If a topic mentions a year, it must be ${input.currentYear} or later. Trending sources below may have a stale year baked into their own original headline — never copy that verbatim.`,
+    "",
+    "Rules:",
+    `- You MUST generate an array of EXACTLY ${n} topics.`,
+    "- Prevent duplicates: do NOT generate the same topic or close variations of the same angle multiple times in this batch.",
+    "- Never repeat or closely rephrase a topic already posted or in the queue (listed below).",
+    "- Prefer topics from the trending candidates list below when they fit the creator's interests.",
+    "- If the interest list is empty, pick straight from trends.",
+    "- The topics must be specific enough to talk about for 30-90s, not vague categories.",
+    "- Pick a `format` that fits each topic; vary formats across the batch.",
+  ];
+
+  systemLines.push(
+    "",
+    "HARD REQUIREMENTS FOR PILLARS:",
+    "You are given a strict list of pillars that each topic MUST belong to. You must assign Topic 1 to Pillar 1, Topic 2 to Pillar 2, and so on. Report the assigned pillar verbatim in the `pillar` field for each topic."
+  );
+  
+  // Detail the assignment mapping
+  input.assignedPillars.forEach((pillar, i) => {
+    let note = `Topic ${i + 1} MUST belong to the pillar "${pillar}".`;
+    if (input.correctionNotes[i]) {
+      note += ` CORRECTION NOTE: Your previous pick for this slot was rejected: ${input.correctionNotes[i]}`;
+    }
+    systemLines.push(note);
+  });
+
+  if (input.interestTags.length > 0) {
+    systemLines.push("", `Creator's stated interests: ${input.interestTags.join(", ")}`);
+  }
+  if (input.excludeTitles.length > 0) {
+    // Cap at 40 most-recent to keep the context window manageable — the
+    // near-duplicate detector (findNearDuplicate) still covers the full list
+    // at call time, so this only affects what the model sees in its prompt.
+    const recentExcludes = input.excludeTitles.slice(-40);
+    systemLines.push("", "Already picked this batch, queued, or posted — do NOT repeat or closely rephrase these:", recentExcludes.map((t) => `- ${t}`).join("\n"));
+  }
+  if (input.usedPillars && input.usedPillars.length > 0) {
+    systemLines.push("", `Pillars already used recently: ${input.usedPillars.join(", ")}`);
+  }
+  if (input.usedFormats && input.usedFormats.length > 0) {
+    systemLines.push("", `Formats already used recently: ${input.usedFormats.join(", ")}`);
+  }
+  if (input.recentFeedback && input.recentFeedback.length > 0) {
+    systemLines.push(
+      "",
+      "Creator's recent feedback on past topics:",
+      input.recentFeedback
+        .slice(-5)
+        .map((f) => `- "${f.reason}"${f.pillar ? ` (pillar: ${f.pillar})` : ""}`)
+        .join("\n")
+    );
+  }
+  if (input.instruction && input.instruction.trim()) {
+    systemLines.push("", `Creator's instruction for this batch — follow it: ${input.instruction.trim()}`);
+  }
+
+  const userLines = [
+    "Trending candidates:",
+    trendLines || "(none found)",
+    "",
+    `Generate EXACTLY ${n} topics matching the required pillar mapping.`,
+  ];
+
+  try {
+    const result = await generateText({
+      model,
+      output: Output.object({ schema: topicSelectBatchSchema }),
+      system: systemLines.join("\n"),
+      prompt: userLines.join("\n"),
+      timeout: 60_000,
+    });
+
+    const usage = result.usage ?? { inputTokens: 0, outputTokens: 0 };
+    const costUsd = estimateCostUsd(modelId, { inputTokens: usage.inputTokens ?? 0, outputTokens: usage.outputTokens ?? 0 });
+
+    await logAiCall({
+      tenantSlug: input.tenantSlug,
+      purpose: "scoring",
+      feature: "content_calendar_topic_select", // keeping same feature name for cost tracking
+      model: modelId,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      costUsd,
+      durationMs: Date.now() - started,
+      success: true,
+    });
+
+    // Enforce strict pillar assignment on the output
+    const topics = result.output.topics.slice(0, n);
+    return topics.map((t, i) => ({
+      ...t,
+      pillar: input.assignedPillars[i] ?? t.pillar,
+    }));
+  } catch (err) {
+    await logAiCall({
+      tenantSlug: input.tenantSlug,
+      purpose: "scoring",
+      feature: "content_calendar_topic_select",
+      model: modelId,
+      durationMs: Date.now() - started,
+      success: false,
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
+    throw new ContentCalendarAiError("Failed to select topics batch", err);
   }
 }
 
