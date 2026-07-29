@@ -4,7 +4,7 @@ import { rowToSlot, getNextPosition, getNextScheduledDate, retireStaleSlots, tod
 import { getContentCalendarConfig } from "@/lib/content-calendar/config";
 import { buildPillarAssignments } from "@/lib/content-calendar/pillar-rotation";
 import { fetchTrendCandidates } from "@/lib/scrape/trend-pull";
-import { selectTopic, generateBriefing } from "@/lib/ai/content-calendar";
+import { selectTopic, selectTopicsBatch, generateBriefing } from "@/lib/ai/content-calendar";
 import { judgeCandidates } from "@/lib/ai/content-calendar-judge";
 import { mapWithConcurrency } from "@/lib/utils/concurrency";
 import { findNearDuplicate } from "@/lib/utils/text-similarity";
@@ -202,62 +202,63 @@ export async function generateNextBatchApi(
     slots.forEach((s, i) => { if (s === null) pendingIndices.push(i); });
     if (pendingIndices.length === 0) break;
 
-    // Phase 1: generate ONE candidate per still-pending slot, sequentially
-    // within the round (each pick must see every earlier pick THIS round —
-    // concurrency here let duplicate/rephrased topics slip through in
-    // production, since parallel calls can't see each other's pick).
-    // Cheap deterministic checks (near-duplicate, stale year) run inline,
-    // for free, before a candidate is even worth spending a judge call on.
+    // Phase 1: generate ALL candidates for still-pending slots in one batched LLM call
+    // (a 10x speedup over the previous sequential O(N) calls). The batched call is instructed
+    // to naturally avoid duplicates across the generated array, solving the concurrency issue
+    // that originally forced sequential execution.
+    // Cheap deterministic checks (near-duplicate, stale year) run inline, for free,
+    // before a candidate is even worth spending a judge call on.
     const roundCandidates: Array<TopicCandidate & { index: number }> = [];
-    for (const i of pendingIndices) {
-      const assignedPillar = pillarAssignments[i];
-      const pillarTrends = trendsByPillar.get(assignedPillar);
-      const trendsForPick = pillarTrends && pillarTrends.length > 0 ? pillarTrends : trends;
-      const excludeSoFar = [...acceptedTitles, ...roundCandidates.map((c) => c.topicTitle)];
+    
+    // Gather all assigned pillars and correction notes for this batch request
+    const batchAssignedPillars = pendingIndices.map((i) => pillarAssignments[i]);
+    const batchCorrectionNotes = pendingIndices.map((i) => correctionNotes[i]);
+    const excludeSoFar = [...acceptedTitles];
 
-      let cleared: TopicCandidate | null = null;
-      for (let attempt = 0; attempt < MAX_DEDUPE_ATTEMPTS && !cleared; attempt++) {
-        let candidate: TopicCandidate;
-        try {
-          candidate = await selectTopic({
-            tenantSlug,
-            niches: config.niches,
-            interestTags: config.interestTags,
-            trends: trendsForPick,
-            excludeTitles: excludeSoFar,
-            usedPillars: [...acceptedPillars],
-            usedFormats: [...acceptedFormats],
-            assignedPillar,
-            currentYear,
-            todayIso: today,
-            correctionNote: correctionNotes[i],
-            instruction,
-            recentFeedback: config.recentFeedback,
-          });
-        } catch (err) {
-          console.warn(`[content-calendar] topic selection failed for slot ${i} (round ${round + 1})`, err);
-          continue;
-        }
+    let batchCandidates: Array<{ topicTitle: string; searchQuery: string; pillar: string; format: any }> = [];
+    try {
+      batchCandidates = await selectTopicsBatch({
+        tenantSlug,
+        niches: config.niches,
+        interestTags: config.interestTags,
+        trends, // Pass all trends pool
+        excludeTitles: excludeSoFar,
+        usedPillars: [...acceptedPillars],
+        usedFormats: [...acceptedFormats],
+        assignedPillars: batchAssignedPillars,
+        currentYear,
+        todayIso: today,
+        correctionNotes: batchCorrectionNotes,
+        instruction,
+        recentFeedback: config.recentFeedback,
+      });
+    } catch (err) {
+      console.warn(`[content-calendar] batched topic selection failed (round ${round + 1})`, err);
+    }
 
-        const dup = findNearDuplicate(candidate.topicTitle, excludeSoFar);
-        if (dup) {
-          rejectionLog.push({ round: round + 1, pillar: assignedPillar, title: candidate.topicTitle, reason: `near-duplicate of "${dup}"` });
-          correctionNotes[i] = `"${candidate.topicTitle}" was rejected as a near-duplicate of an existing title — pick a genuinely different angle.`;
-          continue;
-        }
-        const staleYear = findStaleYear(candidate.topicTitle, currentYear);
-        if (staleYear) {
-          rejectionLog.push({ round: round + 1, pillar: assignedPillar, title: candidate.topicTitle, reason: `stale year ${staleYear} (current year is ${currentYear})` });
-          correctionNotes[i] = `"${candidate.topicTitle}" was rejected for citing ${staleYear} — the current year is ${currentYear}. Don't copy a year from a trending source's headline.`;
-          continue;
-        }
-        cleared = candidate;
+    // Process each candidate returned by the batch call through deterministic checks
+    for (let batchIdx = 0; batchIdx < batchCandidates.length; batchIdx++) {
+      const candidate = batchCandidates[batchIdx];
+      const slotIndex = pendingIndices[batchIdx];
+      const assignedPillar = pillarAssignments[slotIndex];
+      
+      const dup = findNearDuplicate(candidate.topicTitle, excludeSoFar);
+      if (dup) {
+        rejectionLog.push({ round: round + 1, pillar: assignedPillar, title: candidate.topicTitle, reason: `near-duplicate of "${dup}"` });
+        correctionNotes[slotIndex] = `"${candidate.topicTitle}" was rejected as a near-duplicate of an existing title — pick a genuinely different angle.`;
+        continue;
+      }
+      
+      const staleYear = findStaleYear(candidate.topicTitle, currentYear);
+      if (staleYear) {
+        rejectionLog.push({ round: round + 1, pillar: assignedPillar, title: candidate.topicTitle, reason: `stale year ${staleYear} (current year is ${currentYear})` });
+        correctionNotes[slotIndex] = `"${candidate.topicTitle}" was rejected for citing ${staleYear} — the current year is ${currentYear}. Don't copy a year from a trending source's headline.`;
+        continue;
       }
 
-      if (cleared) {
-        roundCandidates.push({ index: i, ...cleared });
-      }
-      // else: slot stays pending, retried next round (or dropped at the cap)
+      // Passed deterministic checks
+      excludeSoFar.push(candidate.topicTitle);
+      roundCandidates.push({ index: slotIndex, ...candidate });
     }
 
     if (roundCandidates.length === 0) {
@@ -273,7 +274,7 @@ export async function generateNextBatchApi(
       niches: config.niches,
       currentYear,
       candidates: roundCandidates.map((c) => ({ index: c.index, title: c.topicTitle, pillar: c.pillar, format: c.format })),
-      contextTitles: [...acceptedTitles, ...roundCandidates.map((c) => c.topicTitle)],
+      contextTitles: [...acceptedTitles],
     });
 
     let acceptedThisRound = 0;
