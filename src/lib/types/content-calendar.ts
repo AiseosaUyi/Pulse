@@ -33,10 +33,20 @@ export interface ContentSlotBrief {
   // from (see content-calendar/config.ts `niches`) — null for slots
   // generated before pillars existed, or if the AI didn't report one.
   pillar: string | null;
-  // Video content format (teardown/how_to/hot_take/personal_story/listicle/
-  // news_reaction) — null for slots generated before format variety existed.
   format: string | null;
+  category?: string | null;
 }
+
+export const CONTENT_CATEGORY_OPTIONS = [
+  "Educational & How-To",
+  "Product Walkthrough",
+  "Personal Story & Journey",
+  "Hot Take & Debunking",
+  "Tools & Listicle",
+  "Teardown & Analysis",
+  "Behind The Scenes",
+] as const;
+
 
 export interface ContentSlotRecord {
   id: string;

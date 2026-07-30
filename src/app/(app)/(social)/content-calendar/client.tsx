@@ -33,6 +33,7 @@ import {
   updateSlotStatus,
   updateSlotNotes,
   updateSlotTopic,
+  updateSlotDetails,
   markSlotOpened,
   createSignedSlotVideoUpload,
   registerSlotVideo,
@@ -46,6 +47,7 @@ import type { TrendCandidate } from "@/lib/scrape/trend-pull";
 import {
   BATCH_SIZE_OPTIONS,
   DEFAULT_BATCH_SIZE,
+  CONTENT_CATEGORY_OPTIONS,
   isSlotStale,
   type ContentSlotRecord,
   type ContentSlotStatus,
@@ -140,6 +142,55 @@ export default function ContentCalendarClient({
   const [addForDate, setAddForDate] = useState<string | null>(null);
   const [addInstruction, setAddInstruction] = useState("");
   const [addingForDate, startAddForDate] = useTransition();
+
+  // Drag and drop rescheduling state
+  const [draggedSlotId, setDraggedSlotId] = useState<string | null>(null);
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, slotId: string) => {
+    e.dataTransfer.setData("text/plain", slotId);
+    e.dataTransfer.effectAllowed = "move";
+    setDraggedSlotId(slotId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, dateKey: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverDate !== dateKey) setDragOverDate(dateKey);
+  };
+
+  const handleDragLeave = (e: React.DragEvent, dateKey: string) => {
+    if (dragOverDate === dateKey) setDragOverDate(null);
+  };
+
+  const handleDropSlot = async (e: React.DragEvent, targetDateKey: string) => {
+    e.preventDefault();
+    setDragOverDate(null);
+    const slotId = e.dataTransfer.getData("text/plain") || draggedSlotId;
+    if (!slotId) return;
+
+    const slot = slots.find((s) => s.id === slotId);
+    if (!slot || slot.scheduledDate === targetDateKey) {
+      setDraggedSlotId(null);
+      return;
+    }
+
+    // Optimistic local update
+    setSlots((prev) =>
+      prev.map((s) => (s.id === slotId ? { ...s, scheduledDate: targetDateKey } : s))
+    );
+    setDraggedSlotId(null);
+
+    const res = await rescheduleSlot(slotId, targetDateKey);
+    if (!res.success) {
+      toast.error(res.error);
+      router.refresh();
+      return;
+    }
+    toast.success("Rescheduled");
+    router.refresh();
+  };
+
 
   useEffect(() => {
     setSlots(initialSlots);
@@ -315,9 +366,6 @@ export default function ContentCalendarClient({
               Generate my next {batchSize}
             </Button>
           </div>
-          <span className="text-[11px] text-text-muted">
-            {openCount} upcoming {openCount === 1 ? 'post' : 'posts'}
-          </span>
         </div>
       </div>
 
@@ -489,13 +537,17 @@ export default function ContentCalendarClient({
             const key = localDateKey(day);
             const inMonth = day.getMonth() === currentMonth;
             const isToday = key === todayKey;
+            const isDragTarget = dragOverDate === key;
             const daySlots = slotsByDate.get(key) ?? [];
             return (
               <div
                 key={key}
-                className={`bg-card min-h-[64px] sm:min-h-[92px] p-1 sm:p-1.5 flex flex-col gap-1 ${
+                onDragOver={(e) => handleDragOver(e, key)}
+                onDragLeave={(e) => handleDragLeave(e, key)}
+                onDrop={(e) => handleDropSlot(e, key)}
+                className={`bg-card min-h-[64px] sm:min-h-[92px] p-1 sm:p-1.5 flex flex-col gap-1 transition-all ${
                   inMonth ? "" : "opacity-40"
-                }`}
+                } ${isDragTarget ? "ring-2 ring-primary-500 bg-primary-500/10" : ""}`}
               >
                 <div className="flex items-center justify-between">
                   <span
@@ -519,29 +571,40 @@ export default function ContentCalendarClient({
                   </button>
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto max-h-[110px] space-y-1">
-                  {daySlots.map((slot) => (
-                    <button
-                      key={slot.id}
-                      type="button"
-                      data-testid="slot-card"
-                      onClick={() => handleSelectSlot(slot)}
-                      title={slot.topicTitle}
-                      className="w-full text-left rounded-md border border-border/60 bg-sidebar/60 hover:bg-sidebar px-1 sm:px-1.5 py-1 transition-colors"
-                    >
-                      <div className="flex items-center gap-1">
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[slot.status]}`}
-                        />
-                        {/* Below sm: too narrow for readable truncated text
-                            (7 columns on a ~375px screen) — the dot alone
-                            signals "something's scheduled here", tap opens
-                            the panel with the full title. */}
-                        <span className="hidden sm:inline text-[10px] text-foreground truncate leading-tight">
-                          {slot.topicTitle}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
+                  {daySlots.map((slot) => {
+                    const isDragging = draggedSlotId === slot.id;
+                    return (
+                      <button
+                        key={slot.id}
+                        type="button"
+                        data-testid="slot-card"
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, slot.id)}
+                        onDragEnd={() => setDraggedSlotId(null)}
+                        onClick={() => setSelectedSlotId(slot.id)}
+                        title={slot.topicTitle}
+                        className={`w-full text-left rounded-md border border-border/60 bg-sidebar/60 hover:bg-sidebar px-1 sm:px-1.5 py-1 transition-colors cursor-grab active:cursor-grabbing ${
+                          isDragging ? "opacity-40 border-dashed border-primary-500" : ""
+                        }`}
+                      >
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[slot.status]}`}
+                          />
+                          <span className="hidden sm:inline text-[10px] text-foreground truncate leading-tight flex-1 min-w-0">
+                            {slot.topicTitle}
+                          </span>
+                        </div>
+                        {slot.topicBrief?.category && (
+                          <div className="hidden sm:block mt-0.5">
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-primary-500/10 text-primary-500 font-medium truncate max-w-full inline-block leading-tight">
+                              {slot.topicBrief.category}
+                            </span>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -590,6 +653,15 @@ function SlotPanel({
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(slot.topicTitle);
   const [savingTitle, setSavingTitle] = useState(false);
+
+  // Full brief editing states
+  const [isEditingBrief, setIsEditingBrief] = useState(false);
+  const [categoryDraft, setCategoryDraft] = useState(slot.topicBrief?.category ?? "");
+  const [whyItMattersDraft, setWhyItMattersDraft] = useState(slot.topicBrief?.whyItMatters ?? "");
+  const [talkingPointsDraft, setTalkingPointsDraft] = useState((slot.topicBrief?.talkingPoints ?? []).join("\n"));
+  const [contrarianAngleDraft, setContrarianAngleDraft] = useState(slot.topicBrief?.contrarianAngle ?? "");
+  const [savingBrief, setSavingBrief] = useState(false);
+
   const stale = isSlotStale(slot);
 
   useEffect(() => {
@@ -602,7 +674,12 @@ function SlotPanel({
     setRegenReason("");
     setEditingTitle(false);
     setTitleDraft(slot.topicTitle);
-  }, [slot.id, slot.notes, slot.scheduledDate, slot.topicTitle]);
+    setIsEditingBrief(false);
+    setCategoryDraft(slot.topicBrief?.category ?? "");
+    setWhyItMattersDraft(slot.topicBrief?.whyItMatters ?? "");
+    setTalkingPointsDraft((slot.topicBrief?.talkingPoints ?? []).join("\n"));
+    setContrarianAngleDraft(slot.topicBrief?.contrarianAngle ?? "");
+  }, [slot.id, slot.notes, slot.scheduledDate, slot.topicTitle, slot.topicBrief]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -648,6 +725,50 @@ function SlotPanel({
     }
     onChange({ topicTitle: trimmed });
     setEditingTitle(false);
+    router.refresh();
+  };
+
+  const handleSaveBrief = async () => {
+    const trimmedTitle = titleDraft.trim();
+    if (!trimmedTitle) {
+      toast.error("Topic title cannot be empty");
+      return;
+    }
+    setSavingBrief(true);
+    const parsedPoints = talkingPointsDraft
+      .split("\n")
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    const catValue = categoryDraft.trim() || null;
+    const res = await updateSlotDetails(slot.id, {
+      topicTitle: trimmedTitle,
+      notes: notes,
+      category: catValue,
+      whyItMatters: whyItMattersDraft.trim(),
+      talkingPoints: parsedPoints,
+      contrarianAngle: contrarianAngleDraft.trim() || null,
+    });
+    setSavingBrief(false);
+
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+
+    toast.success("Brief details saved");
+    onChange({
+      topicTitle: trimmedTitle,
+      notes: notes,
+      topicBrief: {
+        ...slot.topicBrief,
+        category: catValue,
+        whyItMatters: whyItMattersDraft.trim(),
+        talkingPoints: parsedPoints,
+        contrarianAngle: contrarianAngleDraft.trim() || null,
+      },
+    });
+    setIsEditingBrief(false);
     router.refresh();
   };
 
@@ -770,9 +891,14 @@ function SlotPanel({
                   day: "numeric",
                 })}
               </button>
-              {slot.topicBrief.pillar && (
+              {slot.topicBrief?.category && (
+                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-primary-500/10 text-primary-500 border border-primary-500/20 font-medium shrink-0">
+                  <Tag size={10} /> {slot.topicBrief.category}
+                </span>
+              )}
+              {slot.topicBrief?.pillar && (
                 <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-sidebar border border-border/60 text-text-muted shrink-0">
-                  <Tag size={10} /> {slot.topicBrief.pillar}
+                  {slot.topicBrief.pillar}
                 </span>
               )}
               {stale && (
@@ -781,7 +907,20 @@ function SlotPanel({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-0.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsEditingBrief((v) => !v)}
+                className={`p-1.5 rounded-lg border text-xs transition-colors flex items-center gap-1 ${
+                  isEditingBrief
+                    ? "bg-primary-500/10 text-primary-500 border-primary-500/30"
+                    : "hover:bg-sidebar text-text-muted hover:text-foreground border-border/60"
+                }`}
+                title="Edit briefing details"
+              >
+                <Pencil size={13} />
+                <span>{isEditingBrief ? "Editing" : "Edit info"}</span>
+              </button>
               <button
                 type="button"
                 onClick={handleDelete}
@@ -801,50 +940,54 @@ function SlotPanel({
               </button>
             </div>
           </div>
-          {editingTitle ? (
-            <div className="flex items-center gap-2">
-              <Input
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                className="h-8 text-sm"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSaveTitle();
-                  if (e.key === "Escape") {
+
+          {!isEditingBrief && (
+            editingTitle ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  className="h-8 text-sm"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveTitle();
+                    if (e.key === "Escape") {
+                      setEditingTitle(false);
+                      setTitleDraft(slot.topicTitle);
+                    }
+                  }}
+                />
+                <Button size="xs" onClick={handleSaveTitle} disabled={savingTitle}>
+                  Save
+                </Button>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => {
                     setEditingTitle(false);
                     setTitleDraft(slot.topicTitle);
-                  }
-                }}
-              />
-              <Button size="xs" onClick={handleSaveTitle} disabled={savingTitle}>
-                Save
-              </Button>
-              <Button
-                size="xs"
-                variant="ghost"
-                onClick={() => {
-                  setEditingTitle(false);
-                  setTitleDraft(slot.topicTitle);
-                }}
-                disabled={savingTitle}
-              >
-                Cancel
-              </Button>
-            </div>
-          ) : (
-            <div className="flex items-start gap-1.5 group">
-              <h2 className="text-sm font-semibold text-foreground">{slot.topicTitle}</h2>
-              <button
-                type="button"
-                onClick={() => setEditingTitle(true)}
-                className="p-0.5 rounded text-text-muted hover:text-primary-500 shrink-0 mt-0.5"
-                aria-label="Edit topic"
-                title="Edit topic directly"
-              >
-                <Pencil size={12} />
-              </button>
-            </div>
+                  }}
+                  disabled={savingTitle}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-start gap-1.5 group">
+                <h2 className="text-sm font-semibold text-foreground">{slot.topicTitle}</h2>
+                <button
+                  type="button"
+                  onClick={() => setEditingTitle(true)}
+                  className="p-0.5 rounded text-text-muted hover:text-primary-500 shrink-0 mt-0.5"
+                  aria-label="Edit topic title"
+                  title="Edit topic title"
+                >
+                  <Pencil size={12} />
+                </button>
+              </div>
+            )
           )}
+
           {showReschedule && (
             <div className="flex items-center gap-2">
               <Input
@@ -861,20 +1004,105 @@ function SlotPanel({
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-          {slot.topicBrief.whyItMatters && (
-            <p className="text-sm text-foreground italic border-l-2 border-primary-500/40 pl-2.5">
-              {slot.topicBrief.whyItMatters}
-            </p>
-          )}
+          {isEditingBrief ? (
+            <div className="space-y-3 border border-primary-500/20 bg-primary-500/5 p-3.5 rounded-xl">
+              <p className="text-xs font-semibold text-primary-500 flex items-center gap-1.5">
+                <Pencil size={12} /> Edit Briefing & Content Details
+              </p>
 
-          <div>
-            <p className="text-xs font-semibold text-foreground mb-1">Talking points</p>
-            <ul className="list-disc list-inside text-sm text-foreground space-y-0.5">
-              {slot.topicBrief.talkingPoints.map((point, i) => (
-                <li key={i}>{point}</li>
-              ))}
-            </ul>
-          </div>
+              <div>
+                <label className="text-[11px] font-medium text-foreground block mb-1">Topic Title</label>
+                <Input
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  placeholder="Topic title..."
+                  className="text-xs h-8 bg-card"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-medium text-foreground block mb-1">Category</label>
+                <select
+                  value={categoryDraft}
+                  onChange={(e) => setCategoryDraft(e.target.value)}
+                  className="w-full h-8 rounded-lg border border-border bg-card px-2 text-xs text-foreground"
+                >
+                  <option value="">(No category selected)</option>
+                  {CONTENT_CATEGORY_OPTIONS.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-medium text-foreground block mb-1">Why It Matters / Hook Summary</label>
+                <Textarea
+                  value={whyItMattersDraft}
+                  onChange={(e) => setWhyItMattersDraft(e.target.value)}
+                  placeholder="Plain-language orientation sentence..."
+                  rows={2}
+                  className="text-xs bg-card"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-medium text-foreground block mb-1">Talking Points (one per line)</label>
+                <Textarea
+                  value={talkingPointsDraft}
+                  onChange={(e) => setTalkingPointsDraft(e.target.value)}
+                  placeholder="Point 1&#10;Point 2&#10;Point 3"
+                  rows={4}
+                  className="text-xs bg-card"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-medium text-foreground block mb-1">Contrarian Angle (optional)</label>
+                <Textarea
+                  value={contrarianAngleDraft}
+                  onChange={(e) => setContrarianAngleDraft(e.target.value)}
+                  placeholder="Counter-take or contrarian angle..."
+                  rows={2}
+                  className="text-xs bg-card"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <Button size="sm" onClick={handleSaveBrief} disabled={savingBrief} className="gap-1 text-xs">
+                  {savingBrief ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                  Save Briefing Details
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsEditingBrief(false)}
+                  disabled={savingBrief}
+                  className="text-xs"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {slot.topicBrief?.whyItMatters && (
+                <p className="text-sm text-foreground italic border-l-2 border-primary-500/40 pl-2.5">
+                  {slot.topicBrief.whyItMatters}
+                </p>
+              )}
+
+              <div>
+                <p className="text-xs font-semibold text-foreground mb-1">Talking points</p>
+                <ul className="list-disc list-inside text-sm text-foreground space-y-0.5">
+                  {(slot.topicBrief?.talkingPoints ?? []).map((point, i) => (
+                    <li key={i}>{point}</li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
 
           {slot.topicBrief.creatorExamples.length > 0 ? (
             <div>

@@ -47,6 +47,7 @@ const topicSelectBatchSchema = z.object({
 });
 
 const briefingSchema = z.object({
+  category: z.string().describe("The high-level content category: Educational & How-To, Product Walkthrough, Personal Story & Journey, Hot Take & Debunking, Tools & Listicle, Teardown & Analysis, or Behind The Scenes."),
   whyItMatters: z.string().describe("ONE plain-language sentence on why this topic is worth talking about right now. Write for someone who may be new to this specific topic — orient them before the talking points below assume any context."),
   talkingPoints: z.array(z.string()).describe("3-5 concrete talking points for a 30-90s short-form video on this topic. Empty array if truly nothing usable."),
   stat: z.string().nullable().describe("One surprising, specific stat or fact drawn from the provided ARTICLE sources, or null if none of the sources contain one."),

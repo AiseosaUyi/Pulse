@@ -1,4 +1,5 @@
 
+// @ts-expect-error ws lacks types in this env
 import WebSocket from "ws";
 (globalThis as any).WebSocket = WebSocket;
 import { generateNextBatchApi } from "./src/lib/services/content-calendar";

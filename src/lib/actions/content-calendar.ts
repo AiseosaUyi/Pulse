@@ -200,6 +200,67 @@ export async function updateSlotNotes(slotId: string, notes: string): Promise<Ac
   return { success: true };
 }
 
+export async function updateSlotDetails(
+  slotId: string,
+  updates: {
+    topicTitle?: string;
+    notes?: string;
+    category?: string | null;
+    whyItMatters?: string;
+    talkingPoints?: string[];
+    contrarianAngle?: string | null;
+  }
+): Promise<ActionResult> {
+  const gate = await requireEnabledTenant();
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const admin = createAdminClient();
+  const { data: slot } = await admin
+    .from("content_slots")
+    .select("topic_title, notes, topic_brief")
+    .eq("id", slotId)
+    .eq("tenant_slug", gate.tenantSlug)
+    .maybeSingle();
+
+  if (!slot) return { success: false, error: "Slot not found" };
+
+  const currentBrief = (slot.topic_brief as Record<string, unknown> | null) ?? {};
+  const updatedBrief = {
+    ...currentBrief,
+    ...(updates.category !== undefined ? { category: updates.category } : {}),
+    ...(updates.whyItMatters !== undefined ? { whyItMatters: updates.whyItMatters } : {}),
+    ...(updates.talkingPoints !== undefined ? { talkingPoints: updates.talkingPoints } : {}),
+    ...(updates.contrarianAngle !== undefined ? { contrarianAngle: updates.contrarianAngle } : {}),
+  };
+
+  const dbUpdate: Record<string, unknown> = {
+    topic_brief: updatedBrief,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (updates.topicTitle !== undefined) {
+    const trimmed = updates.topicTitle.trim();
+    if (!trimmed) return { success: false, error: "Topic title cannot be empty" };
+    dbUpdate.topic_title = trimmed;
+  }
+
+  if (updates.notes !== undefined) {
+    dbUpdate.notes = updates.notes;
+  }
+
+  const { error } = await admin
+    .from("content_slots")
+    .update(dbUpdate)
+    .eq("id", slotId)
+    .eq("tenant_slug", gate.tenantSlug);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/content-calendar");
+  return { success: true };
+}
+
+
 // Video upload — reuses ONLY the signed-upload-URL mechanism from
 // video-generate.ts, not its video_assets table (design doc ENG REVIEW,
 // locked decision #5: that table's model is provider-job/credits-shaped
