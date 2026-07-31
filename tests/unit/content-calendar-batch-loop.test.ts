@@ -27,12 +27,20 @@ vi.mock("@/lib/scrape/trend-pull", () => ({
   fetchTrendCandidates: (...args: unknown[]) => fetchTrendCandidatesMock(...args),
 }));
 
+class ContentCalendarAiErrorMock extends Error {
+  constructor(message: string, public cause?: unknown) {
+    super(message);
+    this.name = "ContentCalendarAiError";
+  }
+}
+
 const selectTopicsBatchMock = vi.fn();
 const generateBriefingMock = vi.fn();
 vi.mock("@/lib/ai/content-calendar", () => ({
   selectTopic: vi.fn(),
   selectTopicsBatch: (...args: unknown[]) => selectTopicsBatchMock(...args),
   generateBriefing: (...args: unknown[]) => generateBriefingMock(...args),
+  ContentCalendarAiError: ContentCalendarAiErrorMock,
 }));
 
 const judgeCandidatesMock = vi.fn();
@@ -260,7 +268,7 @@ describe("generateNextBatchApi — self-correcting batch loop", () => {
     expect(generateBriefingMock).not.toHaveBeenCalled();
   });
 
-  it("stops early and keeps whatever was already accepted when a later round's batch call throws", async () => {
+  it("stops early and keeps whatever was already accepted when a later round genuinely times out", async () => {
     getContentCalendarConfigMock.mockResolvedValue({
       niches: ["Design", "Video"],
       interestTags: ["AI"],
@@ -270,7 +278,15 @@ describe("generateNextBatchApi — self-correcting batch loop", () => {
     let round = 0;
     selectTopicsBatchMock.mockImplementation(async (input: { assignedPillars: string[] }) => {
       round++;
-      if (round === 2) throw new Error("upstream timeout");
+      if (round === 2) {
+        // Mirrors how the real selectTopicsBatch wraps a genuine AI-SDK
+        // timeout: ContentCalendarAiError with an AbortError-named cause
+        // (see @ai-sdk/provider-utils' isAbortError check).
+        throw new ContentCalendarAiErrorMock(
+          "Failed to select topics batch",
+          Object.assign(new Error("The operation was aborted"), { name: "AbortError" })
+        );
+      }
       return input.assignedPillars.map((pillar, i) => candidate(`${pillar} idea`, pillar, i));
     });
     judgeCandidatesMock.mockImplementation(async ({ candidates }: { candidates: Array<{ index: number; pillar: string }> }) =>
@@ -285,7 +301,40 @@ describe("generateNextBatchApi — self-correcting batch loop", () => {
     expect(result.generated).toBe(1);
     expect(result.roundsUsed).toBe(2);
     expect(result.missingPillars).toEqual(["Video"]);
-    // Round 2 threw before any further selectTopicsBatch calls could happen.
+    // Round 2 timed out before any further selectTopicsBatch calls could happen.
+    expect(selectTopicsBatchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries the next round instead of aborting the whole batch on a non-timeout error", async () => {
+    getContentCalendarConfigMock.mockResolvedValue({
+      niches: ["Design", "Video"],
+      interestTags: ["AI"],
+      postsPerDay: 1,
+      recentFeedback: [],
+    });
+    let round = 0;
+    selectTopicsBatchMock.mockImplementation(async (input: { assignedPillars: string[] }) => {
+      round++;
+      // A transient, non-timeout failure (e.g. a validation or rate-limit
+      // error) on round 1 only — previously this was indistinguishable
+      // from a timeout and would have killed the whole batch instead of
+      // giving the next round a chance to recover.
+      if (round === 1) throw new Error("rate limited");
+      return input.assignedPillars.map((pillar, i) => candidate(`${pillar} idea`, pillar, i));
+    });
+    judgeCandidatesMock.mockImplementation(async ({ candidates }: { candidates: Array<{ index: number; pillar: string }> }) =>
+      candidates.map((c) => ({ index: c.index, pass: true, reason: "" }))
+    );
+    const { admin } = makeAdmin({});
+
+    const result = await generateNextBatchApi(admin as never, "t1", "user-1", 2);
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    // Round 1's non-timeout throw didn't abort the batch — round 2 filled
+    // both pillars successfully.
+    expect(result.generated).toBe(2);
+    expect(result.missingPillars).toEqual([]);
     expect(selectTopicsBatchMock).toHaveBeenCalledTimes(2);
   });
 });

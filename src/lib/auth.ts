@@ -80,7 +80,8 @@ export async function getUserTenants(): Promise<TenantMembership[]> {
 }
 
 // Reads the tenant cookie, validates the user belongs to that tenant,
-// falls back to first membership. Returns null if user has no memberships.
+// falls back to an onboarded tenant (with brand voice) if no cookie is set,
+// or first membership. Returns null if user has no memberships.
 export async function getCurrentTenant(): Promise<TenantMembership | null> {
   const memberships = await getUserTenants();
   if (memberships.length === 0) return null;
@@ -88,5 +89,31 @@ export async function getCurrentTenant(): Promise<TenantMembership | null> {
   const cookieStore = await cookies();
   const cookieSlug = cookieStore.get("tenant")?.value;
   const match = memberships.find((m) => m.slug === cookieSlug);
-  return match ?? memberships[0];
+  if (match) return match;
+
+  // Fallback when no valid cookie is set: prefer a workspace that has already
+  // completed onboarding (has brand voice) so a user logging in freshly
+  // lands directly in their active workspace instead of an un-onboarded one.
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const admin = createAdminClient();
+    const { data: tenantRows } = await admin
+      .from("tenants")
+      .select("slug, settings")
+      .in("slug", memberships.map((m) => m.slug));
+
+    if (tenantRows && tenantRows.length > 0) {
+      const onboardedSlug = tenantRows.find(
+        (t) => (t.settings as { brand_voice?: unknown } | null)?.brand_voice
+      )?.slug;
+      if (onboardedSlug) {
+        const onboardedMatch = memberships.find((m) => m.slug === onboardedSlug);
+        if (onboardedMatch) return onboardedMatch;
+      }
+    }
+  } catch (err) {
+    console.warn("[auth] getCurrentTenant fallback check failed", err);
+  }
+
+  return memberships[0];
 }

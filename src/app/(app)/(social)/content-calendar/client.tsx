@@ -182,35 +182,54 @@ export default function ContentCalendarClient({
     );
     setDraggedSlotId(null);
 
-    const res = await rescheduleSlot(slotId, targetDateKey);
-    if (!res.success) {
-      toast.error(res.error);
+    try {
+      const res = await rescheduleSlot(slotId, targetDateKey);
+      if (!res.success) {
+        toast.error(res.error);
+        router.refresh();
+        return;
+      }
+      // Drag-and-drop reschedules on a card that's also click-to-open — an
+      // imprecise pointer-down-then-move (easy on a trackpad) can fire this
+      // with no deliberate drag intent. Undo is one click, not a confirmation
+      // dialog on every drag, so it doesn't slow down real reschedules.
+      toast.success("Rescheduled", undefined, {
+        label: "Undo",
+        onClick: () => void handleUndoReschedule(slotId, previousDateKey),
+      });
       router.refresh();
-      return;
+    } catch {
+      // rescheduleSlot can throw (not just return {success: false}) on a
+      // transport-level failure — without this, the optimistic setSlots
+      // above stays applied with nothing actually persisted and no
+      // indication to the user that the move didn't take.
+      setSlots((prev) =>
+        prev.map((s) => (s.id === slotId ? { ...s, scheduledDate: previousDateKey } : s))
+      );
+      toast.error("Couldn't reschedule that slot. Please try again.");
     }
-    // Drag-and-drop reschedules on a card that's also click-to-open — an
-    // imprecise pointer-down-then-move (easy on a trackpad) can fire this
-    // with no deliberate drag intent. Undo is one click, not a confirmation
-    // dialog on every drag, so it doesn't slow down real reschedules.
-    toast.success("Rescheduled", undefined, {
-      label: "Undo",
-      onClick: () => void handleUndoReschedule(slotId, previousDateKey),
-    });
-    router.refresh();
   };
 
   const handleUndoReschedule = async (slotId: string, previousDateKey: string) => {
     setSlots((prev) =>
       prev.map((s) => (s.id === slotId ? { ...s, scheduledDate: previousDateKey } : s))
     );
-    const res = await rescheduleSlot(slotId, previousDateKey);
-    if (!res.success) {
-      toast.error(res.error);
+    try {
+      const res = await rescheduleSlot(slotId, previousDateKey);
+      if (!res.success) {
+        toast.error(res.error);
+        router.refresh();
+        return;
+      }
+      toast.success("Undone");
       router.refresh();
-      return;
+    } catch {
+      // Unlike handleDropSlot, there's no "previous" state to roll back to
+      // here — this call *is* the rollback. Resync from the server instead
+      // of guessing, since we don't know whether the undo partially applied.
+      toast.error("Couldn't undo that reschedule. Please try again.");
+      router.refresh();
     }
-    toast.success("Undone");
-    router.refresh();
   };
 
 
@@ -392,7 +411,7 @@ export default function ContentCalendarClient({
       </div>
 
       {showTrends && (
-        <div className="mb-6 -mt-3 rounded-xl border border-border/60 bg-card p-3">
+        <div className="mb-6 -mt-3 rounded-2xl border border-border/60 bg-card p-3">
           <p className="text-xs font-medium text-foreground mb-1.5">
             What&apos;s trending in your niche right now
           </p>
@@ -445,7 +464,7 @@ export default function ContentCalendarClient({
       )}
 
       {showInstruction && (
-        <div className="mb-6 -mt-3 rounded-xl border border-border/60 bg-card p-3">
+        <div className="mb-6 -mt-3 rounded-2xl border border-border/60 bg-card p-3">
           <p className="text-xs font-medium text-foreground mb-1.5">
             One-off direction for this batch (optional)
           </p>
@@ -478,7 +497,7 @@ export default function ContentCalendarClient({
       )}
 
       {addForDate && (
-        <div className="mb-6 rounded-xl border border-border/60 bg-card p-3">
+        <div className="mb-6 rounded-2xl border border-border/60 bg-card p-3">
           <p className="text-xs font-medium text-foreground mb-1.5">
             Add for{" "}
             {new Date(`${addForDate}T00:00:00`).toLocaleDateString("en-US", {
@@ -1051,7 +1070,7 @@ function SlotPanel({
 
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {isEditingBrief ? (
-            <div className="space-y-3 border border-primary-500/20 bg-primary-500/5 p-3.5 rounded-xl">
+            <div className="space-y-3 border border-primary-500/20 bg-primary-500/5 p-3.5 rounded-2xl">
               <p className="text-xs font-semibold text-primary-500 flex items-center gap-1.5">
                 <Pencil size={12} /> Edit Briefing & Content Details
               </p>

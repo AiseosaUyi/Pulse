@@ -4,7 +4,8 @@ import { rowToSlot, getNextPosition, getNextScheduledDate, retireStaleSlots, tod
 import { getContentCalendarConfig } from "@/lib/content-calendar/config";
 import { buildPillarAssignments } from "@/lib/content-calendar/pillar-rotation";
 import { fetchTrendCandidates } from "@/lib/scrape/trend-pull";
-import { selectTopic, selectTopicsBatch, generateBriefing } from "@/lib/ai/content-calendar";
+import { selectTopic, selectTopicsBatch, generateBriefing, ContentCalendarAiError } from "@/lib/ai/content-calendar";
+import { checkAiBudget, BudgetExceededError } from "@/lib/ai/ai-budget";
 import { judgeCandidates } from "@/lib/ai/content-calendar-judge";
 import { mapWithConcurrency } from "@/lib/utils/concurrency";
 import { findNearDuplicate } from "@/lib/utils/text-similarity";
@@ -121,6 +122,22 @@ export async function generateNextBatchApi(
   const startedAt = Date.now();
   console.log(`[content-calendar] generateNextBatchApi start — tenant=${tenantSlug} requestedN=${requestedN} instruction=${instruction ? `"${instruction}"` : "(none)"}`);
 
+  // Cost-based backpressure — not a queue-depth cap (that was deliberately
+  // removed twice, see MAX_QUEUE_DEPTH history: a hardcoded slot count kept
+  // being wrong in one direction or the other). This gates actual AI spend
+  // instead, via the same monthly-budget mechanism already used by the SEO
+  // module (src/lib/ai/ai-budget.ts) — nothing previously stopped repeated
+  // batch calls (web UI or the rate-limited-but-not-cost-limited /api/v1
+  // route) from generating unbounded AI spend.
+  try {
+    await checkAiBudget(tenantSlug);
+  } catch (err) {
+    if (err instanceof BudgetExceededError) {
+      return { success: false, error: err.message };
+    }
+    throw err;
+  }
+
   await retireStaleSlots(admin, tenantSlug);
 
   const n = Math.max(1, Math.min(requestedN, MAX_BATCH_SIZE));
@@ -234,10 +251,26 @@ export async function generateNextBatchApi(
         recentFeedback: config.recentFeedback,
       });
     } catch (err) {
-      console.warn(`[content-calendar] batched topic selection failed (round ${round + 1})`, err);
-      // If the batch timed out, further rounds will also time out — stop early
-      // rather than burning another 45 s per empty round.
-      batchTimedOut = true;
+      // ContentCalendarAiError wraps the real cause — unwrap it so a
+      // transient validation/rate-limit/network error isn't treated the
+      // same as an actual timeout. Matches the AI SDK's own isAbortError
+      // check (@ai-sdk/provider-utils): AbortError / ResponseAborted /
+      // TimeoutError name on an Error or DOMException.
+      const cause = err instanceof ContentCalendarAiError ? err.cause : err;
+      const isTimeout =
+        (cause instanceof Error || cause instanceof DOMException) &&
+        (cause.name === "AbortError" || cause.name === "ResponseAborted" || cause.name === "TimeoutError");
+
+      if (isTimeout) {
+        console.warn(`[content-calendar] batched topic selection timed out (round ${round + 1}) — further rounds would also time out, stopping early`, err);
+        batchTimedOut = true;
+      } else {
+        // Not a timeout — this round is bounded by MAX_ROUNDS regardless,
+        // so give the loop a chance to recover on the next round instead of
+        // discarding the rest of the batch on one transient failure.
+        console.warn(`[content-calendar] batched topic selection failed (round ${round + 1}), will retry next round`, err);
+        continue;
+      }
     }
     if (batchTimedOut) break;
 

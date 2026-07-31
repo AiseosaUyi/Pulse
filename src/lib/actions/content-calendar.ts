@@ -8,6 +8,7 @@ import { getContentCalendarConfig, appendContentCalendarFeedback } from "@/lib/c
 import { fetchTrendCandidates, type TrendCandidate } from "@/lib/scrape/trend-pull";
 import { generateSlotContent, generateBriefing } from "@/lib/ai/content-calendar";
 import { generateNextBatchApi, type GenerateNextBatchResult } from "@/lib/services/content-calendar";
+import { checkAiBudget, BudgetExceededError } from "@/lib/ai/ai-budget";
 import {
   getNextPosition,
   retireStaleSlots,
@@ -352,6 +353,11 @@ export async function createSlotFromTrend(input: {
   await retireStaleSlots(admin, tenantSlug);
 
   try {
+    // Cost-based backpressure — see generateNextBatchApi for why this
+    // replaces the removed queue-depth cap. err.message is already a
+    // clean user-facing string on BudgetExceededError.
+    await checkAiBudget(tenantSlug);
+
     const brief = await generateBriefing({
       tenantSlug,
       topicTitle: input.title,
@@ -400,6 +406,19 @@ export async function createSlotForDate(
 
   const admin = createAdminClient();
   await retireStaleSlots(admin, tenantSlug);
+
+  // Cost-based backpressure — see generateNextBatchApi for why this
+  // replaces the removed queue-depth cap. Checked before any other work
+  // (including the trend fetch below) so a budget-exhausted tenant fails
+  // fast rather than paying for scraping it won't use.
+  try {
+    await checkAiBudget(tenantSlug);
+  } catch (err) {
+    if (err instanceof BudgetExceededError) {
+      return { success: false, error: err.message };
+    }
+    throw err;
+  }
 
   const config = await getContentCalendarConfig(tenantSlug);
   const trendsPerNiche = await Promise.all(config.niches.map((niche) => fetchTrendCandidates(niche)));
