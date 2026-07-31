@@ -45,6 +45,7 @@ export default async function ResetPasswordPage({
         <div>
           <Label htmlFor="rp-password">New password</Label>
           <PasswordInput
+            id="rp-password"
             name="password"
             required
             minLength={8}
@@ -56,6 +57,7 @@ export default async function ResetPasswordPage({
         <div>
           <Label htmlFor="rp-confirm">Confirm password</Label>
           <PasswordInput
+            id="rp-confirm"
             name="confirm"
             required
             minLength={8}

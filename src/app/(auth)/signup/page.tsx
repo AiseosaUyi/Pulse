@@ -112,7 +112,7 @@ export default async function SignupPage({
         </div>
         <div>
           <Label htmlFor="su-password">Password</Label>
-          <PasswordInput name="password" required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" />
+          <PasswordInput id="su-password" name="password" required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" />
           <p className="mt-1 text-xs text-gray-500">8 characters minimum.</p>
         </div>
         <div>

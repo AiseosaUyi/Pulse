@@ -5,6 +5,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PasswordInputProps {
+  id?: string;
   name: string;
   autoComplete?: "current-password" | "new-password";
   minLength?: number;
@@ -14,6 +15,7 @@ interface PasswordInputProps {
 }
 
 export function PasswordInput({
+  id,
   name,
   autoComplete = "current-password",
   minLength,
@@ -26,6 +28,7 @@ export function PasswordInput({
   return (
     <div className={cn("relative", className)}>
       <input
+        id={id}
         type={visible ? "text" : "password"}
         name={name}
         required={required}

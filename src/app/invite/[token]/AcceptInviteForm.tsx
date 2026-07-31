@@ -24,6 +24,7 @@ export function AcceptInviteForm({ token }: { token: string }) {
       <div>
         <Label htmlFor="iv-pass">Password</Label>
         <PasswordInput
+          id="iv-pass"
           name="password"
           required
           minLength={8}

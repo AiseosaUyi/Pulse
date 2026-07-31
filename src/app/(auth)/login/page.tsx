@@ -58,7 +58,7 @@ export default async function LoginPage({
               Forgot password?
             </Link>
           </div>
-          <PasswordInput name="password" required autoComplete="current-password" placeholder="Enter your password" />
+          <PasswordInput id="login-password" name="password" required autoComplete="current-password" placeholder="Enter your password" />
         </div>
         <Button type="submit" size="xl" className="w-full">
           Sign in

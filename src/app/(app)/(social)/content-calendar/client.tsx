@@ -174,6 +174,7 @@ export default function ContentCalendarClient({
       setDraggedSlotId(null);
       return;
     }
+    const previousDateKey = slot.scheduledDate;
 
     // Optimistic local update
     setSlots((prev) =>
@@ -187,7 +188,28 @@ export default function ContentCalendarClient({
       router.refresh();
       return;
     }
-    toast.success("Rescheduled");
+    // Drag-and-drop reschedules on a card that's also click-to-open — an
+    // imprecise pointer-down-then-move (easy on a trackpad) can fire this
+    // with no deliberate drag intent. Undo is one click, not a confirmation
+    // dialog on every drag, so it doesn't slow down real reschedules.
+    toast.success("Rescheduled", undefined, {
+      label: "Undo",
+      onClick: () => void handleUndoReschedule(slotId, previousDateKey),
+    });
+    router.refresh();
+  };
+
+  const handleUndoReschedule = async (slotId: string, previousDateKey: string) => {
+    setSlots((prev) =>
+      prev.map((s) => (s.id === slotId ? { ...s, scheduledDate: previousDateKey } : s))
+    );
+    const res = await rescheduleSlot(slotId, previousDateKey);
+    if (!res.success) {
+      toast.error(res.error);
+      router.refresh();
+      return;
+    }
+    toast.success("Undone");
     router.refresh();
   };
 
@@ -581,7 +603,7 @@ export default function ContentCalendarClient({
                         draggable
                         onDragStart={(e) => handleDragStart(e, slot.id)}
                         onDragEnd={() => setDraggedSlotId(null)}
-                        onClick={() => setSelectedSlotId(slot.id)}
+                        onClick={() => handleSelectSlot(slot)}
                         title={slot.topicTitle}
                         className={`w-full text-left rounded-md border border-border/60 bg-sidebar/60 hover:bg-sidebar px-1 sm:px-1.5 py-1 transition-colors cursor-grab active:cursor-grabbing ${
                           isDragging ? "opacity-40 border-dashed border-primary-500" : ""
@@ -597,7 +619,7 @@ export default function ContentCalendarClient({
                         </div>
                         {slot.topicBrief?.category && (
                           <div className="hidden sm:block mt-0.5">
-                            <span className="text-[9px] px-1 py-0.2 rounded bg-primary-500/10 text-primary-500 font-medium truncate max-w-full inline-block leading-tight">
+                            <span className="text-[9px] px-1 py-0.5 rounded bg-primary-500/10 text-primary-500 font-medium truncate max-w-full inline-block leading-tight">
                               {slot.topicBrief.category}
                             </span>
                           </div>
@@ -726,6 +748,30 @@ function SlotPanel({
     onChange({ topicTitle: trimmed });
     setEditingTitle(false);
     router.refresh();
+  };
+
+  // The standalone inline title editor and the full-brief edit form share
+  // `titleDraft` (and the brief form owns its own category/whyItMatters/etc.
+  // drafts). Entering or leaving either mode without resyncing from `slot`
+  // let an abandoned, uncommitted edit in one form silently ride along into
+  // a save triggered by the other — always resync on the way in and out.
+  const resetBriefDrafts = () => {
+    setTitleDraft(slot.topicTitle);
+    setCategoryDraft(slot.topicBrief?.category ?? "");
+    setWhyItMattersDraft(slot.topicBrief?.whyItMatters ?? "");
+    setTalkingPointsDraft((slot.topicBrief?.talkingPoints ?? []).join("\n"));
+    setContrarianAngleDraft(slot.topicBrief?.contrarianAngle ?? "");
+  };
+
+  const openEditBrief = () => {
+    setEditingTitle(false);
+    resetBriefDrafts();
+    setIsEditingBrief(true);
+  };
+
+  const closeEditBrief = () => {
+    resetBriefDrafts();
+    setIsEditingBrief(false);
   };
 
   const handleSaveBrief = async () => {
@@ -910,7 +956,7 @@ function SlotPanel({
             <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
-                onClick={() => setIsEditingBrief((v) => !v)}
+                onClick={() => (isEditingBrief ? closeEditBrief() : openEditBrief())}
                 className={`p-1.5 rounded-lg border text-xs transition-colors flex items-center gap-1 ${
                   isEditingBrief
                     ? "bg-primary-500/10 text-primary-500 border-primary-500/30"
@@ -924,7 +970,7 @@ function SlotPanel({
               <button
                 type="button"
                 onClick={handleDelete}
-                className="p-1.5 rounded-lg hover:bg-status-red/10 text-text-muted hover:text-status-red"
+                className="p-2.5 -m-0.5 rounded-lg hover:bg-status-red/10 text-text-muted hover:text-status-red"
                 aria-label="Delete this slot"
                 title="Delete this slot"
               >
@@ -933,7 +979,7 @@ function SlotPanel({
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 rounded-lg hover:bg-sidebar text-text-muted hover:text-foreground"
+                className="p-2.5 -m-0.5 rounded-lg hover:bg-sidebar text-text-muted hover:text-foreground"
                 aria-label="Close panel"
               >
                 <X size={16} />
@@ -1077,7 +1123,7 @@ function SlotPanel({
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => setIsEditingBrief(false)}
+                  onClick={closeEditBrief}
                   disabled={savingBrief}
                   className="text-xs"
                 >
@@ -1147,7 +1193,7 @@ function SlotPanel({
             </div>
           )}
 
-          {slot.topicBrief.contrarianAngle && (
+          {!isEditingBrief && slot.topicBrief.contrarianAngle && (
             <div>
               <p className="text-xs font-semibold text-foreground mb-1">Contrarian angle</p>
               <p className="text-sm text-foreground">{slot.topicBrief.contrarianAngle}</p>

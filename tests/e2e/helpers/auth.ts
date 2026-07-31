@@ -11,8 +11,8 @@ export async function loginAsSeedUser(page: Page): Promise<void> {
   }
 
   await page.goto("/login");
-  await page.getByPlaceholder("you@company.com").fill(email);
-  await page.getByPlaceholder("Enter your password").fill(password);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: /sign in/i }).click();
   await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
 }

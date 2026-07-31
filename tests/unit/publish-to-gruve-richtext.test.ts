@@ -21,7 +21,11 @@ const postRow = {
   title: "Test post",
   slug: "test-post",
   content: "# New content with a [link](https://gruve.events)",
-  question: "Q",
+  // Contentful's gruveBlog.question field enforces 12-30 chars (see
+  // QUESTION_MIN/QUESTION_MAX in publish-to-gruve.ts) — must satisfy that
+  // here or the length check short-circuits before markdownToRichText is
+  // ever called, which is what this regression test is actually about.
+  question: "Why does this matter?",
   author: "Author",
   author_image: "http://img",
   cover_image: { url: "http://cover" },

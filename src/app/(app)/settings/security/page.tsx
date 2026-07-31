@@ -29,6 +29,7 @@ export default async function SecuritySettingsPage() {
           <div>
             <Label htmlFor="s-current">Current password</Label>
             <PasswordInput
+              id="s-current"
               name="currentPassword"
               required
               autoComplete="current-password"
@@ -38,6 +39,7 @@ export default async function SecuritySettingsPage() {
           <div>
             <Label htmlFor="s-new">New password</Label>
             <PasswordInput
+              id="s-new"
               name="newPassword"
               required
               minLength={8}
@@ -49,6 +51,7 @@ export default async function SecuritySettingsPage() {
           <div>
             <Label htmlFor="s-confirm">Confirm new password</Label>
             <PasswordInput
+              id="s-confirm"
               name="confirmPassword"
               required
               minLength={8}

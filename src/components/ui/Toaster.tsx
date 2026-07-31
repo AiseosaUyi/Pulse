@@ -20,31 +20,37 @@ import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 
 export type ToastTone = "success" | "error" | "info";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface ToastEntry {
   id: number;
   tone: ToastTone;
   title: string;
   subtitle?: string;
+  action?: ToastAction;
 }
 
 type Listener = (entry: ToastEntry) => void;
 const listeners = new Set<Listener>();
 let nextId = 1;
 
-function emit(tone: ToastTone, title: string, subtitle?: string) {
-  const entry: ToastEntry = { id: nextId++, tone, title, subtitle };
+function emit(tone: ToastTone, title: string, subtitle?: string, action?: ToastAction) {
+  const entry: ToastEntry = { id: nextId++, tone, title, subtitle, action };
   listeners.forEach((l) => l(entry));
 }
 
 export const toast = {
-  success(title: string, subtitle?: string) {
-    emit("success", title, subtitle);
+  success(title: string, subtitle?: string, action?: ToastAction) {
+    emit("success", title, subtitle, action);
   },
-  error(title: string, subtitle?: string) {
-    emit("error", title, subtitle);
+  error(title: string, subtitle?: string, action?: ToastAction) {
+    emit("error", title, subtitle, action);
   },
-  info(title: string, subtitle?: string) {
-    emit("info", title, subtitle);
+  info(title: string, subtitle?: string, action?: ToastAction) {
+    emit("info", title, subtitle, action);
   },
 };
 
@@ -102,6 +108,18 @@ export function Toaster() {
             <div className="text-sm font-medium">{t.title}</div>
             {t.subtitle ? (
               <div className="text-xs opacity-80 mt-0.5">{t.subtitle}</div>
+            ) : null}
+            {t.action ? (
+              <button
+                type="button"
+                onClick={() => {
+                  t.action!.onClick();
+                  dismiss(t.id);
+                }}
+                className="text-xs font-semibold underline underline-offset-2 mt-1"
+              >
+                {t.action.label}
+              </button>
             ) : null}
           </div>
           <button

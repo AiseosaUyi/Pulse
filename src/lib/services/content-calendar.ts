@@ -197,10 +197,10 @@ export async function generateNextBatchApi(
   let roundsUsed = 0;
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    roundsUsed = round + 1;
     const pendingIndices: number[] = [];
     slots.forEach((s, i) => { if (s === null) pendingIndices.push(i); });
     if (pendingIndices.length === 0) break;
+    roundsUsed = round + 1;
 
     // Phase 1: generate ALL candidates for still-pending slots in one batched LLM call
     // (a 10x speedup over the previous sequential O(N) calls). The batched call is instructed
