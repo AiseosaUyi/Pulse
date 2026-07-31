@@ -18,6 +18,7 @@ import {
   startFullAudit,
   advanceFullAudit,
   cancelFullAudit,
+  skipBrandAudit,
   type AuditPhase,
   type AuditState,
 } from "@/lib/actions/brand-audit";
@@ -173,6 +174,20 @@ export function AuditWizardClient({ tenantSlug, tenantName }: Props) {
     abortRef.current = true;
   };
 
+  const [skipping, startSkipping] = useTransition();
+
+  const handleSkip = () => {
+    startSkipping(async () => {
+      const res = await skipBrandAudit(tenantSlug);
+      if (!res.success) {
+        setView({ kind: "error", message: res.error });
+        return;
+      }
+      router.push("/dashboard");
+      router.refresh();
+    });
+  };
+
   const enterApp = () => {
     router.push("/dashboard");
   };
@@ -240,10 +255,11 @@ export function AuditWizardClient({ tenantSlug, tenantName }: Props) {
           <div className="flex items-center justify-between flex-wrap gap-3 pt-1">
             <button
               type="button"
-              onClick={enterApp}
-              className="text-xs text-text-muted hover:text-foreground transition-colors"
+              onClick={handleSkip}
+              disabled={skipping || isRunning}
+              className="text-xs text-text-muted hover:text-foreground transition-colors disabled:opacity-50"
             >
-              Skip for now
+              {skipping ? "Skipping…" : "Skip for now"}
             </button>
             <Button
               onClick={submit}

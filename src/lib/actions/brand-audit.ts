@@ -605,3 +605,81 @@ function parseIntent(
     | "transactional"
     | "navigational") ?? "informational";
 }
+
+// ──────────────────────────────────────────────────────────
+// Skip audit path — sets default brand voice & positioning
+// so the user can enter the dashboard immediately.
+// ──────────────────────────────────────────────────────────
+
+export async function skipBrandAudit(
+  tenantSlug: string
+): Promise<ActionResult> {
+  try {
+    const supabase = await createClient();
+    const { data: tenant, error: readErr } = await supabase
+      .from("tenants")
+      .select("name, settings")
+      .eq("slug", tenantSlug)
+      .maybeSingle();
+
+    if (readErr) return { success: false, error: readErr.message };
+    if (!tenant) return { success: false, error: "Tenant not found." };
+
+    const brandName = tenant.name || tenantSlug;
+
+    const voice = {
+      tone: `Clear, professional, and engaging voice for ${brandName}.`,
+      audience: `Customers and audience interested in ${brandName}.`,
+      do_list: [
+        "Be clear, direct, and valuable",
+        "Maintain an authentic brand tone",
+      ],
+      dont_list: [
+        "Avoid overly dense jargon",
+        "Don't post without clear value",
+      ],
+      example_posts: [
+        `Welcome to ${brandName}! We're excited to share our latest updates with you.`,
+      ],
+    };
+
+    const positioning = {
+      mission: `Building value and audience engagement for ${brandName}.`,
+      value_proposition: `Delivering consistent, valuable insights for ${brandName}'s audience.`,
+      target_demographics: [
+        {
+          segment: "Target Audience",
+          pain_points: ["Finding reliable information", "Staying updated"],
+        },
+      ],
+      topics_to_cover: ["Product updates", "Industry insights", "Customer stories"],
+      topics_to_avoid: [],
+      competitors: [],
+      differentiators: ["Clear value proposition", "Authentic perspective"],
+    };
+
+    const existing = (tenant.settings as Record<string, unknown>) ?? {};
+    const merged = {
+      ...existing,
+      brand_voice: voice,
+      brand_positioning: positioning,
+      brand_audit_skipped: true,
+    };
+
+    const { error: writeErr } = await supabase
+      .from("tenants")
+      .update({ settings: merged })
+      .eq("slug", tenantSlug);
+
+    if (writeErr) return { success: false, error: writeErr.message };
+
+    revalidatePath("/dashboard");
+    revalidatePath("/settings");
+
+    return { success: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}
+
