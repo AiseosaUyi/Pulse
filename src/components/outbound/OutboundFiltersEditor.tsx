@@ -38,6 +38,11 @@ function clampDwell(value: number): number {
 }
 
 export function OutboundFiltersEditor({ tenantSlug, initialFilters }: Props) {
+  const isUnconfigured =
+    initialFilters.keywords.length === 0 &&
+    initialFilters.competitorUrls.length === 0 &&
+    initialFilters.geoScope.length === 0;
+
   const [keywords, setKeywords] = useState(
     initialFilters.keywords.join("\n")
   );
@@ -95,6 +100,20 @@ export function OutboundFiltersEditor({ tenantSlug, initialFilters }: Props) {
 
   return (
     <div className="space-y-8">
+      {isUnconfigured && (
+        <div
+          className="rounded-lg border border-status-yellow/30 bg-status-yellow/5 px-4 py-3 text-sm text-foreground"
+          role="status"
+        >
+          <p className="font-medium">No outbound filters set up yet</p>
+          <p className="text-xs text-text-muted mt-1">
+            Nothing is scoped to your brand yet — the qualifier won&apos;t
+            flag any captures as buyer signals until you add event-intent
+            keywords, competitor platforms, and a geographic scope below.
+          </p>
+        </div>
+      )}
+
       <div>
         <Label htmlFor="obf-keywords">
           Event-intent keywords (one per line)

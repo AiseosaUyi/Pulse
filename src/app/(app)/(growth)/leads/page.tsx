@@ -23,6 +23,7 @@ import {
   UNCONFIRMED_PLATFORM_IDS,
   IG_MENTION_PLATFORMS,
 } from "@/lib/scrape/event-platforms";
+import { isEventScraperEnabledForTenant } from "@/lib/scrape/event-platforms/tenant-config";
 import { OutboundClient } from "./client";
 import type { OutboundDmRecord } from "@/lib/types/outbound";
 import type { EventScraperPlatformOption } from "./event-platform-runs";
@@ -69,23 +70,32 @@ export default async function LeadsPage() {
   // Plain-data platform list for the "Run now" buttons — deliberately NOT
   // importing the scraper configs themselves into client code (they pull in
   // cheerio + parser functions with no reason to ship to the browser).
-  const eventScraperPlatforms: EventScraperPlatformOption[] = [
-    ...ACTIVE_EVENT_PLATFORMS.map((p) => ({
-      id: p.id,
-      label: p.label,
-      kind: "active" as const,
-    })),
-    ...UNCONFIRMED_PLATFORM_IDS.map((p) => ({
-      id: p.id,
-      label: p.label,
-      kind: "unconfirmed" as const,
-    })),
-    ...IG_MENTION_PLATFORMS.map((p) => ({
-      id: p.id,
-      label: p.label,
-      kind: "ig_mention" as const,
-    })),
-  ];
+  //
+  // Only surfaced when this tenant is on the event-scraper allowlist — the
+  // "Run now" action itself also re-checks this server-side, but hiding the
+  // buttons here stops the wrong tenant from ever seeing them in the first
+  // place (past bug: a manual run against the wrong tenant wrote Gruve-ICP
+  // prospects into sippy because nothing gated the UI or the action).
+  const eventScraperEnabled = isEventScraperEnabledForTenant(tenant.slug);
+  const eventScraperPlatforms: EventScraperPlatformOption[] = eventScraperEnabled
+    ? [
+        ...ACTIVE_EVENT_PLATFORMS.map((p) => ({
+          id: p.id,
+          label: p.label,
+          kind: "active" as const,
+        })),
+        ...UNCONFIRMED_PLATFORM_IDS.map((p) => ({
+          id: p.id,
+          label: p.label,
+          kind: "unconfirmed" as const,
+        })),
+        ...IG_MENTION_PLATFORMS.map((p) => ({
+          id: p.id,
+          label: p.label,
+          kind: "ig_mention" as const,
+        })),
+      ]
+    : [];
 
   return (
     <div className="p-4 md:p-8 max-w-[1200px]">
@@ -124,6 +134,7 @@ export default async function LeadsPage() {
         campaigns={campaigns}
         initialEventScraperRuns={eventScraperRuns}
         eventScraperPlatforms={eventScraperPlatforms}
+        eventScraperEnabled={eventScraperEnabled}
       />
     </div>
   );

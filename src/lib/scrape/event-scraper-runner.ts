@@ -341,6 +341,12 @@ async function resolveAndUpsert(
     payload: { upserted: upserted?.length ?? 0 },
   });
 
+  if ((upserted?.length ?? 0) > 0) {
+    console.log(
+      `[event-scraper] wrote ${upserted?.length} prospect(s) into tenant=${tenantSlug} via platform=${platformId} (run=${runId}, gate=isEventScraperEnabledForTenant)`
+    );
+  }
+
   return upserted?.length ?? 0;
 }
 
@@ -420,6 +426,12 @@ export async function runIgMentionScan(
         status: "ok",
         payload: { upserted: upserted?.length ?? 0 },
       });
+
+      if ((upserted?.length ?? 0) > 0) {
+        console.log(
+          `[event-scraper] wrote ${upserted?.length} prospect(s) into tenant=${opts.tenantSlug} via platform=${platformId} (run=${runId}, hashtags=${hashtags.join(",")}, gate=isEventScraperEnabledForTenant)`
+        );
+      }
 
       return {
         status: "succeeded",

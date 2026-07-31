@@ -54,6 +54,19 @@ type ActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
   | { success: false; error: string };
 
+// Brand voice/positioning provenance. "placeholder" (skipBrandAudit's
+// generic filler) is always safe to replace with a real audit result;
+// "audit" (a completed AI audit) and unmarked/legacy rows are treated as
+// user-owned content and must never be silently overwritten — only a
+// blank slate gets filled.
+function hasProtectedBrandContent(existing: Record<string, unknown>): boolean {
+  const hasVoice = !!existing.brand_voice;
+  const hasPositioning = !!existing.brand_positioning;
+  if (!hasVoice && !hasPositioning) return false;
+  if (existing.brand_audit_source === "placeholder") return false;
+  return true;
+}
+
 export type AuditPhase =
   | "starting"
   | "voice_done"
@@ -112,16 +125,26 @@ export async function runBrandAudit(
     const audit: BrandAuditResult = await runBrandAuditAi(tenantSlug, site);
 
     const existing = (tenant.settings as Record<string, unknown>) ?? {};
+    // Never clobber voice/positioning the user already has — fill only
+    // when there's nothing there yet, or what's there is skipBrandAudit's
+    // generic placeholder (safe to replace with a real audit result).
+    const protectedContent = hasProtectedBrandContent(existing);
     const merged = {
       ...existing,
-      brand_voice: audit.voice,
-      brand_positioning: audit.positioning,
+      ...(protectedContent
+        ? {}
+        : {
+            brand_voice: audit.voice,
+            brand_positioning: audit.positioning,
+            brand_audit_source: "audit",
+          }),
       brand_audit_meta: {
         url: site.url,
         pages_fetched: audit.pagesFetched,
         ran_at: new Date().toISOString(),
         cost_usd: audit.cost,
         duration_ms: audit.durationMs,
+        voice_positioning_skipped: protectedContent,
       },
     };
 
@@ -335,15 +358,27 @@ async function runVoicePhase(
   const site = await scrapeSite(state.url);
   const audit = await runBrandAuditAi(tenantSlug, site);
 
+  const { settings: existing } = await readAuditState(supabase, tenantSlug);
+  // Same non-destructive rule as the sync path: fill empty fields only,
+  // or replace skipBrandAudit's placeholder — never a value the user
+  // (or a prior real audit) already saved.
+  const protectedContent = hasProtectedBrandContent(existing);
+
   const { error } = await mergeSettings(supabase, tenantSlug, {
-    brand_voice: audit.voice,
-    brand_positioning: audit.positioning,
+    ...(protectedContent
+      ? {}
+      : {
+          brand_voice: audit.voice,
+          brand_positioning: audit.positioning,
+          brand_audit_source: "audit",
+        }),
     brand_audit_meta: {
       url: site.url,
       pages_fetched: audit.pagesFetched,
       ran_at: new Date().toISOString(),
       cost_usd: audit.cost,
       duration_ms: audit.durationMs,
+      voice_positioning_skipped: protectedContent,
     },
   });
   if (error) throw new Error(error);
@@ -625,6 +660,25 @@ export async function skipBrandAudit(
     if (readErr) return { success: false, error: readErr.message };
     if (!tenant) return { success: false, error: "Tenant not found." };
 
+    const existing = (tenant.settings as Record<string, unknown>) ?? {};
+
+    // Skip is meant to unblock onboarding with placeholder copy, not to
+    // clobber real content — if this tenant already has a completed audit
+    // or a manual edit, leave it alone and just clear any in-progress
+    // audit state so the dashboard gate opens.
+    if (hasProtectedBrandContent(existing)) {
+      const next = { ...existing };
+      delete next.audit_state;
+      const { error: writeErr } = await supabase
+        .from("tenants")
+        .update({ settings: next })
+        .eq("slug", tenantSlug);
+      if (writeErr) return { success: false, error: writeErr.message };
+      revalidatePath("/dashboard");
+      revalidatePath("/settings");
+      return { success: true };
+    }
+
     const brandName = tenant.name || tenantSlug;
 
     const voice = {
@@ -658,12 +712,12 @@ export async function skipBrandAudit(
       differentiators: ["Clear value proposition", "Authentic perspective"],
     };
 
-    const existing = (tenant.settings as Record<string, unknown>) ?? {};
     const merged = {
       ...existing,
       brand_voice: voice,
       brand_positioning: positioning,
       brand_audit_skipped: true,
+      brand_audit_source: "placeholder",
     };
 
     const { error: writeErr } = await supabase

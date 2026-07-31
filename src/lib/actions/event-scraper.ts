@@ -13,6 +13,7 @@ import {
   runIgMentionScan,
 } from "@/lib/scrape/event-scraper-runner";
 import { listRunProspects } from "@/lib/services/event-scraper-runs";
+import { isEventScraperEnabledForTenant } from "@/lib/scrape/event-platforms/tenant-config";
 import type { ProspectRecord } from "@/lib/types/outbound";
 
 type ActionResult<T = unknown> =
@@ -30,6 +31,14 @@ export async function runEventPlatformScraperNow(
   ActionResult<{ candidatesFound: number; prospectsCreated: number }>
 > {
   const user = await requireUser();
+
+  if (!isEventScraperEnabledForTenant(tenantSlug)) {
+    return {
+      success: false,
+      error:
+        "Event platform scraping isn't enabled for this tenant's ICP. Contact an admin if this brand should be added to the allowlist.",
+    };
+  }
 
   const active = ACTIVE_EVENT_PLATFORMS.find((c) => c.id === platformId);
   const unconfirmed = UNCONFIRMED_PLATFORM_IDS.find((p) => p.id === platformId);

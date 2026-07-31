@@ -207,6 +207,7 @@ export function OutboundClient({
   campaigns,
   initialEventScraperRuns,
   eventScraperPlatforms,
+  eventScraperEnabled,
 }: {
   tenantSlug: string;
   tenantName: string;
@@ -220,6 +221,7 @@ export function OutboundClient({
   campaigns: OutreachCampaignRecord[];
   initialEventScraperRuns: EventScraperRunRecord[];
   eventScraperPlatforms: EventScraperPlatformOption[];
+  eventScraperEnabled: boolean;
 }) {
   const dialogs = useDialogs();
   const searchParams = useSearchParams();
@@ -836,6 +838,7 @@ export function OutboundClient({
           searches={searches}
           initialEventScraperRuns={initialEventScraperRuns}
           eventScraperPlatforms={eventScraperPlatforms}
+          eventScraperEnabled={eventScraperEnabled}
         />
       )}
 
@@ -1565,11 +1568,13 @@ function DiscoveryView({
   searches: initial,
   initialEventScraperRuns,
   eventScraperPlatforms,
+  eventScraperEnabled,
 }: {
   tenantSlug: string;
   searches: ProspectSearchRecord[];
   initialEventScraperRuns: EventScraperRunRecord[];
   eventScraperPlatforms: EventScraperPlatformOption[];
+  eventScraperEnabled: boolean;
 }) {
   const dialogs = useDialogs();
   const [searches, setSearches] = useState(initial);
@@ -1704,6 +1709,7 @@ function DiscoveryView({
         tenantSlug={tenantSlug}
         initialRuns={initialEventScraperRuns}
         platforms={eventScraperPlatforms}
+        enabledForTenant={eventScraperEnabled}
       />
 
       {error && (

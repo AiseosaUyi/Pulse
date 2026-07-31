@@ -9,7 +9,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Loader2, RefreshCw, Radar } from "lucide-react";
+import { ChevronRight, Loader2, RefreshCw, Radar, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/utils/format";
 import {
@@ -43,10 +43,12 @@ export function EventPlatformRuns({
   tenantSlug,
   initialRuns,
   platforms,
+  enabledForTenant,
 }: {
   tenantSlug: string;
   initialRuns: EventScraperRunRecord[];
   platforms: EventScraperPlatformOption[];
+  enabledForTenant: boolean;
 }) {
   const router = useRouter();
   const [runningId, setRunningId] = useState<string | null>(null);
@@ -116,6 +118,24 @@ export function EventPlatformRuns({
           </div>
         </div>
       </div>
+
+      {!enabledForTenant && initialRuns.length > 0 && (
+        <div
+          className="flex items-start gap-2 rounded-lg border border-status-yellow/30 bg-status-yellow/5 px-3 py-2 text-sm text-status-yellow"
+          role="alert"
+        >
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <p>
+            This tenant isn&rsquo;t on the event-platform-scraper ICP
+            allowlist, but has {initialRuns.length} past run
+            {initialRuns.length === 1 ? "" : "s"} and prospects below from
+            before this was gated. They likely don&rsquo;t match this
+            brand&rsquo;s ICP — review before reaching out, rather than
+            assuming they&rsquo;re qualified leads. Nothing has been
+            deleted; expand a run to see which prospects it created.
+          </p>
+        </div>
+      )}
 
       {message && (
         <div
