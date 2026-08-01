@@ -5,8 +5,8 @@ export function SidebarNav({ accountType }: { accountType: NavAccountType }) {
   const groups = navGroupsForAccountType(accountType);
   return (
     <nav aria-label="Main navigation" className="flex-1 overflow-y-auto px-3">
-      {groups.map((group) => (
-        <SidebarNavGroup key={group.label} group={group} />
+      {groups.map((group, index) => (
+        <SidebarNavGroup key={group.label || index} group={group} />
       ))}
     </nav>
   );
