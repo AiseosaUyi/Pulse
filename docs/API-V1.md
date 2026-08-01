@@ -352,6 +352,31 @@ same rows `analytics/overview`'s `adSpend` figure sums) so a caller can see whic
 **`GET /api/v1/weekly-review`** — pre-stored, no LLM call on read (generation is a separate cron).
 404 if no review has been generated yet.
 
+### Ads platform
+
+Real Meta/TikTok ad accounts — distinct from the legacy `analytics/ads*` routes above, which read
+the older manual `campaigns` table. `/api/v1/ads/*` reads/writes migration 094-097's tables
+(`ad_accounts`, `ad_campaigns`, `ad_budget_rules`, `ad_alerts`, `competitor_ads`).
+
+| Method | Path | Scope | Description |
+|---|---|---|---|
+| GET | `/api/v1/ads/accounts` | `analytics:read` | Real connected Meta/TikTok ad accounts for this tenant, with sync status. |
+| GET | `/api/v1/ads/roas` | `analytics:read` | Blended ROAS — ad spend joined against Pulse's own order data, not the platform's self-reported number — plus per-campaign breakdown with match confidence (`confirmed`/`guessed`/`unmatched`). |
+| GET | `/api/v1/ads/competitors` | `intel:read` | Competitor ads discovered via Meta's Ad Library, longest-running first (ad longevity as the profitability signal — exact spend isn't available for ordinary commercial ads). |
+| GET | `/api/v1/ads/budget-rules` | `analytics:read` | List ad budget guardrail automation rules. |
+| POST | `/api/v1/ads/budget-rules` | `publish:write` | Create a rule: pause/reallocate budget when a metric (CPA/ROAS/CTR/frequency/spend/CPM) crosses a threshold and holds for N consecutive days. |
+| GET | `/api/v1/ads/alerts` | `analytics:read` | Creative fatigue, disapprovals, delivery issues, and CPA anomalies surfaced from connected ad accounts. |
+
+**`GET /api/v1/ads/roas?days=30`** — `days` optional, defaults to 30. Returns `{ summary, campaigns }`;
+`summary.blendedRoas` is null until at least one campaign has matched spend.
+
+**`GET /api/v1/ads/alerts?unresolvedOnly=true&limit=50`** — both filters optional.
+
+Server-side conversion tracking (Meta CAPI / TikTok Events API), the Meta webhook subscription for
+creative-fatigue push alerts, and the budget-rule evaluator itself are cron/webhook-driven — see
+`CLAUDE.md`'s Ads Platform section for the full architecture; there's no REST endpoint for triggering
+a sync or a rule evaluation manually.
+
 ### Content
 
 | Method | Path | Scope | Description |
@@ -754,6 +779,23 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 | `pulse_list_campaigns` | `GET /analytics/ads` | `analytics:read` |
 | `pulse_weekly_review` | `GET /weekly-review` | `analytics:read` |
 
+**Ads platform**
+
+| Tool | REST twin | Scope |
+|---|---|---|
+| `pulse_ad_accounts` | `GET /ads/accounts` | `analytics:read` |
+| `pulse_ad_roas` | `GET /ads/roas` | `analytics:read` |
+| `pulse_set_ad_campaign_utm` | — (MCP-only) | `analytics:read` |
+| `pulse_competitor_ads` | `GET /ads/competitors` | `intel:read` |
+| `pulse_competitor_ad_variants` | — (MCP-only) | `intel:read` |
+| `pulse_list_ad_budget_rules` | `GET /ads/budget-rules` | `analytics:read` |
+| `pulse_create_ad_budget_rule` | `POST /ads/budget-rules` | `publish:write` |
+| `pulse_set_ad_budget_rule_enabled` | — (MCP-only) | `publish:write` |
+| `pulse_delete_ad_budget_rule` | — (MCP-only) | `publish:write` |
+| `pulse_ad_budget_rule_runs` | — (MCP-only) | `analytics:read` |
+| `pulse_ad_alerts` | `GET /ads/alerts` | `analytics:read` |
+| `pulse_resolve_ad_alert` | — (MCP-only) | `analytics:read` (mutates — see Deviations below) |
+
 **Content**
 
 | Tool | REST twin | Scope |
@@ -776,8 +818,9 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 No `pulse_approve`/`pulse_reject` tools — approval must be a deliberate human action taken via the
 signed link, not something an AI agent can call on the tenant's behalf.
 
-41 tools total across all 9 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
-Analytics, Content, Notifications) — every group in the original build spec.
+53 tools total across all 10 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
+Analytics, Ads platform, Content, Notifications) — every group in the original build spec, plus
+the ads platform added after it.
 
 ### Deviations (MCP)
 
@@ -804,6 +847,14 @@ Analytics, Content, Notifications) — every group in the original build spec.
 5. **Tool result errors use `isError: true`** with a plain-text message, not the REST layer's
    `{error, issues}` shape — that's the MCP protocol's own error convention
    (`src/lib/api/mcp-context.ts`'s `mcpToolError()`), not a departure from anything REST-specific.
+6. **Ads platform group, added after the original spec**: 5 of its 12 tools have no REST twin
+   (`pulse_set_ad_campaign_utm`, `pulse_competitor_ad_variants`,
+   `pulse_set_ad_budget_rule_enabled`, `pulse_delete_ad_budget_rule`,
+   `pulse_ad_budget_rule_runs`, `pulse_resolve_ad_alert`) — MCP shipped ahead of REST for these,
+   a real (not yet closed) gap from the "stay twins" convention above, tracked rather than
+   silently left undocumented. `pulse_resolve_ad_alert` also mutates data under `analytics:read`
+   rather than `publish:write` — every other mutating ads tool correctly requires `publish:write`;
+   this one is a known scope inconsistency, not yet fixed.
 
 ## Pre-landing review findings (fixed before shipping)
 

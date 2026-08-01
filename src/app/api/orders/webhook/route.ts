@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { extractBearer, resolveApiToken } from "@/lib/api-tokens";
+import { fireOrderConversionEvents } from "@/lib/attribution/ads-conversions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -97,6 +98,36 @@ export async function POST(req: Request) {
     event: status,
     meta: { raw: body },
   });
+
+  // Best-effort server-side conversion push (Meta CAPI / TikTok Events API)
+  // to every connected ad account with pixel config. Awaited (not
+  // fire-and-forget) so it actually completes before the function returns
+  // — a serverless function isn't guaranteed to keep running after its
+  // response is sent. Internally never throws (see
+  // fireOrderConversionEvents), so this can't fail the webhook response.
+  // Only fires on a real purchase-completion status, not on a bare
+  // "created" (cart-abandon-prone) event.
+  if (status === "paid" || status === "fulfilled") {
+    const customer = (body.customer as Record<string, unknown> | undefined) ?? undefined;
+    await fireOrderConversionEvents({
+      tenantSlug: auth.tenantSlug,
+      orderId: order.id,
+      amount,
+      currency: orderPayload.currency,
+      eventTime: Math.floor(Date.now() / 1000),
+      customer: customer
+        ? {
+            email: typeof customer.email === "string" ? customer.email : undefined,
+            phone: typeof customer.phone === "string" ? customer.phone : undefined,
+            ip: typeof customer.ip === "string" ? customer.ip : undefined,
+            userAgent: typeof customer.user_agent === "string" ? customer.user_agent : undefined,
+            fbc: typeof customer.fbc === "string" ? customer.fbc : undefined,
+            fbp: typeof customer.fbp === "string" ? customer.fbp : undefined,
+            ttclid: typeof customer.ttclid === "string" ? customer.ttclid : undefined,
+          }
+        : undefined,
+    });
+  }
 
   return NextResponse.json(
     { ok: true, orderId: order.id },

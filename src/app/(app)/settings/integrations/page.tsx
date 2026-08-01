@@ -5,16 +5,22 @@ import { listIntegrations } from "@/lib/services/integrations";
 import { listApiTokens } from "@/lib/actions/api-tokens";
 import { listConnectedAccountsForTenant } from "@/lib/actions/composio";
 import { getDriveConnectionStatus } from "@/lib/services/drive-connections";
+import { listAdAccountsForTenant } from "@/lib/services/ad-accounts";
+import { listTikTokAdsConnectionsForTenant } from "@/lib/services/tiktok-ads-connections";
+import { isTikTokAdsConfigured } from "@/lib/integrations/tiktok-ads";
 import { IntegrationsClient } from "./client";
 import { ApiTokensSection } from "./api-tokens";
 import { ConnectedAccountsSection } from "./connected-accounts";
 import { DriveSection } from "./drive-section";
+import { AdsIntegrationsSection } from "./ads-integrations-section";
 import { SettingsPageHeading } from "../_shared";
 
 interface PageProps {
   searchParams: Promise<{
     drive_connected?: string;
     drive_error?: string;
+    connected?: string;
+    error?: string;
   }>;
 }
 
@@ -44,12 +50,14 @@ export default async function IntegrationsSettingsPage({
   }
 
   const params = await searchParams;
-  const [integrations, apiTokens, connectedAccounts, driveStatus] =
+  const [integrations, apiTokens, connectedAccounts, driveStatus, adAccounts, tiktokAdsConnections] =
     await Promise.all([
       listIntegrations(tenant.slug),
       listApiTokens(tenant.slug),
       listConnectedAccountsForTenant(tenant.slug),
       getDriveConnectionStatus(tenant.slug),
+      listAdAccountsForTenant(tenant.slug),
+      listTikTokAdsConnectionsForTenant(tenant.slug),
     ]);
 
   const driveFlash = params.drive_connected
@@ -60,6 +68,16 @@ export default async function IntegrationsSettingsPage({
         message: `Drive connection failed: ${params.drive_error}`,
       }
     : null;
+
+  const adsFlash = params.connected
+    ? { kind: "success" as const, message: `${params.connected === "tiktok_ads" ? "TikTok Ads" : params.connected} connected.` }
+    : params.error
+    ? { kind: "error" as const, message: `Connection failed: ${params.error}` }
+    : null;
+
+  const metaAdsConnections = connectedAccounts
+    .filter((r) => r.toolkit === "metaads")
+    .map((r) => ({ id: r.id, alias: r.alias, status: r.status, displayName: r.displayName }));
 
   return (
     <div className="max-w-[760px]">
@@ -76,6 +94,16 @@ export default async function IntegrationsSettingsPage({
         <ConnectedAccountsSection
           tenantSlug={tenant.slug}
           initial={connectedAccounts}
+        />
+      </div>
+      <div className="mt-6">
+        <AdsIntegrationsSection
+          tenantSlug={tenant.slug}
+          metaConnections={metaAdsConnections}
+          tiktokConnections={tiktokAdsConnections}
+          tiktokConfigured={isTikTokAdsConfigured()}
+          adAccounts={adAccounts}
+          flash={adsFlash}
         />
       </div>
       <div className="mt-6">

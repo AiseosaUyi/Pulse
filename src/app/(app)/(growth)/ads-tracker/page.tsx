@@ -4,10 +4,12 @@
 // The old campaign table is kept below as a compressed side-panel
 // for operators who still log spend by hand.
 
+import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { getCurrentTenant } from "@/lib/auth";
 import { getCampaigns, summarize } from "@/lib/services/campaigns";
 import { getTenant } from "@/lib/services/tenants";
+import { listAdAccountsForTenant } from "@/lib/services/ad-accounts";
 import {
   CAMPAIGN_PLATFORM_LABELS,
   CAMPAIGN_STATUS_LABELS,
@@ -16,6 +18,7 @@ import {
 import { formatCurrency } from "@/lib/utils/format";
 import { AddCampaignButton, DeleteCampaignButton } from "./client";
 import { AdCritiquePanel } from "./ad-critique";
+import { RealAdsSection } from "./real-ads-section";
 
 const statusBadge: Record<CampaignStatus, { variant: "active" | "overdue" | "opportunity" | "needs_posts" }> = {
   active: { variant: "active" },
@@ -45,24 +48,40 @@ export default async function AdsTrackerPage() {
   const summary = summarize(campaigns);
   const tenantMeta = tenant ? await getTenant(tenant.slug) : null;
   const currency = tenantMeta?.currency ?? "NGN";
+  const adAccounts = tenant ? await listAdAccountsForTenant(tenant.slug) : [];
+  const hasRealAccounts = adAccounts.length > 0;
 
   return (
     <div className="p-4 md:p-8 max-w-[1200px] space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Ads Critic</h1>
+          <h1 className="text-2xl font-bold text-foreground">Ads</h1>
           <p className="text-text-secondary text-sm mt-0.5">
-            Paste a running Meta or TikTok ad. Get a ruthless critique that
-            tells you whether to ship, polish, or kill — plus a rewrite.
+            {hasRealAccounts
+              ? "Real spend, blended ROAS, and creative critique in one place."
+              : "Connect Meta or TikTok to see real spend and ROAS — or paste a creative below for a critique right now."}
           </p>
         </div>
       </div>
 
+      {!hasRealAccounts && (
+        <div className="rounded-2xl border border-primary-500/20 bg-primary-50 p-4 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-foreground">
+            No ad account connected yet. Connect Meta or TikTok to replace manual entry with real spend, real ROAS, and automated alerts.
+          </p>
+          <Link href="/settings/integrations" className="shrink-0 inline-flex items-center h-9 px-4 rounded-lg bg-primary-500 text-white text-sm font-medium hover:bg-primary-600 transition-colors">
+            Connect an ad account
+          </Link>
+        </div>
+      )}
+
+      {tenant && hasRealAccounts && <RealAdsSection tenantSlug={tenant.slug} />}
+
       {tenant && <AdCritiquePanel tenantSlug={tenant.slug} />}
 
-      {/* Manual campaign tracker — secondary. Kept for operators who
-          log spend by hand. If you pipe in Meta/TikTok reports later,
-          this becomes the auto-populated overview. */}
+      {/* Manual campaign tracker — legacy path, kept for tenants without a
+          real connection yet. Once a real ad account exists, RealAdsSection
+          above is the source of truth and this becomes pure history. */}
       <section className="bg-card rounded-2xl border border-border/50 p-5">
         <div className="flex items-start justify-between mb-4 gap-2 flex-wrap">
           <div>
@@ -110,9 +129,11 @@ export default async function AdsTrackerPage() {
               Critic above — it doesn&apos;t need anything stored.
             </p>
             <p className="text-text-secondary text-xs leading-relaxed mt-2">
-              Meta / TikTok Ads API auto-sync is on the roadmap so you
-              won&apos;t have to log by hand. Free APIs, needs platform
-              approval.
+              Or connect a real Meta/TikTok ad account in{" "}
+              <Link href="/settings/integrations" className="text-primary-500 hover:underline">
+                Settings → Integrations
+              </Link>{" "}
+              and skip logging by hand entirely.
             </p>
           </div>
         ) : (

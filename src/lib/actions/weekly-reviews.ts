@@ -5,6 +5,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getTenant } from "@/lib/services/tenants";
 import { getBrandContext } from "@/lib/ai/brand-positioning";
 import { totalsForWindow } from "@/lib/services/analytics";
+import { listAdAccountsForTenant } from "@/lib/services/ad-accounts";
+import { getAdRoasSummary } from "@/lib/attribution/ads";
+import { listAdAlerts } from "@/lib/services/ad-alerts";
 import {
   synthesizeWeeklyReview,
   WeeklyReviewError,
@@ -121,11 +124,17 @@ async function collectPayload(tenantSlug: string) {
   const adCrit = adCritRes.data ?? [];
   const aiCost = aiCostRes.data ?? [];
 
-  const analyticsTotals = await totalsForWindow(tenantSlug, 7);
+  const [analyticsTotals, realAdAccounts, adRoasSummary, unresolvedAdAlerts] = await Promise.all([
+    totalsForWindow(tenantSlug, 7),
+    listAdAccountsForTenant(tenantSlug),
+    getAdRoasSummary(tenantSlug, 7),
+    listAdAlerts(tenantSlug, { unresolvedOnly: true, limit: 50 }),
+  ]);
   const analyticsAvailable =
     analyticsTotals.pageviews > 0 ||
     analyticsTotals.sessions > 0 ||
     analyticsTotals.users > 0;
+  const hasRealAdAccount = realAdAccounts.length > 0;
 
   return {
     content: {
@@ -163,6 +172,12 @@ async function collectPayload(tenantSlug: string) {
     },
     ads: {
       critiques_run: adCrit.length,
+      has_real_account: hasRealAdAccount,
+      spend: hasRealAdAccount ? adRoasSummary.totalSpend : 0,
+      attributed_revenue: hasRealAdAccount ? adRoasSummary.totalAttributedRevenue : 0,
+      blended_roas: hasRealAdAccount ? adRoasSummary.blendedRoas : null,
+      currency: adRoasSummary.currency,
+      unresolved_alerts: hasRealAdAccount ? unresolvedAdAlerts.length : 0,
     },
     analytics: {
       pageviews: analyticsTotals.pageviews,

@@ -7,6 +7,8 @@ import {
   getLinkedInProfile,
   getTikTokUserBasicInfo,
 } from "@/lib/composio/executors";
+import { getMetaAdsBusinessProfile, listMetaAdAccounts } from "@/lib/composio/ads-executors";
+import { upsertAdAccount } from "@/lib/services/ad-accounts";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth";
@@ -131,6 +133,26 @@ export async function confirmComposioConnection(
         const tiktok = await getTikTokUserBasicInfo(conn);
         userHandle = tiktok.username ?? tiktok.openId;
         displayName = tiktok.displayName ?? null;
+      } else if (row.toolkit === "metaads") {
+        const profile = await getMetaAdsBusinessProfile(conn);
+        displayName = profile.label;
+        // Discover every ad account this OAuth grant covers and register
+        // each into the unified ad_accounts table — one Business Manager
+        // connection commonly spans several real ad accounts, and the sync
+        // crons need each one as its own row regardless of how many share
+        // this single Composio connection.
+        const accounts = await listMetaAdAccounts(conn);
+        for (const acc of accounts) {
+          await upsertAdAccount({
+            tenantSlug: row.tenant_slug,
+            platform: "meta",
+            externalAccountId: acc.id,
+            accountName: acc.name,
+            currency: acc.currency ?? "NGN",
+            timezone: acc.timezoneName,
+            connectedAccountId: row.id,
+          });
+        }
       }
     } catch {
       // ignore — we can backfill later

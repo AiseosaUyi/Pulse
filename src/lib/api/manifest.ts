@@ -56,6 +56,12 @@ export const API_V1_MANIFEST: ManifestEntry[] = [
   { method: "GET", path: "/api/v1/analytics/posts", scope: "analytics:read", description: "Per-post engagement metrics (filter platform/since) — reads own_post_metrics, the same table publish:write's metrics endpoint writes to." },
   { method: "GET", path: "/api/v1/analytics/ads/overview", scope: "analytics:read", description: "Aggregate ad-campaign totals: spend, revenue, ROAS, impressions/clicks/conversions, active vs total count." },
   { method: "GET", path: "/api/v1/analytics/ads", scope: "analytics:read", description: "Per-campaign detail (filter status) behind the ads/overview totals — platform, status, spend, revenue, ROAS, dates." },
+  { method: "GET", path: "/api/v1/ads/accounts", scope: "analytics:read", description: "Real connected Meta/TikTok ad accounts for this tenant, with sync status." },
+  { method: "GET", path: "/api/v1/ads/roas", scope: "analytics:read", description: "Blended ROAS: ad spend joined against Pulse's own order data (not the platform's self-reported ROAS), plus per-campaign breakdown with match confidence." },
+  { method: "GET", path: "/api/v1/ads/competitors", scope: "intel:read", description: "Competitor ads discovered via Meta's Ad Library, longest-running first." },
+  { method: "GET", path: "/api/v1/ads/budget-rules", scope: "analytics:read", description: "Ad budget guardrail automation rules." },
+  { method: "POST", path: "/api/v1/ads/budget-rules", scope: "publish:write", description: "Create an ad budget guardrail rule (pause/reallocate on a metric threshold held for N days)." },
+  { method: "GET", path: "/api/v1/ads/alerts", scope: "analytics:read", description: "Creative fatigue, delivery issues, and platform recommendations from connected ad accounts." },
   { method: "GET", path: "/api/v1/weekly-review", scope: "analytics:read", description: "The latest generated weekly business-review narrative (pre-stored, no LLM call on read)." },
 
   // Content

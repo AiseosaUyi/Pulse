@@ -19,4 +19,4 @@ export function isComposioConfigured(): boolean {
 // three; each (alias, toolkit) pair holds a distinct OAuth connection.
 export type Alias = string;
 
-export type Toolkit = "instagram" | "tiktok" | "linkedin";
+export type Toolkit = "instagram" | "tiktok" | "linkedin" | "metaads";

@@ -88,6 +88,26 @@
       "schedule": "0 14 * * *"
     },
     {
+      "path": "/api/cron/sync-ad-structure",
+      "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/sync-ad-insights",
+      "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-competitor-ads",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/evaluate-ad-budget-rules",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/detect-creative-fatigue",
+      "schedule": "45 * * * *"
+    },
+    {
       "path": "/api/cron/apify-x-sync",
       "schedule": "0 6,12,18,22 * * *"
     },

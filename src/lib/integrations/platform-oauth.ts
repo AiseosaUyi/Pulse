@@ -5,7 +5,7 @@
 import { cookies } from "next/headers";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 
-export type OAuthPlatform = "x" | "linkedin" | "instagram" | "tiktok" | "youtube";
+export type OAuthPlatform = "x" | "linkedin" | "instagram" | "tiktok" | "youtube" | "tiktok_ads";
 
 const STATE_TTL = 10 * 60; // 10 minutes
 

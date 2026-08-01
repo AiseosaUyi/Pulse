@@ -7,6 +7,7 @@ export const COACH_SOURCE_TYPES = [
   "competitor_move",
   "distribution_gap",
   "generic",
+  "ads_signal",
 ] as const;
 
 export type CoachSourceType = (typeof COACH_SOURCE_TYPES)[number];

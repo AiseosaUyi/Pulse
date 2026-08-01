@@ -95,6 +95,14 @@ export interface WeeklyReviewInput {
     };
     ads: {
       critiques_run: number;
+      /** False when no real Meta/TikTok ad account is connected — the
+       *  numbers below are all zero in that case, not "no spend this week". */
+      has_real_account: boolean;
+      spend: number;
+      attributed_revenue: number;
+      blended_roas: number | null;
+      currency: string;
+      unresolved_alerts: number;
     };
     analytics: {
       pageviews: number;
@@ -235,6 +243,16 @@ function buildUser(input: WeeklyReviewInput): string {
     "",
     "=== ADS ===",
     `Ad critiques run: ${payload.ads.critiques_run}`,
+    payload.ads.has_real_account
+      ? [
+          `Real ad spend (7d): ${payload.ads.currency} ${payload.ads.spend.toLocaleString()}`,
+          `Attributed revenue (real orders matched to campaigns): ${payload.ads.currency} ${payload.ads.attributed_revenue.toLocaleString()}`,
+          `Blended ROAS: ${payload.ads.blended_roas != null ? `${payload.ads.blended_roas}x` : "not enough matched data yet"}`,
+          payload.ads.unresolved_alerts > 0
+            ? `${payload.ads.unresolved_alerts} unresolved ad alert${payload.ads.unresolved_alerts === 1 ? "" : "s"} (creative fatigue, disapprovals, or CPA anomalies) — worth a callout.`
+            : "No unresolved ad alerts.",
+        ].join("\n")
+      : "No Meta/TikTok ad account connected — only the manual creative critique tool has usage this week.",
     "",
     "=== WEB ANALYTICS (GA4) ===",
     payload.analytics.available

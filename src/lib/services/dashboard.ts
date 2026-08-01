@@ -35,6 +35,51 @@ function reachFromMetrics(m: OwnMetricsPayload | null | undefined): number {
   return m.reach ?? m.views ?? m.impressions ?? 0;
 }
 
+/** Prefers real synced ad spend (ad_accounts + ad_insights_daily, last 7
+ *  days) once a tenant has connected a real Meta/TikTok ad account; falls
+ *  back to the legacy manual-entry `campaigns` table for tenants that
+ *  haven't connected anything yet — same table the pre-platform Ads Critic
+ *  flow still writes to. */
+async function computeAdSpendStat(
+  client: SupabaseClient,
+  tenantSlug: string
+): Promise<{ total: number; activeCount: number }> {
+  const { count: connectedAccounts } = await client
+    .from("ad_accounts")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_slug", tenantSlug)
+    .eq("status", "active");
+
+  if ((connectedAccounts ?? 0) > 0) {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const [insightsRes, campaignsRes] = await Promise.all([
+      client
+        .from("ad_insights_daily")
+        .select("spend, external_id")
+        .eq("tenant_slug", tenantSlug)
+        .eq("level", "campaign")
+        .gte("date", weekAgo),
+      client
+        .from("ad_campaigns")
+        .select("external_id")
+        .eq("tenant_slug", tenantSlug)
+        .eq("status", "active"),
+    ]);
+    const total = (insightsRes.data ?? []).reduce((sum, r) => sum + Number(r.spend ?? 0), 0);
+    return { total, activeCount: campaignsRes.data?.length ?? 0 };
+  }
+
+  const { data } = await client
+    .from("campaigns")
+    .select("spend")
+    .eq("tenant_slug", tenantSlug)
+    .eq("status", "active");
+  return {
+    total: (data ?? []).reduce((sum, c) => sum + Number(c.spend ?? 0), 0),
+    activeCount: data?.length ?? 0,
+  };
+}
+
 export async function getDashboardStats(
   tenantSlug: string
 ): Promise<DashboardStats | null> {
@@ -44,7 +89,7 @@ export async function getDashboardStats(
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-  const [ownThisWeek, ownPriorWeek, activeLeadsRes, adSpendRes, tenant] =
+  const [ownThisWeek, ownPriorWeek, activeLeadsRes, adSpendStat, tenant] =
     await Promise.all([
       supabase
         .from("own_post_metrics")
@@ -63,11 +108,7 @@ export async function getDashboardStats(
         .select("id, status", { count: "exact", head: false })
         .eq("tenant_slug", tenantSlug)
         .in("status", ACTIVE_PROSPECT_STATUSES as unknown as string[]),
-      supabase
-        .from("campaigns")
-        .select("spend")
-        .eq("tenant_slug", tenantSlug)
-        .eq("status", "active"),
+      computeAdSpendStat(supabase, tenantSlug),
       getTenant(tenantSlug),
     ]);
 
@@ -92,9 +133,8 @@ export async function getDashboardStats(
       (l) => l.status === "qualified" || l.status === "new"
     ).length ?? 0;
 
-  const adSpendTotal =
-    adSpendRes.data?.reduce((sum, c) => sum + Number(c.spend ?? 0), 0) ?? 0;
-  const activeCampaigns = adSpendRes.data?.length ?? 0;
+  const adSpendTotal = adSpendStat.total;
+  const activeCampaigns = adSpendStat.activeCount;
 
   const connected = (tenant.platforms ?? []).filter((p) => p.connected).length;
   const profileScore = Math.round((connected / 4) * 100);
@@ -180,7 +220,7 @@ export async function getDashboardStatsApi(
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-  const [ownThisWeek, ownPriorWeek, activeLeadsRes, adSpendRes, tenantRow] =
+  const [ownThisWeek, ownPriorWeek, activeLeadsRes, adSpendStat, tenantRow] =
     await Promise.all([
       client
         .from("own_post_metrics")
@@ -199,11 +239,7 @@ export async function getDashboardStatsApi(
         .select("id, status", { count: "exact", head: false })
         .eq("tenant_slug", tenantSlug)
         .in("status", ACTIVE_PROSPECT_STATUSES as unknown as string[]),
-      client
-        .from("campaigns")
-        .select("spend")
-        .eq("tenant_slug", tenantSlug)
-        .eq("status", "active"),
+      computeAdSpendStat(client, tenantSlug),
       client.from("tenants").select("settings").eq("slug", tenantSlug).maybeSingle(),
     ]);
 
@@ -225,8 +261,8 @@ export async function getDashboardStatsApi(
   const needsFollowup =
     activeLeadsRes.data?.filter((l) => l.status === "qualified" || l.status === "new").length ?? 0;
 
-  const adSpendTotal = adSpendRes.data?.reduce((sum, c) => sum + Number(c.spend ?? 0), 0) ?? 0;
-  const activeCampaigns = adSpendRes.data?.length ?? 0;
+  const adSpendTotal = adSpendStat.total;
+  const activeCampaigns = adSpendStat.activeCount;
 
   const connected = platforms.filter((p) => p.connected).length;
   const profileScore = Math.round((connected / 4) * 100);

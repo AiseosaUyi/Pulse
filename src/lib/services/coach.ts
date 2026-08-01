@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   CoachActionRecord,
   CoachSourceType,
@@ -105,6 +106,56 @@ export async function listCoachHistory(
     .limit(limit);
   if (error || !data) return [];
   return (data as Row[]).map(rowTo);
+}
+
+/**
+ * Cron/webhook-context coach action insert — uses the admin client since
+ * these callers have no user session (auth.uid() is null, which the
+ * RLS-gated SSR client above needs). Deterministic, not AI-synthesized:
+ * see migration 098 for why ad signals skip the LLM path.
+ *
+ * Dedups on (tenant_slug, source_id) against any still-open action —
+ * the ad alert / budget rule crons that call this re-evaluate on every
+ * run (every 30-60 min) and would otherwise re-fire the same condition
+ * into a fresh coach action each time.
+ */
+export async function insertCoachActionAdmin(params: {
+  tenantSlug: string;
+  sourceId: string | null;
+  title: string;
+  description: string;
+  impactArea: string;
+  priority: 1 | 2 | 3;
+  ctaLabel: string;
+  actionHref: string | null;
+}): Promise<void> {
+  const admin = createAdminClient();
+
+  if (params.sourceId) {
+    const { data: existing } = await admin
+      .from("coach_actions")
+      .select("id")
+      .eq("tenant_slug", params.tenantSlug)
+      .eq("source_type", "ads_signal")
+      .eq("source_id", params.sourceId)
+      .in("status", ["pending", "in_progress", "snoozed"])
+      .limit(1)
+      .maybeSingle();
+    if (existing) return;
+  }
+
+  await admin.from("coach_actions").insert({
+    tenant_slug: params.tenantSlug,
+    source_type: "ads_signal",
+    source_id: params.sourceId,
+    title: params.title,
+    description: params.description,
+    impact_area: params.impactArea,
+    priority: params.priority,
+    cta_label: params.ctaLabel,
+    action_href: params.actionHref,
+    created_by_ai: false,
+  });
 }
 
 export async function getCoachAction(

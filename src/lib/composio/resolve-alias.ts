@@ -72,6 +72,29 @@ export async function listActiveConnections(
   }));
 }
 
+// Resolve a connection by its own connected_accounts row id — used when the
+// caller already knows exactly which connection owns a resource (e.g. an
+// ad_accounts row's connected_account_id) rather than looking it up by
+// (tenant, toolkit), which assumes a single active connection per pair.
+export async function resolveConnectionById(id: string): Promise<ResolvedConnection | null> {
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("connected_accounts")
+    .select("id, alias, composio_connection_id, composio_user_id, user_handle, last_synced_at")
+    .eq("id", id)
+    .eq("status", "active")
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    id: data.id,
+    alias: data.alias,
+    composioConnectionId: data.composio_connection_id,
+    composioUserId: data.composio_user_id,
+    userHandle: data.user_handle,
+    lastSyncedAt: data.last_synced_at,
+  };
+}
+
 // The Composio user_id we pass into tools.execute. Each alias gets its
 // own Composio user, and Pulse stores that mapping on the row. Callers
 // should always use the row's composio_user_id rather than reconstructing

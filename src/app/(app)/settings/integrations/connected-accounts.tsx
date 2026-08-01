@@ -8,7 +8,7 @@ import {
   disconnectComposioAccount,
 } from "@/lib/actions/composio";
 
-type Toolkit = "instagram" | "tiktok" | "linkedin";
+type Toolkit = "instagram" | "tiktok" | "linkedin" | "metaads";
 
 interface ConnectedAccountRow {
   id: string;
@@ -25,9 +25,10 @@ const TOOLKIT_LABEL: Record<Toolkit, string> = {
   instagram: "Instagram",
   tiktok: "TikTok",
   linkedin: "LinkedIn",
+  metaads: "Meta Ads",
 };
 
-const TOOLKIT_OPTIONS: Toolkit[] = ["instagram", "tiktok", "linkedin"];
+const TOOLKIT_OPTIONS: Toolkit[] = ["instagram", "tiktok", "linkedin", "metaads"];
 const ALIAS_OPTIONS = ["gruve", "sippy", "personal"];
 
 export function ConnectedAccountsSection({
