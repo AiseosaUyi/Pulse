@@ -7,6 +7,7 @@ import { z } from "zod";
 import { estimateCostUsd, getModel, getModelId, logAiCall } from "@/lib/ai/gateway";
 import type { BrandVoice } from "@/lib/ai/brand-voice";
 import { buildPositioningBlock, type BrandPositioning } from "@/lib/ai/brand-positioning";
+import { stripBannedDashes } from "@/lib/blog/content-flags";
 
 export const engageDraftSchema = z.object({
   quote: z
@@ -102,7 +103,11 @@ export async function draftEngagementAi(
       durationMs: Date.now() - started,
       success: true,
     });
-    return { result: result.output, model: modelId, costUsd: cost };
+    const cleaned: EngageDraft = {
+      quote: stripBannedDashes(result.output.quote, input.voice),
+      reply: stripBannedDashes(result.output.reply, input.voice),
+    };
+    return { result: cleaned, model: modelId, costUsd: cost };
   } catch (err) {
     await logAiCall({
       tenantSlug: input.tenantSlug,

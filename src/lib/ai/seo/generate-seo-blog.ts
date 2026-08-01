@@ -35,6 +35,7 @@ import {
   SerperError,
 } from "@/lib/scrape/serper-serp";
 import type { SerpResult } from "@/lib/scrape/google-serp";
+import { stripBannedDashes } from "@/lib/blog/content-flags";
 
 export const seoBlogSchema = z.object({
   title: z.string().min(1).max(120),
@@ -199,7 +200,10 @@ export async function generateSeoBlog(
       success: true,
     });
 
-    return result.output;
+    return {
+      ...result.output,
+      body_markdown: stripBannedDashes(result.output.body_markdown, voice),
+    };
   } catch (err) {
     await logAiCall({
       tenantSlug: input.tenantSlug,
@@ -257,7 +261,7 @@ function buildSystemPrompt(
     "- schema_candidates: include 'Article' or 'BlogPosting' always; add 'FAQPage' when faq[] is non-empty; add 'HowTo' only if body is procedural with numbered steps.",
     "- FAQ content goes ONLY in the faq[] field — never in body_markdown. Do not write a 'Frequently Asked Questions' heading, an FAQ section, or any Q&A-style pairs into the body. faq[] is rendered as invisible FAQPage schema for search engines, not as visible article text; readers should never see a Q&A block in the post. End body_markdown with a natural closing paragraph or CTA instead.",
     "- If voice forbids a topic, refuse to cover it in body_markdown.",
-    "- Never invent statistics. Cite sources by linking out only when the source is visible in the SERP context provided.",
+    "- Never invent statistics, percentages, or rates presented as fact. Never invent delivery/time guarantees, named customer testimonials, or competitor prices. Cite sources by linking out only when the source is visible in the SERP context provided. When a claim needs a number you don't have, write a `[VERIFY: what's needed]` placeholder instead of an invented figure.",
   ].join("\n");
 }
 

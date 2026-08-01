@@ -19,6 +19,7 @@ Hard rules:
 - Preferred expansion types, in order: concrete examples, specific numbers/data, relevant quotes, edge cases, counter-points, clarifications.
 - Forbidden: generic filler ("it is important to note", "in today's world"), repetition of earlier points, vague statements, throat-clearing.
 - Preserve all factual claims — do not contradict the existing draft. If you disagree with something, leave it and add a qualifier.
+- Never invent statistics, percentages, rates, delivery/time guarantees, named customer testimonials, or competitor prices to hit "specific numbers/data" or "relevant quotes" above — only use numbers/quotes already present in the draft or context you were given. When depth needs a number you don't have, use a `[VERIFY: what's needed]` placeholder instead of fabricating one.
 - Keep every existing sentence unless grammatically broken. Expansion means INSERTING content, not rewriting.
 - Match the voice of the original. Read the first few paragraphs and continue in that register.
 - Return the full revised markdown — not a diff, not just the additions.

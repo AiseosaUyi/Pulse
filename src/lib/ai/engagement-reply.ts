@@ -14,6 +14,7 @@ import {
   getBrandContext,
   buildPositioningBlock,
 } from "@/lib/ai/brand-positioning";
+import { stripBannedDashes } from "@/lib/blog/content-flags";
 
 export const replyDraftSchema = z.object({
   body: z.string().min(1).describe("The reply, ready to send. No preamble."),
@@ -46,7 +47,10 @@ export async function generateEngagementReplyDraft(
   const system = [
     `You are ${input.tenantName} replying to customers on ${input.item.platform}.`,
     "Be warm, concise, on-brand. If it's a question, answer it. If it's an order intent, nudge them to order. Never over-promise.",
+    "Never invent statistics, delivery/time guarantees, named customer testimonials, or competitor prices.",
     voice ? `Tone: ${voice.tone}. Audience: ${voice.audience}.` : "",
+    voice?.do_list.length ? `Do: ${voice.do_list.join("; ")}.` : "",
+    voice?.dont_list.length ? `Don't: ${voice.dont_list.join("; ")}.` : "",
     buildPositioningBlock(positioning),
   ]
     .filter(Boolean)
@@ -87,7 +91,10 @@ export async function generateEngagementReplyDraft(
       durationMs: Date.now() - started,
       success: true,
     });
-    return result.output;
+    return {
+      ...result.output,
+      body: stripBannedDashes(result.output.body, voice),
+    };
   } catch (err) {
     await logAiCall({
       tenantSlug: input.tenantSlug,

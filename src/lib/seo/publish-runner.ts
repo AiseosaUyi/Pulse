@@ -122,7 +122,7 @@ export async function runPublish(args: {
   const { data: post, error: postErr } = await supabase
     .from("blog_posts")
     .select(
-      "id, tenant_slug, status, version, title, slug, question, excerpt, meta_description, body_rich_text, author, author_image, read_minutes, seo_meta_title, seo_meta_description, canonical_override, faq_items, json_ld_overrides, pulse_metadata, cover_image, thumbnail, inline_images, tags, category, author_bio, author_title, author_url, published_date, updated_date, noindex"
+      "id, tenant_slug, status, version, title, slug, question, excerpt, meta_description, body_rich_text, author, author_image, read_minutes, seo_meta_title, seo_meta_description, canonical_override, faq_items, json_ld_overrides, pulse_metadata, cover_image, thumbnail, inline_images, tags, category, author_bio, author_title, author_url, published_date, updated_date, noindex, content_flags, content_flags_cleared"
     )
     .eq("id", blogPostId)
     .maybeSingle();
@@ -305,6 +305,12 @@ export async function runPublish(args: {
         );
       }
       if (!post.slug) throw new Error("slug is required to publish");
+      const flags = (post.content_flags as unknown[] | null) ?? [];
+      if (flags.length > 0 && !post.content_flags_cleared) {
+        throw new Error(
+          `${flags.length} unreviewed content flag${flags.length === 1 ? "" : "s"} (unverified stats, testimonials, guarantees, or prices) — clear them in the editor before publishing`
+        );
+      }
       return { ok: true };
     });
 

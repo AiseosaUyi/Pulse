@@ -7,8 +7,9 @@
 
 import { requireUser, getCurrentTenant } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getTenant } from "@/lib/services/tenants";
 import { mapKeywordToGruve, type KeywordMapping } from "@/lib/ai/keyword-to-gruve";
-import { buildGruveDiscoveryUrl, GRUVE_HOSTS } from "@/lib/seo/gruve-discovery";
+import { buildGruveDiscoveryUrl, GRUVE_HOSTS, isGruveDiscoveryTenant } from "@/lib/seo/gruve-discovery";
 
 export interface KeywordDeeplinkResult {
   keyword: string;
@@ -29,6 +30,14 @@ export async function generateKeywordDeeplink(
   const tenant = await getCurrentTenant();
   if (!tenant) return { success: false, error: "No active tenant" };
   if (!keyword.trim()) return { success: false, error: "Keyword is empty" };
+
+  const fullTenant = await getTenant(tenant.slug);
+  if (!isGruveDiscoveryTenant(fullTenant?.domain)) {
+    return {
+      success: false,
+      error: "This tenant doesn't run Gruve's event-discovery site — deeplinks aren't applicable here.",
+    };
+  }
 
   const mapping = await mapKeywordToGruve(tenant.slug, keyword);
   const filters = { location: mapping.location, category: mapping.category, when: mapping.when };
@@ -54,6 +63,14 @@ export async function backfillKeywordDeeplinks(): Promise<
   await requireUser();
   const tenant = await getCurrentTenant();
   if (!tenant) return { success: false, error: "No active tenant" };
+
+  const fullTenant = await getTenant(tenant.slug);
+  if (!isGruveDiscoveryTenant(fullTenant?.domain)) {
+    return {
+      success: false,
+      error: "This tenant doesn't run Gruve's event-discovery site — deeplinks aren't applicable here.",
+    };
+  }
 
   const supabase = await createClient();
   const { data: rows, error } = await supabase

@@ -13,6 +13,7 @@ import {
   logAiCall,
 } from "@/lib/ai/gateway";
 import type { BrandVoice } from "@/lib/ai/brand-voice";
+import { stripBannedDashes } from "@/lib/blog/content-flags";
 import {
   buildPositioningBlock,
   type BrandPositioning,
@@ -305,7 +306,14 @@ export async function draftOutboundDmAi(
       durationMs: Date.now() - started,
       success: true,
     });
-    return { result: result.output, model: modelId, costUsd: cost };
+    const cleaned: DraftDmResult = {
+      ...result.output,
+      body: stripBannedDashes(result.output.body, input.voice),
+      followup_body: result.output.followup_body
+        ? stripBannedDashes(result.output.followup_body, input.voice)
+        : result.output.followup_body,
+    };
+    return { result: cleaned, model: modelId, costUsd: cost };
   } catch (err) {
     await logAiCall({
       tenantSlug: input.tenantSlug,

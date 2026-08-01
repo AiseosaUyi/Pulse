@@ -4,6 +4,7 @@ import { getModel, getModelId, estimateCostUsd, logAiCall } from "@/lib/ai/gatew
 import { buildPositioningBlock } from "@/lib/ai/brand-positioning";
 import type { BrandVoice } from "@/lib/ai/brand-voice";
 import type { BrandPositioning } from "@/lib/ai/brand-positioning";
+import { stripBannedDashes } from "@/lib/blog/content-flags";
 
 // Strict-output rule: every field must be required (nullable, not optional).
 const engagementSchema = z.object({
@@ -97,7 +98,11 @@ Generate the reply, quote tweet, recommended action, reasoning, and opportunity 
       durationMs: Date.now() - started,
       success: true,
     });
-    return result.output;
+    return {
+      ...result.output,
+      reply: stripBannedDashes(result.output.reply, input.voice),
+      quoteTweet: stripBannedDashes(result.output.quoteTweet, input.voice),
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await logAiCall({
@@ -181,7 +186,10 @@ Generate 4 original post ideas this brand should tweet this week, each inspired 
       durationMs: Date.now() - started,
       success: true,
     });
-    return result.output.ideas;
+    return result.output.ideas.map((idea) => ({
+      ...idea,
+      text: stripBannedDashes(idea.text, input.voice),
+    }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await logAiCall({

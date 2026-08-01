@@ -405,7 +405,8 @@ async function runCompetitorsPhase(
   const result = await discoverCompetitorsAi(
     tenantSlug,
     positioningBlock,
-    brandName
+    brandName,
+    { domain: tenant?.domain, primaryRegions: tenant?.audienceConfig?.primaryRegions }
   );
 
   // Skip any competitor whose name matches an existing row (case-

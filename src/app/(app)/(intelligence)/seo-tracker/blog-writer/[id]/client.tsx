@@ -37,6 +37,7 @@ import { useDialogs } from "@/components/ui/Dialog";
 import {
   deleteBlogPost,
   updateBlogPost,
+  clearContentFlags,
 } from "@/lib/actions/blog-posts";
 import { saveBlogContent } from "@/lib/actions/blog-versions";
 import type {
@@ -180,6 +181,8 @@ export function BlogEditorPageClient({
   const [isSaving, startSave] = useTransition();
   const [isDeleting, startDelete] = useTransition();
   const [isPublishing, startPublish] = useTransition();
+  const [isClearingFlags, startClearFlags] = useTransition();
+  const [flagsError, setFlagsError] = useState<string | null>(null);
   // Default to the safe target: test (gamma), not live (www).
   const [publishTarget, setPublishTarget] = useState<"test" | "live">("test");
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -273,6 +276,18 @@ export function BlogEditorPageClient({
         contentMarkdown: current.markdown,
       });
       setEditorState(null);
+      router.refresh();
+    });
+  };
+
+  const handleClearFlags = () => {
+    setFlagsError(null);
+    startClearFlags(async () => {
+      const res = await clearContentFlags(post.id, tenantSlug);
+      if (!res.success) {
+        setFlagsError(res.error);
+        return;
+      }
       router.refresh();
     });
   };
@@ -562,6 +577,47 @@ export function BlogEditorPageClient({
       <div className="grid lg:grid-cols-[1fr_340px] gap-6 items-start">
         {/* Main — scrolls with the page */}
         <div className="space-y-4 min-w-0">
+          {post.contentFlags.length > 0 && (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 space-y-2"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-red-500">
+                  {post.contentFlags.length} content flag
+                  {post.contentFlags.length === 1 ? "" : "s"} — needs verification before publish
+                </p>
+                {post.contentFlagsCleared ? (
+                  <span className="text-xs font-medium text-status-green shrink-0">
+                    Reviewed, publish allowed
+                  </span>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleClearFlags}
+                    disabled={isClearingFlags}
+                  >
+                    {isClearingFlags ? "Marking reviewed…" : "Mark reviewed, allow publish"}
+                  </Button>
+                )}
+              </div>
+              <ul className="space-y-1.5">
+                {post.contentFlags.map((flag, i) => (
+                  <li key={i} className="text-xs text-text-muted">
+                    <span className="font-medium text-foreground">{flag.type.replace(/_/g, " ")}:</span>{" "}
+                    {flag.message}
+                    <div className="italic text-[11px] mt-0.5">&ldquo;{flag.excerpt}&rdquo;</div>
+                  </li>
+                ))}
+              </ul>
+              {flagsError && (
+                <p className="text-xs text-red-500" role="alert">{flagsError}</p>
+              )}
+            </div>
+          )}
+
           <div className="grid md:grid-cols-[1fr_220px] gap-4">
             <div>
               <Label htmlFor="bp-title">Title</Label>

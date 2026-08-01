@@ -335,12 +335,19 @@ tenant has never generated one.
 |---|---|---|---|
 | GET | `/api/v1/analytics/overview` | `analytics:read` | Dashboard KPIs: reach/engagement this week vs last, prospect pipeline, active campaign spend, connected platforms. |
 | GET | `/api/v1/analytics/posts` | `analytics:read` | Per-post engagement metrics (filter `platform`/`since`) — reads `own_post_metrics`, the same table `publish:write`'s metrics endpoint writes to. |
+| GET | `/api/v1/analytics/ads/overview` | `analytics:read` | Aggregate ad-campaign totals: spend, revenue, ROAS, impressions/clicks/conversions, active vs total count. |
+| GET | `/api/v1/analytics/ads` | `analytics:read` | Per-campaign detail (filter `status`) behind the `ads/overview` totals — platform, status, spend, revenue, ROAS, dates. |
 | GET | `/api/v1/weekly-review` | `analytics:read` | The latest generated weekly business-review narrative. |
 
 **`GET /api/v1/analytics/overview`** — no pagination, no filters, returns the same shape the
 in-app dashboard widget renders (`socialReach`, `activeLeads`, `adSpend`, `connectedPlatforms`, ...).
 
 **`GET /api/v1/analytics/posts?platform=instagram&since=2026-07-01T00:00:00Z&limit=25&offset=0`**
+
+**`GET /api/v1/analytics/ads/overview`** — no pagination, no filters. Reads the `campaigns` table (the
+same rows `analytics/overview`'s `adSpend` figure sums) so a caller can see which campaigns make up that total.
+
+**`GET /api/v1/analytics/ads?status=active&limit=25&offset=0`**
 
 **`GET /api/v1/weekly-review`** — pre-stored, no LLM call on read (generation is a separate cron).
 404 if no review has been generated yet.
@@ -743,6 +750,8 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 |---|---|---|
 | `pulse_analytics_overview` | `GET /analytics/overview` | `analytics:read` |
 | `pulse_post_insights` | `GET /analytics/posts` | `analytics:read` |
+| `pulse_ads_overview` | `GET /analytics/ads/overview` | `analytics:read` |
+| `pulse_list_campaigns` | `GET /analytics/ads` | `analytics:read` |
 | `pulse_weekly_review` | `GET /weekly-review` | `analytics:read` |
 
 **Content**
@@ -767,7 +776,7 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 No `pulse_approve`/`pulse_reject` tools — approval must be a deliberate human action taken via the
 signed link, not something an AI agent can call on the tenant's behalf.
 
-39 tools total across all 9 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
+41 tools total across all 9 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
 Analytics, Content, Notifications) — every group in the original build spec.
 
 ### Deviations (MCP)

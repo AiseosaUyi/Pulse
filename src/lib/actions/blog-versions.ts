@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { countWords } from "@/lib/blog/word-count";
 import { scoreBlogPost } from "@/lib/ai/score-blog";
 import { getBrandContext } from "@/lib/ai/brand-positioning";
+import { scanBlogContent } from "@/lib/blog/content-flags";
 
 type ActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -46,11 +47,17 @@ export async function saveBlogContent(
   const user = await getCurrentUser();
 
   const wordCount = countWords(input.content);
+  const { voice: voiceForFlags } = await getBrandContext(tenantSlug);
+  const contentFlags = scanBlogContent(input.content, voiceForFlags);
 
   const patch: Record<string, unknown> = {
     content: input.content,
     content_json: input.contentJson,
     word_count: wordCount,
+    // Content changed — rescan and require fresh human clearance before
+    // this edit can publish, even if an earlier version was cleared.
+    content_flags: contentFlags,
+    content_flags_cleared: false,
   };
   if (input.title !== undefined) patch.title = input.title;
   if (input.metaDescription !== undefined)
@@ -81,7 +88,8 @@ export async function saveBlogContent(
 
     if (row) {
       try {
-        const { voice, positioning } = await getBrandContext(tenantSlug);
+        const { positioning } = await getBrandContext(tenantSlug);
+        const voice = voiceForFlags;
         const targetWordCount =
           (row.generation_meta as { target_word_count?: number } | null)
             ?.target_word_count ?? 1200;
@@ -202,6 +210,7 @@ export async function revertToVersion(
   const content = (version.content_markdown ?? "") as string;
   const contentJson = version.content_json ?? null;
   const wordCount = (version.word_count ?? countWords(content)) as number;
+  const { voice } = await getBrandContext(tenantSlug);
 
   const { error: updateErr } = await supabase
     .from("blog_posts")
@@ -210,6 +219,8 @@ export async function revertToVersion(
       content_json: contentJson,
       word_count: wordCount,
       content_score: version.content_score ?? null,
+      content_flags: scanBlogContent(content, voice),
+      content_flags_cleared: false,
     })
     .eq("id", postId)
     .eq("tenant_slug", tenantSlug);

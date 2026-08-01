@@ -200,7 +200,7 @@ Turns approved content (or a free-text prompt) into short-form video on ByteDanc
 
 ## `/api/v1` REST API + MCP server (external AI operators)
 
-Full reference (all endpoints, all 39 MCP tools, deviations, auth flow) lives in `docs/API-V1.md` — treat it as the source of truth over this summary, and `GET /api/v1/manifest` as the source of truth over the doc (self-generated from `src/lib/api/manifest.ts`, can't drift from the real routes).
+Full reference (all endpoints, all 41 MCP tools, deviations, auth flow) lives in `docs/API-V1.md` — treat it as the source of truth over this summary, and `GET /api/v1/manifest` as the source of truth over the doc (self-generated from `src/lib/api/manifest.ts`, can't drift from the real routes).
 
 - **What it's for**: a versioned, scoped, token-authenticated REST API (`/api/v1/*`) so external AI "operator" skills (Cowork's `pulse-sales`, `pulse-content`, `pulse-seo`, `pulse-social`, `pulse-analyst`) can drive Pulse server-to-server without the cookie/session auth the web app uses. Wraps the existing service/action layer — no duplicated business logic. Separate from `/api/ext/*` (the unscoped Chrome extension surface, untouched by this work).
 - **Auth**: `Authorization: Bearer pulse_ext_<hex>` tokens minted at Settings → Integrations → API tokens, carrying comma-separated scopes from `src/lib/api/scopes.ts` (`sales:*`, `content:*`, `seo:*`, `intel:read`, `analytics:read`, `publish:*`, `engage:*`, `admin`). `requireApiContext()` (`src/lib/api/context.ts`) is the shared gate every `/api/v1/*` route calls — token resolution, scope check, rate limiting (60 req/min/token), structured auth logging.

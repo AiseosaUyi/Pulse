@@ -299,24 +299,35 @@ export interface CompetitorDiscoveryResult {
 export async function discoverCompetitorsAi(
   tenantSlug: string,
   positioningBlock: string,
-  brandName: string
+  brandName: string,
+  market?: { domain?: string | null; primaryRegions?: string[] }
 ): Promise<CompetitorDiscoveryResult> {
   const system = [
     "You are a competitive researcher. Given a brand's positioning, name 3-5 REAL direct competitors they would benchmark against.",
     "",
     "Rules:",
     "- Competitors must be real companies that actually exist. If you can't verify 3 real ones, return the most plausible category leaders.",
-    "- Prefer domain-known competitors in the same market/vertical.",
+    "- Competitors MUST operate in and serve the SAME geographic market as this brand (see 'Market' below) — not just the same vertical globally. A well-known global/US brand in the same category is the WRONG answer if it doesn't actually operate in this brand's market. When in doubt, prefer a smaller local/regional player that's actually reachable by this brand's customers over a bigger name that isn't.",
+    "- A competitor sells the SAME thing to the SAME kind of buyer this brand sells to. Never list a business that would be a CUSTOMER of this brand (e.g. a bar/restaurant/venue is a customer of a drinks or supplies distributor, not its competitor) — that's a prospect, not a competitor.",
     "- `domain` should be the bare domain (e.g. `hubspot.com`) without protocol. Null only if you genuinely don't know.",
     "- `why` is one concrete sentence — not fluff.",
     "- Return ONLY JSON matching the schema.",
   ].join("\n");
+
+  const marketBlock = [
+    "Market (competitors must serve this exact market):",
+    market?.domain ? `- Brand's own site: ${market.domain}` : null,
+    market?.primaryRegions?.length
+      ? `- Primary regions served: ${market.primaryRegions.join(", ")}`
+      : null,
+  ].filter(Boolean);
 
   const user = [
     `Brand: ${brandName}`,
     "",
     positioningBlock,
     "",
+    ...(marketBlock.length > 1 ? [marketBlock.join("\n"), ""] : []),
     "Name 3-5 competitors this brand would benchmark against.",
   ].join("\n");
 

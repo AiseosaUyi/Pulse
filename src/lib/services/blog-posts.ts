@@ -15,6 +15,7 @@ import { generateBlogPost, BlogGenerationError } from "@/lib/ai/generate-blog-po
 import { countWords } from "@/lib/blog/word-count";
 import { buildGooglePreview } from "@/lib/blog/google-preview";
 import { uniqueSlugFor } from "@/lib/blog/slug";
+import { scanBlogContent, type ContentFlag } from "@/lib/blog/content-flags";
 
 interface Row {
   id: string;
@@ -51,6 +52,8 @@ interface Row {
   faq_schema: unknown | null;
   faq_items: Array<{ question: string; answer: string }> | null;
   google_preview: BlogGooglePreview | null;
+  content_flags: ContentFlag[] | null;
+  content_flags_cleared: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -91,6 +94,8 @@ function rowTo(row: Row): BlogPostRecord {
     faqSchema: row.faq_schema ?? null,
     faqItems: row.faq_items ?? [],
     googlePreview: row.google_preview ?? null,
+    contentFlags: row.content_flags ?? [],
+    contentFlagsCleared: row.content_flags_cleared ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -223,6 +228,7 @@ export async function createManualBlogPostApi(
     const finalWordCount = countWords(draft.content);
     const wordCountWarning = meta.stopped_reason === "max_passes_reached";
     const scoreWarning = meta.score_warning === true;
+    const contentFlags = scanBlogContent(draft.content, voice);
 
     const slug = await uniqueSlugFor(tenantSlug, draft.title);
     const googlePreview = buildGooglePreview({
@@ -252,6 +258,7 @@ export async function createManualBlogPostApi(
         sub_scores: score?.subScores ?? null,
         score_issues: score?.issues ?? [],
         score_warning: scoreWarning,
+        content_flags: contentFlags,
       })
       .select("id")
       .single();

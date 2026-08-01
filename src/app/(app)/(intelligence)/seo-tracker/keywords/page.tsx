@@ -1,5 +1,7 @@
 import { getCurrentTenant } from "@/lib/auth";
+import { getTenant } from "@/lib/services/tenants";
 import { getKeywordRankings, deriveSEOMetrics } from "@/lib/services/seo";
+import { isGruveDiscoveryTenant } from "@/lib/seo/gruve-discovery";
 import { KeywordRow } from "@/components/keywords/KeywordRow";
 import { BackfillDeeplinksButton } from "@/components/keywords/BackfillDeeplinksButton";
 import { AddKeywordButton } from "../client";
@@ -7,6 +9,8 @@ import { AddKeywordButton } from "../client";
 export default async function KeywordsPage() {
   const tenant = await getCurrentTenant();
   const tenantSlug = tenant?.slug ?? "";
+  const fullTenant = tenantSlug ? await getTenant(tenantSlug) : null;
+  const showDeeplinks = isGruveDiscoveryTenant(fullTenant?.domain);
 
   const keywords = await getKeywordRankings(tenantSlug);
   const metrics = deriveSEOMetrics(keywords);
@@ -26,7 +30,7 @@ export default async function KeywordsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <BackfillDeeplinksButton />
+          {showDeeplinks && <BackfillDeeplinksButton />}
           <AddKeywordButton />
         </div>
       </div>
@@ -115,7 +119,7 @@ export default async function KeywordsPage() {
               </thead>
               <tbody>
                 {keywords.map((kw) => (
-                  <KeywordRow key={kw.id} kw={kw} />
+                  <KeywordRow key={kw.id} kw={kw} showDeeplink={showDeeplinks} />
                 ))}
               </tbody>
             </table>

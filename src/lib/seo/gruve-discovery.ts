@@ -27,6 +27,23 @@ export const GRUVE_HOSTS = {
   gamma: "https://gamma.gruve.events",
 } as const;
 
+/**
+ * The keyword→deeplink feature below points at Gruve's own event-discovery
+ * app (/home, /categories/<cat>) — it is not a generic "every tenant has a
+ * discovery site" capability. Without this guard, generating/backfilling a
+ * deeplink for ANY tenant's tracked keywords writes a gruve.events URL onto
+ * that tenant's keyword_rankings row regardless of what site they actually
+ * run — a real cross-tenant leakage bug (a Sippy keyword row pointing at
+ * https://www.gruve.events/categories/food_drinks). Gate on the tenant's
+ * own configured domain rather than a hardcoded slug so this stays correct
+ * if Gruve's slug or a future Gruve-domain tenant changes.
+ */
+export function isGruveDiscoveryTenant(tenantDomain: string | null | undefined): boolean {
+  if (!tenantDomain) return false;
+  const host = new URL(GRUVE_HOSTS.live).hostname.replace(/^www\./, "");
+  return tenantDomain.trim().toLowerCase().replace(/^www\./, "") === host;
+}
+
 export interface GruveDiscoveryFilters {
   location: string | null;
   category: GruveCategory | null;

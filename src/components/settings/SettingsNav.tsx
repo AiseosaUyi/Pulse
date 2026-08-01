@@ -120,7 +120,6 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Content calendar",
         href: "/settings/content-calendar",
         icon: Sparkles,
-        surfaces: ["individual"],
       },
     ],
   },

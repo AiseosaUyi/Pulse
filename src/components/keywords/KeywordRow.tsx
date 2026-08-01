@@ -13,7 +13,7 @@ import { useDialogs } from "@/components/ui/Dialog";
 import type { KeywordRanking } from "@/lib/types/seo";
 import { KEYWORD_DIFFICULTY_LABELS } from "@/lib/types/seo";
 
-export function KeywordRow({ kw }: { kw: KeywordRanking }) {
+export function KeywordRow({ kw, showDeeplink = true }: { kw: KeywordRanking; showDeeplink?: boolean }) {
   const dialogs = useDialogs();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -170,15 +170,17 @@ export function KeywordRow({ kw }: { kw: KeywordRanking }) {
       </td>
       <td className="px-3 py-3">
         <div className="flex items-center justify-end gap-1">
-          <button
-            onClick={handleGruveLink}
-            disabled={isPending}
-            aria-label="Generate deep link"
-            title={kw.url ? "Regenerate deep link" : "Map to a deep link"}
-            className="p-1.5 rounded text-text-muted hover:text-primary-500 hover:bg-primary-500/10 transition-colors"
-          >
-            <Wand2 size={14} />
-          </button>
+          {showDeeplink && (
+            <button
+              onClick={handleGruveLink}
+              disabled={isPending}
+              aria-label="Generate deep link"
+              title={kw.url ? "Regenerate deep link" : "Map to a deep link"}
+              className="p-1.5 rounded text-text-muted hover:text-primary-500 hover:bg-primary-500/10 transition-colors"
+            >
+              <Wand2 size={14} />
+            </button>
+          )}
           <button
             onClick={handleUpdate}
             disabled={isPending}

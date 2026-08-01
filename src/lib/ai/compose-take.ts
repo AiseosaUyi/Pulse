@@ -19,6 +19,7 @@ import {
   buildPositioningBlock,
   type BrandPositioning,
 } from "@/lib/ai/brand-positioning";
+import { stripBannedDashes } from "@/lib/blog/content-flags";
 
 export const composeModes = ["original", "reply", "quote"] as const;
 export type ComposeMode = (typeof composeModes)[number];
@@ -123,7 +124,17 @@ export async function composeTakeAi(
       durationMs: Date.now() - started,
       success: true,
     });
-    return { result: result.output, model: modelId, costUsd: cost };
+    const strip = (s: string | null) => (s === null ? null : stripBannedDashes(s, input.voice));
+    const cleaned: ComposeTakeResult = {
+      ...result.output,
+      x: strip(result.output.x),
+      linkedin: strip(result.output.linkedin),
+      instagram: strip(result.output.instagram),
+      tiktok: strip(result.output.tiktok),
+      youtube: strip(result.output.youtube),
+      hooks: result.output.hooks?.map((h) => stripBannedDashes(h, input.voice)) ?? result.output.hooks,
+    };
+    return { result: cleaned, model: modelId, costUsd: cost };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await logAiCall({

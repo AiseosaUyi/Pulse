@@ -11,6 +11,7 @@ import { countWords, withinTolerance, deviation } from "@/lib/blog/word-count";
 import { loadPrompt, renderTemplate } from "@/lib/ai/prompts";
 import { scoreBlogPost, type ScoreBlogResult } from "@/lib/ai/score-blog";
 import type { ScoreIssue } from "@/lib/ai/score-subscores/types";
+import { stripBannedDashes } from "@/lib/blog/content-flags";
 
 const MODEL = "gpt-4.1";
 const MODEL_ID = `openai/${MODEL}`;
@@ -170,6 +171,7 @@ export async function initialGenerate(
     "- content is the full markdown article, starting with the single `#` title on line 1.",
     "- secondary_keywords is 3-6 naturally related phrases the article should rank for.",
     "- This schema has no separate FAQ field. Do NOT write a 'Frequently Asked Questions' section, a Q&A block, or any structured/schema data (JSON, JSON-LD, a fenced code block) into `content` — readers should never see raw data formatting in the article. If the topic calls for FAQ-style content, weave the answers into normal prose paragraphs instead.",
+    "- **Never invent facts.** Do not fabricate statistics, percentages, or rates (e.g. \"96% on-time\"), delivery/time guarantees, named customer testimonials, or competitor prices. Only state a number, guarantee, or quote if it was given to you in context above. If a claim needs a number you don't have, write a `[VERIFY: what's needed]` placeholder instead of inventing one — never present an invented figure as fact.",
     "- Return ONLY JSON matching the schema.",
     `- **Final reminder: the finished \`content\` field must be approximately ${targetWordCount} words. Count your output before returning. If it's under, add genuine depth (examples, specifics, edge cases) until it hits the target.**`,
   ].join("\n");
@@ -487,6 +489,15 @@ export async function generateBlogPost(
       if (ex === MAX_EXPANSION_PASSES) stoppedReason = "max_passes_reached";
     }
   }
+
+  // Deterministic dash strip — model compliance with "no em/en dashes" is
+  // unreliable regardless of how the prompt is worded, so this is a hard
+  // mechanical fix rather than a prompt-only ask. Only touches tenants
+  // whose own brand voice dont_list actually forbids dashes.
+  currentPost = {
+    ...currentPost,
+    content: stripBannedDashes(currentPost.content, input.voice),
+  };
 
   // Short-circuit: skip scoring when caller asked (debug) or cost cap hit.
   if (!runScoring) {

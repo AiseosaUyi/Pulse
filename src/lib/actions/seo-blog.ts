@@ -20,6 +20,8 @@ import { BudgetExceededError } from "@/lib/ai/ai-budget";
 import { heuristicMap } from "@/lib/seo/gruve-discovery";
 import { getTenantSeoConfig } from "@/lib/seo/tenant-seo-config";
 import { extractAndStripFaqSection } from "@/lib/seo/strip-inline-faq";
+import { scanBlogContent } from "@/lib/blog/content-flags";
+import { getBrandContext } from "@/lib/ai/brand-positioning";
 
 export type SeoBlogActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -127,6 +129,8 @@ export async function generateSeoBlogForPost(
     const faqItems = draft.faq && draft.faq.length > 0 ? draft.faq : extractedFaq;
     const firstFaqQuestion = faqItems[0]?.question ?? null;
     const suggestedCategory = heuristicMap(draft.primary_keyword).category;
+    const { voice } = await getBrandContext(tenant.slug);
+    const contentFlags = scanBlogContent(cleanedContent, voice);
 
     const { data: updated, error: updateErr } = await supabase
       .from("blog_posts")
@@ -141,6 +145,8 @@ export async function generateSeoBlogForPost(
         outline: outlineJsonb,
         word_count: quickWordCount(cleanedContent),
         version: post.version + 1,
+        content_flags: contentFlags,
+        content_flags_cleared: false,
         // Auto-populated SEO fields (slice 2/3).
         excerpt: draft.excerpt,
         slug: post.slug ?? draft.slug,

@@ -38,6 +38,7 @@ import { buildPositioningBlock } from "@/lib/ai/brand-positioning";
 import { scoreBlogPost } from "@/lib/ai/score-blog";
 import { countWords } from "@/lib/blog/word-count";
 import { buildGooglePreview } from "@/lib/blog/google-preview";
+import { scanBlogContent, stripBannedDashes } from "@/lib/blog/content-flags";
 import type { RegenerationState, BlogScoreIssue } from "@/lib/types/blog-posts";
 
 type ActionResult<T = unknown> =
@@ -481,8 +482,13 @@ async function commitDraft(
   supabase: Awaited<ReturnType<typeof createClient>>
 ): Promise<void> {
   const user = await getCurrentUser();
-  const draft = state.draft;
+  const { voice: voiceForFlags } = await getBrandContext(tenantSlug);
+  const draft = {
+    ...state.draft,
+    content: stripBannedDashes(state.draft.content, voiceForFlags),
+  };
   const finalWordCount = countWords(draft.content);
+  const contentFlags = scanBlogContent(draft.content, voiceForFlags);
 
   const googlePreview = buildGooglePreview({
     title: draft.title,
@@ -543,6 +549,8 @@ async function commitDraft(
       sub_scores: state.score?.subScores ?? null,
       score_issues: state.score?.issues ?? [],
       score_warning: !!scoreWarning,
+      content_flags: contentFlags,
+      content_flags_cleared: false,
       regeneration_state: null,
       generation_status: "ready",
     })

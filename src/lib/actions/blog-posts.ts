@@ -18,6 +18,8 @@ import { buildGooglePreview } from "@/lib/blog/google-preview";
 import { uniqueSlugFor } from "@/lib/blog/slug";
 import type { BlogPostStatus } from "@/lib/types/blog-posts";
 import { extractAndStripFaqSection } from "@/lib/seo/strip-inline-faq";
+import { scanBlogContent, type ContentFlag } from "@/lib/blog/content-flags";
+import type { BrandVoice } from "@/lib/ai/brand-voice";
 
 type ActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -44,6 +46,7 @@ async function persistGeneratedPost(
   tenantDomain: string,
   generation: Awaited<ReturnType<typeof generateBlogPost>>,
   targetKeyword: string,
+  voice: BrandVoice | null,
   extras: {
     blogType?: BlogType;
     blogIdeaId?: string;
@@ -72,6 +75,7 @@ async function persistGeneratedPost(
   const finalWordCount = countWords(cleanedContent);
   const wordCountWarning = meta.stopped_reason === "max_passes_reached";
   const scoreWarning = meta.score_warning === true;
+  const contentFlags = scanBlogContent(cleanedContent, voice);
 
   // Slug — derived from title, tenant-unique.
   const slug = await uniqueSlugFor(tenantSlug, draft.title);
@@ -108,6 +112,7 @@ async function persistGeneratedPost(
       sub_scores: score?.subScores ?? null,
       score_issues: score?.issues ?? [],
       score_warning: scoreWarning,
+      content_flags: contentFlags,
       blog_type: extras.blogType ?? null,
       blog_idea_id: extras.blogIdeaId ?? null,
       feature_meta: extras.featureMeta ?? null,
@@ -178,7 +183,8 @@ export async function generateBlogPostDraft(
       tenant.name,
       tenant.domain,
       generation,
-      keyword
+      keyword,
+      voice
     );
   } catch (err) {
     return { success: false, error: humanizeGenerationError(err) };
@@ -243,7 +249,8 @@ export async function createManualBlogPost(
       tenant.name,
       tenant.domain,
       generation,
-      keyword || groundingKeyword
+      keyword || groundingKeyword,
+      voice
     );
   } catch (err) {
     return { success: false, error: humanizeGenerationError(err) };
@@ -281,6 +288,11 @@ export async function updateBlogPost(
   if (patch.content !== undefined) {
     update.content = patch.content;
     update.word_count = countWords(patch.content);
+    // Content changed — rescan and require a fresh human clearance before
+    // this edit can publish, even if an earlier version was cleared.
+    const { voice } = await getBrandContext(tenantSlug);
+    update.content_flags = scanBlogContent(patch.content, voice);
+    update.content_flags_cleared = false;
   }
   if (patch.secondaryKeywords !== undefined) update.secondary_keywords = patch.secondaryKeywords;
   if (patch.status !== undefined) update.status = patch.status;
@@ -298,6 +310,31 @@ export async function updateBlogPost(
   if (patch.updatedDate !== undefined) update.updated_date = patch.updatedDate;
   if (patch.noindex !== undefined) update.noindex = patch.noindex;
   if (Object.keys(update).length === 0) return { success: true };
+
+  // Publish gate — applies to every tenant. If this edit is trying to set
+  // status to 'published', the flags that will be live on the row (the
+  // ones just computed above if content changed, otherwise whatever's
+  // already stored) must be empty or explicitly cleared by a human.
+  if (patch.status === "published") {
+    let flags = update.content_flags as ContentFlag[] | undefined;
+    let cleared = update.content_flags_cleared as boolean | undefined;
+    if (flags === undefined) {
+      const { data: existing } = await supabase
+        .from("blog_posts")
+        .select("content_flags, content_flags_cleared")
+        .eq("id", id)
+        .eq("tenant_slug", tenantSlug)
+        .maybeSingle();
+      flags = (existing?.content_flags as ContentFlag[] | null) ?? [];
+      cleared = existing?.content_flags_cleared ?? false;
+    }
+    if (flags.length > 0 && !cleared) {
+      return {
+        success: false,
+        error: `Cannot publish: ${flags.length} unreviewed flag${flags.length === 1 ? "" : "s"} on this post (unverified stats, testimonials, guarantees, or prices). Review and clear them first.`,
+      };
+    }
+  }
 
   const { error } = await supabase
     .from("blog_posts")
@@ -417,6 +454,7 @@ export async function commitBlogIdea(
       tenant.domain,
       generation,
       ideaRow.target_keyword || ideaRow.title,
+      voice,
       {
         blogType: ideaRow.blog_type as BlogType,
         blogIdeaId: ideaRow.id as string,
@@ -454,6 +492,27 @@ export async function dismissBlogIdea(
     .eq("id", ideaId)
     .eq("tenant_slug", tenantSlug);
   if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+/**
+ * Human reviewer signs off on the current content_flags so the post can
+ * publish despite them (e.g. a percentage flag that turned out to be a
+ * real, sourced stat). Any subsequent content edit resets clearance —
+ * see updateBlogPost.
+ */
+export async function clearContentFlags(
+  id: string,
+  tenantSlug: string
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("blog_posts")
+    .update({ content_flags_cleared: true })
+    .eq("id", id)
+    .eq("tenant_slug", tenantSlug);
+  if (error) return { success: false, error: error.message };
+  revalidatePath(`/seo-tracker/blog-writer/${id}`);
   return { success: true };
 }
 

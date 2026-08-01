@@ -1,3 +1,5 @@
+import type { ContentFlag } from "@/lib/blog/content-flags";
+
 export type BlogPostStatus =
   | "draft"
   | "editing"
@@ -162,6 +164,11 @@ export interface BlogPostRecord {
   faqItems: Array<{ question: string; answer: string }>;
   /** Cached Google preview {title_display, url_display, meta_display}. */
   googlePreview: BlogGooglePreview | null;
+  /** Fabrication/voice-compliance flags from the latest content scan
+   *  (src/lib/blog/content-flags.ts). Non-empty blocks publish until
+   *  contentFlagsCleared is set. */
+  contentFlags: ContentFlag[];
+  contentFlagsCleared: boolean;
   createdAt: string;
   updatedAt: string;
 }
