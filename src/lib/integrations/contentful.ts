@@ -64,10 +64,12 @@ export interface ContentfulConfig {
 
 function envContentfulConfig(target: PublishTarget): ContentfulConfig | null {
   if (!ENV_SPACE || !ENV_CMA_TOKEN) return null;
+  const liveEnv = ENV_ENV_ID;
+  const testEnv = process.env.CONTENTFUL_TEST_ENVIRONMENT ?? liveEnv;
   return {
     spaceId: ENV_SPACE,
     cmaToken: ENV_CMA_TOKEN,
-    envId: target === "test" ? ENV_TEST_ENV_ID : ENV_ENV_ID,
+    envId: target === "test" ? testEnv : liveEnv,
     locale: ENV_LOCALE,
     blogContentType: DEFAULT_BLOG_CT,
     landingContentType: DEFAULT_LANDING_CT,
@@ -91,7 +93,11 @@ export async function resolveContentfulConfig(
   const spaceId = creds?.config?.space_id ? String(creds.config.space_id) : "";
   if (creds?.secretToken && spaceId) {
     const liveEnv = String(creds.config.environment ?? "master");
-    const testEnv = String(creds.config.test_environment ?? "Production");
+    const testEnv = creds.config.test_environment
+      ? String(creds.config.test_environment)
+      : tenantSlug === "gruve" && process.env.CONTENTFUL_TEST_ENVIRONMENT
+      ? process.env.CONTENTFUL_TEST_ENVIRONMENT
+      : liveEnv;
     const rawAliases = creds.config.field_aliases;
     const fieldAliases: Record<string, string | null> | undefined =
       rawAliases && typeof rawAliases === "object" && !Array.isArray(rawAliases)
@@ -164,7 +170,22 @@ function getEnv(cfg: ContentfulConfig): Promise<Environment> {
         { type: "legacy" }
       );
       const space = await client.getSpace(cfg.spaceId);
-      return space.getEnvironment(cfg.envId);
+      try {
+        return await space.getEnvironment(cfg.envId);
+      } catch (err: unknown) {
+        const is404 =
+          typeof err === "object" &&
+          err !== null &&
+          (("status" in err && (err as { status?: number }).status === 404) ||
+            ("name" in err && (err as { name?: string }).name === "NotFound"));
+        if (is404 && cfg.envId !== "master") {
+          console.warn(
+            `[Contentful] Environment "${cfg.envId}" not found (404) in space ${cfg.spaceId}. Falling back to "master".`
+          );
+          return await space.getEnvironment("master");
+        }
+        throw err;
+      }
     })().catch((e) => {
       envCache.delete(key); // allow retry on transient auth/network failure
       throw e;
