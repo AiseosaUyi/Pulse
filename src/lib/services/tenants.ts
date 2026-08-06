@@ -68,12 +68,30 @@ export async function getTenantMeta(
 }
 
 export async function getTenant(slug: string): Promise<Tenant | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("tenants")
-    .select("slug, name, settings, created_at")
-    .eq("slug", slug)
-    .maybeSingle();
-  if (error || !data) return null;
+  let data: { slug: string; name: string; settings: TenantSettings | null; created_at: string } | null = null;
+  try {
+    const supabase = await createClient();
+    const res = await supabase
+      .from("tenants")
+      .select("slug, name, settings, created_at")
+      .eq("slug", slug)
+      .maybeSingle();
+    data = res.data;
+  } catch {
+    // Session-less context (e.g. cron, background publish runner, standalone script)
+  }
+
+  if (!data) {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const admin = createAdminClient();
+    const res = await admin
+      .from("tenants")
+      .select("slug, name, settings, created_at")
+      .eq("slug", slug)
+      .maybeSingle();
+    data = res.data;
+  }
+
+  if (!data) return null;
   return hydrate(data);
 }
