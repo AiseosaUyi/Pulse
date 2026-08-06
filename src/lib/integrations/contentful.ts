@@ -273,7 +273,14 @@ export function mapToGruveBlogFields(
 
   if (d.excerpt != null) setField(fields, "description", L(d.excerpt), a);
   if (d.author != null) setField(fields, "author", L(d.author), a);
-  if (d.readMinutes != null) setField(fields, "minuteRead", L(d.readMinutes), a);
+  if (d.readMinutes != null) {
+    const targetKey = resolveField("minuteRead", a);
+    const val =
+      targetKey !== "minuteRead" || typeof d.readMinutes === "string"
+        ? String(d.readMinutes)
+        : d.readMinutes;
+    setField(fields, "minuteRead", L(val), a);
+  }
   if (d.seoMetaTitle != null) setField(fields, "seoTitle", L(d.seoMetaTitle), a);
   if (d.seoMetaDescription != null) setField(fields, "seoDescription", L(d.seoMetaDescription), a);
   if (d.canonicalOverride != null) setField(fields, "canonicalUrl", L(d.canonicalOverride), a);
@@ -373,6 +380,48 @@ async function findEntryIdByPulseId(
 }
 
 /**
+ * Coerce entry field values to match the target Contentful ContentType definition's field types
+ * (e.g. converting number to string when target field type is Symbol/Text).
+ */
+async function sanitizeFieldsForContentType(
+  env: Environment,
+  contentTypeId: string,
+  fields: Record<string, Record<string, unknown>>,
+  locale: string
+): Promise<Record<string, Record<string, unknown>>> {
+  try {
+    const ct = await env.getContentType(contentTypeId);
+    const fieldMap = new Map(ct.fields.map((f) => [f.id, f]));
+    const sanitized: Record<string, Record<string, unknown>> = { ...fields };
+
+    for (const [fieldId, valMap] of Object.entries(sanitized)) {
+      const fieldDef = fieldMap.get(fieldId);
+      if (!fieldDef || !valMap || typeof valMap !== "object") continue;
+
+      const rawVal = valMap[locale];
+      if (rawVal === undefined || rawVal === null) continue;
+
+      if (
+        (fieldDef.type === "Symbol" || fieldDef.type === "Text") &&
+        typeof rawVal === "number"
+      ) {
+        sanitized[fieldId] = { ...valMap, [locale]: String(rawVal) };
+      } else if (
+        (fieldDef.type === "Integer" || fieldDef.type === "Number") &&
+        typeof rawVal === "string" &&
+        !isNaN(Number(rawVal))
+      ) {
+        sanitized[fieldId] = { ...valMap, [locale]: Number(rawVal) };
+      }
+    }
+
+    return sanitized;
+  } catch {
+    return fields;
+  }
+}
+
+/**
  * Upsert the gruveBlog entry keyed by pulseId. Does NOT publish — that
  * is the `publish_entry`/`notify_gruve` step (see publishGruveBlogEntry).
  */
@@ -382,7 +431,13 @@ export async function upsertGruveBlog(
   cfg: ContentfulConfig
 ): Promise<UpsertResult> {
   const env = await getEnv(cfg);
-  const fields = mapToGruveBlogFields(draft, assets, cfg);
+  let fields = mapToGruveBlogFields(draft, assets, cfg);
+  fields = await sanitizeFieldsForContentType(
+    env,
+    cfg.blogContentType,
+    fields,
+    cfg.locale
+  );
   const existingId = await findEntryIdByPulseId(
     env,
     cfg.blogContentType,

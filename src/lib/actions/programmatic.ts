@@ -307,11 +307,13 @@ export async function publishProgrammaticPage(
     };
   }
 
-  // Test publishes go to the staging site (gamma) when configured; live → www.
-  // The Contentful environment is already chosen by `target` via cfg.envId.
-  const stagingBase = process.env.GRUVE_STAGING_BASE_URL?.trim();
-  const siteBase =
-    target === "test" && stagingBase ? stagingBase : seo.siteBaseUrl;
+  // Test publishes go to this tenant's own staging domain when configured;
+  // live → its production domain. Both come from tenant.settings (Settings →
+  // Integrations → Site domains), NOT a shared env var — a global fallback
+  // here would leak one tenant's staging host into every other tenant's
+  // "test" publish. The Contentful environment is already chosen by `target`
+  // via cfg.envId.
+  const siteBase = target === "test" ? seo.stagingBaseUrl ?? seo.siteBaseUrl : seo.siteBaseUrl;
 
   const supabase = await createClient();
   const { data: page, error } = await supabase

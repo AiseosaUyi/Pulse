@@ -117,15 +117,19 @@ export interface GenerateBlogInput {
 }
 
 export function buildVoiceBlock(voice: BrandVoice | null): string {
+  const dashConstraint =
+    "\n- CRITICAL PUNCTUATION RULE: STRICTLY FORBIDDEN to use em-dashes (—) or en-dashes (–) anywhere. Use commas, periods, or parentheses instead. Em-dashes make content read like generic AI writing.";
+
   if (!voice) {
-    return "No brand voice configured — keep it plainspoken and specific. Avoid generic SEO filler.";
+    return `No brand voice configured — keep it plainspoken and specific. Avoid generic SEO filler.${dashConstraint}`;
   }
+
   return [
     "Brand voice:",
     `- Tone: ${voice.tone}`,
     `- Audience: ${voice.audience}`,
     `- Do: ${voice.do_list.join(" | ")}`,
-    `- Don't: ${voice.dont_list.join(" | ")}`,
+    `- Don't: ${voice.dont_list.join(" | ")}${dashConstraint}`,
     "",
     "Examples of our voice:",
     ...voice.example_posts.map((p, i) => `  ${i + 1}. ${p}`),

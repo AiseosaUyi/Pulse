@@ -8,7 +8,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { JSONContent } from "@tiptap/core";
-import { ArrowLeft, History as HistoryIcon, Share2, Rocket, CheckCircle2, Circle, ExternalLink, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, History as HistoryIcon, Share2, Rocket, CheckCircle2, Circle, ExternalLink, Loader2, Sparkles, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +20,7 @@ import { AuthorPicker } from "@/components/seo/blog/AuthorPicker";
 import { autofillBlogImageFromTopic } from "@/lib/actions/blog-images";
 import type { AuthorRecord } from "@/lib/types/authors";
 import { publishBlogToGruve } from "@/lib/actions/publish-to-gruve";
+import { unpublishPublishedArticle } from "@/lib/actions/seo-approvals";
 import { QUESTION_MIN, QUESTION_MAX } from "@/lib/seo/question-constraints";
 import { buildBlogUrls } from "@/lib/seo/blog-urls";
 import type { TenantSeoConfig } from "@/lib/seo/tenant-seo-config";
@@ -62,14 +63,83 @@ function toDateInput(v: string | null): string {
   return v.slice(0, 10);
 }
 
+// Contentful field ids -> plain-English labels, for error messages. Falls
+// back to the raw field id (still better than nothing) for anything not
+// listed here, including tenant-specific aliased field ids we don't know
+// about (see fieldAliases on ContentfulConfig).
+const FIELD_LABELS: Record<string, string> = {
+  title: "Title",
+  slug: "URL slug",
+  content: "Body content",
+  pulseId: "internal post ID",
+  question: "Question / hook",
+  description: "Excerpt",
+  author: "Author name",
+  minuteRead: "Read time",
+  readTime: "Read time",
+  seoTitle: "SEO title",
+  seoDescription: "SEO description",
+  canonicalUrl: "Canonical URL",
+  faqItems: "FAQ items",
+  jsonLd: "Structured data",
+  pulseMetadata: "internal metadata",
+  tags: "Tags",
+  category: "Category",
+  authorBio: "Author bio",
+  authorTitle: "Author title",
+  authorUrl: "Author URL",
+  publishedDate: "Published date",
+  updatedDate: "Updated date",
+  noindex: "No-index flag",
+  bannerImage: "Banner image",
+  thumbnail: "Thumbnail",
+  authorImage: "Author image",
+};
+
+// Contentful's field type ids -> what a non-engineer should hear instead.
+const CONTENTFUL_TYPE_NAMES: Record<string, string> = {
+  Symbol: "short text",
+  Text: "long text",
+  Integer: "a whole number",
+  Number: "a number",
+  Boolean: "on/off",
+  Link: "a linked item",
+  Array: "a list",
+  Date: "a date",
+  Object: "structured data",
+};
+
+// Turns one Contentful CMA validation detail into a plain sentence fragment.
+// Contentful's own wording ("The type of \"value\" is incorrect, expected
+// type: Symbol") is meaningless to whoever just clicked Publish — this maps
+// the handful of validation shapes we actually see in practice.
+function humanizeValidationDetail(detail?: string, name?: string): string {
+  if (detail) {
+    const typeMismatch = detail.match(/expected type:\s*(\w+)/i);
+    if (typeMismatch) {
+      const kind = CONTENTFUL_TYPE_NAMES[typeMismatch[1]] ?? typeMismatch[1];
+      return `should be ${kind}, but got something else — this usually fixes itself if you try publishing again`;
+    }
+    if (/is not one of/i.test(detail)) {
+      return "has a value that isn't one of the allowed options";
+    }
+    if (/size|length/i.test(detail)) {
+      return "is too long or too short";
+    }
+  }
+  if (name === "required") return "is required and can't be left empty";
+  return detail ?? "isn't valid";
+}
+
 // publishBlogToGruve surfaces failed-step errors as
 // `Publish failed at "STEP": { ...raw Contentful API error JSON... }` —
 // readable to a developer, not to the person who just clicked Publish.
-// Extract Contentful's validation messages when present; fall back to the
-// raw string for anything this doesn't recognize rather than hiding it.
-function friendlyPublishError(raw: string): string {
+// Returns a plain-English headline plus the original technical detail
+// (kept, not hidden, so support/engineering can still diagnose it) rather
+// than showing Contentful's raw wording as the primary message.
+export function friendlyPublishError(raw: string): { headline: string; detail: string | null } {
   const match = raw.match(/^Publish failed at "([^"]+)":\s*(\{[\s\S]*\})$/);
-  if (!match) return raw;
+  if (!match) return { headline: raw, detail: null };
   const [, step, jsonPart] = match;
   try {
     const parsed = JSON.parse(jsonPart) as {
@@ -79,19 +149,24 @@ function friendlyPublishError(raw: string): string {
     const validationErrors = parsed.details?.errors;
     if (Array.isArray(validationErrors) && validationErrors.length > 0) {
       const lines = validationErrors.map((e) => {
-        const field = e.path?.filter((p) => p !== "fields" && p !== "en-US").join(" ");
-        return field && e.details ? `${field}: ${e.details}` : (e.details ?? e.name ?? "invalid field");
+        const fieldId = e.path?.filter((p) => p !== "fields" && p !== "en-US")[0];
+        const label = fieldId ? FIELD_LABELS[fieldId] ?? fieldId : null;
+        const human = humanizeValidationDetail(e.details, e.name);
+        return label ? `${label} ${human}` : human;
       });
-      return `Publish failed (${step}): ${lines.join("; ")}`;
+      return {
+        headline: `Couldn't publish: ${lines.join("; ")}.`,
+        detail: `${step}: ${jsonPart}`,
+      };
     }
     if (typeof parsed.message === "string") {
-      return `Publish failed (${step}): ${parsed.message}`;
+      return { headline: `Couldn't publish: ${parsed.message}.`, detail: `${step}: ${jsonPart}` };
     }
   } catch {
     // Not JSON (or a shape we don't recognize) — show the raw message rather
     // than swallowing it silently.
   }
-  return raw;
+  return { headline: `Couldn't publish (${step}).`, detail: raw };
 }
 
 export function BlogEditorPageClient({
@@ -181,6 +256,8 @@ export function BlogEditorPageClient({
   const [isSaving, startSave] = useTransition();
   const [isDeleting, startDelete] = useTransition();
   const [isPublishing, startPublish] = useTransition();
+  const [isUnpublishing, startUnpublish] = useTransition();
+  const [unpublishError, setUnpublishError] = useState<string | null>(null);
   const [isClearingFlags, startClearFlags] = useTransition();
   const [flagsError, setFlagsError] = useState<string | null>(null);
   // Default to the safe target: test (gamma), not live (www).
@@ -449,6 +526,38 @@ export function BlogEditorPageClient({
       setPublishResult({ gammaUrl: res.gammaUrl, liveUrl: res.liveUrl });
       router.refresh();
     });
+  };
+
+  // Reverses a live/staging publish — flips status back to draft with an
+  // audit trail (unpublished_at/by/reason, migration 099) rather than
+  // deleting the post, so the version history and any prior review stay
+  // intact. See unpublishPublishedArticle in lib/actions/seo-approvals.ts;
+  // Stage 1 content-safety fabrication guard used this same shape by hand
+  // via a one-off script before this button existed.
+  const handleUnpublish = () => {
+    setUnpublishError(null);
+    void (async () => {
+      const reason = await dialogs.prompt({
+        title: `Unpublish "${post.title}"?`,
+        subtitle:
+          "This takes the post off the live/staging site and moves it back to Draft. The published history is kept, not deleted.",
+        tone: "destructive",
+        placeholder: "Why is this being unpublished?",
+        confirmLabel: "Unpublish",
+        validate: (v) => (v.trim() ? null : "A reason is required."),
+      });
+      if (!reason) return;
+      startUnpublish(async () => {
+        const res = await unpublishPublishedArticle(post.id, reason.trim());
+        if (!res.success) {
+          setUnpublishError(res.error);
+          return;
+        }
+        setStatus("draft");
+        setBaseline((b) => ({ ...b, status: "draft" }));
+        router.refresh();
+      });
+    })();
   };
 
   const pendingFeedback = feedback.filter((f) => f.status === "pending").length;
@@ -993,11 +1102,24 @@ export function BlogEditorPageClient({
                   Save your edits (top right) before publishing.
                 </p>
               )}
-              {publishError && (
-                <p className="text-[12px] text-error-500" role="alert">
-                  {friendlyPublishError(publishError)}
-                </p>
-              )}
+              {publishError && (() => {
+                const { headline, detail } = friendlyPublishError(publishError);
+                return (
+                  <div role="alert">
+                    <p className="text-[12px] text-error-500">{headline}</p>
+                    {detail && (
+                      <details className="mt-0.5">
+                        <summary className="text-[11px] text-text-muted cursor-pointer select-none">
+                          Technical detail
+                        </summary>
+                        <p className="text-[11px] text-text-muted mt-0.5 break-all">
+                          {detail}
+                        </p>
+                      </details>
+                    )}
+                  </div>
+                );
+              })()}
               {publishResult && (
                 <p className="text-[12px] text-status-green font-medium">
                   Published ✓
@@ -1030,6 +1152,29 @@ export function BlogEditorPageClient({
                     >
                       <ExternalLink size={12} /> View on staging
                     </a>
+                  )}
+                </div>
+              )}
+              {status === "published" && (
+                <div className="pt-1 border-t border-border/30 mt-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full gap-1.5 text-error-500 hover:text-error-500"
+                    onClick={handleUnpublish}
+                    disabled={isUnpublishing}
+                  >
+                    {isUnpublishing ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <EyeOff size={14} />
+                    )}
+                    {isUnpublishing ? "Unpublishing…" : "Unpublish"}
+                  </Button>
+                  {unpublishError && (
+                    <p className="text-[12px] text-error-500 mt-1" role="alert">
+                      {unpublishError}
+                    </p>
                   )}
                 </div>
               )}

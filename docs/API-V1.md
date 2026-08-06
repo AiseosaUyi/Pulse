@@ -383,7 +383,7 @@ a sync or a rule evaluation manually.
 |---|---|---|---|
 | GET | `/api/v1/briefs` | `content:read` | List content briefs (filter `status`). |
 | POST | `/api/v1/briefs` | `content:write` | Generate a content brief from an existing intel card. |
-| GET | `/api/v1/content-calendar` | `content:read` | Upcoming `content_slots` for the tenant (individual-persona feature — allowlist-gated, same as the app). |
+| GET | `/api/v1/content-calendar` | `content:read` | Upcoming `content_slots` for the tenant (available to every tenant — see `src/lib/content-calendar/tenant-config.ts`). |
 | GET | `/api/v1/blog-posts` | `content:read` | List blog posts (filter `status`). |
 | GET | `/api/v1/blog-posts/:id` | `content:read` | Single blog post + its latest saved version. |
 | POST | `/api/v1/blog-posts` | `content:write` | Create a draft blog post (title and/or targetKeyword and/or extraContext — at least one required). AI-generated. |
@@ -403,9 +403,9 @@ a sync or a rule evaluation manually.
 
 404 if `cardId` doesn't resolve to a real intel card for this tenant. Real `gpt-5` call — not free.
 
-**`GET /api/v1/content-calendar`** — 404 for any tenant not on the `content_slots` allowlist
-(currently a single dogfood tenant — see `src/lib/content-calendar/tenant-config.ts`), same as the
-in-app page would show.
+**`GET /api/v1/content-calendar`** — available to any tenant (the earlier single-dogfood-tenant
+allowlist in `src/lib/content-calendar/tenant-config.ts` was lifted; the check stays wired as a
+choke point for a future re-gating).
 
 **`GET /api/v1/blog-posts/:id`**
 
@@ -554,10 +554,11 @@ this doc's endpoint table to be current.
     `seo_recommendations`' `applied`/`dismissed`/`snoozed` transitions are currently in-app-only.
     The scope is reserved for a future `POST /api/v1/seo/recommendations/:id/status`-shaped
     endpoint, not dead.
-13. **`GET /api/v1/content-calendar` is allowlist-gated, not just persona-gated** — it 404s for
-    every tenant except the single dogfood tenant on `isContentCalendarEnabledForTenant()`'s
-    allowlist, mirroring the in-app page's own gate exactly (see `CLAUDE.md`'s Content Calendar
-    section). A token minted for any other tenant gets the same 404 the page would show.
+13. **`GET /api/v1/content-calendar`'s allowlist gate was lifted** — `isContentCalendarEnabledForTenant()`
+    now returns `true` for every tenant (it started allowlist-gated to a single dogfood tenant; see
+    `CLAUDE.md`'s Content Calendar section, which predates the lift). The check is still called on
+    every request so re-gating in the future is a one-line change in `tenant-config.ts`, not a hunt
+    through every call site.
 14. **`POST /api/v1/captions/compose` and `POST /api/v1/blog-posts` attribute `created_by` to the
     token's owner** (`tenant_api_tokens.created_by`), not a session user — same pattern as
     `POST /api/v1/prospects/:id/notes`. Their underlying `"use server"` actions

@@ -226,13 +226,16 @@ function buildSystemPrompt(
   voice: Awaited<ReturnType<typeof getBrandContext>>["voice"],
   positioning: Awaited<ReturnType<typeof getBrandContext>>["positioning"]
 ): string {
+  const dashConstraint =
+    "\n- CRITICAL PUNCTUATION RULE: STRICTLY FORBIDDEN to use em-dashes (—) or en-dashes (–) anywhere in body_markdown. Use commas, periods, or parentheses instead. Em-dashes make content read like generic AI writing.";
+
   const voiceBlock = voice
     ? [
         "Brand voice:",
         `- Tone: ${voice.tone}`,
         `- Audience: ${voice.audience}`,
         `- Do: ${voice.do_list.join(" | ")}`,
-        `- Don't: ${voice.dont_list.join(" | ")}`,
+        `- Don't: ${voice.dont_list.join(" | ")}${dashConstraint}`,
         ...(voice.example_posts.length
           ? [
               "Examples of our voice:",
@@ -242,7 +245,7 @@ function buildSystemPrompt(
             ]
           : []),
       ].join("\n")
-    : "No brand voice configured — write in plain professional English.";
+    : `No brand voice configured — write in plain professional English.${dashConstraint}`;
 
   return [
     `You write SEO-optimized blog posts for ${tenantName}.`,

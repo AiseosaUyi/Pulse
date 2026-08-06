@@ -114,10 +114,10 @@ describe("/api/v1 content group", () => {
     expect(res.status).toBe(403);
   });
 
-  it("GET /content-calendar 404s for a non-allowlisted tenant", async () => {
+  it("GET /content-calendar is available to any tenant (allowlist gate lifted)", async () => {
     const { GET } = await import("../../src/app/api/v1/content-calendar/route");
     const res = await GET(authedRequest("https://test.local/api/v1/content-calendar", readToken));
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
   });
 
   it("GET /blog-posts only returns the token's own tenant", async () => {

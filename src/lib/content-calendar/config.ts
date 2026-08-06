@@ -69,12 +69,18 @@ export async function getContentCalendarConfig(
     .select("settings")
     .eq("slug", tenantSlug)
     .maybeSingle();
-  if (error || !data?.settings) return DEFAULT_CONFIG;
+
+  const tenantDefault: ContentCalendarConfig =
+    tenantSlug === "sippy"
+      ? { ...DEFAULT_CONFIG, niches: ["drinks delivery", "nightlife", "cocktails"] }
+      : DEFAULT_CONFIG;
+
+  if (error || !data?.settings) return tenantDefault;
 
   const parsed = contentCalendarConfigSchema.safeParse(
     (data.settings as { contentCalendar?: unknown }).contentCalendar
   );
-  return parsed.success ? parsed.data : DEFAULT_CONFIG;
+  return parsed.success ? parsed.data : tenantDefault;
 }
 
 // Appends one regenerate-reason entry (capped to the last 20) without

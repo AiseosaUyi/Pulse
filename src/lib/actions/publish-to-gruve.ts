@@ -149,6 +149,27 @@ export async function publishBlogToGruve(
     return { success: false, error: questionError };
   }
 
+  // Stage 1 Content Safety Guard: Scan for unverified statistics, time SLAs,
+  // named testimonials, competitor pricing, or banned em-dashes.
+  const { getBrandContext } = await import("@/lib/ai/brand-positioning");
+  const { scanBlogContent } = await import("@/lib/blog/content-flags");
+  const { voice } = await getBrandContext(tenant.slug);
+  const flags = scanBlogContent(post.content ?? "", voice);
+
+  const { data: flagRow } = await supabase
+    .from("blog_posts")
+    .select("content_flags_cleared")
+    .eq("id", postId)
+    .maybeSingle();
+
+  if (flags.length > 0 && !flagRow?.content_flags_cleared) {
+    const flagSummary = flags.map((f) => `• [${f.type}] ${f.message}`).join("\n");
+    return {
+      success: false,
+      error: `Publishing blocked due to content validation flags:\n${flagSummary}\nClear flags in editor before publishing.`,
+    };
+  }
+
   // Convert markdown → Contentful RichText and move the post into
   // 'publishing' so the runner proceeds. Admin client: this is an explicit,
   // validated user action that intentionally bypasses the review/approval
@@ -181,7 +202,7 @@ export async function publishBlogToGruve(
   revalidatePath(`/seo-tracker/blog-writer/${postId}`);
   // Build both view links from real hosts (no hardcoded tenant domain):
   //  - liveUrl  → the tenant's production site (www), from tenant settings
-  //  - gammaUrl → the staging site, from GRUVE_STAGING_BASE_URL when set
+  //  - gammaUrl → the tenant's own staging site, from tenant settings
   // The returned link the user clicks matches the target they published to.
   const seo = await getTenantSeoConfig(tenant.slug);
   const path = `${seo.blogPathPrefix}/${post.slug}`;

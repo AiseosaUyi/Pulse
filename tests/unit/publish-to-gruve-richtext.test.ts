@@ -35,6 +35,10 @@ const postRow = {
   body_rich_text: OLD_BODY_RICH_TEXT,
 };
 
+vi.mock("@/lib/ai/brand-positioning", () => ({
+  getBrandContext: vi.fn().mockResolvedValue({ voice: null, positioning: null }),
+}));
+
 vi.mock("@/lib/auth", () => ({
   requireUser: vi.fn().mockResolvedValue({ id: "user-1" }),
   getCurrentTenant: vi.fn().mockResolvedValue({ slug: "gruve" }),

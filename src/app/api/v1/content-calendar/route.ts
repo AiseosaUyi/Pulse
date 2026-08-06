@@ -1,6 +1,7 @@
-// Individual-persona feature — allowlist-gated the same way the app is
-// (isContentCalendarEnabledForTenant), not just persona-gated. A token
-// minted for a non-allowlisted tenant gets a 404, same as the page would.
+// isContentCalendarEnabledForTenant currently allows every tenant (the
+// single-tenant allowlist was lifted — see the function's own comment in
+// tenant-config.ts). The check stays wired here so a future re-gating is a
+// one-line change in tenant-config.ts, not a hunt through every call site.
 
 import { z } from "zod";
 import { requireApiContext } from "@/lib/api/context";

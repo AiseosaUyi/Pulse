@@ -102,7 +102,7 @@ export function scanForFabrication(content: string): ContentFlag[] {
  */
 export function scanForVoiceViolations(content: string, voice: BrandVoice | null): ContentFlag[] {
   if (!voice) return [];
-  const forbidsDashes = voice.dont_list.some((rule) => /\b(em|en)[\s-]?dash(es)?\b/i.test(rule));
+  const forbidsDashes = voice.dont_list.some((rule) => /\b(em|en)[\s-]?dash(es)?\b|\bdashes\b/i.test(rule));
   if (!forbidsDashes) return [];
 
   return findAll(content, /[—–]/g, (m) => ({
@@ -125,7 +125,7 @@ export function scanBlogContent(content: string, voice: BrandVoice | null): Cont
  */
 export function stripBannedDashes(content: string, voice: BrandVoice | null): string {
   if (!voice) return content;
-  const forbidsDashes = voice.dont_list.some((rule) => /\b(em|en)[\s-]?dash(es)?\b/i.test(rule));
+  const forbidsDashes = voice.dont_list.some((rule) => /\b(em|en)[\s-]?dash(es)?\b|\bdashes\b/i.test(rule));
   if (!forbidsDashes) return content;
   return content.replace(/\s*[—–]\s*/g, ", ").replace(/,\s*,/g, ",");
 }

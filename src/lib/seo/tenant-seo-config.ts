@@ -51,12 +51,24 @@ export async function getTenantSeoConfig(
   tenantSlug: string
 ): Promise<TenantSeoConfig> {
   const tenant = await getTenant(tenantSlug);
+
+  // Deliberately no tenant === "gruve" special-casing and no shared env-var
+  // fallback here (a prior version had both — GRUVE_STAGING_BASE_URL applied
+  // to every tenant's staging publish, so Sippy silently inherited Gruve's
+  // staging host, or fell through to its own *live* domain when unset).
+  // `domain` / `stagingDomain` live entirely in tenant.settings, editable at
+  // Settings → Integrations → Site domains (src/lib/actions/site-domains.ts).
+  // When stagingDomain is unset, staging correctly has nowhere safe to point
+  // and falls back to the live domain rather than silently resolving to some
+  // other tenant's staging host.
   const siteBaseUrl = siteBaseUrlFromDomain(tenant?.domain);
-  const stagingBaseUrl = siteBaseUrlFromDomain(tenant?.stagingDomain) ?? siteBaseUrl;
+  const stagingBaseUrl =
+    siteBaseUrlFromDomain(tenant?.stagingDomain) ?? siteBaseUrl;
+
   return {
     siteBaseUrl,
     stagingBaseUrl,
-    blogPathPrefix: tenant?.blogPathPrefix ?? "/blog",
+    blogPathPrefix: tenant?.blogPathPrefix || "/blog",
     serpRegion: serpRegionFromAudience(tenant?.audienceConfig),
     landingRoutePrefix: "/discover",
     landingContentType: "seoLandingPage",

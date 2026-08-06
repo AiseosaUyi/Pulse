@@ -27,7 +27,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireUser } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireUser, getCurrentTenant } from "@/lib/auth";
 
 export type ApprovalActionResult<T = unknown> =
   | ({ success: true } & (T extends void ? unknown : T))
@@ -232,4 +233,39 @@ export async function archivePost(
     expectedVersion,
     reason,
   });
+}
+
+export async function unpublishPublishedArticle(
+  postId: string,
+  reason: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  const user = await requireUser();
+  const tenant = await getCurrentTenant();
+  if (!tenant) return { success: false, error: "No active tenant" };
+
+  const admin = createAdminClient();
+  const { data: post, error: fetchErr } = await admin
+    .from("blog_posts")
+    .select("id, tenant_slug, status, contentful_entry_id")
+    .eq("id", postId)
+    .maybeSingle();
+
+  if (fetchErr || !post) return { success: false, error: "Article not found" };
+  if (post.tenant_slug !== tenant.slug) return { success: false, error: "Tenant mismatch" };
+
+  const { error: updateErr } = await admin
+    .from("blog_posts")
+    .update({
+      status: "draft",
+      unpublished_at: new Date().toISOString(),
+      unpublished_by: user.id,
+      unpublish_reason: reason,
+    })
+    .eq("id", postId);
+
+  if (updateErr) return { success: false, error: updateErr.message };
+
+  revalidatePath("/seo-tracker/blog-writer");
+  revalidatePath(`/seo-tracker/blog-writer/${postId}`);
+  return { success: true };
 }

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Plug } from "lucide-react";
 import { getCurrentUser, getCurrentTenant } from "@/lib/auth";
+import { getTenant } from "@/lib/services/tenants";
 import { listIntegrations } from "@/lib/services/integrations";
 import { listApiTokens } from "@/lib/actions/api-tokens";
 import { listConnectedAccountsForTenant } from "@/lib/actions/composio";
@@ -13,6 +14,7 @@ import { ApiTokensSection } from "./api-tokens";
 import { ConnectedAccountsSection } from "./connected-accounts";
 import { DriveSection } from "./drive-section";
 import { AdsIntegrationsSection } from "./ads-integrations-section";
+import { SiteDomainsSection } from "./site-domains-section";
 import { SettingsPageHeading } from "../_shared";
 
 interface PageProps {
@@ -50,7 +52,7 @@ export default async function IntegrationsSettingsPage({
   }
 
   const params = await searchParams;
-  const [integrations, apiTokens, connectedAccounts, driveStatus, adAccounts, tiktokAdsConnections] =
+  const [integrations, apiTokens, connectedAccounts, driveStatus, adAccounts, tiktokAdsConnections, tenantRecord] =
     await Promise.all([
       listIntegrations(tenant.slug),
       listApiTokens(tenant.slug),
@@ -58,6 +60,7 @@ export default async function IntegrationsSettingsPage({
       getDriveConnectionStatus(tenant.slug),
       listAdAccountsForTenant(tenant.slug),
       listTikTokAdsConnectionsForTenant(tenant.slug),
+      getTenant(tenant.slug),
     ]);
 
   const driveFlash = params.drive_connected
@@ -87,6 +90,15 @@ export default async function IntegrationsSettingsPage({
         subtitle="Connect the tools Pulse pulls data from and manage API tokens for your own integrations. All credentials are stored securely."
       />
       <IntegrationsClient tenantSlug={tenant.slug} initial={integrations} />
+      <div className="mt-6">
+        <SiteDomainsSection
+          initial={{
+            domain: tenantRecord?.domain ?? "",
+            stagingDomain: tenantRecord?.stagingDomain ?? "",
+            blogPathPrefix: tenantRecord?.blogPathPrefix ?? "/blog",
+          }}
+        />
+      </div>
       <div className="mt-6">
         <DriveSection status={driveStatus} flash={driveFlash} />
       </div>
