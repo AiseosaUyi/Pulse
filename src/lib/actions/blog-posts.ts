@@ -8,6 +8,7 @@ import { getTenant } from "@/lib/services/tenants";
 import { getBrandContext } from "@/lib/ai/brand-positioning";
 import { generateBlogPost, BlogGenerationError } from "@/lib/ai/generate-blog-post";
 import { generateBlogIdeas, BlogIdeationError } from "@/lib/ai/blog-ideate";
+import { generateFaqForPost, FaqGenerationError } from "@/lib/ai/generate-faq";
 import type {
   BlogType,
   FeatureMeta,
@@ -659,6 +660,61 @@ export async function clearContentFlags(
   if (error) return { success: false, error: error.message };
   revalidatePath(`/seo-tracker/blog-writer/${id}`);
   return { success: true };
+}
+
+/**
+ * Generates 3-5 FAQ Q&A pairs grounded on the post's real current title +
+ * body, and appends them to whatever faq_items already exist (never
+ * overwrites). Used by the FAQ card in the blog editor sidebar.
+ */
+export async function generateFaqForExistingPost(
+  tenantSlug: string,
+  postId: string
+): Promise<ActionResult<{ faqItems: Array<{ question: string; answer: string }> }>> {
+  const supabase = await createClient();
+  const { data: post, error: fetchErr } = await supabase
+    .from("blog_posts")
+    .select("id, title, content, faq_items")
+    .eq("id", postId)
+    .eq("tenant_slug", tenantSlug)
+    .maybeSingle();
+  if (fetchErr || !post) return { success: false, error: "Post not found" };
+  if (!post.content?.trim()) {
+    return { success: false, error: "Write or generate the post body first." };
+  }
+
+  const { voice, positioning } = await getBrandContext(tenantSlug);
+  const existingFaq =
+    (post.faq_items as Array<{ question: string; answer: string }> | null) ?? [];
+
+  try {
+    const { items } = await generateFaqForPost({
+      tenantSlug,
+      title: post.title,
+      content: post.content,
+      voice,
+      positioning,
+      existingQuestions: existingFaq.map((f) => f.question),
+    });
+    const nextFaq = [...existingFaq, ...items];
+
+    const { error: updateErr } = await supabase
+      .from("blog_posts")
+      .update({ faq_items: nextFaq })
+      .eq("id", postId);
+    if (updateErr) return { success: false, error: updateErr.message };
+
+    revalidatePath(`/seo-tracker/blog-writer/${postId}`);
+    return { success: true, faqItems: nextFaq };
+  } catch (err) {
+    const msg =
+      err instanceof FaqGenerationError
+        ? "AI generation failed. Please try again."
+        : err instanceof Error
+          ? err.message
+          : "Unknown error";
+    return { success: false, error: msg };
+  }
 }
 
 export async function deleteBlogPost(

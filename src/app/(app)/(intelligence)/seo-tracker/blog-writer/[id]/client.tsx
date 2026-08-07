@@ -8,7 +8,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { JSONContent } from "@tiptap/core";
-import { ArrowLeft, History as HistoryIcon, Share2, Rocket, CheckCircle2, Circle, ExternalLink, Loader2, Sparkles, EyeOff } from "lucide-react";
+import { ArrowLeft, History as HistoryIcon, Share2, Rocket, CheckCircle2, Circle, ExternalLink, Loader2, Sparkles, EyeOff, HelpCircle, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,6 +40,7 @@ import {
   updateBlogPost,
   clearContentFlags,
   generateDraftForExistingPost,
+  generateFaqForExistingPost,
 } from "@/lib/actions/blog-posts";
 import { saveBlogContent } from "@/lib/actions/blog-versions";
 import type {
@@ -293,6 +294,9 @@ export function BlogEditorPageClient({
     toDateInput(post.updatedDate ?? post.updatedAt)
   );
   const [noindex, setNoindex] = useState(Boolean(post.noindex));
+  const [faqItems, setFaqItems] = useState(post.faqItems);
+  const [isGeneratingFaq, startGenerateFaq] = useTransition();
+  const [faqError, setFaqError] = useState<string | null>(null);
   const [detailsSaved, setDetailsSaved] = useState(false);
 
   const [isSaving, startSave] = useTransition();
@@ -425,6 +429,18 @@ export function BlogEditorPageClient({
     });
   };
 
+  const handleGenerateFaq = () => {
+    setFaqError(null);
+    startGenerateFaq(async () => {
+      const res = await generateFaqForExistingPost(tenantSlug, post.id);
+      if (!res.success) {
+        setFaqError(res.error);
+        return;
+      }
+      setFaqItems(res.faqItems);
+    });
+  };
+
   const handleDelete = async () => {
     const ok = await dialogs.confirm({
       title: `Delete "${post.title}"?`,
@@ -548,6 +564,7 @@ export function BlogEditorPageClient({
     publishedDate: publishedDate || null,
     updatedDate: updatedDate || null,
     noindex,
+    faqItems,
   });
 
   const handleSaveDetails = () => {
@@ -1056,6 +1073,111 @@ export function BlogEditorPageClient({
               {detailsSaved && (
                 <p className="text-[11px] text-status-green">Details saved.</p>
               )}
+            </div>
+          </div>
+
+          {/* FAQ — feeds blog_posts.faq_items, which the publish path pushes
+              to Contentful's faqItems field. Never shown inline in the
+              article body — rendered as invisible FAQPage JSON-LD on the
+              live site. Manual edits save via "Save details" above (folded
+              into detailsPatch); "Generate with AI" persists immediately. */}
+          <div className="rounded-lg border border-border bg-card">
+            <div className="px-4 py-3 border-b border-border/30 flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-foreground font-semibold text-sm flex items-center gap-1.5">
+                  <HelpCircle size={14} /> FAQ
+                </h3>
+                <p className="text-[11px] text-text-muted mt-0.5">
+                  Structured data only — never shown in the article body.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleGenerateFaq}
+                disabled={isGeneratingFaq || isSaving || isDeleting}
+                className="gap-1.5 shrink-0"
+              >
+                {isGeneratingFaq ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Sparkles size={14} />
+                )}
+                {isGeneratingFaq ? "Writing…" : "Generate"}
+              </Button>
+            </div>
+            <div className="p-4 space-y-3">
+              {faqItems.length === 0 ? (
+                <p className="text-[11px] text-text-muted">
+                  No FAQ items yet — add one, or generate a few from the post.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {faqItems.map((item, index) => (
+                    <div key={index} className="rounded-lg border border-border/60 p-3">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <Input
+                          value={item.question}
+                          onChange={(e) =>
+                            setFaqItems((prev) =>
+                              prev.map((f, i) =>
+                                i === index ? { ...f, question: e.target.value } : f
+                              )
+                            )
+                          }
+                          placeholder="Question"
+                          disabled={isSaving}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFaqItems((prev) => prev.filter((_, i) => i !== index))
+                          }
+                          disabled={isSaving}
+                          className="text-text-muted hover:text-red-500 p-1.5 rounded-md hover:bg-sidebar shrink-0"
+                          aria-label="Remove FAQ item"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <Textarea
+                        value={item.answer}
+                        onChange={(e) =>
+                          setFaqItems((prev) =>
+                            prev.map((f, i) =>
+                              i === index ? { ...f, answer: e.target.value } : f
+                            )
+                          )
+                        }
+                        placeholder="Answer"
+                        rows={2}
+                        disabled={isSaving}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() =>
+                  setFaqItems((prev) => [...prev, { question: "", answer: "" }])
+                }
+                disabled={isSaving}
+                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-border text-text-muted hover:text-foreground hover:border-primary-500/40 text-xs"
+              >
+                <Plus size={12} />
+                Add question
+              </button>
+              {faqError && <p className="text-[11px] text-red-500">{faqError}</p>}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={handleSaveDetails}
+                disabled={isSaving}
+              >
+                {isSaving ? "Saving…" : "Save details"}
+              </Button>
             </div>
           </div>
 
