@@ -51,15 +51,15 @@ export function AuthorPicker({
   };
 
   return (
-    <div>
+    <div className="min-w-0">
       <Label htmlFor="bp-author-picker">Author *</Label>
-      <div className="flex gap-2">
+      <div className="flex gap-2 min-w-0">
         <select
           id="bp-author-picker"
           value={current?.id ?? NONE_VALUE}
           onChange={(e) => handleChange(e.target.value)}
           disabled={disabled}
-          className="flex-1 h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
+          className="flex-1 min-w-0 h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground"
         >
           <option value={NONE_VALUE}>
             {selectedName && !current

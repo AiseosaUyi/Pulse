@@ -92,29 +92,7 @@ export function CreateAuthorModal({
       />
       <DialogBody>
         <div className="space-y-3">
-          <div className="grid grid-cols-[1fr_88px] gap-2 items-center overflow-hidden">
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="ca-name">Name *</Label>
-                <Input
-                  id="ca-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ada Obi"
-                  disabled={busy}
-                />
-              </div>
-              <div>
-                <Label htmlFor="ca-title">Role / title</Label>
-                <Input
-                  id="ca-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Events Editor"
-                  disabled={busy}
-                />
-              </div>
-            </div>
+          <div className="w-[88px]">
             <ImageUploadField
               label="Avatar"
               kind="author"
@@ -124,6 +102,27 @@ export function CreateAuthorModal({
               postId={postId}
               disabled={busy}
               onChange={setImageUrl}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="ca-name">Name *</Label>
+            <Input
+              id="ca-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ada Obi"
+              disabled={busy}
+            />
+          </div>
+          <div>
+            <Label htmlFor="ca-title">Role / title</Label>
+            <Input
+              id="ca-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Events Editor"
+              disabled={busy}
             />
           </div>
 
