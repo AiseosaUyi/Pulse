@@ -6,7 +6,6 @@ import { Toaster } from "@/components/ui/Toaster";
 import { RouteProgress } from "@/components/ui/RouteProgress";
 import { getCurrentUser, getUserTenants, getCurrentTenant } from "@/lib/auth";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
-import { getOnboardingProgress } from "@/lib/services/onboarding";
 
 export default async function AppLayout({
   children,
@@ -21,7 +20,6 @@ export default async function AppLayout({
 
   const currentTenant = await getCurrentTenant();
   const currentSlug = currentTenant?.slug ?? tenants[0].slug;
-  const currentName = currentTenant?.name ?? tenants[0].name;
   const currentAccountType = currentTenant?.accountType ?? tenants[0].accountType;
 
   // Onboarding gate: a tenant without brand voice hasn't been set up yet.
@@ -36,26 +34,20 @@ export default async function AppLayout({
     );
   }
 
-  const onboardingProgress = await getOnboardingProgress(currentSlug);
-
   return (
     <DialogProvider>
       <RouteProgress />
       <MobileNav
         tenants={tenants}
         currentTenantSlug={currentSlug}
-        currentTenantName={currentName}
         currentAccountType={currentAccountType}
-        onboardingProgress={onboardingProgress}
       />
       <div className="flex h-full">
         <div className="hidden md:block">
           <Sidebar
             tenants={tenants}
             currentTenantSlug={currentSlug}
-            currentTenantName={currentName}
             currentAccountType={currentAccountType}
-            onboardingProgress={onboardingProgress}
           />
         </div>
         <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
