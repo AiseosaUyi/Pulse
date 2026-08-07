@@ -11,8 +11,6 @@ import { getNotifications } from "@/lib/services/notifications";
 import { getTenant } from "@/lib/services/tenants";
 import { listActiveCoachActions } from "@/lib/services/coach";
 import { getLatestWeeklyReview } from "@/lib/services/weekly-reviews";
-import { getSetupStatus } from "@/lib/services/setup-status";
-import { SetupBanner } from "@/components/dashboard/SetupBanner";
 import { CadenceRail } from "@/app/(app)/(social)/composer/CadenceRail";
 import { getTracker } from "@/lib/services/cadence";
 import { formatCurrency } from "@/lib/utils/format";
@@ -23,7 +21,7 @@ export default async function DashboardPage() {
   const tenantSlug = currentTenant?.slug ?? "";
   const accountType = currentTenant?.accountType ?? "startup";
 
-  const [tenant, stats, platforms, suggestions, notifications, coachActions, weeklyReview, setupStatus, tracker] = await Promise.all([
+  const [tenant, stats, platforms, suggestions, notifications, coachActions, weeklyReview, tracker] = await Promise.all([
     getTenant(tenantSlug),
     getDashboardStats(tenantSlug),
     getPlatforms(tenantSlug),
@@ -31,7 +29,6 @@ export default async function DashboardPage() {
     getNotifications(tenantSlug),
     listActiveCoachActions(tenantSlug, 8),
     getLatestWeeklyReview(tenantSlug),
-    getSetupStatus(tenantSlug, accountType),
     getTracker(tenantSlug),
   ]);
 
@@ -97,11 +94,6 @@ export default async function DashboardPage() {
           </>
         )}
       </div>
-
-      {/* Launch readiness — collapsed by default so the tenant's real numbers
-          above lead the page; stays visible (not dismissed) until every
-          setup task is done */}
-      <SetupBanner status={setupStatus} />
 
       {/* Weekly business review — synthesis of what Pulse shipped this week */}
       <div className="mb-4">

@@ -1,6 +1,7 @@
 import { Share2, ExternalLink, AlertCircle, CheckCircle2 } from "lucide-react";
 import { SettingsPageHeading } from "../_shared";
 import { YouTubeIcon } from "@/components/icons/social";
+import { FeatureSetupNotice } from "@/components/ui/FeatureSetupNotice";
 import { getCurrentTenant } from "@/lib/auth";
 import {
   fetchAllSocialApiAccounts,
@@ -90,6 +91,11 @@ export default async function SocialPublishingSettingsPage({
               <p className="mt-0.5 text-xs text-text-muted">
                 Direct OAuth — free. Community posts require 500+ subscribers.
               </p>
+              {!youtubeConfigured && (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  Not set up — needs YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET in your deployment env, then redeploy.
+                </p>
+              )}
             </div>
             <div className="shrink-0">
               {youtubeConn ? (
@@ -119,29 +125,26 @@ export default async function SocialPublishingSettingsPage({
           </p>
 
           {!socialApiConfigured ? (
-            <div className="rounded-2xl border border-dashed border-border p-6 space-y-3">
-              <p className="text-sm text-text-muted">
-                These platforms connect via{" "}
-                <a href="https://social-api.ai" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
-                  SocialAPI.ai
-                </a>
-                {" "}— no platform app reviews needed.
-              </p>
-              <ol className="space-y-1.5 text-sm text-text-muted list-decimal list-inside">
-                <li>Sign up at social-api.ai (free Hobby plan or $29/mo Side Hustle)</li>
-                <li>Copy your API key from their dashboard</li>
-                <li>Paste your API key into your deployment settings and redeploy</li>
-                <li>Come back here to link accounts</li>
-              </ol>
-              <a
-                href="https://social-api.ai/dashboard"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-primary-500 bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-              >
-                Open SocialAPI.ai <ExternalLink size={13} />
-              </a>
-            </div>
+            <FeatureSetupNotice
+              icon={Share2}
+              title="Instagram, LinkedIn, and TikTok aren't connected yet"
+              description={
+                <>
+                  These platforms connect via{" "}
+                  <a href="https://social-api.ai" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
+                    SocialAPI.ai
+                  </a>
+                  {" "}— no platform app reviews needed.
+                </>
+              }
+              steps={[
+                "Sign up at social-api.ai (free Hobby plan or $29/mo Side Hustle)",
+                "Copy your API key from their dashboard",
+                "Paste your API key into your deployment settings and redeploy",
+                "Come back here to link accounts",
+              ]}
+              cta={{ label: "Open SocialAPI.ai", href: "https://social-api.ai/dashboard", external: true }}
+            />
           ) : (
             <div className="space-y-3">
               <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-text-muted flex items-center justify-between gap-4">
