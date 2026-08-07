@@ -40,9 +40,8 @@ urgent, but real:
 - [ ] **`/seo-tracker/blog-writer` — keyword cannibalization** — two separate pairs of posts target the same keyword (`best web3 conferences 2023`, `weekend events near me`).
 - [ ] **Blog editor author picker shows "(unsaved)" on already-published posts** — the `authors` table (migration 056) postdates these posts and nothing ever backfilled a link from their free-text author name. Needs a human-reviewed backfill script, not an automated guess.
 
-**Migrations pending** (write the SQL Editor, per this repo's convention):
-- `101_blog_draft_sections.sql` — adds `blog_posts.draft_sections` for the manual authoring flow.
-- `102_outbound_templates_dedupe_global_unique.sql` — dedupes double-seeded default templates + adds a unique constraint.
+**Migration pending** (run in the SQL Editor, per this repo's convention):
+- `101_blog_draft_sections.sql` — adds `blog_posts.draft_sections` for the manual authoring flow **and** dedupes double-seeded outbound templates + adds a unique constraint (merged from the former 102 into one paste-and-run).
 
 ---
 
