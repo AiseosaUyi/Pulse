@@ -24,9 +24,26 @@ interface Row {
   own_performance: OwnPerformance | null;
   seo_summary: SeoSummary | null;
   leads_summary: LeadsSummary | null;
+  // Populated by the separate "weekly business review" generator
+  // (src/lib/actions/weekly-reviews.ts), which upserts into the same
+  // weekly_digests row but only ever sets these two columns — the
+  // rules-based digest columns above (own_performance/seo_summary/
+  // leads_summary/strategic_brief) then keep their JSONB `{}`/NULL
+  // column defaults (migration 016) rather than being null outright,
+  // which is why they render as truthy-but-undefined without this guard.
+  narrative: string | null;
   generator_model: string | null;
   generator_cost_usd: string | null;
   generated_at: string;
+}
+
+/** DB defaults these JSONB columns to `{}` rather than NULL, so an
+ * un-populated column round-trips as a truthy-but-empty object instead
+ * of null. Treat "no keys" the same as "no data" so the UI's `own &&`
+ * guards behave correctly instead of rendering undefined fields. */
+function nullIfEmpty<T extends object>(v: T | null | undefined): T | null {
+  if (!v || Object.keys(v).length === 0) return null;
+  return v;
 }
 
 function rowTo(row: Row): WeeklyDigestRecord {
@@ -34,13 +51,15 @@ function rowTo(row: Row): WeeklyDigestRecord {
     id: row.id,
     tenantSlug: row.tenant_slug,
     weekOf: row.week_of,
-    strategicBrief: row.strategic_brief,
+    // Fall back to the business-review narrative when the rules-based
+    // digest pass never ran for this week (see Row.narrative comment).
+    strategicBrief: row.strategic_brief ?? row.narrative ?? null,
     topCompetitorMoves: row.top_competitor_moves ?? [],
     winningFormats: row.winning_formats ?? [],
     recommendedActions: (row.recommended_actions ?? []) as WeeklyDigestRecord["recommendedActions"],
-    ownPerformance: row.own_performance,
-    seoSummary: row.seo_summary,
-    leadsSummary: row.leads_summary,
+    ownPerformance: nullIfEmpty(row.own_performance),
+    seoSummary: nullIfEmpty(row.seo_summary),
+    leadsSummary: nullIfEmpty(row.leads_summary),
     generatorModel: row.generator_model,
     generatorCostUsd: row.generator_cost_usd ? Number(row.generator_cost_usd) : 0,
     generatedAt: row.generated_at,

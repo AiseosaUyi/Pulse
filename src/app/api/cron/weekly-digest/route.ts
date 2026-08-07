@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyFromRequest } from "@/lib/cron/auth";
 import { withCronRun } from "@/lib/cron/run-tracker";
 import { generateWeeklyDigest } from "@/lib/actions/weekly-digest";
+import { generateWeeklyReview } from "@/lib/actions/weekly-reviews";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -46,6 +47,32 @@ export async function POST(req: Request) {
       const message = err instanceof Error ? err.message : String(err);
       summary.errors.push({ tenant: tenant.slug, message });
       console.error(`[cron/weekly-digest] ${tenant.slug} threw`, message);
+    }
+
+    // Also refresh the narrative "weekly business review" (Dashboard
+    // widget + weekly-email cron both read weekly_digests.narrative).
+    // Nothing previously called generateWeeklyReview() automatically —
+    // it only ran when a user manually clicked "Generate this week" on
+    // the dashboard — so the narrative went stale indefinitely once
+    // that stopped happening, and weekly-email's `.not("narrative", "is",
+    // null)` gate meant no emails ever went out either. This cron's own
+    // "1hr before weekly-email" comment already assumed this happened.
+    try {
+      const reviewRes = await generateWeeklyReview(tenant.slug);
+      if (!reviewRes.success) {
+        summary.errors.push({
+          tenant: tenant.slug,
+          message: `weekly-review: ${reviewRes.error}`,
+        });
+        console.error(
+          `[cron/weekly-digest] ${tenant.slug} review generation failed`,
+          reviewRes.error
+        );
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      summary.errors.push({ tenant: tenant.slug, message: `weekly-review: ${message}` });
+      console.error(`[cron/weekly-digest] ${tenant.slug} review generation threw`, message);
     }
   }
 

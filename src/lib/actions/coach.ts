@@ -61,6 +61,30 @@ export async function coachForBlogPost(
   const post = await getBlogPostRecord(tenantSlug, blogPostId);
   if (!post) return { success: false, error: "Blog post not found" };
 
+  // Dedup: skip if this post already has open coach actions from a
+  // prior "Ask coach" click. Without this, repeated clicks on an
+  // unchanged post regenerate the same issues into fresh actions the
+  // LLM phrases 2-3 different ways each time (e.g. three separate
+  // "shorten the title" cards), flooding the queue with near-duplicates.
+  // Mirrors the dedup insertCoachActionAdmin() already does for the
+  // ads-signal cron path.
+  const supabase = await createClient();
+  const { data: existingOpen } = await supabase
+    .from("coach_actions")
+    .select("id")
+    .eq("tenant_slug", tenantSlug)
+    .eq("source_type", "blog_score")
+    .eq("source_id", blogPostId)
+    .in("status", ["pending", "in_progress", "snoozed"])
+    .limit(1);
+  if (existingOpen && existingOpen.length > 0) {
+    return {
+      success: false,
+      error:
+        "Coach already has open actions for this post — resolve or dismiss them before asking again.",
+    };
+  }
+
   const { voice, positioning } = await getBrandContext(tenantSlug);
 
   const scoreLine =

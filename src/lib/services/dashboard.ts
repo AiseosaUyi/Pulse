@@ -163,7 +163,14 @@ export async function getDashboardStats(
     profileScore: {
       label: "Profile score",
       value: String(profileScore),
-      subtitle: `${connected}/4 platforms connected`,
+      // "tracked" not "connected": this reads tenants.settings.platforms
+      // (manually-logged / seeded profile stats used for the platform
+      // score), a different concept from the real OAuth connections the
+      // "Connect your accounts" setup checklist checks via
+      // connected_accounts/whatsapp_accounts/tenant_integrations. Both
+      // legitimately exist; "connected" here was misleading since it
+      // implied the same thing as that checklist.
+      subtitle: `${connected}/4 platforms tracked`,
     },
     activeLeads: {
       label: "Active prospects",
@@ -287,7 +294,14 @@ export async function getDashboardStatsApi(
     profileScore: {
       label: "Profile score",
       value: String(profileScore),
-      subtitle: `${connected}/4 platforms connected`,
+      // "tracked" not "connected": this reads tenants.settings.platforms
+      // (manually-logged / seeded profile stats used for the platform
+      // score), a different concept from the real OAuth connections the
+      // "Connect your accounts" setup checklist checks via
+      // connected_accounts/whatsapp_accounts/tenant_integrations. Both
+      // legitimately exist; "connected" here was misleading since it
+      // implied the same thing as that checklist.
+      subtitle: `${connected}/4 platforms tracked`,
     },
     activeLeads: {
       label: "Active prospects",
