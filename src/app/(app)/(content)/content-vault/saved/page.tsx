@@ -19,7 +19,7 @@ export default async function VaultSavedPage() {
   const [saved, trends, storage] = await Promise.all([
     listSavedContent(tenantSlug),
     listTrendScouts(tenantSlug, { limit: 10 }),
-    getStorageUsage(),
+    getStorageUsage(tenantSlug),
   ]);
 
   const usedCount = saved.filter((c) => c.status === "used").length;

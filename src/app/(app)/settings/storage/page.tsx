@@ -15,7 +15,7 @@ export default async function StorageSettingsPage() {
   const tenantSlug = tenant?.slug ?? "";
 
   const [usage, largest] = await Promise.all([
-    getStorageUsage(),
+    getStorageUsage(tenantSlug),
     listLargestFiles(tenantSlug, 100),
   ]);
 
@@ -52,63 +52,8 @@ export default async function StorageSettingsPage() {
           <span>{pct}% full</span>
           <span>·</span>
           <span>{usage.totalFiles} files</span>
-          {usage.perTenant.length > 1 && (
-            <>
-              <span>·</span>
-              <span>across {usage.perTenant.length} tenants</span>
-            </>
-          )}
         </div>
       </div>
-
-      {/* Per-tenant breakdown */}
-      {usage.perTenant.length > 0 && (
-        <div className="bg-card rounded-xl border border-border/50 mb-6 overflow-hidden">
-          <div className="px-5 py-3 border-b border-border/30">
-            <h2 className="text-xs uppercase tracking-wide text-text-muted font-semibold">
-              Usage by tenant
-            </h2>
-          </div>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border/30">
-                <th className="text-left px-5 py-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                  Tenant
-                </th>
-                <th className="text-right px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                  Files
-                </th>
-                <th className="text-right px-5 py-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                  Size
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {usage.perTenant.map((t) => (
-                <tr
-                  key={t.tenantSlug}
-                  className={`border-b border-border/20 last:border-0 ${t.tenantSlug === tenantSlug ? "bg-primary-500/[0.04]" : ""}`}
-                >
-                  <td className="px-5 py-2.5 text-sm text-foreground font-mono">
-                    {t.tenantSlug}
-                    {t.tenantSlug === tenantSlug && (
-                      <span className="text-[10px] ml-2 text-primary-500">
-                        (you)
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-sm text-text-secondary text-right">
-                    {t.files}
-                  </td>
-                  <td className="px-5 py-2.5 text-sm text-text-secondary text-right">
-                    {formatBytes(t.bytes)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
 
       {/* Largest files in current tenant */}
       <StoragePruneClient tenantSlug={tenantSlug} files={largest} />

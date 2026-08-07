@@ -1,9 +1,10 @@
 // Storage usage accounting for the saved-assets bucket. Supabase's free
 // plan gives 1 GB; once you cross that they start charging ~$0.021/GB.
-// We list all objects in the bucket via the admin client, sum byte
-// counts, and group by the leading path segment (which is tenant_slug).
-// Cheap: Storage list responses include metadata.size so we don't touch
-// the objects themselves.
+// We list objects via the admin client (bypasses RLS) but always scope
+// the listing to a single tenant's path prefix (the leading path segment
+// is tenant_slug) — tenant-facing callers must never aggregate or expose
+// another tenant's usage. Cheap: Storage list responses include
+// metadata.size so we don't touch the objects themselves.
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { STORAGE_BUCKET } from "@/lib/storage/save-asset";
@@ -27,7 +28,6 @@ export interface StorageUsage {
   quotaBytes: number;
   usedRatio: number;
   warn: boolean;
-  perTenant: Array<{ tenantSlug: string; files: number; bytes: number }>;
 }
 
 interface RawObject {
@@ -69,10 +69,15 @@ async function listAllRecursive(prefix = ""): Promise<Array<RawObject & { path: 
   return all;
 }
 
-export async function getStorageUsage(): Promise<StorageUsage> {
+/**
+ * Storage usage for a single tenant, scoped to that tenant's path prefix.
+ * Never aggregates across tenants — this is what tenant-facing UI
+ * (Settings → Storage, the Content Vault meter) must call.
+ */
+export async function getStorageUsage(tenantSlug: string): Promise<StorageUsage> {
   let files: Array<RawObject & { path: string }> = [];
   try {
-    files = await listAllRecursive("");
+    files = await listAllRecursive(tenantSlug);
   } catch {
     // Bucket missing (migration 021 unapplied) or network blip — return
     // an empty usage report rather than breaking the page.
@@ -82,26 +87,10 @@ export async function getStorageUsage(): Promise<StorageUsage> {
       quotaBytes: STORAGE_QUOTA_BYTES,
       usedRatio: 0,
       warn: false,
-      perTenant: [],
     };
   }
 
-  const perTenantMap = new Map<string, { files: number; bytes: number }>();
-  let totalBytes = 0;
-  for (const f of files) {
-    const size = f.metadata?.size ?? 0;
-    totalBytes += size;
-    const tenantSlug = f.path.split("/")[0] ?? "unknown";
-    const entry = perTenantMap.get(tenantSlug) ?? { files: 0, bytes: 0 };
-    entry.files += 1;
-    entry.bytes += size;
-    perTenantMap.set(tenantSlug, entry);
-  }
-
-  const perTenant = Array.from(perTenantMap.entries())
-    .map(([tenantSlug, v]) => ({ tenantSlug, ...v }))
-    .sort((a, b) => b.bytes - a.bytes);
-
+  const totalBytes = files.reduce((sum, f) => sum + (f.metadata?.size ?? 0), 0);
   const usedRatio = totalBytes / STORAGE_QUOTA_BYTES;
   return {
     totalBytes,
@@ -109,7 +98,6 @@ export async function getStorageUsage(): Promise<StorageUsage> {
     quotaBytes: STORAGE_QUOTA_BYTES,
     usedRatio,
     warn: usedRatio >= STORAGE_WARN_RATIO,
-    perTenant,
   };
 }
 
