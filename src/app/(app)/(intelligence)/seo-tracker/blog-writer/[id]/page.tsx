@@ -41,6 +41,13 @@ export default async function BlogEditorPage({
       getBlogPublishRequirements(tenantSlug),
     ]);
 
+  // Prefer the current user's own author record (created_by = their user id)
+  // so returning to a new post prefills title/bio/url too, not just name/image.
+  // If they've created more than one, pick the most recently updated.
+  const ownAuthor = authors
+    .filter((a) => a.createdBy === user?.id)
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0] ?? null;
+
   return (
     <BlogEditorPageClient
       post={post}
@@ -55,8 +62,11 @@ export default async function BlogEditorPage({
       succeededTargets={succeededTargets}
       questionRequired={publishRequirements.questionRequired}
       profileDefaults={{
-        author: user?.displayName ?? null,
-        authorImage: user?.avatarUrl ?? null,
+        author: ownAuthor?.name ?? user?.displayName ?? null,
+        authorImage: ownAuthor?.imageUrl ?? user?.avatarUrl ?? null,
+        authorTitle: ownAuthor?.title ?? null,
+        authorBio: ownAuthor?.bio ?? null,
+        authorUrl: ownAuthor?.url ?? null,
       }}
     />
   );

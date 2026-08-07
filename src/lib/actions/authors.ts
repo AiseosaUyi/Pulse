@@ -27,6 +27,7 @@ function rowToRecord(row: Record<string, unknown>): AuthorRecord {
     bio: (row.bio as string) ?? null,
     imageUrl: (row.image_url as string) ?? null,
     url: (row.url as string) ?? null,
+    createdBy: (row.created_by as string) ?? null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };

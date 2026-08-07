@@ -9,6 +9,7 @@ interface AuthorRow {
   bio: string | null;
   image_url: string | null;
   url: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +23,7 @@ function rowTo(row: AuthorRow): AuthorRecord {
     bio: row.bio,
     imageUrl: row.image_url,
     url: row.url,
+    createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

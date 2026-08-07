@@ -6,6 +6,7 @@ export interface AuthorRecord {
   bio: string | null;
   imageUrl: string | null;
   url: string | null;
+  createdBy: string | null;
   createdAt: string;
   updatedAt: string;
 }

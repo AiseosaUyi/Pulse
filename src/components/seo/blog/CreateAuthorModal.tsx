@@ -92,7 +92,7 @@ export function CreateAuthorModal({
       />
       <DialogBody>
         <div className="space-y-3">
-          <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
+          <div className="grid grid-cols-[1fr_88px] gap-2 items-center overflow-hidden">
             <div className="space-y-3">
               <div>
                 <Label htmlFor="ca-name">Name *</Label>

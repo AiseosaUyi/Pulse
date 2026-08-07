@@ -38,6 +38,7 @@ function emptyForm(): ProviderForm {
       space_id: "",
       cma_token: "",
       environment: "",
+      test_environment: "",
       locale: "",
       blog_content_type: "",
       landing_content_type: "",
@@ -67,6 +68,9 @@ export function IntegrationsClient({
       if (rec.provider === "contentful") {
         base.contentful.space_id = String(rec.config.space_id ?? "");
         base.contentful.environment = String(rec.config.environment ?? "");
+        base.contentful.test_environment = String(
+          rec.config.test_environment ?? ""
+        );
         base.contentful.locale = String(rec.config.locale ?? "");
         base.contentful.blog_content_type = String(
           rec.config.blog_content_type ?? ""
@@ -198,6 +202,13 @@ export function IntegrationsClient({
       config = {
         space_id: form.space_id,
         environment: form.environment || "master",
+        // Optional — blank means publish-to-test reuses `environment`.
+        // Distinct from a "staging domain": this is the Contentful
+        // environment id (e.g. a separate `Production` env pointed at a
+        // gamma site), not a URL, so it needs its own field.
+        ...(form.test_environment
+          ? { test_environment: form.test_environment }
+          : {}),
         locale: form.locale || "en-US",
         // Optional overrides — blank means use the defaults (gruveBlog /
         // seoLandingPage), so each tenant only sets these if theirs differ.
@@ -517,6 +528,19 @@ function renderFields(
               placeholder="master"
             />
           </div>
+        </div>
+        <div>
+          <Label htmlFor="cf-test-env">Staging/test environment</Label>
+          <Input
+            id="cf-test-env"
+            value={form.test_environment}
+            onChange={(e) => onChange("test_environment", e.target.value)}
+            placeholder="e.g. Production (defaults to Environment above)"
+          />
+          <p className="text-[11px] text-text-muted mt-1">
+            Contentful environment id used when publishing to Staging. Leave
+            blank to reuse the environment above.
+          </p>
         </div>
         <div>
           <Label htmlFor="cf-token">Content Management API token</Label>

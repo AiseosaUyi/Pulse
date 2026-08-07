@@ -188,7 +188,13 @@ export function BlogEditorPageClient({
   versions: BlogPostVersionRecord[];
   feedback: BlogPostFeedbackRecord[];
   distributions: ContentDistributionRecord[];
-  profileDefaults?: { author: string | null; authorImage: string | null };
+  profileDefaults?: {
+    author: string | null;
+    authorImage: string | null;
+    authorTitle?: string | null;
+    authorBio?: string | null;
+    authorUrl?: string | null;
+  };
   /** Tenant's own site host, for internal-vs-external link scoring. */
   siteDomain?: string | null;
   /** Reusable authors for this tenant. */
@@ -245,9 +251,9 @@ export function BlogEditorPageClient({
   // SEO / E-E-A-T fields (slice 2).
   const [tags, setTags] = useState<string[]>(post.tags ?? []);
   const [category, setCategory] = useState(post.category ?? "");
-  const [authorBio, setAuthorBio] = useState(post.authorBio ?? "");
-  const [authorTitle, setAuthorTitle] = useState(post.authorTitle ?? "");
-  const [authorUrl, setAuthorUrl] = useState(post.authorUrl ?? "");
+  const [authorBio, setAuthorBio] = useState(post.authorBio ?? profileDefaults?.authorBio ?? "");
+  const [authorTitle, setAuthorTitle] = useState(post.authorTitle ?? profileDefaults?.authorTitle ?? "");
+  const [authorUrl, setAuthorUrl] = useState(post.authorUrl ?? profileDefaults?.authorUrl ?? "");
   const [publishedDate, setPublishedDate] = useState(toDateInput(post.publishedDate));
   const [updatedDate, setUpdatedDate] = useState(toDateInput(post.updatedDate));
   const [noindex, setNoindex] = useState(Boolean(post.noindex));
@@ -832,7 +838,7 @@ export function BlogEditorPageClient({
             <div className="px-4 py-3 border-b border-border/30">
               <h3 className="text-foreground font-semibold text-sm">SEO &amp; author details</h3>
               <p className="text-[11px] text-text-muted mt-0.5">
-                Strengthens Article schema, E‑E‑A‑T &amp; internal linking.
+                Helps search engines trust the post and its author.
               </p>
             </div>
             <div className="p-4 space-y-3">
@@ -845,7 +851,7 @@ export function BlogEditorPageClient({
                   placeholder="Add a tag and press Enter"
                 />
                 <p className="text-[11px] text-text-muted mt-1">
-                  AI-suggested from the post — remove any with ✕, type to add more.
+                  Pulled from the post — remove what doesn&apos;t fit, add your own.
                 </p>
               </div>
               <div>
@@ -904,9 +910,12 @@ export function BlogEditorPageClient({
                   value={authorBio}
                   onChange={(e) => setAuthorBio(e.target.value)}
                   rows={2}
-                  placeholder="Short author bio — feeds Person schema (E‑E‑A‑T)."
+                  placeholder="A couple sentences about this author"
                   disabled={isSaving}
                 />
+                <p className="text-[11px] text-text-muted mt-1">
+                  Shown with the byline and helps establish credibility with search engines.
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -968,7 +977,7 @@ export function BlogEditorPageClient({
               </p>
             </div>
             <div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
-              <div className="rounded-lg border border-dashed border-primary-500/30 bg-primary-50/40 p-3 flex items-center justify-between gap-3">
+              <div className="rounded-lg border border-dashed border-primary-500/30 bg-primary-50/40 p-3 flex flex-col gap-3">
                 <p className="text-[11px] text-text-muted">
                   Skip the designer — fetch a free stock photo matched to your
                   topic and fill both banner + thumbnail.
@@ -978,7 +987,7 @@ export function BlogEditorPageClient({
                   size="sm"
                   onClick={handleAutofillImage}
                   disabled={isAutofilling || isPublishing}
-                  className="shrink-0 gap-1.5"
+                  className="w-full gap-1.5"
                 >
                   {isAutofilling ? (
                     <Loader2 size={14} className="animate-spin" />
@@ -1020,7 +1029,7 @@ export function BlogEditorPageClient({
                   disabled={isPublishing}
                 />
               </div>
-              <div className="grid grid-cols-[1fr_88px] gap-2 items-start overflow-hidden">
+              <div className="grid grid-cols-[1fr_88px] gap-2 items-center overflow-hidden">
                 <AuthorPicker
                   tenantSlug={tenantSlug}
                   postId={post.id}
