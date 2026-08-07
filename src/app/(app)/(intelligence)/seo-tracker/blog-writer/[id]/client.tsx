@@ -39,6 +39,7 @@ import {
   deleteBlogPost,
   updateBlogPost,
   clearContentFlags,
+  generateDraftForExistingPost,
 } from "@/lib/actions/blog-posts";
 import { saveBlogContent } from "@/lib/actions/blog-versions";
 import type {
@@ -301,6 +302,8 @@ export function BlogEditorPageClient({
   const [unpublishError, setUnpublishError] = useState<string | null>(null);
   const [isClearingFlags, startClearFlags] = useTransition();
   const [flagsError, setFlagsError] = useState<string | null>(null);
+  const [isGeneratingDraft, startGenerateDraft] = useTransition();
+  const [generateDraftError, setGenerateDraftError] = useState<string | null>(null);
   // Default to the safe target: test (gamma), not live (www).
   const [publishTarget, setPublishTarget] = useState<"test" | "live">("test");
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -404,6 +407,18 @@ export function BlogEditorPageClient({
       const res = await clearContentFlags(post.id, tenantSlug);
       if (!res.success) {
         setFlagsError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  const handleGenerateDraft = () => {
+    setGenerateDraftError(null);
+    startGenerateDraft(async () => {
+      const res = await generateDraftForExistingPost(tenantSlug, post.id);
+      if (!res.success) {
+        setGenerateDraftError(res.error);
         return;
       }
       router.refresh();
@@ -837,6 +852,33 @@ export function BlogEditorPageClient({
                 </span>
               )}
             </div>
+
+            {!post.content && (
+              <div className="rounded-lg border border-dashed border-primary-500/30 bg-primary-50/40 p-3 mb-2 flex flex-col gap-2">
+                <p className="text-[11px] text-text-muted">
+                  Blank post — write it yourself below, or generate a first
+                  draft from the title to edit from there.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGenerateDraft}
+                  disabled={isGeneratingDraft || isSaving || isDeleting}
+                  className="w-full gap-1.5"
+                >
+                  {isGeneratingDraft ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                  {isGeneratingDraft ? "Writing…" : "Generate a full draft"}
+                </Button>
+                {generateDraftError && (
+                  <p className="text-[11px] text-red-500">{generateDraftError}</p>
+                )}
+              </div>
+            )}
+
             <TiptapEditor
               key={post.updatedAt}
               initialJson={initialJson}

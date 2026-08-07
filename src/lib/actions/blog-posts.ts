@@ -257,6 +257,149 @@ export async function createManualBlogPost(
   }
 }
 
+/**
+ * Manual-authoring "Generate a full draft" action — for a post created via
+ * startManualBlogDraft (blank content, real title, no AI call yet). Runs the
+ * exact same full-post pipeline as every AI-generated post (multi-pass
+ * expand/refine/score) grounded on the title the user already typed, then
+ * writes the result into the EXISTING row instead of inserting a new one.
+ * Title is never overridden — the user's manual title stays exactly as
+ * typed; only body/meta/outline/score get filled in.
+ */
+export async function generateDraftForExistingPost(
+  tenantSlug: string,
+  postId: string
+): Promise<ActionResult<CreateBlogResult>> {
+  const supabase = await createClient();
+  const { data: post, error: fetchErr } = await supabase
+    .from("blog_posts")
+    .select("id, title, slug")
+    .eq("id", postId)
+    .eq("tenant_slug", tenantSlug)
+    .maybeSingle();
+  if (fetchErr || !post) return { success: false, error: "Post not found" };
+  if (!post.title?.trim()) {
+    return { success: false, error: "Add a title before generating a draft." };
+  }
+
+  const tenant = await getTenant(tenantSlug);
+  if (!tenant) return { success: false, error: "Tenant not found" };
+
+  const { voice, positioning } = await getBrandContext(tenantSlug);
+
+  try {
+    const generation = await generateBlogPost({
+      tenantSlug,
+      tenantName: tenant.name,
+      voice,
+      positioning,
+      targetKeyword: post.title,
+      titleOverride: post.title,
+      improveTitle: false,
+    });
+
+    const { post: draft, meta, score } = generation;
+    const htmlEntityDecodedScriptTag = draft.content.replace(
+      /&lt;script([^&]*)&gt;/gi,
+      "<script$1>"
+    ).replace(/&lt;\/script&gt;/gi, "</script>");
+    const { cleanedContent, extractedFaq } = extractAndStripFaqSection(
+      htmlEntityDecodedScriptTag
+    );
+    const finalWordCount = countWords(cleanedContent);
+    const contentFlags = scanBlogContent(cleanedContent, voice);
+    const googlePreview = buildGooglePreview({
+      title: post.title,
+      metaDescription: draft.meta_description,
+      slug: post.slug,
+      tenantDomain: tenant.domain,
+    });
+
+    const { error: updateErr } = await supabase
+      .from("blog_posts")
+      .update({
+        target_keyword: post.title,
+        secondary_keywords: draft.secondary_keywords,
+        meta_description: draft.meta_description,
+        excerpt: draft.meta_description,
+        outline: draft.outline,
+        content: cleanedContent,
+        content_json: null,
+        faq_items: extractedFaq,
+        word_count: finalWordCount,
+        generator_model: "openai/gpt-4.1",
+        generation_meta: meta,
+        google_preview: googlePreview,
+        content_score: score?.total ?? null,
+        sub_scores: score?.subScores ?? null,
+        score_issues: score?.issues ?? [],
+        score_warning: meta.score_warning === true,
+        content_flags: contentFlags,
+        content_flags_cleared: false,
+      })
+      .eq("id", postId);
+    if (updateErr) return { success: false, error: updateErr.message };
+
+    revalidatePath(`/seo-tracker/blog-writer/${postId}`);
+    revalidatePath("/seo-tracker/blog-writer");
+    return {
+      success: true,
+      postId,
+      wordCount: finalWordCount,
+      targetWordCount: meta.target_word_count,
+      wordCountWarning: meta.stopped_reason === "max_passes_reached",
+      contentScore: score?.total ?? null,
+      scoreWarning: meta.score_warning === true,
+    };
+  } catch (err) {
+    return { success: false, error: humanizeGenerationError(err) };
+  }
+}
+
+/** Manual-authoring "Write it myself" entry point — creates a blank post
+ *  (real title, empty content) with no AI call, and drops the author
+ *  straight into the normal editor. "Generate a full draft" (above) is an
+ *  optional in-editor assist, not a forced step. */
+export async function startManualBlogDraft(
+  tenantSlug: string,
+  input: { title: string }
+): Promise<ActionResult<{ postId: string }>> {
+  const title = input.title.trim();
+  if (!title) {
+    return { success: false, error: "Give the post a title to get started." };
+  }
+
+  const tenant = await getTenant(tenantSlug);
+  if (!tenant) return { success: false, error: "Tenant not found" };
+
+  const slug = await uniqueSlugFor(tenantSlug, title);
+  const googlePreview = buildGooglePreview({
+    title,
+    metaDescription: null,
+    slug,
+    tenantDomain: tenant.domain,
+  });
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .insert({
+      tenant_slug: tenantSlug,
+      title,
+      slug,
+      content: "",
+      status: "draft",
+      word_count: 0,
+      google_preview: googlePreview,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { success: false, error: error?.message ?? "Insert failed" };
+
+  revalidatePath("/seo-tracker/blog-writer");
+  return { success: true, postId: data.id };
+}
+
 export async function updateBlogPost(
   id: string,
   tenantSlug: string,

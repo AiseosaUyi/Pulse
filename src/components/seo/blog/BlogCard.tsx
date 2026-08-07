@@ -66,8 +66,8 @@ export function BlogCard({
   // Always derive from the post's current title/meta/slug rather than
   // trusting the cached blog_posts.google_preview column: that cache is
   // only written at creation/regeneration time (see buildGooglePreview
-  // call sites in lib/actions/blog-posts.ts, blog-regeneration.ts,
-  // blog-sections.ts) and NOT by the plain title/meta edit path
+  // call sites in lib/actions/blog-posts.ts, blog-regeneration.ts) and
+  // NOT by the plain title/meta edit path
   // (updateBlogPost in lib/actions/blog-posts.ts) — a post whose title
   // was hand-edited and saved keeps showing its old title/slug here
   // indefinitely. Recomputing is cheap (pure truncation, no AI/network

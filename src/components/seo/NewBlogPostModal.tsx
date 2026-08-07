@@ -10,8 +10,8 @@ import { Label } from "@/components/ui/label";
 import {
   generateBlogIdeasAction,
   commitBlogIdea,
+  startManualBlogDraft,
 } from "@/lib/actions/blog-posts";
-import { startManualBlogDraft } from "@/lib/actions/blog-sections";
 import {
   BLOG_TYPES,
   BLOG_TYPE_LABELS,
@@ -158,16 +158,12 @@ export function NewBlogPostModal({
       return;
     }
     startTransition(async () => {
-      const res = await startManualBlogDraft(tenantSlug, {
-        title: manualTitle,
-        blogType: manualTitle ? blogType : undefined,
-        extraContext: extra.trim() || undefined,
-      });
+      const res = await startManualBlogDraft(tenantSlug, { title: manualTitle });
       if (!res.success) {
         setError(res.error);
         return;
       }
-      router.push(`/seo-tracker/blog-writer/${res.postId}/sections`);
+      router.push(`/seo-tracker/blog-writer/${res.postId}`);
       onClose();
     });
   };
@@ -201,7 +197,7 @@ export function NewBlogPostModal({
                 {step === "pick-type" && mode === "ai" &&
                   "Pick a type — we'll suggest topics that fit your brand and current trends."}
                 {step === "pick-type" && mode === "manual" &&
-                  "Give it a title and start writing — generate any section with AI when you want a hand."}
+                  "Give it a title — you'll land in the same full editor as an AI-generated post."}
                 {step === "ideating" &&
                   "Generating ideas from brand voice, positioning, competitors, and trends…"}
                 {step === "review-ideas" &&
@@ -263,39 +259,10 @@ export function NewBlogPostModal({
                       placeholder="What's this post called?"
                       disabled={isPending}
                     />
-                  </div>
-                  <div>
-                    <Label>Blog type (optional, helps AI stay on-topic)</Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                      {BLOG_TYPES.map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setBlogType(t)}
-                          disabled={isPending}
-                          className={`text-left p-3 rounded-lg border transition-colors ${
-                            blogType === t
-                              ? "border-primary-500 bg-primary-500/5"
-                              : "border-border hover:border-primary-500/40"
-                          }`}
-                        >
-                          <p className="text-foreground text-sm font-medium">
-                            {BLOG_TYPE_LABELS[t]}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="np-manual-extra">Extra context (optional)</Label>
-                    <Textarea
-                      id="np-manual-extra"
-                      value={extra}
-                      onChange={(e) => setExtra(e.target.value)}
-                      placeholder="Anything worth knowing before you start writing?"
-                      rows={2}
-                      disabled={isPending}
-                    />
+                    <p className="text-text-muted text-xs mt-1.5">
+                      Opens straight into the full editor — write it yourself,
+                      or generate a first draft to edit from there.
+                    </p>
                   </div>
                 </>
               ) : (
