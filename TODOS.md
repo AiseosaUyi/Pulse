@@ -20,6 +20,32 @@ item unblocks something earlier.
 
 ---
 
+## QA sweep backlog — deferred low-severity findings (2026-08-07)
+
+Full app QA sweep (5 baseline + 6 exhaustive deep-dive passes, real browser testing against
+the Gruve tenant). High/medium findings were fixed same-day (see commits `a0a29c3`, `e952e6a`,
+`64bf181`, `3320336`, `dcfcac5`, `17212b6`). These low-severity items were deferred — not
+urgent, but real:
+
+- [ ] **`/leads` prospect drawer overflows viewport horizontally at ~1568px** — action buttons (Copy reply link, Analyse, Edit, Delete) require horizontal scroll to reach at normal desktop width.
+- [ ] **`/schedule` — stale "Scheduled" posts never reconcile** — a post scheduled ~2.5 weeks ago never transitioned to Published/Failed. Likely a dev-only QStash-can't-reach-localhost artifact, but worth confirming stale scheduled posts get flagged/reconciled in production.
+- [ ] **`/settings/appearance` promises a "System" theme option that doesn't render** — copy says "Pick Light, Dark, or System"; only Light/Dark actually show.
+- [ ] **`/seo-tracker/keywords` — stray "Raves in lagos" keyword** doesn't fit the tenant's Web3/event-conference theme; looks like leftover test data.
+- [ ] **`/seo-tracker/keywords` — all 26 tracked keywords show Volume: 0, Position: —** despite Difficulty being populated. Confirm rank/volume ingestion is actually wired up for this tenant.
+- [ ] **`/ads-tracker` manual campaign form has no visible error message** on failed required-field validation — just silent focus return, no inline text.
+- [ ] **`/leads` — inconsistent Naira price formatting** between listings from the same scraper run (₦1.07 vs ₦1,070.00) — likely a `priceRaw` parsing bug on at least one source.
+- [ ] **`/leads` → Discovery "Run now" scraper buttons have no confirmation dialog and no disabled state** — a misclick triggers a real external crawl.
+- [ ] **`/settings/content-engine` — stray "Cocktail Build" (drink-recipe) format forked under Gruve** — confirmed correctly tenant-scoped (not a leak), just an accidental fork, likely from a dev account that owns both Gruve and Sippy workspaces. Delete via the UI when convenient.
+- [ ] **`/seo-tracker/topical-map` — 3/26 keywords silently excluded from clustering** despite the header claiming all 26 are covered ("4 clusters across 26 keywords" but clusters sum to 23).
+- [ ] **`/seo-tracker/blog-writer` — keyword cannibalization** — two separate pairs of posts target the same keyword (`best web3 conferences 2023`, `weekend events near me`).
+- [ ] **Blog editor author picker shows "(unsaved)" on already-published posts** — the `authors` table (migration 056) postdates these posts and nothing ever backfilled a link from their free-text author name. Needs a human-reviewed backfill script, not an automated guess.
+
+**Migrations pending** (write the SQL Editor, per this repo's convention):
+- `101_blog_draft_sections.sql` — adds `blog_posts.draft_sections` for the manual authoring flow.
+- `102_outbound_templates_dedupe_global_unique.sql` — dedupes double-seeded default templates + adds a unique constraint.
+
+---
+
 ## P1 — F2 Polish (close the loop on what just shipped)
 
 - [ ] **Overwrite placeholder brand voice** — I wrote a placeholder for Gruve during smoke testing. Visit `/settings/brand-voice` → overwrite with the real Gruve voice, then do Sippy too. Run an on-demand "Steal This" to verify output quality with the real voice. (~30 min manual per tenant)
