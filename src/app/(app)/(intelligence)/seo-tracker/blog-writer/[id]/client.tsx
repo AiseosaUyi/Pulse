@@ -117,7 +117,7 @@ const FIELD_LABELS: Record<string, string> = {
   authorUrl: "Author URL",
   publishedDate: "Published date",
   updatedDate: "Updated date",
-  noindex: "No-index flag",
+  noindex: "Noindex flag",
   bannerImage: "Banner image",
   thumbnail: "Thumbnail",
   authorImage: "Author image",
@@ -145,7 +145,7 @@ function humanizeValidationDetail(detail?: string, name?: string): string {
     const typeMismatch = detail.match(/expected type:\s*(\w+)/i);
     if (typeMismatch) {
       const kind = CONTENTFUL_TYPE_NAMES[typeMismatch[1]] ?? typeMismatch[1];
-      return `should be ${kind}, but got something else — this usually fixes itself if you try publishing again`;
+      return `should be ${kind}, but got something else. This usually fixes itself if you try publishing again`;
     }
     if (/is not one of/i.test(detail)) {
       return "has a value that isn't one of the allowed options";
@@ -771,7 +771,7 @@ export function BlogEditorPageClient({
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium text-red-500">
                   {post.contentFlags.length} content flag
-                  {post.contentFlags.length === 1 ? "" : "s"} — needs verification before publish
+                  {post.contentFlags.length === 1 ? "" : "s"}, needs verification before publish
                 </p>
                 {post.contentFlagsCleared ? (
                   <span className="text-xs font-medium text-status-green shrink-0">
@@ -839,7 +839,7 @@ export function BlogEditorPageClient({
                 <div
                   id="bp-status"
                   className="w-full h-11 px-3 rounded-lg border border-border bg-sidebar text-sm text-text-muted flex items-center"
-                  title="Set by the publish pipeline — not editable from this screen."
+                  title="Set by the publish pipeline. Not editable from this screen."
                 >
                   {STATUS_LABELS[post.status] ?? post.status}
                 </div>
@@ -873,7 +873,7 @@ export function BlogEditorPageClient({
             {!post.content && (
               <div className="rounded-lg border border-dashed border-primary-500/30 bg-primary-50/40 p-3 mb-2 flex flex-col gap-2">
                 <p className="text-[11px] text-text-muted">
-                  Blank post — write it yourself below, or generate a first
+                  Blank post. Write it yourself below, or generate a first
                   draft from the title to edit from there.
                 </p>
                 <Button
@@ -900,7 +900,7 @@ export function BlogEditorPageClient({
               key={post.updatedAt}
               initialJson={initialJson}
               initialMarkdown={post.content}
-              placeholder="Start writing. Markdown shortcuts work: ## heading, - list, > quote…"
+              placeholder="Start writing…"
               disabled={isSaving || isDeleting}
               onChange={setEditorState}
               tenantSlug={tenantSlug}
@@ -977,7 +977,7 @@ export function BlogEditorPageClient({
                     disabled={isSaving}
                     className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground capitalize"
                   >
-                    <option value="">— none —</option>
+                    <option value="">None</option>
                     {categories.map((c) => (
                       <option key={c} value={c}>
                         {c.replace(/_/g, " ")}
@@ -1088,7 +1088,7 @@ export function BlogEditorPageClient({
                   <HelpCircle size={14} /> FAQ
                 </h3>
                 <p className="text-[11px] text-text-muted mt-0.5">
-                  Structured data only — never shown in the article body.
+                  Structured data only, never shown in the article body.
                 </p>
               </div>
               <Button
@@ -1109,7 +1109,7 @@ export function BlogEditorPageClient({
             <div className="p-4 space-y-3">
               {faqItems.length === 0 ? (
                 <p className="text-[11px] text-text-muted">
-                  No FAQ items yet — add one, or generate a few from the post.
+                  No FAQ items yet. Add one, or generate a few from the post.
                 </p>
               ) : (
                 <div className="space-y-3">
@@ -1197,8 +1197,8 @@ export function BlogEditorPageClient({
             <div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
               <div className="rounded-lg border border-dashed border-primary-500/30 bg-primary-50/40 p-3 flex flex-col gap-3">
                 <p className="text-[11px] text-text-muted">
-                  Skip the designer — fetch a free stock photo matched to your
-                  topic and fill both banner + thumbnail.
+                  Skip the designer. Fetch a free stock photo matched to your
+                  topic and fill both banner and thumbnail.
                 </p>
                 <Button
                   variant="outline"
@@ -1243,7 +1243,7 @@ export function BlogEditorPageClient({
                   id="bp-question"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
-                  placeholder="The sub-heading / FAQ-style hook"
+                  placeholder="The subheading or FAQ style hook"
                   disabled={isPublishing}
                 />
               </div>
