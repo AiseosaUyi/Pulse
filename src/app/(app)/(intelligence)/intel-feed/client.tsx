@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Settings } from "lucide-react";
 import { AddPostModal } from "@/components/intelligence/AddPostModal";
@@ -24,16 +24,24 @@ interface Props {
 }
 
 export function IntelFeedTabs({ feed, xSignals, competitors, tenantSlug, trends }: Props) {
-  const [tab, setTab] = useState<Tab>(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const t = params.get("tab");
-      if (t === "trends" || t === "x_signals" || t === "competitors") return t;
-    }
-    return "competitors";
-  });
+  // Initial state must be deterministic (same on server + first client render) to
+  // avoid a hydration mismatch — reading window.location.search here previously made
+  // the very first client render diverge from the server-rendered markup whenever a
+  // `?tab=` param was present, which showed up as a badge/active-tab styling mismatch.
+  // The URL is instead read post-mount, in the effect below.
+  const [tab, setTab] = useState<Tab>("competitors");
   const [showModal, setShowModal] = useState(false);
   const [visibleXSignals, setVisibleXSignals] = useState(xSignals);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("tab");
+    if (t === "trends" || t === "x_signals" || t === "competitors") {
+      setTab(t);
+    }
+    // Only ever read on mount — subsequent tab changes are driven by the tab bar itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "competitors", label: "Competitor intel", count: feed.length || undefined },

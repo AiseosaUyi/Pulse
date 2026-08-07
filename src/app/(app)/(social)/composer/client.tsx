@@ -125,7 +125,7 @@ function DraftRow({
       <span style={{ color }} className="shrink-0">
         <Icon size={14} />
       </span>
-      <p className="flex-1 truncate text-xs text-gray-1100">{preview}</p>
+      <p className="min-w-0 flex-1 truncate text-xs text-gray-1100">{preview}</p>
       <span className="shrink-0 text-xs text-gray-900">{date}</span>
       <button
         type="button"

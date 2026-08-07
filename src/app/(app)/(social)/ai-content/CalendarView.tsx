@@ -30,7 +30,13 @@ function getMondayOf(dateStr: string): Date {
 }
 
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // Build from local date parts — toISOString() converts to UTC first, which
+  // rolls the date over a day early/late for any timezone behind/ahead of UTC
+  // (e.g. "today" resolving to tomorrow in US timezones near midnight).
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function addDays(d: Date, n: number): Date {

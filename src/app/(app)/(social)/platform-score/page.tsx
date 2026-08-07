@@ -132,7 +132,7 @@ export default async function PlatformScorePage() {
                       {p.score}/100
                     </span>
                     <span className={`text-xs ${p.trend === "up" ? "text-status-green" : p.trend === "down" ? "text-status-red" : "text-text-muted"}`}>
-                      {p.trend === "up" ? "↑" : p.trend === "down" ? "↓" : "→"}
+                      {p.trend === "up" ? "↑" : p.trend === "down" ? "↓" : "•"}
                     </span>
                   </div>
                 </div>

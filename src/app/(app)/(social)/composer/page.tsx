@@ -49,7 +49,7 @@ export default async function ComposerPage({
       )}
 
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
-        <div className="lg:flex-1">
+        <div className="lg:min-w-0 lg:flex-1">
           <Composer tenantSlug={tenant.slug} initialAngle={initialAngle} initialDate={initialDate} hasConnections={hasConnections} initialDrafts={initialDrafts} />
         </div>
         <div className="hidden w-80 shrink-0 lg:block lg:sticky lg:top-8">
