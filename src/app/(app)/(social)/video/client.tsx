@@ -22,6 +22,7 @@ import {
 import { createGeneration, createSignedVideoUpload, registerVideoAsset } from "@/lib/actions/video-generate";
 import { estimateSeedanceCredits } from "@/lib/video/providers/seedance-constraints";
 import { toast } from "@/components/ui/Toaster";
+import { FeatureSetupNotice } from "@/components/ui/FeatureSetupNotice";
 import type { ClipMode, VideoCharacter } from "@/lib/types/video";
 import type {
   GenerationSummary,
@@ -190,8 +191,18 @@ export function VideoStudioClient({
       </header>
 
       {!providerConfigured && (
-        <div className="mb-5 rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
-          Video generation isn’t enabled yet. Storyboards and scripts still work — ask your developer to enable video generation to start creating clips.
+        <div className="mb-5">
+          <FeatureSetupNotice
+            icon={Clapperboard}
+            title="Video generation isn't set up yet"
+            description="Storyboards and scripts still work, but rendering clips needs a PicsArt API key — the video provider stays dormant until PICSART_API_KEY is configured."
+            steps={[
+              "Sign up for API access at picsart.io",
+              "Grab your API key from the PicsArt developer dashboard",
+              "Add PICSART_API_KEY to your deployment environment and redeploy",
+            ]}
+            cta={{ label: "Open PicsArt", href: "https://picsart.io", external: true }}
+          />
         </div>
       )}
 

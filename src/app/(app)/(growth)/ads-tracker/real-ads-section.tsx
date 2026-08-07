@@ -4,12 +4,15 @@
 // synced campaign list, active alerts, and budget guardrail rules.
 
 import Link from "next/link";
+import { Radar } from "lucide-react";
 import { listAdAccountsForTenant } from "@/lib/services/ad-accounts";
 import { getAdCampaignRoas, getAdRoasSummary } from "@/lib/attribution/ads";
 import { listAdAlerts } from "@/lib/services/ad-alerts";
 import { listAdBudgetRules } from "@/lib/services/ad-budget-rules";
 import { listCompetitorAds } from "@/lib/services/competitor-ads";
+import { isMetaAdLibraryConfigured } from "@/lib/integrations/meta-ad-library";
 import { formatCurrency } from "@/lib/utils/format";
+import { FeatureSetupNotice } from "@/components/ui/FeatureSetupNotice";
 import { BudgetRulesPanel } from "./budget-rules-panel";
 import { UtmMappingButton } from "./utm-mapping-button";
 
@@ -138,7 +141,7 @@ export async function RealAdsSection({ tenantSlug }: { tenantSlug: string }) {
         </section>
       )}
 
-      {competitorAds.length > 0 && (
+      {competitorAds.length > 0 ? (
         <section className="bg-card rounded-2xl border border-border/50 p-5">
           <h2 className="text-sm font-semibold text-foreground mb-1">Competitor ads still running</h2>
           <p className="text-xs text-text-muted mb-3">
@@ -168,7 +171,18 @@ export async function RealAdsSection({ tenantSlug }: { tenantSlug: string }) {
             })}
           </div>
         </section>
-      )}
+      ) : !isMetaAdLibraryConfigured() ? (
+        <FeatureSetupNotice
+          icon={Radar}
+          title="Competitor ad intelligence isn't set up yet"
+          description="Needs a Meta Ad Library access token to pull public ad data for your competitors. Even once configured, exact spend and impression numbers are only available for political or EU-regulated ads — for an ordinary commercial competitor you'll still get real creative, longevity, and platform data, just not a spend figure."
+          steps={[
+            "Get a Meta Ad Library API access token (a verified developer account is enough — no Business Verification or App Review needed, unlike the full Marketing API)",
+            "Add META_AD_LIBRARY_ACCESS_TOKEN to your deployment environment and redeploy",
+            "The sync-competitor-ads cron picks up creative, longevity, and platform data on its next run",
+          ]}
+        />
+      ) : null}
 
       <BudgetRulesPanel tenantSlug={tenantSlug} accounts={accounts} initialRules={rules} />
     </div>
