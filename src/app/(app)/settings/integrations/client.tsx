@@ -50,9 +50,11 @@ function emptyForm(): ProviderForm {
 export function IntegrationsClient({
   tenantSlug,
   initial,
+  contentfulUsingSharedFallback = false,
 }: {
   tenantSlug: string;
   initial: IntegrationRecord[];
+  contentfulUsingSharedFallback?: boolean;
 }) {
   const dialogs = useDialogs();
   const [records, setRecords] = useState<IntegrationRecord[]>(initial);
@@ -358,6 +360,14 @@ export function IntegrationsClient({
                     Last error: {record.lastError}
                   </p>
                 )}
+                {provider === "contentful" &&
+                  !record &&
+                  contentfulUsingSharedFallback && (
+                    <p className="text-xs text-primary-500 mt-1">
+                      Using shared workspace defaults — fill in the fields
+                      below to use your own Contentful space instead.
+                    </p>
+                  )}
               </div>
               {record && (
                 <div className="flex items-center gap-2">

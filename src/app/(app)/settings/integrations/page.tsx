@@ -82,6 +82,20 @@ export default async function IntegrationsSettingsPage({
     .filter((r) => r.toolkit === "metaads")
     .map((r) => ({ id: r.id, alias: r.alias, status: r.status, displayName: r.displayName }));
 
+  // Contentful publishing silently works for a tenant with no
+  // `tenant_integrations` row via the shared env-var fallback in
+  // resolveContentfulConfig() (CLAUDE.md: intentional Gruve safety net).
+  // The Settings form has no way to reflect that on its own, so tell the
+  // server-side truth here and let the client component show an inline
+  // note instead of implying nothing is configured.
+  const hasContentfulRecord = integrations.some(
+    (r) => r.provider === "contentful"
+  );
+  const contentfulUsingSharedFallback =
+    !hasContentfulRecord &&
+    Boolean(process.env.CONTENTFUL_SPACE_ID) &&
+    Boolean(process.env.CONTENTFUL_CMA_TOKEN);
+
   return (
     <div className="max-w-[760px]">
       <SettingsPageHeading
@@ -89,7 +103,11 @@ export default async function IntegrationsSettingsPage({
         title="Integrations"
         subtitle="Connect the tools Pulse pulls data from and manage API tokens for your own integrations. All credentials are stored securely."
       />
-      <IntegrationsClient tenantSlug={tenant.slug} initial={integrations} />
+      <IntegrationsClient
+        tenantSlug={tenant.slug}
+        initial={integrations}
+        contentfulUsingSharedFallback={contentfulUsingSharedFallback}
+      />
       <div className="mt-6">
         <SiteDomainsSection
           initial={{
