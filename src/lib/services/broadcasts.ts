@@ -48,6 +48,37 @@ export async function listBroadcastLists(
   }));
 }
 
+export interface WhatsappConnectionStatus {
+  connected: boolean;
+  displayPhone: string | null;
+  lastError: string | null;
+}
+
+// Whether this tenant has a live WhatsApp Cloud API number wired up
+// (whatsapp_accounts, migration 058). Broadcasts silently fail without one,
+// so pages that send/preview broadcasts need this to explain why.
+export async function getWhatsappConnectionStatus(
+  tenantSlug: string
+): Promise<WhatsappConnectionStatus> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("whatsapp_accounts")
+    .select("status, display_phone, last_error")
+    .eq("tenant_slug", tenantSlug)
+    .maybeSingle();
+  if (!data) return { connected: false, displayPhone: null, lastError: null };
+  const row = data as {
+    status: string;
+    display_phone: string | null;
+    last_error: string | null;
+  };
+  return {
+    connected: row.status === "connected",
+    displayPhone: row.display_phone,
+    lastError: row.last_error,
+  };
+}
+
 export async function listBroadcastMessages(
   tenantSlug: string,
   limit = 50

@@ -3,6 +3,7 @@ import { getCurrentUser, getCurrentTenant } from "@/lib/auth";
 import {
   listBroadcastLists,
   listBroadcastMessages,
+  getWhatsappConnectionStatus,
 } from "@/lib/services/broadcasts";
 import { BroadcastsClient } from "./client";
 
@@ -14,10 +15,17 @@ export default async function BroadcastsPage() {
   const tenant = await getCurrentTenant();
   if (!tenant) redirect("/signup?step=company");
 
-  const [lists, messages] = await Promise.all([
+  const [lists, messages, whatsappStatus] = await Promise.all([
     listBroadcastLists(tenant.slug),
     listBroadcastMessages(tenant.slug),
+    getWhatsappConnectionStatus(tenant.slug),
   ]);
 
-  return <BroadcastsClient lists={lists} messages={messages} />;
+  return (
+    <BroadcastsClient
+      lists={lists}
+      messages={messages}
+      whatsappStatus={whatsappStatus}
+    />
+  );
 }

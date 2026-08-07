@@ -121,7 +121,9 @@ export function ApiTokensSection({
             API tokens
           </h2>
           <p className="text-xs text-text-muted mt-1 max-w-xl">
-            For the Pulse Chrome extension and any first-party automation.
+            For the Pulse Chrome extension and any first-party automation —
+            including your storefront&apos;s checkout webhook, which needs a
+            token to attribute website orders back to Pulse automatically.
             Tokens grant this tenant&apos;s outbound scope — revoke any time.
           </p>
         </div>
@@ -249,8 +251,9 @@ export function ApiTokensSection({
 
       {activeTokens.length === 0 ? (
         <p className="text-xs text-text-muted italic">
-          No active tokens yet. Click &ldquo;New token&rdquo; to mint one for
-          the Chrome extension.
+          No active tokens yet — the Chrome extension won&apos;t authenticate
+          and website orders won&apos;t auto-attribute until one exists.
+          Click &ldquo;New token&rdquo; to mint one.
         </p>
       ) : (
         <ul className="divide-y divide-border/30">

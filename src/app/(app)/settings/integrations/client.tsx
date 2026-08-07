@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { formatDateTime } from "@/lib/utils/format";
 import {
   CheckCircle2,
+  CircleDashed,
   Loader2,
   ShieldAlert,
   Trash2,
@@ -351,6 +352,12 @@ export function IntegrationsClient({
                       <ShieldAlert size={12} /> error
                     </span>
                   )}
+                  {!record &&
+                    !(provider === "contentful" && contentfulUsingSharedFallback) && (
+                      <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-text-muted">
+                        <CircleDashed size={12} /> not connected
+                      </span>
+                    )}
                 </h2>
                 <p className="text-xs text-text-muted mt-1 max-w-xl">
                   {PROVIDER_BLURBS[provider]}

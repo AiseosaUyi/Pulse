@@ -8,14 +8,21 @@ import {
   sendBroadcast,
 } from "@/lib/actions/broadcasts";
 import { toast } from "@/components/ui/Toaster";
-import type { BroadcastList, BroadcastMessage } from "@/lib/services/broadcasts";
+import { WhatsAppConnectCard } from "./WhatsAppConnectCard";
+import type {
+  BroadcastList,
+  BroadcastMessage,
+  WhatsappConnectionStatus,
+} from "@/lib/services/broadcasts";
 
 export function BroadcastsClient({
   lists,
   messages,
+  whatsappStatus,
 }: {
   lists: BroadcastList[];
   messages: BroadcastMessage[];
+  whatsappStatus: WhatsappConnectionStatus;
 }) {
   const [pending, startTransition] = useTransition();
   const [activeList, setActiveList] = useState<string | null>(
@@ -74,6 +81,10 @@ export function BroadcastsClient({
           </p>
         </div>
       </header>
+
+      <div className="mb-6">
+        <WhatsAppConnectCard status={whatsappStatus} />
+      </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         <section className="space-y-4">
@@ -165,7 +176,12 @@ export function BroadcastsClient({
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
             />
             <button
-              disabled={pending || !activeList}
+              disabled={pending || !activeList || !whatsappStatus.connected}
+              title={
+                !whatsappStatus.connected
+                  ? "Connect WhatsApp above before sending"
+                  : undefined
+              }
               className="inline-flex items-center gap-1.5 rounded-full bg-primary-500 text-white px-4 py-2 text-sm font-medium disabled:opacity-60"
             >
               <Send size={15} /> Send
