@@ -9,6 +9,7 @@ import type {
   BlogPostOutlineItem,
   BlogScoreIssue,
   BlogSubScores,
+  DraftSection,
 } from "@/lib/types/blog-posts";
 import { getBrandContext } from "@/lib/ai/brand-positioning";
 import { generateBlogPost, BlogGenerationError } from "@/lib/ai/generate-blog-post";
@@ -54,6 +55,7 @@ interface Row {
   google_preview: BlogGooglePreview | null;
   content_flags: ContentFlag[] | null;
   content_flags_cleared: boolean | null;
+  draft_sections: DraftSection[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -96,6 +98,7 @@ function rowTo(row: Row): BlogPostRecord {
     googlePreview: row.google_preview ?? null,
     contentFlags: row.content_flags ?? [],
     contentFlagsCleared: row.content_flags_cleared ?? false,
+    draftSections: row.draft_sections ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

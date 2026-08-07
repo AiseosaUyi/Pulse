@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Sparkles, ArrowLeft, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Sparkles, ArrowLeft, Check, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +11,7 @@ import {
   generateBlogIdeasAction,
   commitBlogIdea,
 } from "@/lib/actions/blog-posts";
+import { startManualBlogDraft } from "@/lib/actions/blog-sections";
 import {
   BLOG_TYPES,
   BLOG_TYPE_LABELS,
@@ -33,6 +35,7 @@ import { LENGTH_BANDS, type LengthBand } from "@/lib/blog/word-count";
  */
 
 type Step = "pick-type" | "ideating" | "review-ideas" | "generating";
+type Mode = "ai" | "manual";
 
 export function NewBlogPostModal({
   tenantSlug,
@@ -43,10 +46,16 @@ export function NewBlogPostModal({
   trackedKeywords: string[];
   onClose: () => void;
 }) {
+  const router = useRouter();
+  const [mode, setMode] = useState<Mode>("ai");
   const [step, setStep] = useState<Step>("pick-type");
   const [blogType, setBlogType] = useState<BlogType>("educational");
   const [extra, setExtra] = useState("");
   const [band, setBand] = useState<LengthBand>("medium");
+
+  // Manual mode — the user types the title, then writes/generates each
+  // section independently on the section-builder page.
+  const [manualTitle, setManualTitle] = useState("");
 
   // Feature-announcement-only fields.
   const [featureName, setFeatureName] = useState("");
@@ -142,6 +151,27 @@ export function NewBlogPostModal({
     });
   };
 
+  const onStartManual = () => {
+    setError(null);
+    if (!manualTitle.trim()) {
+      setError("Give the post a title to get started.");
+      return;
+    }
+    startTransition(async () => {
+      const res = await startManualBlogDraft(tenantSlug, {
+        title: manualTitle,
+        blogType: manualTitle ? blogType : undefined,
+        extraContext: extra.trim() || undefined,
+      });
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      router.push(`/seo-tracker/blog-writer/${res.postId}/sections`);
+      onClose();
+    });
+  };
+
   const costEstimate = (bandInfo.target * 0.00004).toFixed(3);
 
   return (
@@ -168,8 +198,10 @@ export function NewBlogPostModal({
             <div>
               <h2 className="text-foreground font-semibold">New blog post</h2>
               <p className="text-text-muted text-xs mt-0.5">
-                {step === "pick-type" &&
+                {step === "pick-type" && mode === "ai" &&
                   "Pick a type — we'll suggest topics that fit your brand and current trends."}
+                {step === "pick-type" && mode === "manual" &&
+                  "Give it a title and start writing — generate any section with AI when you want a hand."}
                 {step === "ideating" &&
                   "Generating ideas from brand voice, positioning, competitors, and trends…"}
                 {step === "review-ideas" &&
@@ -193,6 +225,81 @@ export function NewBlogPostModal({
           {/* ── Step 1: pick type ─────────────────────────── */}
           {step === "pick-type" && (
             <>
+              <div className="flex gap-1.5 p-1 rounded-lg bg-sidebar border border-border w-fit">
+                <button
+                  type="button"
+                  onClick={() => setMode("ai")}
+                  disabled={isPending}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    mode === "ai"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-text-muted hover:text-foreground"
+                  }`}
+                >
+                  AI-generated
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("manual")}
+                  disabled={isPending}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    mode === "manual"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-text-muted hover:text-foreground"
+                  }`}
+                >
+                  Write it myself
+                </button>
+              </div>
+
+              {mode === "manual" ? (
+                <>
+                  <div>
+                    <Label htmlFor="np-manual-title">Title</Label>
+                    <Input
+                      id="np-manual-title"
+                      value={manualTitle}
+                      onChange={(e) => setManualTitle(e.target.value)}
+                      placeholder="What's this post called?"
+                      disabled={isPending}
+                    />
+                  </div>
+                  <div>
+                    <Label>Blog type (optional, helps AI stay on-topic)</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                      {BLOG_TYPES.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setBlogType(t)}
+                          disabled={isPending}
+                          className={`text-left p-3 rounded-lg border transition-colors ${
+                            blogType === t
+                              ? "border-primary-500 bg-primary-500/5"
+                              : "border-border hover:border-primary-500/40"
+                          }`}
+                        >
+                          <p className="text-foreground text-sm font-medium">
+                            {BLOG_TYPE_LABELS[t]}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="np-manual-extra">Extra context (optional)</Label>
+                    <Textarea
+                      id="np-manual-extra"
+                      value={extra}
+                      onChange={(e) => setExtra(e.target.value)}
+                      placeholder="Anything worth knowing before you start writing?"
+                      rows={2}
+                      disabled={isPending}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
               <div>
                 <Label>Blog type</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
@@ -304,6 +411,8 @@ export function NewBlogPostModal({
                   {trackedKeywords.slice(0, 6).join(", ")}
                   {trackedKeywords.length > 6 ? "…" : ""}
                 </p>
+              )}
+                </>
               )}
             </>
           )}
@@ -428,7 +537,13 @@ export function NewBlogPostModal({
           <Button variant="ghost" onClick={onClose} disabled={isPending}>
             {warning ? "Close" : "Cancel"}
           </Button>
-          {step === "pick-type" && (
+          {step === "pick-type" && mode === "manual" && (
+            <Button onClick={onStartManual} disabled={isPending || !manualTitle.trim()}>
+              <PenLine size={14} />
+              {isPending ? "Creating…" : "Start writing"}
+            </Button>
+          )}
+          {step === "pick-type" && mode === "ai" && (
             <Button
               onClick={onIdeate}
               disabled={isPending || (isFeatureType && !featureValid)}

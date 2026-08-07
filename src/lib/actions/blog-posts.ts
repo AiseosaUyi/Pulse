@@ -279,6 +279,7 @@ export async function updateBlogPost(
     publishedDate?: string | null;
     updatedDate?: string | null;
     noindex?: boolean;
+    faqItems?: Array<{ question: string; answer: string }>;
   }
 ): Promise<ActionResult> {
   const supabase = await createClient();
@@ -309,6 +310,7 @@ export async function updateBlogPost(
   if (patch.publishedDate !== undefined) update.published_date = patch.publishedDate;
   if (patch.updatedDate !== undefined) update.updated_date = patch.updatedDate;
   if (patch.noindex !== undefined) update.noindex = patch.noindex;
+  if (patch.faqItems !== undefined) update.faq_items = patch.faqItems;
   if (Object.keys(update).length === 0) return { success: true };
 
   // Publish gate — applies to every tenant. If this edit is trying to set

@@ -13,6 +13,15 @@ export interface BlogPostOutlineItem {
   bullets: string[];
 }
 
+/** One block in the manual-authoring section builder. `heading` is only
+ *  meaningful for `kind: "body"` — intro/conclusion render without one. */
+export interface DraftSection {
+  id: string;
+  kind: "intro" | "body" | "conclusion";
+  heading: string;
+  content: string;
+}
+
 /**
  * Shape written to `blog_posts.generation_meta` by the generator.
  * Mirrors `GenerationMeta` in `src/lib/ai/generate-blog-post.ts` — keep
@@ -169,6 +178,9 @@ export interface BlogPostRecord {
    *  contentFlagsCleared is set. */
   contentFlags: ContentFlag[];
   contentFlagsCleared: boolean;
+  /** Manual-authoring scratch state (section-builder UI). Null once
+   *  compiled into `content`, or for posts that were never manual. */
+  draftSections: DraftSection[] | null;
   createdAt: string;
   updatedAt: string;
 }
