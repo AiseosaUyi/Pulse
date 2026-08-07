@@ -63,16 +63,21 @@ export function BlogCard({
 }) {
   const score = scoreTone(post.contentScore);
 
-  // Use cached google_preview if present, fall back to computing on
-  // the fly so pre-Phase-C rows render cleanly.
-  const preview =
-    post.googlePreview ??
-    buildGooglePreview({
-      title: post.title,
-      metaDescription: post.metaDescription,
-      slug: post.slug,
-      tenantDomain,
-    });
+  // Always derive from the post's current title/meta/slug rather than
+  // trusting the cached blog_posts.google_preview column: that cache is
+  // only written at creation/regeneration time (see buildGooglePreview
+  // call sites in lib/actions/blog-posts.ts, blog-regeneration.ts,
+  // blog-sections.ts) and NOT by the plain title/meta edit path
+  // (updateBlogPost in lib/actions/blog-posts.ts) — a post whose title
+  // was hand-edited and saved keeps showing its old title/slug here
+  // indefinitely. Recomputing is cheap (pure truncation, no AI/network
+  // cost) so there's no real upside to preferring the stale cache.
+  const preview = buildGooglePreview({
+    title: post.title,
+    metaDescription: post.metaDescription,
+    slug: post.slug,
+    tenantDomain,
+  });
 
   const excerpt =
     post.metaDescription?.trim() ||

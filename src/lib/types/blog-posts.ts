@@ -183,6 +183,10 @@ export interface BlogPostRecord {
   draftSections: DraftSection[] | null;
   createdAt: string;
   updatedAt: string;
+  /** Real "went live" timestamp set by the publish runner (blog_posts.published_at,
+   *  migration 043) — distinct from `publishedDate`, which is a manual override
+   *  of Contentful's datePublished. Null until the post has actually published once. */
+  publishedAt: string | null;
 }
 
 export interface BlogPostVersionRecord {

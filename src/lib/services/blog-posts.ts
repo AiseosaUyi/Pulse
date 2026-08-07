@@ -58,6 +58,7 @@ interface Row {
   draft_sections: DraftSection[] | null;
   created_at: string;
   updated_at: string;
+  published_at: string | null;
 }
 
 function rowTo(row: Row): BlogPostRecord {
@@ -101,6 +102,7 @@ function rowTo(row: Row): BlogPostRecord {
     draftSections: row.draft_sections ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    publishedAt: row.published_at ?? null,
   };
 }
 

@@ -47,14 +47,16 @@ export function BlogSidePanel({
     return () => window.removeEventListener("keydown", h);
   }, [onClose]);
 
-  const preview =
-    post.googlePreview ??
-    buildGooglePreview({
-      title: post.title,
-      metaDescription: post.metaDescription,
-      slug: post.slug,
-      tenantDomain,
-    });
+  // Always derive from the post's current fields rather than the cached
+  // blog_posts.google_preview column — that cache isn't refreshed by a
+  // plain title/meta edit (updateBlogPost), so it can show a stale, even
+  // pre-rename, title/slug indefinitely. See BlogCard.tsx for the same fix.
+  const preview = buildGooglePreview({
+    title: post.title,
+    metaDescription: post.metaDescription,
+    slug: post.slug,
+    tenantDomain,
+  });
 
   // Prefer the structured FAQ field (what actually publishes as schema) —
   // fall back to parsing the body for older posts generated before FAQ was

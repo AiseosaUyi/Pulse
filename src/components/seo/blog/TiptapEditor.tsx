@@ -191,8 +191,18 @@ export function TiptapEditor({
   }, [disabled, editor]);
 
   if (!editor) {
+    // Reserve the same total height as the loaded state (toolbar strip +
+    // min-h-[420px] content) so nothing below this editor — including the
+    // page's own toolbar buttons — shifts position once `editor` becomes
+    // non-null. A bare min-h-[420px] placeholder here used to be ~44px
+    // shorter than the real Toolbar+EditorContent, causing a layout jump
+    // right as the page finished mounting — exactly the window where a
+    // fast click could land on the wrong button.
     return (
-      <div className="rounded-lg border border-border bg-card min-h-[420px]" />
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <div className="h-11 border-b border-border/30 bg-sidebar/40" />
+        <div className="min-h-[420px]" />
+      </div>
     );
   }
 

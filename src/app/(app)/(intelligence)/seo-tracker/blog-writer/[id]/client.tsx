@@ -49,6 +49,14 @@ import type {
 } from "@/lib/types/blog-posts";
 import type { ContentDistributionRecord } from "@/lib/types/content-distributions";
 
+// Statuses this screen lets a human hand-pick. Deliberately narrower than
+// the full blog_posts_status_check constraint (043_seo_brief_columns.sql),
+// which also allows in_review/seo_approved/scheduled/publishing/publish_failed
+// — those are owned by the SEO approval pipeline (lib/actions/seo-approvals.ts)
+// and the publish runner (lib/seo/publish-runner.ts), which set them via the
+// optimistic-version transition_blog_post_status RPC + audit trail. This raw
+// dropdown + updateBlogPost has neither, so letting a user hand-set one of
+// those from here would silently clobber the pipeline's own state.
 const STATUS_OPTIONS: BlogPostStatus[] = [
   "draft",
   "editing",
@@ -56,6 +64,23 @@ const STATUS_OPTIONS: BlogPostStatus[] = [
   "published",
   "archived",
 ];
+
+// Human labels for every value the DB column can actually hold (superset of
+// STATUS_OPTIONS) — used to render pipeline-owned/terminal statuses (e.g.
+// publish_failed) correctly instead of an unmatched <select value> silently
+// rendering as whatever option happens to be first ("Draft").
+const STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  editing: "Editing",
+  review: "In review",
+  in_review: "In review",
+  seo_approved: "SEO approved",
+  scheduled: "Scheduled",
+  publishing: "Publishing…",
+  published: "Published",
+  publish_failed: "Publish failed",
+  archived: "Archived",
+};
 
 function toDateInput(v: string | null): string {
   if (!v) return "";
@@ -254,8 +279,18 @@ export function BlogEditorPageClient({
   const [authorBio, setAuthorBio] = useState(post.authorBio ?? profileDefaults?.authorBio ?? "");
   const [authorTitle, setAuthorTitle] = useState(post.authorTitle ?? profileDefaults?.authorTitle ?? "");
   const [authorUrl, setAuthorUrl] = useState(post.authorUrl ?? profileDefaults?.authorUrl ?? "");
-  const [publishedDate, setPublishedDate] = useState(toDateInput(post.publishedDate));
-  const [updatedDate, setUpdatedDate] = useState(toDateInput(post.updatedDate));
+  // publishedDate/updatedDate are manual Contentful datePublished/dateModified
+  // overrides — blank until a user sets one. Fall back to the post's real
+  // timestamps (publishedAt from the publish runner, updatedAt from the row)
+  // so a live post's Article schema dates aren't blank just because no one
+  // ever typed an override, mirroring the post.field ?? fallback pattern
+  // used for author fields above.
+  const [publishedDate, setPublishedDate] = useState(
+    toDateInput(post.publishedDate ?? post.publishedAt)
+  );
+  const [updatedDate, setUpdatedDate] = useState(
+    toDateInput(post.updatedDate ?? post.updatedAt)
+  );
   const [noindex, setNoindex] = useState(Boolean(post.noindex));
   const [detailsSaved, setDetailsSaved] = useState(false);
 
@@ -642,6 +677,10 @@ export function BlogEditorPageClient({
           >
             {isDeleting ? "Deleting…" : "Delete"}
           </Button>
+          {/* Divider keeps the destructive Delete button visually separated
+              from Distribute/Ask coach/Save — a fast click during any brief
+              layout shift lands in the gap, not on another action. */}
+          <div className="w-px h-5 bg-border" aria-hidden="true" />
           <Button
             variant="ghost"
             size="sm"
@@ -745,19 +784,34 @@ export function BlogEditorPageClient({
             </div>
             <div>
               <Label htmlFor="bp-status">Status</Label>
-              <select
-                id="bp-status"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as BlogPostStatus)}
-                disabled={isSaving || isDeleting}
-                className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground capitalize"
-              >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+              {(STATUS_OPTIONS as string[]).includes(post.status) ? (
+                <select
+                  id="bp-status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as BlogPostStatus)}
+                  disabled={isSaving || isDeleting}
+                  className="w-full h-11 px-3 rounded-lg border border-border bg-card text-sm text-foreground capitalize"
+                >
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                // Pipeline-owned/terminal status (e.g. publish_failed) — not
+                // in STATUS_OPTIONS, so a <select> would silently render as
+                // its first option ("Draft") without this branch. Show it
+                // read-only instead; saving from this screen never touches
+                // status unless the dropdown above is actually rendered.
+                <div
+                  id="bp-status"
+                  className="w-full h-11 px-3 rounded-lg border border-border bg-sidebar text-sm text-text-muted flex items-center"
+                  title="Set by the publish pipeline — not editable from this screen."
+                >
+                  {STATUS_LABELS[post.status] ?? post.status}
+                </div>
+              )}
             </div>
           </div>
 
@@ -851,7 +905,7 @@ export function BlogEditorPageClient({
                   placeholder="Add a tag and press Enter"
                 />
                 <p className="text-[11px] text-text-muted mt-1">
-                  Pulled from the post — remove what doesn&apos;t fit, add your own.
+                  Add tags to help search engines and readers find this post.
                 </p>
               </div>
               <div>
