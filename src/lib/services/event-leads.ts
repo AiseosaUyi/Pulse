@@ -122,7 +122,10 @@ export async function captureEventLead(
         display_name: organizerName,
         profile_url: profileUrl,
         event_title: eventTitle,
-        signal_summary: `[event_platform_scraper] ${eventTitle ?? "Captured event"} · ${priceRaw ?? "paid"} · ${input.captureMethod} capture`,
+        // Keep this human-readable — source type is carried structurally
+        // in signal_data.source_type below, not as a prefix here. This
+        // string flows verbatim into the DM-drafting AI prompt and UI.
+        signal_summary: `${eventTitle ?? "Captured event"} · ${priceRaw ?? "paid"} · ${input.captureMethod} capture`,
         signal_data: {
           source_type: "event_platform_scraper",
           platform_id: input.platformId,

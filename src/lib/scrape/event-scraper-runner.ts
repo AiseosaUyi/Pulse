@@ -289,7 +289,11 @@ async function resolveAndUpsert(
         event_title: c.eventTitle,
         category: c.category,
         event_scraper_run_id: runId,
-        signal_summary: `[event_platform_scraper] ${c.eventTitle} · ${c.priceRaw ?? "paid"} · ${platformLabel}`,
+        // NOTE: source type lives structurally in signal_data.source_type
+        // below — never prefix a raw internal tag onto this human-readable
+        // string, it flows verbatim into the DM-drafting AI prompt and the
+        // /leads UI (see src/lib/ai/outbound.ts buildDraftUser/buildQualifyUser).
+        signal_summary: `${c.eventTitle} · ${c.priceRaw ?? "paid"} · ${platformLabel}`,
         signal_data: {
           source_type: "event_platform_scraper",
           platform_id: platformId,
@@ -399,7 +403,9 @@ export async function runIgMentionScan(
         platform: "instagram" as const,
         handle: p.owner_handle!.toLowerCase(),
         profile_url: `https://www.instagram.com/${p.owner_handle!.toLowerCase()}/`,
-        signal_summary: `[event_platform_scraper] Posted using ${p.hashtag} (${platformLabel})`,
+        // See note above — keep this human-readable, source type is
+        // carried structurally in signal_data.source_type instead.
+        signal_summary: `Posted using ${p.hashtag} (${platformLabel})`,
         signal_data: {
           source_type: "event_platform_scraper",
           platform_id: platformId,

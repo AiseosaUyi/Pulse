@@ -58,7 +58,7 @@ import type {
   OutreachCampaignRecord,
 } from "@/lib/types/outreach-intelligence";
 import type { ProspectRecord, ProspectStatus } from "@/lib/types/outbound";
-import { PLATFORM_LABELS, STATUS_LABELS } from "@/lib/types/outbound";
+import { PLATFORM_LABELS, STATUS_LABELS, isUnresolvedProspectHandle } from "@/lib/types/outbound";
 import type { OutboundTemplateRecord, TemplateType } from "@/lib/types/outbound-templates";
 import { TEMPLATE_TYPE_LABELS } from "@/lib/types/outbound-templates";
 
@@ -710,11 +710,21 @@ function platformDmUrl(prospect: ProspectRecord): string | null {
 // ── Token substitution ───────────────────────────────────────────────────────
 
 function fillTokens(body: string, prospect: ProspectRecord, companyName?: string): string {
-  const firstName = prospect.displayName?.split(" ")[0] ?? prospect.handle;
+  // Never fall back to the raw handle as a stand-in for a person's name —
+  // for scraper-sourced prospects the "handle" can be a synthesized slug
+  // (see isUnresolvedProspectHandle), and even a real handle reads as a
+  // broken greeting ("Hey event-egotickets-summer-on-the-hills-...!").
+  // "there" keeps every template's [FIRST_NAME] slot grammatical with no
+  // real name on file.
+  const firstName = prospect.displayName?.split(" ")[0]?.trim() || "there";
+  // "your recent content" overclaims specific research we don't have when
+  // there's no real signal — "your profile" stays true and still reads as
+  // a complete sentence in every template that uses [SIGNAL].
+  const signal = prospect.signalSummary?.trim() || "your profile";
   return body
     .replace(/\[FIRST_NAME\]/gi, firstName)
     .replace(/\[HANDLE\]/gi, `@${prospect.handle}`)
-    .replace(/\[SIGNAL\]/gi, prospect.signalSummary ?? "your recent content")
+    .replace(/\[SIGNAL\]/gi, signal)
     .replace(/\[EVENT\]/gi, prospect.eventTitle ?? "your event")
     .replace(/\[COMPANY\]/gi, companyName ?? "us");
 }
@@ -770,9 +780,15 @@ function ReachoutCard({
     : "cold_open";
 
   const template = selectTemplate(templates, preferredType, prospect.platform);
+  // Only greet by @handle here when it's a real, resolved handle — a
+  // synthesized scraper slug (isUnresolvedProspectHandle) reads as broken
+  // ("Hey @event-egotickets-summer-on-the-hills-...!").
+  const noTemplateGreeting = isUnresolvedProspectHandle(prospect)
+    ? "there"
+    : `@${prospect.handle}`;
   const body = template
     ? fillTokens(template.body, prospect, companyName)
-    : `Hey @${prospect.handle}! I came across your profile and thought you'd be a great fit for what we do. Would love to connect!`;
+    : `Hey ${noTemplateGreeting}! I came across your profile and thought you'd be a great fit for what we do. Would love to connect!`;
 
   const label =
     conversationStage === "cold" || conversationStage === "follow_up_requested" || prospect.status === "sent"
@@ -1018,9 +1034,19 @@ export function ProspectThreadPanel({
         <div className="shrink-0 px-4 pt-4 pb-3 border-b border-border/60 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <h2 className="text-sm font-semibold text-foreground truncate">
+              <h2
+                className={`text-sm font-semibold truncate ${isUnresolvedProspectHandle(prospect) ? "text-text-muted italic" : "text-foreground"}`}
+              >
                 @{prospect.handle}
               </h2>
+              {isUnresolvedProspectHandle(prospect) && (
+                <span
+                  className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-sidebar text-text-muted shrink-0"
+                  title="We couldn't resolve a real social handle for this lead — this identifier was auto-generated, not verified."
+                >
+                  Unverified
+                </span>
+              )}
               <span className="text-xs uppercase tracking-wide text-text-muted shrink-0">
                 {PLATFORM_LABELS[prospect.platform]}
               </span>

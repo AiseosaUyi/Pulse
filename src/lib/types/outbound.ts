@@ -124,6 +124,21 @@ export interface InboundMessageRecord {
   createdAt: string;
 }
 
+/**
+ * True when a prospect's `handle` is a synthesized slug (e.g.
+ * "event-egotickets-korle-woko") rather than a real, resolved social
+ * handle. The event-platform scraper falls back to this shape when
+ * SERP-based handle resolution fails, and stamps
+ * `signal_data.resolved_via = "unresolved"` at write time — this
+ * reads that flag back so the UI never presents a synthetic slug as
+ * a verified identity.
+ */
+export function isUnresolvedProspectHandle(
+  prospect: Pick<ProspectRecord, "signalData">
+): boolean {
+  return prospect.signalData?.resolved_via === "unresolved";
+}
+
 export const PLATFORM_LABELS: Record<OutboundPlatform, string> = {
   instagram: "Instagram",
   tiktok: "TikTok",

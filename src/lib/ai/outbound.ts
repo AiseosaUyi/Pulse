@@ -334,8 +334,10 @@ function buildDraftSystem(input: DraftDmInput): string {
     `You write cold DMs for ${tenantName}. Sound like a human doing outbound who actually read the prospect's profile — not like marketing.`,
     "",
     "Rules:",
-    "- Personalize to the signal in the first sentence. Reference their post, event, or recent activity specifically.",
+    "- Personalize to the signal in the first sentence ONLY when a Signal, Bio, or Qualifier notes line is actually provided below. Reference their post, event, or recent activity specifically — never invent one.",
+    "- If none of Signal / Bio / Qualifier notes is provided, do NOT reference 'your recent content', 'what you're posting/putting out', or any other activity you weren't given — that produces a dangling, ungrammatical sentence. Instead write a complete, self-contained opener grounded in their profile, niche, or general brand fit.",
     "- Never open with 'Hi [name]' or 'Hope you're well'. Start with something that proves you did your homework.",
+    "- Only address the prospect by name if a real display name is given below. If none is given, do NOT greet them using their raw handle as if it were a name (e.g. never write 'Hey <handle>!') — address them naturally without inserting a name, or refer to their brand/profile instead.",
     "- End with ONE low-commitment question. Not a pitch, not a meeting ask.",
     "- No emoji unless the brand voice says we use them.",
     "- Never mention prices, never promise specific outcomes, never imply existing relationship.",
@@ -357,17 +359,30 @@ function buildDraftSystem(input: DraftDmInput): string {
 
 function buildDraftUser(input: DraftDmInput): string {
   const { prospect, context } = input;
+  const hasDisplayName = Boolean(prospect.displayName?.trim());
+  const hasSignalContext = Boolean(
+    prospect.signalSummary?.trim() ||
+      prospect.bio?.trim() ||
+      prospect.qualificationReason?.trim() ||
+      context?.trim()
+  );
   return [
     `Platform: ${prospect.platform}`,
     `Prospect: @${prospect.handle}${
-      prospect.displayName ? ` (${prospect.displayName})` : ""
+      hasDisplayName ? ` (${prospect.displayName})` : ""
     }`,
+    hasDisplayName
+      ? ""
+      : "No real display name is available for this prospect — do not greet them using the raw handle as if it were a name.",
     prospect.bio ? `Bio: ${prospect.bio}` : "",
     prospect.signalSummary ? `Signal: ${prospect.signalSummary}` : "",
     prospect.qualificationReason
       ? `Qualifier notes: ${prospect.qualificationReason}`
       : "",
     context ? `Additional context: ${context}` : "",
+    hasSignalContext
+      ? ""
+      : "No signal, bio, or activity context is available for this prospect — do not reference their recent content, posts, or activity. Write a complete opener that doesn't depend on it.",
     "",
     "Draft the DM.",
   ]

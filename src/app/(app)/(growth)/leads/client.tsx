@@ -60,6 +60,7 @@ import {
   SIGNAL_LABELS,
   SIGNAL_TYPES,
   STATUS_LABELS,
+  isUnresolvedProspectHandle,
   type InboundMessageRecord,
   type OutboundDmRecord,
   type OutboundPlatform,
@@ -697,6 +698,14 @@ export function OutboundClient({
                             {p.displayName && (
                               <span className="text-[11px] text-text-muted/60">@{p.handle}</span>
                             )}
+                            {isUnresolvedProspectHandle(p) && (
+                              <span
+                                className="text-[10px] italic text-text-muted/50"
+                                title="We couldn't resolve a real social handle for this lead — this identifier was auto-generated, not verified."
+                              >
+                                (unverified)
+                              </span>
+                            )}
                             <span
                               className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
                                 STATUS_TONE[p.status]
@@ -1213,9 +1222,19 @@ function ProspectDetail({
     <div className="rounded-xl border border-border bg-card">
       <div className="p-4 border-b border-border/40">
         <div className="flex items-center gap-2 flex-wrap">
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3
+            className={`text-sm font-semibold ${isUnresolvedProspectHandle(prospect) ? "text-text-muted italic" : "text-foreground"}`}
+          >
             @{prospect.handle}
           </h3>
+          {isUnresolvedProspectHandle(prospect) && (
+            <span
+              className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-sidebar text-text-muted"
+              title="We couldn't resolve a real social handle for this lead — this identifier was auto-generated, not verified."
+            >
+              Unverified
+            </span>
+          )}
           <span className="text-xs uppercase tracking-wide text-text-muted">
             {PLATFORM_LABELS[prospect.platform]}
           </span>
@@ -1545,6 +1564,14 @@ function InboxView({
                 <span className="text-sm font-semibold text-foreground">
                   @{prospect?.handle ?? "unknown"}
                 </span>
+                {prospect && isUnresolvedProspectHandle(prospect) && (
+                  <span
+                    className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-sidebar text-text-muted"
+                    title="We couldn't resolve a real social handle for this lead — this identifier was auto-generated, not verified."
+                  >
+                    Unverified
+                  </span>
+                )}
                 <span className="text-xs uppercase tracking-wide text-text-muted">
                   {message.platform}
                 </span>

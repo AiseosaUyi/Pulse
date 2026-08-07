@@ -19,7 +19,7 @@ import {
   analyzeProspectConversation,
 } from "@/lib/actions/conversation-intelligence";
 import type { OutreachTodayData, ProspectWithFollowUp } from "@/lib/services/outreach-intelligence";
-import { PLATFORM_LABELS } from "@/lib/types/outbound";
+import { PLATFORM_LABELS, isUnresolvedProspectHandle } from "@/lib/types/outbound";
 import type { ProspectRecord } from "@/lib/types/outbound";
 
 const SNOOZE_OPTIONS = [
@@ -94,6 +94,14 @@ function FollowUpRow({
           <span className="text-sm font-semibold text-foreground">
             @{prospect.handle}
           </span>
+          {isUnresolvedProspectHandle(prospect) && (
+            <span
+              className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-sidebar text-text-muted"
+              title="We couldn't resolve a real social handle for this lead — this identifier was auto-generated, not verified."
+            >
+              Unverified
+            </span>
+          )}
           <span className="text-xs uppercase tracking-wide text-text-muted">
             {PLATFORM_LABELS[prospect.platform]}
           </span>
@@ -255,6 +263,14 @@ function GoingColdRow({
           <span className="text-sm font-semibold text-foreground">
             @{prospect.handle}
           </span>
+          {isUnresolvedProspectHandle(prospect) && (
+            <span
+              className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-sidebar text-text-muted"
+              title="We couldn't resolve a real social handle for this lead — this identifier was auto-generated, not verified."
+            >
+              Unverified
+            </span>
+          )}
           <span className="text-xs uppercase tracking-wide text-text-muted">
             {PLATFORM_LABELS[prospect.platform]}
           </span>

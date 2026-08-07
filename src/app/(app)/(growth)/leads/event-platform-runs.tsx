@@ -20,7 +20,7 @@ import {
   EVENT_PLATFORM_LABELS,
   type EventScraperRunRecord,
 } from "@/lib/types/event-scraper";
-import type { ProspectRecord } from "@/lib/types/outbound";
+import { isUnresolvedProspectHandle, type ProspectRecord } from "@/lib/types/outbound";
 
 export interface EventScraperPlatformOption {
   id: string;
@@ -255,7 +255,14 @@ export function EventPlatformRuns({
                             className="flex items-center justify-between gap-2 text-xs py-1"
                           >
                             <span className="text-foreground truncate">
-                              {p.displayName ?? p.handle}
+                              {p.displayName ??
+                                (isUnresolvedProspectHandle(p) ? (
+                                  <span className="italic text-text-muted">
+                                    {p.handle} (unverified)
+                                  </span>
+                                ) : (
+                                  p.handle
+                                ))}
                               {p.eventTitle && (
                                 <span className="text-text-muted"> · {p.eventTitle}</span>
                               )}
