@@ -415,6 +415,53 @@ export async function setProspectStatus(
   return { ok: true };
 }
 
+/** Set a prospect's quality tier — a second, independent dimension from
+ * pipeline `status` (see migration 104_prospect_quality.sql). Shared by
+ * /api/v1/prospects/:id/quality and the pulse_set_prospect_quality MCP tool. */
+export async function setProspectQuality(
+  client: SupabaseClient,
+  tenantSlug: string,
+  id: string,
+  quality: ProspectQuality
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await client
+    .from("prospects")
+    .update({ quality, last_touched_at: new Date().toISOString() })
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Mark (or unmark, when `duplicateOfId` is null) a prospect as a duplicate
+ * of another. Marking also drops the prospect's pipeline status to
+ * `dismissed`, same as the in-app "mark as duplicate" action — this API
+ * never deletes a row. Shared by /api/v1/prospects/:id/duplicate and the
+ * pulse_mark_duplicate MCP tool. */
+export async function setProspectDuplicate(
+  client: SupabaseClient,
+  tenantSlug: string,
+  id: string,
+  duplicateOfId: string | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (duplicateOfId !== null) {
+    if (duplicateOfId === id) {
+      return { ok: false, error: "A prospect can't be a duplicate of itself" };
+    }
+    const target = await getProspect(client, tenantSlug, duplicateOfId);
+    if (!target) return { ok: false, error: "Target prospect not found" };
+  }
+  const patch: Record<string, unknown> = { duplicate_of_id: duplicateOfId };
+  if (duplicateOfId !== null) patch.status = "dismissed";
+  const { error } = await client
+    .from("prospects")
+    .update(patch)
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 /** Insert a prospect note directly (no session user exists under token
  * auth, so `addProspectNote()` in actions/prospect-notes.ts — which
  * requires `getCurrentUser()` — can't be reused as-is). Attributes

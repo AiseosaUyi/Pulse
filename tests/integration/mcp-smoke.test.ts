@@ -51,6 +51,8 @@ function nodeToWebHandler(handler: (req: Request) => Promise<Response>) {
 
 const TENANT = `mcp-smoke-${Math.random().toString(36).slice(2, 8)}`;
 let token: string;
+let writeToken: string;
+let prospectId: string;
 let server: Server;
 let endpoint: string;
 
@@ -69,6 +71,26 @@ beforeAll(async () => {
   });
   if (tokErr) throw tokErr;
   token = raw;
+
+  const rawWrite = generateToken();
+  const { error: writeTokErr } = await admin.from("tenant_api_tokens").insert({
+    tenant_slug: TENANT,
+    name: "mcp-smoke-write",
+    token_hash: hashToken(rawWrite),
+    token_prefix: rawWrite.slice(0, 14),
+    token_last4: rawWrite.slice(-4),
+    scope: "sales:read,sales:write",
+  });
+  if (writeTokErr) throw writeTokErr;
+  writeToken = rawWrite;
+
+  const { data: prospect, error: pErr } = await admin
+    .from("prospects")
+    .insert({ tenant_slug: TENANT, platform: "instagram", handle: "mcp-smoke-lead" })
+    .select("id")
+    .single();
+  if (pErr) throw pErr;
+  prospectId = prospect.id;
 
   const { GET: handler } = await import("../../src/app/api/[transport]/route");
   server = createServer(nodeToWebHandler(handler as (req: Request) => Promise<Response>));
@@ -104,6 +126,8 @@ describe("MCP server smoke test", () => {
     expect(names).toContain("pulse_whoami");
     expect(names).toContain("pulse_manifest");
     expect(names).toContain("pulse_list_prospects");
+    expect(names).toContain("pulse_set_prospect_quality");
+    expect(names).toContain("pulse_mark_duplicate");
     expect(names).toContain("pulse_publish_queue");
     expect(names).toContain("pulse_inbox");
     expect(names).toContain("pulse_intel_feed");
@@ -148,6 +172,59 @@ describe("MCP server smoke test", () => {
       arguments: { platform: "instagram", handle: "smoke-test" },
     });
     expect(result.isError).toBe(true);
+
+    await client.close();
+  });
+
+  it("calls pulse_set_prospect_quality against a real prospect", async () => {
+    const client = await connectClient(writeToken);
+    const result = await client.callTool({
+      name: "pulse_set_prospect_quality",
+      arguments: { id: prospectId, quality: "warm" },
+    });
+    expect(result.isError).not.toBe(true);
+
+    const { data } = await admin.from("prospects").select("quality").eq("id", prospectId).single();
+    expect(data?.quality).toBe("warm");
+
+    await client.close();
+  });
+
+  it("calls pulse_mark_duplicate to mark then unmark against a real prospect", async () => {
+    const { data: other, error } = await admin
+      .from("prospects")
+      .insert({ tenant_slug: TENANT, platform: "instagram", handle: "mcp-smoke-original" })
+      .select("id")
+      .single();
+    if (error) throw error;
+
+    const client = await connectClient(writeToken);
+    const markResult = await client.callTool({
+      name: "pulse_mark_duplicate",
+      arguments: { id: prospectId, duplicateOfId: other.id },
+    });
+    expect(markResult.isError).not.toBe(true);
+
+    const { data: marked } = await admin
+      .from("prospects")
+      .select("duplicate_of_id, status")
+      .eq("id", prospectId)
+      .single();
+    expect(marked?.duplicate_of_id).toBe(other.id);
+    expect(marked?.status).toBe("dismissed");
+
+    const unmarkResult = await client.callTool({
+      name: "pulse_mark_duplicate",
+      arguments: { id: prospectId, duplicateOfId: null },
+    });
+    expect(unmarkResult.isError).not.toBe(true);
+
+    const { data: unmarked } = await admin
+      .from("prospects")
+      .select("duplicate_of_id")
+      .eq("id", prospectId)
+      .single();
+    expect(unmarked?.duplicate_of_id).toBeNull();
 
     await client.close();
   });
