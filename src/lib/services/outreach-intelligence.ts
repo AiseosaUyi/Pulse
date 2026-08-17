@@ -61,6 +61,8 @@ function prospectRowTo(row: Record<string, unknown>): ProspectRecord {
     qualificationScore: (row.qualification_score as number | null) ?? null,
     qualificationReason: (row.qualification_reason as string | null) ?? null,
     status: row.status as ProspectRecord["status"],
+    quality: (row.quality as ProspectRecord["quality"]) ?? "unscored",
+    duplicateOfId: (row.duplicate_of_id as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
     category: (row.category as string | null) ?? null,
     location: (row.location as string | null) ?? null,

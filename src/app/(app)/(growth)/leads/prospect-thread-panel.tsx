@@ -709,6 +709,21 @@ function platformDmUrl(prospect: ProspectRecord): string | null {
 
 // ── Token substitution ───────────────────────────────────────────────────────
 
+// Above this length (or containing a line break) a signalSummary reads as
+// an internal analyst note rather than a short reason phrase — a real
+// incident: a batch of imported records carried long note-style summaries
+// that, substituted verbatim into [SIGNAL], made the composed DM read like
+// a pasted internal memo instead of an outreach message. Data was cleaned
+// up after the fact; this guard stops it recurring for future imports.
+const MAX_SIGNAL_CHARS = 140;
+
+function signalForDm(prospect: ProspectRecord): string {
+  const raw = prospect.signalSummary?.trim();
+  if (!raw) return "your profile";
+  if (raw.length > MAX_SIGNAL_CHARS || /[\r\n]/.test(raw)) return "your profile";
+  return raw;
+}
+
 function fillTokens(body: string, prospect: ProspectRecord, companyName?: string): string {
   // Never fall back to the raw handle as a stand-in for a person's name —
   // for scraper-sourced prospects the "handle" can be a synthesized slug
@@ -720,7 +735,7 @@ function fillTokens(body: string, prospect: ProspectRecord, companyName?: string
   // "your recent content" overclaims specific research we don't have when
   // there's no real signal — "your profile" stays true and still reads as
   // a complete sentence in every template that uses [SIGNAL].
-  const signal = prospect.signalSummary?.trim() || "your profile";
+  const signal = signalForDm(prospect);
   return body
     .replace(/\[FIRST_NAME\]/gi, firstName)
     .replace(/\[HANDLE\]/gi, `@${prospect.handle}`)

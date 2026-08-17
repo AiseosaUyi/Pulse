@@ -57,6 +57,8 @@ import {
 import {
   OUTBOUND_PLATFORMS,
   PLATFORM_LABELS,
+  PROSPECT_QUALITIES,
+  QUALITY_LABELS,
   SIGNAL_LABELS,
   SIGNAL_TYPES,
   STATUS_LABELS,
@@ -64,6 +66,7 @@ import {
   type InboundMessageRecord,
   type OutboundDmRecord,
   type OutboundPlatform,
+  type ProspectQuality,
   type SignalType,
   type ProspectRecord,
   type ProspectSearchRecord,
@@ -103,6 +106,16 @@ const STATUS_TONE: Record<ProspectStatus, string> = {
   closed_lost: "bg-sidebar text-text-muted",
   dismissed: "bg-sidebar text-text-muted",
 };
+
+const QUALITY_TONE: Record<ProspectQuality, string> = {
+  unscored: "bg-sidebar text-text-muted/70",
+  hot: "bg-status-red/10 text-status-red font-semibold",
+  warm: "bg-status-yellow/10 text-status-yellow font-semibold",
+  cold: "bg-primary-500/8 text-primary-500",
+  dead: "bg-sidebar text-text-muted",
+};
+
+type QualityTab = ProspectQuality | "all" | "duplicates";
 
 const NOW_MS = new Date().getTime();
 
@@ -195,6 +208,63 @@ function ProspectTemporalLine({
   );
 }
 
+function QualityBadge({
+  p,
+  tenantSlug,
+  onUpdate,
+}: {
+  p: ProspectRecord;
+  tenantSlug: string;
+  onUpdate: (updated: ProspectRecord) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, startSave] = useTransition();
+
+  const handleChange = (quality: ProspectQuality) => {
+    setEditing(false);
+    if (quality === p.quality) return;
+    startSave(async () => {
+      const res = await updateProspectAction(tenantSlug, p.id, { quality });
+      if (res.success) onUpdate({ ...p, quality });
+    });
+  };
+
+  if (editing) {
+    return (
+      <select
+        autoFocus
+        defaultValue={p.quality}
+        onBlur={(e) => handleChange(e.target.value as ProspectQuality)}
+        onChange={(e) => handleChange(e.target.value as ProspectQuality)}
+        onClick={(e) => e.stopPropagation()}
+        className="text-[10px] bg-card border border-primary-500/30 rounded px-1 py-0.5 text-foreground outline-none"
+      >
+        {PROSPECT_QUALITIES.map((q) => (
+          <option key={q} value={q}>
+            {QUALITY_LABELS[q]}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
+      disabled={saving}
+      className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded transition-opacity ${QUALITY_TONE[p.quality]} ${saving ? "opacity-50" : "hover:opacity-80"}`}
+      title="Click to set lead quality"
+    >
+      {saving ? <Loader2 size={9} className="animate-spin" /> : null}
+      {QUALITY_LABELS[p.quality]}
+    </button>
+  );
+}
+
 export function OutboundClient({
   tenantSlug,
   tenantName,
@@ -209,6 +279,8 @@ export function OutboundClient({
   initialEventScraperRuns,
   eventScraperPlatforms,
   eventScraperEnabled,
+  qualityKpis,
+  kpis,
 }: {
   tenantSlug: string;
   tenantName: string;
@@ -223,6 +295,18 @@ export function OutboundClient({
   initialEventScraperRuns: EventScraperRunRecord[];
   eventScraperPlatforms: EventScraperPlatformOption[];
   eventScraperEnabled: boolean;
+  qualityKpis: Record<ProspectQuality, number> & { duplicates: number };
+  kpis: {
+    total: number;
+    active: number;
+    qualified: number;
+    drafted: number;
+    sent: number;
+    replied: number;
+    inboxUnread: number;
+    newThisWeek: number;
+    silentOver7Days: number;
+  };
 }) {
   const dialogs = useDialogs();
   const searchParams = useSearchParams();
@@ -250,6 +334,7 @@ export function OutboundClient({
   const [statusFilter, setStatusFilter] = useState<ProspectStatus | "all">(
     "all"
   );
+  const [qualityFilter, setQualityFilter] = useState<QualityTab>("all");
   const [sortBy, setSortBy] = useState<"updated" | "followup">("updated");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkPending, startBulk] = useTransition();
@@ -297,10 +382,20 @@ export function OutboundClient({
 
   const clearSelection = () => setSelectedIds(new Set());
 
-  const goToPage = (nextPage: number, filterOverride?: string) => {
+  const goToPage = (
+    nextPage: number,
+    filterOverride?: string,
+    qualityOverride?: QualityTab
+  ) => {
     const activeFilter = filterOverride ?? statusFilter;
+    const activeQuality = qualityOverride ?? qualityFilter;
     startPageLoad(async () => {
-      const res = await fetchProspectsPage(tenantSlug, nextPage, activeFilter === "all" ? undefined : activeFilter);
+      const res = await fetchProspectsPage(
+        tenantSlug,
+        nextPage,
+        activeFilter === "all" ? undefined : activeFilter,
+        activeQuality
+      );
       setProspects(res.data);
       setTotalCount(res.total);
       setPage(nextPage);
@@ -311,6 +406,11 @@ export function OutboundClient({
   const handleStatusChange = (val: ProspectStatus | "all") => {
     setStatusFilter(val);
     goToPage(0, val);
+  };
+
+  const handleQualityChange = (val: QualityTab) => {
+    setQualityFilter(val);
+    goToPage(0, undefined, val);
   };
 
   const handleBulkDelete = () => {
@@ -493,6 +593,11 @@ export function OutboundClient({
             );
             setEditingProspect(null);
           }}
+          onPartialUpdate={(patch) => {
+            setProspects(prev =>
+              prev.map(p => p.id === editingProspect.id ? { ...p, ...patch } : p)
+            );
+          }}
         />
       )}
 
@@ -565,7 +670,32 @@ export function OutboundClient({
 
       {tab === "pipeline" && (
         <>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-3">
+          <Kpi label="Active" value={kpis.active} />
+          <Kpi label="New this week" value={kpis.newThisWeek} tone="primary" />
+          <Kpi label="All" value={kpis.total} />
+          <Kpi
+            label="Silent >7 days"
+            value={kpis.silentOver7Days}
+            tone={kpis.silentOver7Days > 0 ? "yellow" : "default"}
+          />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+          <Kpi label="Qualified" value={kpis.qualified} tone="primary" />
+          <Kpi label="Ready to send" value={kpis.drafted} tone="yellow" />
+          <Kpi label="Sent" value={kpis.sent} tone="green" />
+          <Kpi
+            label="Inbox"
+            value={kpis.inboxUnread}
+            tone={kpis.inboxUnread > 0 ? "primary" : "default"}
+          />
+        </div>
         <div className="space-y-3">
+            <QualityTabs
+              value={qualityFilter}
+              counts={qualityKpis}
+              onChange={handleQualityChange}
+            />
             <div className="flex items-center gap-2 flex-wrap">
               <StatusFilter value={statusFilter} onChange={handleStatusChange} />
               <button
@@ -714,6 +844,7 @@ export function OutboundClient({
                               {p.status === "qualifying" && <Loader2 size={9} className="animate-spin" />}
                               {STATUS_LABELS[p.status]}
                             </span>
+                            <QualityBadge p={p} tenantSlug={tenantSlug} onUpdate={updateProspect} />
                             {p.qualificationScore != null && (
                               <span className="text-[10px] text-text-muted">
                                 · {p.qualificationScore}
@@ -854,6 +985,71 @@ export function OutboundClient({
       {tab === "templates" && (
         <TemplatesView tenantSlug={tenantSlug} initial={initialTemplates} />
       )}
+    </div>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: number;
+  tone?: "default" | "primary" | "yellow" | "green";
+}) {
+  const tones = {
+    default: "text-foreground",
+    primary: "text-primary-500",
+    yellow: "text-status-yellow",
+    green: "text-status-green",
+  };
+  return (
+    <div className="bg-card rounded-xl p-4 border border-border/50">
+      <p className="text-text-secondary text-xs">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${tones[tone]}`}>{value}</p>
+    </div>
+  );
+}
+
+function QualityTabs({
+  value,
+  counts,
+  onChange,
+}: {
+  value: QualityTab;
+  counts: Record<ProspectQuality, number> & { duplicates: number };
+  onChange: (v: QualityTab) => void;
+}) {
+  const tabs: Array<{ key: QualityTab; label: string; count: number }> = [
+    { key: "all", label: "All", count: 0 },
+    { key: "hot", label: "Hot", count: counts.hot },
+    { key: "warm", label: "Warm", count: counts.warm },
+    { key: "cold", label: "Cold", count: counts.cold },
+    { key: "dead", label: "Dead", count: counts.dead },
+    { key: "duplicates", label: "Duplicates", count: counts.duplicates },
+  ];
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          onClick={() => onChange(t.key)}
+          className={`inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border transition-colors ${
+            value === t.key
+              ? "bg-primary-500/10 text-primary-500 border-primary-500/30 font-medium"
+              : "text-text-muted border-border hover:text-foreground hover:bg-sidebar"
+          }`}
+        >
+          {t.label}
+          {t.count > 0 && (
+            <span className="text-[10px] px-1 rounded-full bg-sidebar">
+              {t.count}
+            </span>
+          )}
+        </button>
+      ))}
     </div>
   );
 }

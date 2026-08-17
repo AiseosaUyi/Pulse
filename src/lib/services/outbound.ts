@@ -8,6 +8,7 @@ import type {
   OutboundDmRecord,
   OutboundDmStatus,
   OutboundPlatform,
+  ProspectQuality,
   ProspectRecord,
   ProspectSearchRecord,
   ProspectStatus,
@@ -25,6 +26,7 @@ type ProspectRow = Omit<
   | "signalData"
   | "qualificationScore"
   | "qualificationReason"
+  | "duplicateOfId"
   | "lastTouchedAt"
   | "createdAt"
   | "updatedAt"
@@ -39,6 +41,7 @@ type ProspectRow = Omit<
   signal_data: Record<string, unknown> | null;
   qualification_score: number | null;
   qualification_reason: string | null;
+  duplicate_of_id: string | null;
   category: string | null;
   location: string | null;
   verified_name: string | null;
@@ -67,6 +70,8 @@ function prospectRowTo(row: ProspectRow): ProspectRecord {
     qualificationScore: row.qualification_score,
     qualificationReason: row.qualification_reason,
     status: row.status,
+    quality: row.quality,
+    duplicateOfId: row.duplicate_of_id,
     notes: row.notes,
     category: row.category,
     location: row.location,
@@ -86,6 +91,8 @@ export async function listProspects(
   filter: {
     status?: ProspectStatus | "all";
     platform?: OutboundPlatform;
+    quality?: ProspectQuality | "all";
+    duplicatesOnly?: boolean;
     qualificationScoreMin?: number;
     search?: string;
     page?: number;
@@ -108,6 +115,11 @@ export async function listProspects(
   }
   if (filter.platform) {
     query = query.eq("platform", filter.platform);
+  }
+  if (filter.duplicatesOnly) {
+    query = query.not("duplicate_of_id", "is", null);
+  } else if (filter.quality && filter.quality !== "all") {
+    query = query.eq("quality", filter.quality);
   }
   if (filter.qualificationScoreMin !== undefined) {
     query = query.gte("qualification_score", filter.qualificationScoreMin);
@@ -503,46 +515,81 @@ export async function listInbox(
   }));
 }
 
+const TERMINAL_STATUSES: ProspectStatus[] = [
+  "closed_won",
+  "closed_lost",
+  "dismissed",
+  "unqualified",
+];
+
 export async function countOutboundKpis(
   tenantSlug: string
 ): Promise<{
   total: number;
+  active: number;
   qualified: number;
   drafted: number;
   sent: number;
   replied: number;
   inboxUnread: number;
+  newThisWeek: number;
+  silentOver7Days: number;
 }> {
   const supabase = await createClient();
-  const { data: statuses, error } = await supabase
+  const { data: rows, error } = await supabase
     .from("prospects")
-    .select("status")
+    .select("status, created_at, last_reachout_at, last_touched_at")
     .eq("tenant_slug", tenantSlug);
-  if (error || !statuses) {
+  if (error || !rows) {
     return {
       total: 0,
+      active: 0,
       qualified: 0,
       drafted: 0,
       sent: 0,
       replied: 0,
       inboxUnread: 0,
+      newThisWeek: 0,
+      silentOver7Days: 0,
     };
   }
+  const nowMs = Date.now();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
   const counts = {
-    total: statuses.length,
+    total: rows.length,
+    active: 0,
     qualified: 0,
     drafted: 0,
     sent: 0,
     replied: 0,
     inboxUnread: 0,
+    newThisWeek: 0,
+    silentOver7Days: 0,
   };
-  for (const row of statuses) {
-    if (row.status === "qualified") counts.qualified++;
-    else if (row.status === "drafted" || row.status === "approved")
-      counts.drafted++;
-    else if (row.status === "sent") counts.sent++;
-    else if (row.status === "replied" || row.status === "handed_off")
-      counts.replied++;
+  for (const row of rows) {
+    const status = row.status as ProspectStatus;
+    if (status === "qualified") counts.qualified++;
+    else if (status === "drafted" || status === "approved") counts.drafted++;
+    else if (status === "sent") counts.sent++;
+    else if (status === "replied" || status === "handed_off") counts.replied++;
+
+    if (!TERMINAL_STATUSES.includes(status)) counts.active++;
+
+    if (
+      row.created_at &&
+      nowMs - new Date(row.created_at as string).getTime() <= sevenDaysMs
+    ) {
+      counts.newThisWeek++;
+    }
+
+    if (status === "sent") {
+      const ref = (row.last_reachout_at ?? row.last_touched_at) as
+        | string
+        | null;
+      if (ref && nowMs - new Date(ref).getTime() > sevenDaysMs) {
+        counts.silentOver7Days++;
+      }
+    }
   }
   const { count: unread } = await supabase
     .from("inbound_messages")
@@ -550,5 +597,67 @@ export async function countOutboundKpis(
     .eq("tenant_slug", tenantSlug)
     .is("read_at", null);
   counts.inboxUnread = unread ?? 0;
+  return counts;
+}
+
+/** Resolve a handle typed into the "mark as duplicate" field to a real
+ * prospect id within the tenant. Handles aren't globally unique (unique
+ * constraint is tenant_slug+platform+handle), so this returns the first
+ * match — good enough for the duplicate-linking UX, which is a manual,
+ * reviewed action. */
+export async function findProspectIdByHandle(
+  client: SupabaseClient,
+  tenantSlug: string,
+  handle: string
+): Promise<{ id: string; handle: string } | null> {
+  const normalized = handle.trim().replace(/^@/, "").toLowerCase();
+  if (!normalized) return null;
+  const { data } = await client
+    .from("prospects")
+    .select("id, handle")
+    .eq("tenant_slug", tenantSlug)
+    .eq("handle", normalized)
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  return { id: data.id as string, handle: data.handle as string };
+}
+
+export async function getProspectHandle(
+  client: SupabaseClient,
+  tenantSlug: string,
+  id: string
+): Promise<string | null> {
+  const { data } = await client
+    .from("prospects")
+    .select("handle")
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", id)
+    .maybeSingle();
+  return (data?.handle as string | undefined) ?? null;
+}
+
+export async function countProspectQualityKpis(
+  tenantSlug: string
+): Promise<Record<ProspectQuality, number> & { duplicates: number }> {
+  const supabase = await createClient();
+  const { data: rows, error } = await supabase
+    .from("prospects")
+    .select("quality, duplicate_of_id")
+    .eq("tenant_slug", tenantSlug);
+  const counts: Record<ProspectQuality, number> & { duplicates: number } = {
+    unscored: 0,
+    hot: 0,
+    warm: 0,
+    cold: 0,
+    dead: 0,
+    duplicates: 0,
+  };
+  if (error || !rows) return counts;
+  for (const row of rows) {
+    const quality = row.quality as ProspectQuality;
+    if (quality in counts) counts[quality]++;
+    if (row.duplicate_of_id) counts.duplicates++;
+  }
   return counts;
 }

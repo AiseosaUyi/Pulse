@@ -12,6 +12,7 @@ import {
   listProspects,
   listSearches,
   countOutboundKpis,
+  countProspectQualityKpis,
 } from "@/lib/services/outbound";
 import { listAllDmsByProspect } from "@/lib/services/outbound-dms-bulk";
 import { listTemplates } from "@/lib/services/outbound-templates";
@@ -45,6 +46,7 @@ export default async function LeadsPage() {
     searches,
     inbox,
     kpis,
+    qualityKpis,
     dmsByProspect,
     templates,
     todayData,
@@ -55,6 +57,7 @@ export default async function LeadsPage() {
       listSearches(tenant.slug),
       listInbox(tenant.slug, 30),
       countOutboundKpis(tenant.slug),
+      countProspectQualityKpis(tenant.slug),
       listAllDmsByProspect(tenant.slug),
       listTemplates(supabase, tenant.slug),
       getOutreachToday(supabase, tenant.slug),
@@ -109,18 +112,6 @@ export default async function LeadsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-6">
-        <Kpi label="Prospects" value={kpis.total} />
-        <Kpi label="Qualified" value={kpis.qualified} tone="primary" />
-        <Kpi label="Ready to send" value={kpis.drafted} tone="yellow" />
-        <Kpi label="Sent" value={kpis.sent} tone="green" />
-        <Kpi
-          label="Inbox"
-          value={kpis.inboxUnread}
-          tone={kpis.inboxUnread > 0 ? "primary" : "default"}
-        />
-      </div>
-
       <OutboundClient
         tenantSlug={tenant.slug}
         tenantName={tenant.name}
@@ -135,30 +126,9 @@ export default async function LeadsPage() {
         initialEventScraperRuns={eventScraperRuns}
         eventScraperPlatforms={eventScraperPlatforms}
         eventScraperEnabled={eventScraperEnabled}
+        qualityKpis={qualityKpis}
+        kpis={kpis}
       />
-    </div>
-  );
-}
-
-function Kpi({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: number;
-  tone?: "default" | "primary" | "yellow" | "green";
-}) {
-  const tones = {
-    default: "text-foreground",
-    primary: "text-primary-500",
-    yellow: "text-status-yellow",
-    green: "text-status-green",
-  };
-  return (
-    <div className="bg-card rounded-xl p-4 border border-border/50">
-      <p className="text-text-secondary text-xs">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tones[tone]}`}>{value}</p>
     </div>
   );
 }
