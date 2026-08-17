@@ -3,15 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentTenant, requireUser } from "@/lib/auth";
-import { resolveActiveConnection } from "@/lib/composio/resolve-alias";
-import {
-  replyToInstagramComment,
-  sendInstagramDM,
-  commentOnLinkedInPost,
-} from "@/lib/composio/executors";
 import { getTenant } from "@/lib/services/tenants";
 import { generateEngagementReplyDraft } from "@/lib/ai/engagement-reply";
-import type { Toolkit } from "@/lib/composio/client";
+import { dispatchEngagementItemReply, type DispatchResult } from "@/lib/services/reply-dispatch";
 
 const TYPES = ["dm", "comment", "mention", "reply"] as const;
 const PLATFORMS = ["instagram", "tiktok", "twitter", "linkedin"] as const;
@@ -99,11 +93,8 @@ export async function markAsReplied(itemId: string, replied: boolean) {
 export async function sendEngagementReply(
   itemId: string,
   message: string
-): Promise<
-  | { success: true }
-  | { success: false; error: string; reason?: "not_connected" | "unsupported" }
-> {
-  await requireUser();
+): Promise<DispatchResult> {
+  const user = await requireUser();
   const supabase = await createClient();
 
   if (!message.trim()) {
@@ -120,72 +111,26 @@ export async function sendEngagementReply(
     return { success: false, error: readErr?.message ?? "Item not found" };
   }
 
-  const platform = (item.platform as string).toLowerCase() as Toolkit;
-  if (!["instagram", "linkedin"].includes(platform)) {
-    return {
-      success: false,
-      error: `Replying via ${platform} is not supported`,
-      reason: "unsupported",
-    };
-  }
+  const result = await dispatchEngagementItemReply(item, message);
+  if (!result.success) return result;
 
-  const conn = await resolveActiveConnection(item.tenant_slug, platform);
-  if (!conn) {
-    return {
-      success: false,
-      error: `No active ${platform} connection for this workspace`,
-      reason: "not_connected",
-    };
-  }
-
-  if (!item.external_id) {
-    return {
-      success: false,
-      error: "This item is missing an external_id — cannot route reply",
-    };
-  }
-
-  try {
-    if (platform === "instagram") {
-      if (item.type === "comment" || item.type === "mention") {
-        await replyToInstagramComment(conn, item.external_id, message);
-      } else if (item.type === "dm") {
-        const meta = (item.meta ?? {}) as { sender_id?: string };
-        if (!meta.sender_id) {
-          return { success: false, error: "DM has no sender_id in meta" };
-        }
-        await sendInstagramDM(conn, meta.sender_id, message);
-      } else {
-        return {
-          success: false,
-          error: `Cannot reply to ${item.type} on Instagram`,
-          reason: "unsupported",
-        };
-      }
-    } else {
-      // linkedin — only comments are supported
-      if (item.type !== "comment" && item.type !== "reply") {
-        return {
-          success: false,
-          error: `Cannot reply to ${item.type} on LinkedIn`,
-          reason: "unsupported",
-        };
-      }
-      await commentOnLinkedInPost(conn, item.external_id, message);
-    }
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Reply failed",
-    };
-  }
-
+  // Every successful send (human-typed, human-approved AI draft, or later
+  // AI-auto-sent) persists the sent text — a thread view needs outbound
+  // bubbles to exist as rows, and approved_by IS NULL is the AI-vs-human
+  // signal (see lib/services/conversations.ts deriveReply()).
   await supabase
     .from("engagement_items")
-    .update({ replied: true, read: true })
+    .update({
+      replied: true,
+      read: true,
+      sent_body: message,
+      approval_status: "sent",
+      approved_by: user.id,
+      approved_at: new Date().toISOString(),
+    })
     .eq("id", itemId);
 
-  revalidatePath("/engagement");
+  revalidatePath("/conversations");
   return { success: true };
 }
 

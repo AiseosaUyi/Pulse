@@ -15,7 +15,7 @@ export type AccountType = "startup" | "individual";
 export interface TenantMembership {
   slug: string;
   name: string;
-  role: "owner" | "admin" | "member";
+  role: "owner" | "admin" | "member" | "support";
   accountType: AccountType;
 }
 
@@ -116,4 +116,21 @@ export async function getCurrentTenant(): Promise<TenantMembership | null> {
   }
 
   return memberships[0];
+}
+
+// Guard for pages/actions that must reject a role outside `allowed` for the
+// current tenant — e.g. a `support`-role member hitting a route the sidebar
+// already hides them from, but that's still reachable by URL. Mirrors
+// requireUser()'s redirect-based shape. This is a UI-layer second line of
+// defense on top of migration 103's real RLS restriction, not a substitute
+// for it — a route this guards still relies on RLS to actually deny the
+// underlying data access if the guard is ever missed on some call path.
+export async function requireTenantRole(
+  allowed: TenantMembership["role"][]
+): Promise<TenantMembership> {
+  const tenant = await getCurrentTenant();
+  if (!tenant || !allowed.includes(tenant.role)) {
+    redirect("/dashboard");
+  }
+  return tenant;
 }

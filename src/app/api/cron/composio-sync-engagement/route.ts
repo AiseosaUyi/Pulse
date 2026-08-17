@@ -14,6 +14,7 @@ import {
   listInstagramConversations,
   listInstagramMessages,
 } from "@/lib/composio/executors";
+import { maybeAutoReply } from "@/lib/ai/shared-inbox-auto-reply";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -52,24 +53,52 @@ export async function POST(req: Request) {
         for (const c of comments) {
           if (since && new Date(c.timestamp).getTime() <= since) continue;
 
-          const { error } = await admin.from("engagement_items").upsert(
-            {
-              tenant_slug: conn.tenantSlug,
-              type: "comment",
-              platform: "instagram",
-              external_id: c.id,
-              source: "composio",
-              from_name: c.username ?? "Instagram user",
-              from_handle: c.username,
-              content: c.text,
-              read: false,
-              replied: false,
-              created_at: c.timestamp,
-              meta: { media_id: c.mediaId, parent_id: c.parentId },
-            },
-            { onConflict: "tenant_slug,platform,external_id" }
-          );
-          if (!error) summary.commentsAdded += 1;
+          const commentMeta = { media_id: c.mediaId, parent_id: c.parentId };
+          const { data: commentRow, error } = await admin
+            .from("engagement_items")
+            .upsert(
+              {
+                tenant_slug: conn.tenantSlug,
+                type: "comment",
+                platform: "instagram",
+                external_id: c.id,
+                source: "composio",
+                from_name: c.username ?? "Instagram user",
+                from_handle: c.username,
+                content: c.text,
+                read: false,
+                replied: false,
+                created_at: c.timestamp,
+                meta: commentMeta,
+              },
+              { onConflict: "tenant_slug,platform,external_id" }
+            )
+            .select("id")
+            .single();
+          if (!error) {
+            summary.commentsAdded += 1;
+            // Track A Phase 3 — merged-but-inert (see maybeAutoReply's own
+            // gates: per-tenant opt-in + global kill switch). Best-effort:
+            // a drafting/sending failure must never fail the sync cron.
+            if (commentRow?.id) {
+              try {
+                await maybeAutoReply({
+                  source: "engagement",
+                  id: commentRow.id,
+                  tenantSlug: conn.tenantSlug,
+                  platform: "instagram",
+                  type: "comment",
+                  content: c.text,
+                  fromHandle: c.username ?? null,
+                  externalId: c.id,
+                  meta: commentMeta,
+                  receivedAt: c.timestamp,
+                });
+              } catch {
+                // Best-effort — the comment itself is already persisted.
+              }
+            }
+          }
         }
       }
 
@@ -84,24 +113,54 @@ export async function POST(req: Request) {
           // Don't ingest our own outbound messages.
           if (msg.fromHandle === conn.userHandle) continue;
 
-          const { error: engErr } = await admin.from("engagement_items").upsert(
-            {
-              tenant_slug: conn.tenantSlug,
-              type: "dm",
-              platform: "instagram",
-              external_id: msg.id,
-              source: "composio",
-              from_name: msg.fromHandle ?? "Instagram user",
-              from_handle: msg.fromHandle,
-              content: msg.message,
-              read: false,
-              replied: false,
-              created_at: msg.createdAt,
-              meta: { conversation_id: convo.id, sender_id: msg.fromId },
-            },
-            { onConflict: "tenant_slug,platform,external_id" }
-          );
-          if (!engErr) summary.dmsAdded += 1;
+          const dmMeta = { conversation_id: convo.id, sender_id: msg.fromId };
+          const { data: dmRow, error: engErr } = await admin
+            .from("engagement_items")
+            .upsert(
+              {
+                tenant_slug: conn.tenantSlug,
+                type: "dm",
+                platform: "instagram",
+                external_id: msg.id,
+                source: "composio",
+                from_name: msg.fromHandle ?? "Instagram user",
+                from_handle: msg.fromHandle,
+                content: msg.message,
+                read: false,
+                replied: false,
+                created_at: msg.createdAt,
+                meta: dmMeta,
+              },
+              { onConflict: "tenant_slug,platform,external_id" }
+            )
+            .select("id")
+            .single();
+          if (!engErr) {
+            summary.dmsAdded += 1;
+            // Track A Phase 3 — see the comment loop above for the same
+            // merged-but-inert reasoning. This is the engagement_items DM
+            // row only, not the separate prospect-linked inbound_messages
+            // upsert below it (that pipeline belongs to Outbound, not the
+            // shared inbox — see conversations.ts's sourceForPlatform).
+            if (dmRow?.id) {
+              try {
+                await maybeAutoReply({
+                  source: "engagement",
+                  id: dmRow.id,
+                  tenantSlug: conn.tenantSlug,
+                  platform: "instagram",
+                  type: "dm",
+                  content: msg.message,
+                  fromHandle: msg.fromHandle ?? null,
+                  externalId: msg.id,
+                  meta: dmMeta,
+                  receivedAt: msg.createdAt,
+                });
+              } catch {
+                // Best-effort — the DM row itself is already persisted.
+              }
+            }
+          }
 
           // Best-effort linkage to a known prospect by handle.
           if (msg.fromHandle) {

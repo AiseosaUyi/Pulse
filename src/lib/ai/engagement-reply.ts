@@ -21,6 +21,16 @@ export const replyDraftSchema = z.object({
   confidence: z
     .enum(["low", "medium", "high"])
     .describe("How safe this is to send as-is."),
+  // Numeric twin of `confidence`, required (not `.optional()`/`.default()` —
+  // OpenAI strict structured-output mode needs every property in `required`,
+  // per this repo's own documented gotcha in CLAUDE.md). Track A Phase 3's
+  // AI-auto-send gate compares this against a tenant's configured
+  // autoSendConfidence threshold; the enum stays for human-facing display.
+  confidenceScore: z
+    .number()
+    .min(0)
+    .max(1)
+    .describe("Numeric confidence (0-1) this reply is safe to send as-is without human review."),
 });
 
 export type ReplyDraft = z.infer<typeof replyDraftSchema>;

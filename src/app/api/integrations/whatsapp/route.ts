@@ -10,6 +10,7 @@ import {
   parseInboundWebhook,
   getWhatsappAccountByPhoneId,
 } from "@/lib/integrations/whatsapp";
+import { maybeAutoReply } from "@/lib/ai/shared-inbox-auto-reply";
 
 export const dynamic = "force-dynamic";
 
@@ -60,18 +61,50 @@ export async function POST(req: Request) {
     const receivedAt = m.timestamp
       ? new Date(Number(m.timestamp) * 1000).toISOString()
       : new Date().toISOString();
-    const { error } = await admin.from("inbound_messages").upsert(
-      {
-        tenant_slug: tenantSlug,
-        platform: "whatsapp",
-        channel: "whatsapp",
-        external_id: m.id,
-        body: m.text,
-        received_at: receivedAt,
-      },
-      { onConflict: "tenant_slug,platform,external_id" }
-    );
-    if (!error) ingested += 1;
+    const { data: row, error } = await admin
+      .from("inbound_messages")
+      .upsert(
+        {
+          tenant_slug: tenantSlug,
+          platform: "whatsapp",
+          channel: "whatsapp",
+          external_id: m.id,
+          body: m.text,
+          from_handle: m.from,
+          received_at: receivedAt,
+        },
+        { onConflict: "tenant_slug,platform,external_id" }
+      )
+      .select("id")
+      .single();
+    if (!error) {
+      ingested += 1;
+      // Track A Phase 3 — AI-covers-when-away. Merged-but-inert: gated on
+      // the tenant's opt-in settings.sharedInbox.enabled (default false)
+      // and the global AI_AUTO_REPLY_KILL_SWITCH, both checked first inside
+      // maybeAutoReply(). Never awaited-and-thrown into the webhook's own
+      // error path — a drafting/sending failure here must not make Meta
+      // retry-storm a webhook whose actual job (persisting the inbound
+      // message) already succeeded.
+      if (row?.id && m.from) {
+        try {
+          await maybeAutoReply({
+            source: "whatsapp",
+            id: row.id,
+            tenantSlug,
+            platform: "whatsapp",
+            type: "message",
+            content: m.text,
+            fromHandle: m.from,
+            externalId: m.id,
+            meta: null,
+            receivedAt,
+          });
+        } catch {
+          // Best-effort — the inbound message itself is already persisted.
+        }
+      }
+    }
   }
 
   return NextResponse.json({ ok: true, ingested, unmatched });

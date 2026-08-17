@@ -7,12 +7,14 @@ interface SidebarProps {
   tenants: TenantMembership[];
   currentTenantSlug: string;
   currentAccountType: AccountType;
+  currentRole: TenantMembership["role"];
 }
 
 export function Sidebar({
   tenants,
   currentTenantSlug,
   currentAccountType,
+  currentRole,
 }: SidebarProps) {
   return (
     <aside className="w-[260px] bg-sidebar h-screen flex flex-col border-r border-border flex-shrink-0">
@@ -20,7 +22,7 @@ export function Sidebar({
         <Logo size="md" />
       </div>
 
-      <SidebarNav accountType={currentAccountType} />
+      <SidebarNav accountType={currentAccountType} role={currentRole} />
 
       <TenantSwitcher tenants={tenants} currentSlug={currentTenantSlug} />
     </aside>

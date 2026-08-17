@@ -12,12 +12,14 @@ interface MobileNavProps {
   tenants: TenantMembership[];
   currentTenantSlug: string;
   currentAccountType: AccountType;
+  currentRole: TenantMembership["role"];
 }
 
 export function MobileNav({
   tenants,
   currentTenantSlug,
   currentAccountType,
+  currentRole,
 }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -59,7 +61,7 @@ export function MobileNav({
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col" onClick={() => setIsOpen(false)}>
-          <SidebarNav accountType={currentAccountType} />
+          <SidebarNav accountType={currentAccountType} role={currentRole} />
         </div>
 
         <div className="shrink-0">
