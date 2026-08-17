@@ -25,10 +25,12 @@ import {
   Share2,
   Radio,
   ScanSearch,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 
 type SettingsAccountType = "startup" | "individual";
+type SettingsRole = "owner" | "admin" | "member" | "support";
 
 export interface SettingsNavGroup {
   label: string;
@@ -95,6 +97,11 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         icon: Radar,
         surfaces: ["startup"],
       },
+      {
+        label: "AI inbox coverage",
+        href: "/settings/conversations",
+        icon: Inbox,
+      },
     ],
   },
   {
@@ -141,13 +148,27 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function SettingsNav({ accountType = "startup" }: { accountType?: SettingsAccountType }) {
+export function SettingsNav({
+  accountType = "startup",
+  role,
+}: {
+  accountType?: SettingsAccountType;
+  role?: SettingsRole;
+}) {
   const pathname = usePathname();
 
-  const nav = SETTINGS_NAV.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => !item.surfaces || item.surfaces.includes(accountType)),
-  })).filter((group) => group.items.length > 0);
+  // Mirrors the redirect guard in (app)/settings/layout.tsx: a `support`
+  // role only sees the Account group. UI convenience only — the real
+  // boundary is migration 103's RLS, see that layout's comment.
+  const visibleGroups =
+    role === "support" ? SETTINGS_NAV.filter((g) => g.label === "Account") : SETTINGS_NAV;
+
+  const nav = visibleGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.surfaces || item.surfaces.includes(accountType)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <>

@@ -1,5 +1,10 @@
 export type NavAccountType = "startup" | "individual";
 
+// Kept independent from auth.ts's TenantMembership["role"] the same way
+// NavAccountType is kept independent from AccountType — this module stays a
+// leaf with no cross-import into auth.ts.
+export type NavRole = "owner" | "admin" | "member" | "support";
+
 export interface NavItem {
   label: string;
   href: string;
@@ -87,6 +92,25 @@ export function navGroupsForAccountType(accountType: NavAccountType): NavGroup[]
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => isItemVisible(item, accountType)),
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
+/**
+ * Second-pass curation applied AFTER navGroupsForAccountType(): a `support`
+ * role is restricted to Conversations only, regardless of persona. This is
+ * a UI convenience — hiding a link a support agent couldn't use anyway —
+ * not the actual security boundary. The real boundary is Postgres RLS
+ * (migration 103's is_support_member() restrictive policies); this
+ * function has zero effect on what a support-role member can read/write
+ * via a direct Supabase API call.
+ */
+export function navGroupsForRole(groups: NavGroup[], role: NavRole): NavGroup[] {
+  if (role !== "support") return groups;
+  return groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => item.href === "/conversations"),
     }))
     .filter((group) => group.items.length > 0);
 }

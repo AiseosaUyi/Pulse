@@ -21,6 +21,7 @@ export default async function AppLayout({
   const currentTenant = await getCurrentTenant();
   const currentSlug = currentTenant?.slug ?? tenants[0].slug;
   const currentAccountType = currentTenant?.accountType ?? tenants[0].accountType;
+  const currentRole = currentTenant?.role ?? tenants[0].role;
 
   // Onboarding gate: a tenant without brand voice hasn't been set up yet.
   // Both personas need brand voice (the composer/AI calls depend on it), so
@@ -41,6 +42,7 @@ export default async function AppLayout({
         tenants={tenants}
         currentTenantSlug={currentSlug}
         currentAccountType={currentAccountType}
+        currentRole={currentRole}
       />
       <div className="flex h-full">
         <div className="hidden md:block">
@@ -48,6 +50,7 @@ export default async function AppLayout({
             tenants={tenants}
             currentTenantSlug={currentSlug}
             currentAccountType={currentAccountType}
+            currentRole={currentRole}
           />
         </div>
         <main className="flex-1 overflow-y-auto pt-14 md:pt-0">

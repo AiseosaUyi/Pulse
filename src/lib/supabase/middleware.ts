@@ -15,6 +15,12 @@ const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/invite", "/forgot-password
 // Refreshes the Supabase session and gates unauthenticated routes.
 // Called from middleware.ts on every request.
 export async function updateSession(request: NextRequest) {
+  // Exposes the current pathname to Server Components — a layout has no
+  // built-in way to read it (no server-side usePathname) — via a request
+  // header, read back with `headers().get("x-pathname")`. Used by the
+  // `support`-role settings guard in `(app)/settings/layout.tsx`.
+  request.headers.set("x-pathname", request.nextUrl.pathname);
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

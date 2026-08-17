@@ -3,12 +3,13 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { EngagementInbox } from "@/components/engagement/EngagementInbox";
+import { ConversationsInbox } from "@/components/conversations/ConversationsInbox";
 import { EngageClient } from "@/app/(app)/(social)/engage/client";
 import { AddEngagementButton } from "@/app/(app)/(social)/engagement/client";
 import type { AccountType } from "@/lib/auth";
 import type { EngagementItem, EngagementSummary } from "@/lib/types/engagement";
 import type { EngageCandidate } from "@/lib/services/engage";
+import type { ConversationSummary } from "@/lib/types/conversations";
 
 interface Props {
   accountType: AccountType;
@@ -16,11 +17,21 @@ interface Props {
   inboxItems: EngagementItem[];
   inboxSummary: EngagementSummary;
   candidates: EngageCandidate[];
+  conversations: ConversationSummary[];
+  currentUserId: string;
 }
 
 type TabId = "inbox" | "join";
 
-function ConversationsInner({ accountType, tenantSlug, inboxItems, inboxSummary, candidates }: Props) {
+function ConversationsInner({
+  accountType,
+  tenantSlug,
+  inboxItems,
+  inboxSummary,
+  candidates,
+  conversations,
+  currentUserId,
+}: Props) {
   const searchParams = useSearchParams();
   const paramTab = searchParams.get("tab");
 
@@ -114,7 +125,7 @@ function ConversationsInner({ accountType, tenantSlug, inboxItems, inboxSummary,
                   <p className="text-2xl font-bold text-primary-500 mt-1">{inboxSummary.mentions}</p>
                 </div>
               </div>
-              <EngagementInbox items={inboxItems} />
+              <ConversationsInbox initialConversations={conversations} currentUserId={currentUserId} />
             </>
           )}
         </>
