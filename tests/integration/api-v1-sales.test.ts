@@ -208,6 +208,118 @@ describe("/api/v1 sales group", () => {
     expect(res.headers.get("Access-Control-Allow-Methods")).toContain("POST");
   });
 
+  it("POST /prospects/:id/quality sets the quality tier", async () => {
+    const { POST } = await import("../../src/app/api/v1/prospects/[id]/quality/route");
+    const res = await POST(
+      authedRequest(`https://test.local/api/v1/prospects/${tenantProspectId}/quality`, readWriteToken, {
+        method: "POST",
+        body: JSON.stringify({ quality: "hot" }),
+      }),
+      { params: Promise.resolve({ id: tenantProspectId }) }
+    );
+    expect(res.status).toBe(200);
+
+    const { data } = await admin
+      .from("prospects")
+      .select("quality")
+      .eq("id", tenantProspectId)
+      .single();
+    expect(data?.quality).toBe("hot");
+  });
+
+  it("POST /prospects/:id/quality rejects an invalid quality enum (400)", async () => {
+    const { POST } = await import("../../src/app/api/v1/prospects/[id]/quality/route");
+    const res = await POST(
+      authedRequest(`https://test.local/api/v1/prospects/${tenantProspectId}/quality`, readWriteToken, {
+        method: "POST",
+        body: JSON.stringify({ quality: "scorching" }),
+      }),
+      { params: Promise.resolve({ id: tenantProspectId }) }
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /prospects/:id/quality with a read-only token is rejected (403)", async () => {
+    const { POST } = await import("../../src/app/api/v1/prospects/[id]/quality/route");
+    const res = await POST(
+      authedRequest(`https://test.local/api/v1/prospects/${tenantProspectId}/quality`, readOnlyToken, {
+        method: "POST",
+        body: JSON.stringify({ quality: "hot" }),
+      }),
+      { params: Promise.resolve({ id: tenantProspectId }) }
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("POST /prospects/:id/duplicate marks a prospect as a duplicate and drops status to dismissed", async () => {
+    const { data: other, error } = await admin
+      .from("prospects")
+      .insert({ tenant_slug: TENANT, platform: "instagram", handle: "the-original" })
+      .select("id")
+      .single();
+    if (error) throw error;
+
+    const { POST } = await import("../../src/app/api/v1/prospects/[id]/duplicate/route");
+    const res = await POST(
+      authedRequest(`https://test.local/api/v1/prospects/${tenantProspectId}/duplicate`, readWriteToken, {
+        method: "POST",
+        body: JSON.stringify({ duplicateOfId: other.id }),
+      }),
+      { params: Promise.resolve({ id: tenantProspectId }) }
+    );
+    expect(res.status).toBe(200);
+
+    const { data } = await admin
+      .from("prospects")
+      .select("duplicate_of_id, status")
+      .eq("id", tenantProspectId)
+      .single();
+    expect(data?.duplicate_of_id).toBe(other.id);
+    expect(data?.status).toBe("dismissed");
+
+    // unmark
+    const res2 = await POST(
+      authedRequest(`https://test.local/api/v1/prospects/${tenantProspectId}/duplicate`, readWriteToken, {
+        method: "POST",
+        body: JSON.stringify({ duplicateOfId: null }),
+      }),
+      { params: Promise.resolve({ id: tenantProspectId }) }
+    );
+    expect(res2.status).toBe(200);
+    const { data: unmarked } = await admin
+      .from("prospects")
+      .select("duplicate_of_id, status")
+      .eq("id", tenantProspectId)
+      .single();
+    expect(unmarked?.duplicate_of_id).toBeNull();
+    expect(unmarked?.status).toBe("dismissed"); // status is left as-is on unmark
+  });
+
+  it("POST /prospects/:id/duplicate rejects self-reference (400)", async () => {
+    const { POST } = await import("../../src/app/api/v1/prospects/[id]/duplicate/route");
+    const res = await POST(
+      authedRequest(`https://test.local/api/v1/prospects/${tenantProspectId}/duplicate`, readWriteToken, {
+        method: "POST",
+        body: JSON.stringify({ duplicateOfId: tenantProspectId }),
+      }),
+      { params: Promise.resolve({ id: tenantProspectId }) }
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /prospects/:id/duplicate 404s when the target prospect doesn't exist", async () => {
+    const { POST } = await import("../../src/app/api/v1/prospects/[id]/duplicate/route");
+    const fakeId = "00000000-0000-0000-0000-000000000000";
+    const res = await POST(
+      authedRequest(`https://test.local/api/v1/prospects/${tenantProspectId}/duplicate`, readWriteToken, {
+        method: "POST",
+        body: JSON.stringify({ duplicateOfId: fakeId }),
+      }),
+      { params: Promise.resolve({ id: tenantProspectId }) }
+    );
+    expect(res.status).toBe(404);
+  });
+
   it("GET /prospects?search= with PostgREST filter-injection characters doesn't 500 or leak cross-column filters", async () => {
     const { GET } = await import("../../src/app/api/v1/prospects/route");
     // ",)." close/reopen a .or() filter group in PostgREST's grammar —

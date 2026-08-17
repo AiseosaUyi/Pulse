@@ -98,6 +98,8 @@ the real routes. A skill can call this once to learn what's available without ha
 | POST | `/api/v1/prospects/:id/notes` | `sales:write` | Log a note on a prospect. |
 | POST | `/api/v1/prospects/:id/stage` | `sales:write` | Transition pipeline status, with a reason. |
 | POST | `/api/v1/prospects/:id/inbound` | `sales:write` | Record an inbound reply observed on-platform. |
+| POST | `/api/v1/prospects/:id/quality` | `sales:write` | Set a prospect's quality tier — independent of pipeline status. |
+| POST | `/api/v1/prospects/:id/duplicate` | `sales:write` | Mark/unmark a prospect as a duplicate of another. |
 
 **`GET /api/v1/prospects?status=qualified&platform=instagram&qualificationScoreMin=70&search=lagos&limit=25&offset=0`**
 
@@ -167,6 +169,27 @@ outbound DM, inbound message, note, and AI conversation analysis:
 ```json
 { "body": "Interesting, tell me more about pricing", "inReplyToDmId": "optional-dm-uuid" }
 ```
+
+**`POST /api/v1/prospects/:id/quality`**
+
+```json
+{ "quality": "hot" }
+```
+
+`quality` must be one of the `ProspectQuality` enum values: `unscored`, `hot`, `warm`, `cold`,
+`dead`. Independent of pipeline `status` — see migration `104_prospect_quality.sql`.
+
+**`POST /api/v1/prospects/:id/duplicate`**
+
+```json
+// mark as a duplicate — also drops the prospect's status to "dismissed"
+{ "duplicateOfId": "uuid-of-the-original-prospect" }
+// unmark — status is left as-is; re-triage manually
+{ "duplicateOfId": null }
+```
+
+Never deletes a row. `duplicateOfId` must reference an existing prospect in the same tenant
+and can't equal `:id`.
 
 **`POST /api/v1/event-leads`**
 
@@ -733,6 +756,8 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 | `pulse_add_prospect_note` | `POST /prospects/:id/notes` | `sales:write` |
 | `pulse_set_prospect_stage` | `POST /prospects/:id/stage` | `sales:write` |
 | `pulse_record_inbound` | `POST /prospects/:id/inbound` | `sales:write` |
+| `pulse_set_prospect_quality` | `POST /prospects/:id/quality` | `sales:write` |
+| `pulse_mark_duplicate` | `POST /prospects/:id/duplicate` | `sales:write` |
 | `pulse_capture_event_lead` | `POST /event-leads` | `sales:write` |
 | `pulse_outbound_filters` | `GET /outbound/filters` | `sales:read` |
 | `pulse_outbound_templates` | `GET /outbound/templates` | `sales:read` |
@@ -819,7 +844,7 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 No `pulse_approve`/`pulse_reject` tools — approval must be a deliberate human action taken via the
 signed link, not something an AI agent can call on the tenant's behalf.
 
-53 tools total across all 10 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
+55 tools total across all 10 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
 Analytics, Ads platform, Content, Notifications) — every group in the original build spec, plus
 the ads platform added after it.
 

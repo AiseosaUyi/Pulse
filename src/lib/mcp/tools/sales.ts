@@ -8,6 +8,8 @@ import {
   draftAndSaveDm,
   markDmSent,
   setProspectStatus,
+  setProspectQuality,
+  setProspectDuplicate,
   recordInboundMessage,
   addProspectNoteAdmin,
 } from "@/lib/services/outbound";
@@ -17,7 +19,7 @@ import { getOutboundFilters } from "@/lib/server/outbound-filters";
 import { captureEventLead, KNOWN_EVENT_LEAD_PLATFORM_IDS } from "@/lib/services/event-leads";
 import { getBrandContext } from "@/lib/ai/brand-positioning";
 import { getTenantMeta } from "@/lib/services/tenants";
-import { OUTBOUND_PLATFORMS, PROSPECT_STATUSES } from "@/lib/types/outbound";
+import { OUTBOUND_PLATFORMS, PROSPECT_STATUSES, PROSPECT_QUALITIES } from "@/lib/types/outbound";
 
 export function registerSalesTools(server: McpServer) {
   server.registerTool(
@@ -193,6 +195,48 @@ export function registerSalesTools(server: McpServer) {
       if (!gate.ok) return gate.error;
       const { tenantSlug, admin } = gate.context;
       const result = await setProspectStatus(admin, tenantSlug, id, status, reason);
+      if (!result.ok) return mcpToolError(result.error);
+      return mcpToolResult({ success: true });
+    }
+  );
+
+  server.registerTool(
+    "pulse_set_prospect_quality",
+    {
+      title: "Set prospect quality tier",
+      description:
+        "Set a prospect's quality/temperature tier (unscored/hot/warm/cold/dead) — a second dimension independent of pipeline `status`. Mutates data.",
+      inputSchema: {
+        id: z.string().uuid(),
+        quality: z.enum(PROSPECT_QUALITIES),
+      },
+    },
+    async ({ id, quality }, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "sales:write");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin } = gate.context;
+      const result = await setProspectQuality(admin, tenantSlug, id, quality);
+      if (!result.ok) return mcpToolError(result.error);
+      return mcpToolResult({ success: true });
+    }
+  );
+
+  server.registerTool(
+    "pulse_mark_duplicate",
+    {
+      title: "Mark or unmark a prospect as a duplicate",
+      description:
+        "Mark a prospect as a duplicate of another (by its id), or unmark by passing duplicateOfId: null. Marking also drops the prospect's pipeline status to 'dismissed'. Never deletes a row. Mutates data.",
+      inputSchema: {
+        id: z.string().uuid(),
+        duplicateOfId: z.string().uuid().nullable(),
+      },
+    },
+    async ({ id, duplicateOfId }, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "sales:write");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin } = gate.context;
+      const result = await setProspectDuplicate(admin, tenantSlug, id, duplicateOfId);
       if (!result.ok) return mcpToolError(result.error);
       return mcpToolResult({ success: true });
     }

@@ -29,6 +29,8 @@ export const API_V1_MANIFEST: ManifestEntry[] = [
   { method: "POST", path: "/api/v1/prospects/:id/notes", scope: "sales:write", description: "Log a note on a prospect." },
   { method: "POST", path: "/api/v1/prospects/:id/stage", scope: "sales:write", description: "Transition a prospect's pipeline status, with a reason." },
   { method: "POST", path: "/api/v1/prospects/:id/inbound", scope: "sales:write", description: "Record an inbound reply observed on-platform." },
+  { method: "POST", path: "/api/v1/prospects/:id/quality", scope: "sales:write", description: "Set a prospect's quality tier (unscored/hot/warm/cold/dead) — independent of pipeline status." },
+  { method: "POST", path: "/api/v1/prospects/:id/duplicate", scope: "sales:write", description: "Mark a prospect as a duplicate of another (duplicateOfId), or unmark by passing null. Marking also drops status to dismissed; never deletes a row." },
 
   // Publishing — closes the loop for the browser-driven social manager
   { method: "GET", path: "/api/v1/publish-queue", scope: "publish:read", description: "Scheduled posts awaiting manual publishing (filter platform/status/due)." },
