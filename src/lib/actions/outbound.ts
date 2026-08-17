@@ -11,6 +11,8 @@ import {
   listProspects,
   setProspectStatus,
   recordInboundMessage,
+  findProspectIdByHandle,
+  getProspectHandle,
 } from "@/lib/services/outbound";
 import {
   draftOutboundDmAi,
@@ -19,6 +21,7 @@ import {
 } from "@/lib/ai/outbound";
 import type {
   OutboundPlatform,
+  ProspectQuality,
   ProspectRecord,
   ProspectStatus,
   OutboundDmStatus,
@@ -100,6 +103,8 @@ export async function createProspect(
       qualificationScore: data.qualification_score,
       qualificationReason: data.qualification_reason,
       status: data.status,
+      quality: data.quality,
+      duplicateOfId: data.duplicate_of_id ?? null,
       notes: data.notes,
       category: data.category ?? null,
       location: data.location ?? null,
@@ -401,6 +406,7 @@ export async function updateProspect(
     verifiedName?: string | null;
     eventTitle?: string | null;
     lastReachoutAt?: string | null;
+    quality?: ProspectQuality;
   }
 ): Promise<ActionResult> {
   const supabase = await createClient();
@@ -419,6 +425,7 @@ export async function updateProspect(
   if (patch.verifiedName !== undefined) update.verified_name = patch.verifiedName;
   if (patch.eventTitle !== undefined) update.event_title = patch.eventTitle;
   if (patch.lastReachoutAt !== undefined) update.last_reachout_at = patch.lastReachoutAt;
+  if (patch.quality !== undefined) update.quality = patch.quality;
   const { error } = await supabase
     .from("prospects")
     .update(update)
@@ -429,10 +436,61 @@ export async function updateProspect(
   return { success: true };
 }
 
+/**
+ * Flag a prospect as a duplicate of another (looked up by handle), never
+ * a delete — sets `duplicate_of_id` and moves status to `dismissed` so it
+ * drops out of the active pipeline. `unmarkProspectDuplicate` reverses the
+ * link (status is left as-is; the operator re-triages it manually).
+ */
+export async function markProspectDuplicate(
+  tenantSlug: string,
+  id: string,
+  duplicateOfHandle: string
+): Promise<ActionResult<{ duplicateOfId: string; duplicateOfHandle: string }>> {
+  const supabase = await createClient();
+  const target = await findProspectIdByHandle(supabase, tenantSlug, duplicateOfHandle);
+  if (!target) return { success: false, error: "No prospect found with that handle" };
+  if (target.id === id) return { success: false, error: "A prospect can't be a duplicate of itself" };
+
+  const { error } = await supabase
+    .from("prospects")
+    .update({ duplicate_of_id: target.id, status: "dismissed" })
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", id);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/leads");
+  return { success: true, duplicateOfId: target.id, duplicateOfHandle: target.handle };
+}
+
+export async function unmarkProspectDuplicate(
+  tenantSlug: string,
+  id: string
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("prospects")
+    .update({ duplicate_of_id: null })
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", id);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/leads");
+  return { success: true };
+}
+
+export async function lookupProspectHandle(
+  tenantSlug: string,
+  id: string
+): Promise<{ handle: string | null }> {
+  const supabase = await createClient();
+  const handle = await getProspectHandle(supabase, tenantSlug, id);
+  return { handle };
+}
+
 export async function fetchProspectsPage(
   tenantSlug: string,
   page: number,
-  statusFilter?: string
+  statusFilter?: string,
+  qualityFilter?: ProspectQuality | "all" | "duplicates"
 ): Promise<{ data: import("@/lib/types/outbound").ProspectRecord[]; total: number }> {
   const user = await getCurrentUser();
   if (!user) return { data: [], total: 0 };
@@ -441,6 +499,9 @@ export async function fetchProspectsPage(
     page,
     pageSize: 50,
     status: (statusFilter === "all" ? undefined : statusFilter) as import("@/lib/types/outbound").ProspectStatus | undefined,
+    duplicatesOnly: qualityFilter === "duplicates",
+    quality:
+      qualityFilter && qualityFilter !== "duplicates" ? qualityFilter : undefined,
   });
 }
 

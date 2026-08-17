@@ -1,23 +1,37 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Link as LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { updateProspect } from "@/lib/actions/outbound";
-import { OUTBOUND_PLATFORMS, PLATFORM_LABELS } from "@/lib/types/outbound";
-import type { ProspectRecord, OutboundPlatform } from "@/lib/types/outbound";
+import {
+  updateProspect,
+  markProspectDuplicate,
+  unmarkProspectDuplicate,
+  lookupProspectHandle,
+} from "@/lib/actions/outbound";
+import {
+  OUTBOUND_PLATFORMS,
+  PLATFORM_LABELS,
+  PROSPECT_QUALITIES,
+  QUALITY_LABELS,
+} from "@/lib/types/outbound";
+import type { ProspectRecord, OutboundPlatform, ProspectQuality } from "@/lib/types/outbound";
 
 export function EditProspectModal({
   prospect,
   tenantSlug,
   onClose,
   onSaved,
+  onPartialUpdate,
 }: {
   prospect: ProspectRecord;
   tenantSlug: string;
   onClose: () => void;
   onSaved: (updated: Partial<ProspectRecord>) => void;
+  /** Fired by actions that mutate immediately without closing the modal
+   * (duplicate linking) — keeps the pipeline list in sync mid-edit. */
+  onPartialUpdate?: (updated: Partial<ProspectRecord>) => void;
 }) {
   const [handle, setHandle] = useState(prospect.handle);
   const [platform, setPlatform] = useState<OutboundPlatform>(prospect.platform);
@@ -35,8 +49,60 @@ export function EditProspectModal({
   const [lastReachoutAt, setLastReachoutAt] = useState(
     prospect.lastReachoutAt ? prospect.lastReachoutAt.slice(0, 10) : ""
   );
+  const [quality, setQuality] = useState<ProspectQuality>(prospect.quality);
   const [error, setError] = useState<string | null>(null);
   const [isPending, start] = useTransition();
+
+  // Duplicate linking — separate from the main save flow since it mutates
+  // duplicate_of_id + status immediately (mirrors how "Delete" and other
+  // destructive-ish actions elsewhere in this panel act on click, not on
+  // form submit).
+  const [duplicateOfId, setDuplicateOfId] = useState(prospect.duplicateOfId);
+  const [duplicateOfHandle, setDuplicateOfHandle] = useState<string | null>(null);
+  const [duplicateInput, setDuplicateInput] = useState("");
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+  const [isDuplicatePending, startDuplicate] = useTransition();
+
+  useEffect(() => {
+    if (!duplicateOfId) return;
+    let cancelled = false;
+    lookupProspectHandle(tenantSlug, duplicateOfId).then((res) => {
+      if (!cancelled) setDuplicateOfHandle(res.handle);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantSlug, duplicateOfId]);
+
+  const handleMarkDuplicate = () => {
+    if (!duplicateInput.trim()) return;
+    setDuplicateError(null);
+    startDuplicate(async () => {
+      const res = await markProspectDuplicate(tenantSlug, prospect.id, duplicateInput);
+      if (!res.success) {
+        setDuplicateError(res.error);
+        return;
+      }
+      setDuplicateOfId(res.duplicateOfId);
+      setDuplicateOfHandle(res.duplicateOfHandle);
+      setDuplicateInput("");
+      onPartialUpdate?.({ duplicateOfId: res.duplicateOfId, status: "dismissed" });
+    });
+  };
+
+  const handleUnmarkDuplicate = () => {
+    setDuplicateError(null);
+    startDuplicate(async () => {
+      const res = await unmarkProspectDuplicate(tenantSlug, prospect.id);
+      if (!res.success) {
+        setDuplicateError(res.error);
+        return;
+      }
+      setDuplicateOfId(null);
+      setDuplicateOfHandle(null);
+      onPartialUpdate?.({ duplicateOfId: null });
+    });
+  };
 
   const handleSave = () => {
     if (!handle.trim()) { setError("Handle is required"); return; }
@@ -55,6 +121,7 @@ export function EditProspectModal({
         profileUrl: profileUrl || null,
         followerCount: followerCount ? parseInt(followerCount, 10) || null : null,
         lastReachoutAt: lastReachoutAt ? new Date(lastReachoutAt).toISOString() : null,
+        quality,
       };
       const res = await updateProspect(tenantSlug, prospect.id, patch);
       if (!res.success) { setError(res.error ?? "Save failed"); return; }
@@ -164,6 +231,63 @@ export function EditProspectModal({
                 className="w-full text-sm bg-sidebar border border-border rounded-lg px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-primary-500/30"
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">Lead quality</label>
+            <select
+              value={quality}
+              onChange={e => setQuality(e.target.value as ProspectQuality)}
+              className="w-full text-sm bg-sidebar border border-border rounded-lg px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-primary-500/30"
+            >
+              {PROSPECT_QUALITIES.map(q => (
+                <option key={q} value={q}>{QUALITY_LABELS[q]}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1.5 rounded-lg border border-border/60 p-3">
+            <label className="text-xs font-medium text-foreground">Duplicate of</label>
+            {duplicateOfId ? (
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1 text-xs text-text-muted">
+                  <LinkIcon size={11} />
+                  Linked to {duplicateOfHandle ? `@${duplicateOfHandle}` : "another prospect"}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleUnmarkDuplicate}
+                  disabled={isDuplicatePending}
+                  className="text-xs text-primary-500 hover:text-primary-600 disabled:opacity-50"
+                >
+                  {isDuplicatePending ? "Unlinking…" : "Unlink"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={duplicateInput}
+                  onChange={e => setDuplicateInput(e.target.value)}
+                  placeholder="@handle of the original prospect"
+                  className="flex-1 text-sm bg-sidebar border border-border rounded-lg px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-primary-500/30"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleMarkDuplicate}
+                  disabled={isDuplicatePending || !duplicateInput.trim()}
+                >
+                  {isDuplicatePending ? "Linking…" : "Mark"}
+                </Button>
+              </div>
+            )}
+            {duplicateError && (
+              <p className="text-xs text-status-red">{duplicateError}</p>
+            )}
+            <p className="text-[11px] text-text-muted">
+              Marking as a duplicate links it to the original and moves it to Dismissed — it&rsquo;s never deleted.
+            </p>
           </div>
 
           <div className="space-y-1.5">

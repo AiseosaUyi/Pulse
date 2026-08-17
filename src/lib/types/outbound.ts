@@ -38,6 +38,16 @@ export const PROSPECT_STATUSES = [
 
 export type ProspectStatus = (typeof PROSPECT_STATUSES)[number];
 
+export const PROSPECT_QUALITIES = [
+  "unscored",
+  "hot",
+  "warm",
+  "cold",
+  "dead",
+] as const;
+
+export type ProspectQuality = (typeof PROSPECT_QUALITIES)[number];
+
 export const DM_STATUSES = [
   "drafted",
   "approved",
@@ -80,6 +90,8 @@ export interface ProspectRecord {
   qualificationScore: number | null;
   qualificationReason: string | null;
   status: ProspectStatus;
+  quality: ProspectQuality;
+  duplicateOfId: string | null;
   notes: string | null;
   category: string | null;
   location: string | null;
@@ -156,6 +168,14 @@ export const SIGNAL_LABELS: Record<SignalType, string> = {
   recent_post: "Recent post",
   manual: "Manual",
   ticketing_platform: "Ticketing platform",
+};
+
+export const QUALITY_LABELS: Record<ProspectQuality, string> = {
+  unscored: "Unscored",
+  hot: "Hot",
+  warm: "Warm",
+  cold: "Cold",
+  dead: "Dead",
 };
 
 export const STATUS_LABELS: Record<ProspectStatus, string> = {
