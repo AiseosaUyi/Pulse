@@ -127,6 +127,7 @@ export async function runProspectSearchNow(
     qualified: number;
     skipped: number;
     candidates: number;
+    diagnostic?: string;
   }>
 > {
   await requireUser();
@@ -142,6 +143,7 @@ export async function runProspectSearchNow(
       qualified: outcome.qualifiedCount,
       skipped: outcome.skippedCount,
       candidates: outcome.candidateCount,
+      diagnostic: outcome.diagnostic,
     };
   } catch (err) {
     return {

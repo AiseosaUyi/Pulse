@@ -19,6 +19,7 @@ export class SerperError extends Error {
       | "auth_failed"
       | "rate_limited"
       | "quota_exhausted"
+      | "plan_restricted"
       | "empty"
       | "upstream_error",
     public httpStatus?: number,
@@ -130,8 +131,27 @@ export async function scrapeViaSerper(
       );
     }
     if (!res.ok) {
+      // Read the body for whatever message Serper included — e.g. free-tier
+      // accounts reject `site:` operator queries entirely with a 400 and a
+      // specific explanation, distinct from a generic upstream failure.
+      let bodyMessage: string | undefined;
+      try {
+        const body = (await res.json()) as { message?: string };
+        bodyMessage = body.message;
+      } catch {
+        // Non-JSON error body — fall through with just the HTTP status.
+      }
+      if (bodyMessage && /query pattern not allowed/i.test(bodyMessage)) {
+        throw new SerperError(
+          `Serper plan doesn't allow site: operator queries: ${bodyMessage}`,
+          "plan_restricted",
+          res.status
+        );
+      }
       throw new SerperError(
-        `Serper returned HTTP ${res.status}`,
+        bodyMessage
+          ? `Serper returned HTTP ${res.status}: ${bodyMessage}`
+          : `Serper returned HTTP ${res.status}`,
         "upstream_error",
         res.status
       );

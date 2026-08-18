@@ -192,6 +192,8 @@ export interface OutreachTodayData {
     body: string;
     receivedAt: string;
     prospect: ProspectRecord | null;
+    /** Unread longer than the "new" window — still unanswered, just older. */
+    isAging: boolean;
   }>;
   goingCold: ProspectWithFollowUp[];
 }
@@ -234,18 +236,21 @@ export async function getOutreachToday(
       .order("follow_up_at", { ascending: true })
       .limit(30),
 
-    // New replies: unread inbound messages in last 48h — use direct tenant_slug filter
+    // Unanswered replies: ALL unread inbound messages, not windowed to the
+    // last 48h. A reply's `read_at` is the only reliable "still needs a
+    // response" signal — prospects.status flips to 'replied' on any inbound
+    // message, which excludes it from both Overdue (needs follow_up_at,
+    // rarely set on first reply) and Going Cold (requires status='sent'), so
+    // a stale unread reply used to become invisible to every bucket at once
+    // once it aged past 48h. Oldest-first so the most-neglected reply
+    // surfaces at the top.
     supabase
       .from("inbound_messages")
       .select("id, prospect_id, body, received_at")
       .eq("tenant_slug", tenantSlug)
       .is("read_at", null)
-      .gte(
-        "received_at",
-        new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString()
-      )
-      .order("received_at", { ascending: false })
-      .limit(20),
+      .order("received_at", { ascending: true })
+      .limit(50),
 
     // Going cold: sent but no reply after COLD_DAYS with no follow-up scheduled
     supabase
@@ -324,6 +329,9 @@ export async function getOutreachToday(
       body: r.body as string,
       receivedAt: r.received_at as string,
       prospect: replyProspectsMap.get((r.prospect_id as string | null) ?? "") ?? null,
+      isAging:
+        now.getTime() - new Date(r.received_at as string).getTime() >
+        48 * 60 * 60 * 1000,
     })),
     goingCold: (coldRes.data ?? []).map((r) =>
       toWithFollowUp(r as Record<string, unknown>)
@@ -348,9 +356,10 @@ export async function listProspectNotes(
 // ── Thread messages for AI input ─────────────────────────────────────────────
 
 export async function getThreadMessages(
-  prospectId: string
+  prospectId: string,
+  client?: SupabaseClient
 ): Promise<ThreadMessage[]> {
-  const supabase = await createClient();
+  const supabase = client ?? (await createClient());
   const [dmsRes, inboundRes] = await Promise.all([
     supabase
       .from("outbound_dms")
@@ -388,4 +397,82 @@ export async function getThreadMessages(
     (a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()
   );
   return messages;
+}
+
+// ── System-actor conversation analysis (auto-fires on inbound reply) ───────
+
+/**
+ * Same analysis as the human-triggered "Analyze" button
+ * (actions/conversation-intelligence.ts), but callable from a system
+ * context with no real user session. The human action is hard-gated on
+ * getCurrentUser() and cannot run from a webhook/cron. Always takes the
+ * caller's admin client so the write succeeds under RLS with no
+ * auth.uid() — same pattern as the video runner's transitionRunner.
+ * Never throws: a failure here must not break inbound-message recording,
+ * so callers should not need to wrap this in their own try/catch.
+ */
+export async function analyzeConversationSystem(
+  client: SupabaseClient,
+  tenantSlug: string,
+  prospectId: string,
+  triggerId?: string
+): Promise<void> {
+  try {
+    const [{ getTenant }, { analyzeConversationAi }] = await Promise.all([
+      import("@/lib/services/tenants"),
+      import("@/lib/ai/conversation-intelligence"),
+    ]);
+
+    const [tenant, prospectRow] = await Promise.all([
+      getTenant(tenantSlug),
+      client
+        .from("prospects")
+        .select("*")
+        .eq("tenant_slug", tenantSlug)
+        .eq("id", prospectId)
+        .maybeSingle()
+        .then((r) => r.data),
+    ]);
+    if (!tenant || !prospectRow) return;
+    const prospect = prospectRowTo(prospectRow as Record<string, unknown>);
+
+    const thread = await getThreadMessages(prospectId, client);
+    const { result, model, costUsd } = await analyzeConversationAi({
+      tenantSlug,
+      tenantName: tenant.name,
+      prospect,
+      thread,
+    });
+
+    let recommendedFollowUpAt: string | null = null;
+    if (result.recommended_wait_days != null) {
+      const d = new Date();
+      d.setDate(d.getDate() + result.recommended_wait_days);
+      recommendedFollowUpAt = d.toISOString();
+    }
+
+    await client.from("conversation_analyses").insert({
+      tenant_slug: tenantSlug,
+      prospect_id: prospectId,
+      trigger_type: "inbound_message",
+      trigger_id: triggerId ?? null,
+      conversation_stage: result.conversation_stage,
+      intent_summary: result.intent_summary,
+      recommended_follow_up_at: recommendedFollowUpAt,
+      recommended_follow_up_note: result.recommended_follow_up_note,
+      recommended_wait_days: result.recommended_wait_days,
+      objection_detected: result.objection_detected,
+      objection_category: result.objection_category,
+      risk_level: result.risk_level,
+      gruve_relevant: result.gruve_relevant,
+      sippoy_relevant: result.sippoy_relevant,
+      model,
+      cost_usd: costUsd,
+    });
+  } catch (err) {
+    console.warn(
+      `[outreach] auto-analysis failed for prospect ${prospectId}:`,
+      err instanceof Error ? err.message : err
+    );
+  }
 }

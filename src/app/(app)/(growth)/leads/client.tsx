@@ -315,8 +315,9 @@ export function OutboundClient({
 
   const [tab, setTab] = useState<Tab>(() => {
     const t = searchParams.get("tab");
-    if (t === "inbox") return "inbox";
-    if (t === "today") return "today";
+    if (t === "inbox" || t === "today" || t === "discovery" || t === "templates") {
+      return t;
+    }
     return "pipeline";
   });
   const [prospects, setProspects] = useState(initialProspects);
@@ -1809,6 +1810,7 @@ function DiscoveryView({
     qualified: number;
     skipped: number;
     candidates: number;
+    diagnostic?: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -1845,6 +1847,7 @@ function DiscoveryView({
       qualified: res.qualified,
       skipped: res.skipped,
       candidates: res.candidates,
+      diagnostic: res.diagnostic,
     });
     // Bump the last-run stamp locally for snappy UI.
     setSearches((prev) =>
@@ -1954,7 +1957,8 @@ function DiscoveryView({
           {lastRun.qualified > 0 && ` · ${lastRun.qualified} auto-qualified`}
           {lastRun.skipped > 0 &&
             ` · ${lastRun.skipped} already in pipeline (skipped)`}
-          {lastRun.candidates === 0 && " · no results came back — try broader keywords"}
+          {lastRun.candidates === 0 &&
+            ` · ${lastRun.diagnostic ?? "no results came back — try a broader or different query"}`}
         </div>
       )}
 
@@ -2147,8 +2151,11 @@ function DiscoverySearchForm({
         />
         <p className="text-[11px] text-text-muted mt-1">
           This becomes a Google search like{" "}
-          <code>site:{platform}.com &ldquo;{query || "…"}&rdquo;</code> — include
-          quotes in the query itself if you want exact-match.
+          <code>site:{platform}.com {query || "…"}</code> — the {SIGNAL_LABELS[signalType].toLowerCase()}{" "}
+          signal type shapes the query further (e.g. hashtags are matched
+          exactly, event-host/attendee signals add likely bio language).
+          Your query itself isn&rsquo;t auto-quoted, so it stays a broad
+          match unless you add quotes yourself.
         </p>
       </div>
 

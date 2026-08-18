@@ -26,6 +26,8 @@ export interface RunSearchOutcome {
   qualifiedCount: number;
   skippedCount: number;
   errors: string[];
+  /** Human-readable reason zero candidates came back, when applicable. */
+  diagnostic?: string;
 }
 
 interface RunOptions {
@@ -228,6 +230,7 @@ export async function executeProspectSearch(
     outcome.queryUsed = discovery.queryUsed;
     outcome.rawResultCount = discovery.rawResultCount;
     outcome.candidateCount = discovery.candidates.length;
+    outcome.diagnostic = discovery.diagnostic;
 
     const inserted = await upsertCandidates(
       tenantSlug,

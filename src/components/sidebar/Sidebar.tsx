@@ -1,6 +1,7 @@
 import { SidebarNav } from "./SidebarNav";
 import { TenantSwitcher } from "./TenantSwitcher";
 import { Logo } from "@/components/ui/Logo";
+import { NeedsYouBadge } from "@/components/needs-you/NeedsYouBadge";
 import type { AccountType, TenantMembership } from "@/lib/auth";
 
 interface SidebarProps {
@@ -23,6 +24,10 @@ export function Sidebar({
       </div>
 
       <SidebarNav accountType={currentAccountType} role={currentRole} />
+
+      {currentRole !== "support" && (
+        <NeedsYouBadge tenantSlug={currentTenantSlug} accountType={currentAccountType} />
+      )}
 
       <TenantSwitcher tenants={tenants} currentSlug={currentTenantSlug} />
     </aside>

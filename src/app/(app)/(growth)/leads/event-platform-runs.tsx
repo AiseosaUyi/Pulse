@@ -126,11 +126,10 @@ export function EventPlatformRuns({
         >
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <p>
-            This tenant isn&rsquo;t on the event-platform-scraper ICP
-            allowlist, but has {initialRuns.length} past run
+            Event-platform scraping is turned off for this workspace, but has{" "}
+            {initialRuns.length} past run
             {initialRuns.length === 1 ? "" : "s"} and prospects below from
-            before this was gated. They likely don&rsquo;t match this
-            brand&rsquo;s ICP — review before reaching out, rather than
+            before it was turned off. Review before reaching out, rather than
             assuming they&rsquo;re qualified leads. Nothing has been
             deleted; expand a run to see which prospects it created.
           </p>

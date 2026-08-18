@@ -1,11 +1,23 @@
-// Which tenants run the new self-hosted event-platform scraper. Kept
-// separate from discovery-config.ts (the Apify-based system) on purpose —
-// the design doc's explicit constraint is that the old 4 platforms and
-// their config stay untouched. Defaults to Gruve only, same bootstrapping
-// convention as GRUVE_TICKETING_DEFAULT.
+// Per-tenant opt-out for the self-hosted event-platform scraper. Defaults to
+// ENABLED for every tenant — no tenant slug is hardcoded here. This used to
+// be a hardcoded single-tenant allowlist (a blunt fix for a past incident
+// where a manual run against the wrong tenant wrote mismatched-ICP prospects
+// into another tenant — see event-scraper-runner.ts's tenant-scoping, which
+// is the real fix for that bug). A tenant can turn this feature off for
+// itself via tenants.settings.eventScraper.enabled = false; nothing needs to
+// opt in.
+import { createAdminClient } from "@/lib/supabase/admin";
 
-const ENABLED_TENANTS = new Set(["gruve"]);
-
-export function isEventScraperEnabledForTenant(tenantSlug: string): boolean {
-  return ENABLED_TENANTS.has(tenantSlug);
+export async function isEventScraperEnabledForTenant(
+  tenantSlug: string
+): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("tenants")
+    .select("settings")
+    .eq("slug", tenantSlug)
+    .maybeSingle();
+  const settings = (data?.settings ?? {}) as Record<string, unknown>;
+  const eventScraper = settings.eventScraper as { enabled?: boolean } | undefined;
+  return eventScraper?.enabled !== false;
 }

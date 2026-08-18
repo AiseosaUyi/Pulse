@@ -437,13 +437,30 @@ export async function generateBriefing(input: {
   // error state).
   let creatorSources: Array<{ url: string; title: string; snippet: string }> = [];
   const creatorSiteFilter = "(site:tiktok.com OR site:youtube.com/shorts OR site:instagram.com/reel OR site:x.com)";
+  const CREATOR_DOMAINS = ["tiktok.com", "youtube.com", "instagram.com", "x.com", "twitter.com"];
+  const onCreatorDomain = (url: string) => {
+    try {
+      const host = new URL(url).hostname.replace(/^www\./, "");
+      return CREATOR_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
+    } catch {
+      return false;
+    }
+  };
+  // A plain-query retry (see scrapeGoogleSerpDetailed's plan_restricted
+  // handling — Serper's free tier rejects `site:` operator queries) has no
+  // domain scoping baked into the search itself, so results must be
+  // filtered here instead, or a plan-restricted account would silently
+  // surface generic web articles as "creator examples."
   try {
     const results = await scrapeGoogleSerp({
       query: `${input.topicTitle} ${creatorSiteFilter}`,
       region: "us",
       limit: 5,
+      plainQueryFallback: input.topicTitle,
     });
-    creatorSources = results.map((r) => ({ url: r.url, title: r.title, snippet: r.snippet }));
+    creatorSources = results
+      .filter((r) => onCreatorDomain(r.url))
+      .map((r) => ({ url: r.url, title: r.title, snippet: r.snippet }));
   } catch (err) {
     console.warn(`[content-calendar] creator-content search failed for "${input.topicTitle}"`, err);
   }
@@ -461,8 +478,11 @@ export async function generateBriefing(input: {
           query: `${broaderPhrase} ${creatorSiteFilter}`,
           region: "us",
           limit: 5,
+          plainQueryFallback: broaderPhrase,
         });
-        creatorSources = results.map((r) => ({ url: r.url, title: r.title, snippet: r.snippet }));
+        creatorSources = results
+          .filter((r) => onCreatorDomain(r.url))
+          .map((r) => ({ url: r.url, title: r.title, snippet: r.snippet }));
       } catch (err) {
         console.warn(`[content-calendar] broader creator-content search failed for "${broaderPhrase}"`, err);
       }
