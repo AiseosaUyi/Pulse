@@ -161,7 +161,7 @@ export async function getDashboardStats(
           : undefined,
     },
     profileScore: {
-      label: "Profile score",
+      label: "Platforms tracked",
       value: String(profileScore),
       // "tracked" not "connected": this reads tenants.settings.platforms
       // (manually-logged / seeded profile stats used for the platform
@@ -292,7 +292,7 @@ export async function getDashboardStatsApi(
           : undefined,
     },
     profileScore: {
-      label: "Profile score",
+      label: "Platforms tracked",
       value: String(profileScore),
       // "tracked" not "connected": this reads tenants.settings.platforms
       // (manually-logged / seeded profile stats used for the platform

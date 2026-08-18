@@ -24,6 +24,10 @@ export interface NavGroup {
 // Nav groups = user jobs-to-be-done, not feature buckets.
 // The loop is: Home → Discover → Create → Publish → Measure → Connect.
 // Every item answers: "What am I doing right now?"
+// Conversations/Outbound lead the list on purpose (not the original "Home →
+// Discover → Create → Publish → Measure → Connect" job order): they're the
+// tools that directly make money, and were previously the last group in a
+// 6-group sidebar — the least visible items were the most important ones.
 export const navGroups: NavGroup[] = [
   {
     label: "",
@@ -35,7 +39,14 @@ export const navGroups: NavGroup[] = [
   {
     label: "",
     items: [
-      { label: "Signals", href: "/intel-feed", iconName: "Zap" },
+      { label: "Outbound", href: "/leads", iconName: "Target", surfaces: ["startup"] },
+      { label: "Conversations", href: "/conversations", iconName: "MessagesSquare" },
+    ],
+  },
+  {
+    label: "",
+    items: [
+      { label: "Competitor intel", href: "/intel-feed", iconName: "Zap" },
       { label: "SEO", href: "/seo-tracker", iconName: "Search", surfaces: ["startup"] },
     ],
   },
@@ -54,7 +65,10 @@ export const navGroups: NavGroup[] = [
         ],
       },
       { label: "Video studio", href: "/video", iconName: "Film", surfaces: ["startup"] },
-      { label: "Content calendar", href: "/content-calendar", iconName: "CalendarCheck" },
+      // Individual-persona only — a startup tenant already has AI Calendar;
+      // showing both at once (they're genuinely different implementations,
+      // not the same feature twice) was confusing, not just redundant.
+      { label: "Content calendar", href: "/content-calendar", iconName: "CalendarCheck", surfaces: ["individual"] },
     ],
   },
   {
@@ -70,13 +84,6 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: "Platform score", href: "/platform-score", iconName: "CircleDot" },
       { label: "Ads critic", href: "/ads-tracker", iconName: "Diamond", surfaces: ["startup"] },
-    ],
-  },
-  {
-    label: "",
-    items: [
-      { label: "Conversations", href: "/conversations", iconName: "MessagesSquare" },
-      { label: "Outbound", href: "/leads", iconName: "Target", surfaces: ["startup"] },
     ],
   },
 ];
