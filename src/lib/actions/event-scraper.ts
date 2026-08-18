@@ -32,11 +32,11 @@ export async function runEventPlatformScraperNow(
 > {
   const user = await requireUser();
 
-  if (!isEventScraperEnabledForTenant(tenantSlug)) {
+  if (!(await isEventScraperEnabledForTenant(tenantSlug))) {
     return {
       success: false,
       error:
-        "Event platform scraping isn't enabled for this tenant's ICP. Contact an admin if this brand should be added to the allowlist.",
+        "Event platform scraping is turned off for this workspace (tenants.settings.eventScraper.enabled = false).",
     };
   }
 

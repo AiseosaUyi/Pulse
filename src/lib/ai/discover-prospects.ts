@@ -13,7 +13,7 @@
 //   - Google indexes profile pages, so `site:instagram.com "<query>"`
 //     returns real IG profile URLs we can turn into handles.
 
-import { scrapeGoogleSerp, type SerpResult } from "@/lib/scrape/google-serp";
+import { scrapeGoogleSerpDetailed, type SerpResult } from "@/lib/scrape/google-serp";
 import {
   detectFromUrl,
   siteSearchQueryFor,
@@ -52,6 +52,8 @@ export interface DiscoveryResult {
   queryUsed: string;
   /** How many raw SERP results came back before dedup. */
   rawResultCount: number;
+  /** Human-readable reason the search came back empty, when it did. */
+  diagnostic?: string;
 }
 
 /**
@@ -104,12 +106,18 @@ function truncate(text: string | undefined, max: number): string {
 export async function runDiscoverySearch(
   input: DiscoverySearchInput
 ): Promise<DiscoveryResult> {
-  const queryUsed = siteSearchQueryFor(input.platform, input.query);
-  const serp = await scrapeGoogleSerp({
+  const queryUsed = siteSearchQueryFor(input.platform, input.query, input.signalType);
+  const outcome = await scrapeGoogleSerpDetailed({
     query: queryUsed,
     region: input.region,
     limit: input.limit ?? 20,
+    // Free retry if the site: operator is plan-restricted — detectFromUrl
+    // below still filters to real platform-profile URLs, so a plain query
+    // stays correct, just less targeted. Skipped when the query already
+    // has no site scope (platform "manual"/"other").
+    plainQueryFallback: input.query.trim() !== queryUsed ? input.query.trim() : undefined,
   });
+  const serp = outcome.results;
 
   const seen = new Set<string>();
   const candidates: ProspectCandidate[] = [];
@@ -138,9 +146,19 @@ export async function runDiscoverySearch(
     });
   }
 
+  let diagnostic: string | undefined;
+  if (candidates.length === 0) {
+    diagnostic =
+      outcome.diagnostic ??
+      (serp.length > 0
+        ? `Search returned ${serp.length} result${serp.length === 1 ? "" : "s"}, but none were ${input.platform} profile pages — try a query more specific to how people describe themselves on that platform.`
+        : undefined);
+  }
+
   return {
     candidates,
     queryUsed,
     rawResultCount: serp.length,
+    diagnostic,
   };
 }

@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     if (tErr || !tenants) throw new Error(tErr?.message ?? "Failed to list tenants");
 
     for (const tenant of tenants as TenantRow[]) {
-      if (!isEventScraperEnabledForTenant(tenant.slug)) continue;
+      if (!(await isEventScraperEnabledForTenant(tenant.slug))) continue;
       summary.tenantsProcessed += 1;
 
       for (const config of ACTIVE_EVENT_PLATFORMS) {

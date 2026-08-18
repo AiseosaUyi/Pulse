@@ -79,7 +79,7 @@ export default async function LeadsPage() {
   // buttons here stops the wrong tenant from ever seeing them in the first
   // place (past bug: a manual run against the wrong tenant wrote Gruve-ICP
   // prospects into sippy because nothing gated the UI or the action).
-  const eventScraperEnabled = isEventScraperEnabledForTenant(tenant.slug);
+  const eventScraperEnabled = await isEventScraperEnabledForTenant(tenant.slug);
   const eventScraperPlatforms: EventScraperPlatformOption[] = eventScraperEnabled
     ? [
         ...ACTIVE_EVENT_PLATFORMS.map((p) => ({
