@@ -6,7 +6,9 @@ import { PlatformBreakdown } from "@/components/dashboard/PlatformBreakdown";
 import { PulseSuggestions } from "@/components/dashboard/PulseSuggestions";
 import { CoachFeed } from "@/components/coach/CoachFeed";
 import { WeeklyReviewBanner } from "@/components/dashboard/WeeklyReviewBanner";
+import { NeedsYouBanner } from "@/components/needs-you/NeedsYouBanner";
 import { getDashboardStats, getPlatforms, getSuggestions } from "@/lib/services/dashboard";
+import { getSetupStatus } from "@/lib/services/setup-status";
 import { getNotifications } from "@/lib/services/notifications";
 import { getTenant } from "@/lib/services/tenants";
 import { listActiveCoachActions } from "@/lib/services/coach";
@@ -21,7 +23,7 @@ export default async function DashboardPage() {
   const tenantSlug = currentTenant?.slug ?? "";
   const accountType = currentTenant?.accountType ?? "startup";
 
-  const [tenant, stats, platforms, suggestions, notifications, coachActions, weeklyReview, tracker] = await Promise.all([
+  const [tenant, stats, platforms, suggestions, notifications, coachActions, weeklyReview, tracker, setupStatus] = await Promise.all([
     getTenant(tenantSlug),
     getDashboardStats(tenantSlug),
     getPlatforms(tenantSlug),
@@ -30,6 +32,7 @@ export default async function DashboardPage() {
     listActiveCoachActions(tenantSlug, 8),
     getLatestWeeklyReview(tenantSlug),
     getTracker(tenantSlug),
+    getSetupStatus(tenantSlug, accountType),
   ]);
 
   if (!tenant || !stats) {
@@ -76,6 +79,11 @@ export default async function DashboardPage() {
             <ArrowUpRight size={14} />
           </button>
         </div>
+      </div>
+
+      {/* Needs You — computed live per tenant, never authored by hand */}
+      <div className="mb-4">
+        <NeedsYouBanner status={setupStatus} />
       </div>
 
       {/* Stat Cards — startup sees prospects + ad spend; individual sees posts + engagement */}
