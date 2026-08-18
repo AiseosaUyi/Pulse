@@ -130,7 +130,11 @@ export async function importProspects(
           phone: row.phone ?? null,
           last_reachout_at: row.lastReachoutAt ?? null,
           status: "new",
-          signal_data: {},
+          // Same pattern as the extension bulk-add route: flag for the
+          // qualify-backlog cron sweep instead of leaving imported rows
+          // permanently unscored (the only ingestion path that previously
+          // skipped auto-qualify entirely).
+          signal_data: { qualify_pending: true },
           created_at: now,
           updated_at: now,
         });

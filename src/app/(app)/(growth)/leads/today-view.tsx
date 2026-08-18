@@ -203,6 +203,11 @@ function ReplyRow({
               {PLATFORM_LABELS[reply.prospect.platform]}
             </span>
           )}
+          {reply.isAging && (
+            <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-status-red/10 text-status-red border border-status-red/20">
+              Aging
+            </span>
+          )}
           <span className="text-xs text-text-muted ml-auto">
             {relativeTime(reply.receivedAt)}
           </span>
@@ -384,9 +389,15 @@ export function TodayView({
             </span>
           )}
           {data.newReplies.length > 0 && (
-            <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-primary-500/10 text-primary-500 border border-primary-500/20">
+            <span
+              className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border ${
+                data.newReplies.some((r) => r.isAging)
+                  ? "bg-status-red/10 text-status-red border-status-red/20"
+                  : "bg-primary-500/10 text-primary-500 border-primary-500/20"
+              }`}
+            >
               <MessageCircle size={11} />
-              {data.newReplies.length} new {data.newReplies.length === 1 ? "reply" : "replies"}
+              {data.newReplies.length} unanswered {data.newReplies.length === 1 ? "reply" : "replies"}
             </span>
           )}
           {data.dueToday.length > 0 && (
@@ -424,14 +435,14 @@ export function TodayView({
         ))}
       </Section>
 
-      {/* 2 — New Replies */}
+      {/* 2 — Unanswered Replies */}
       <Section
-        title="New Replies"
+        title="Unanswered Replies"
         count={data.newReplies.length}
         tone="primary"
         emptyIcon={<MessageCircle size={28} />}
-        emptyHeading="No new replies"
-        emptyBody="Replies from the last 48 hours show here."
+        emptyHeading="No unanswered replies"
+        emptyBody="Every reply has been answered — this checks all unread replies, not just recent ones."
       >
         {data.newReplies.map((r) => (
           <ReplyRow

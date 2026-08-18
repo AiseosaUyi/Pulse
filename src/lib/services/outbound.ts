@@ -511,13 +511,17 @@ export async function recordInboundMessage(
   const prospect = await getProspect(client, tenantSlug, prospectId);
   if (!prospect) return { ok: false, error: "Prospect not found" };
 
-  const { error } = await client.from("inbound_messages").insert({
-    tenant_slug: tenantSlug,
-    prospect_id: prospectId,
-    in_reply_to_dm_id: input.inReplyToDmId ?? null,
-    platform: prospect.platform,
-    body,
-  });
+  const { data: inserted, error } = await client
+    .from("inbound_messages")
+    .insert({
+      tenant_slug: tenantSlug,
+      prospect_id: prospectId,
+      in_reply_to_dm_id: input.inReplyToDmId ?? null,
+      platform: prospect.platform,
+      body,
+    })
+    .select("id")
+    .single();
   if (error) return { ok: false, error: error.message };
 
   await client
@@ -532,6 +536,20 @@ export async function recordInboundMessage(
       .eq("tenant_slug", tenantSlug)
       .eq("id", input.inReplyToDmId);
   }
+
+  // Auto-analyze on every reply so the prospect gets a fresh follow_up_at
+  // (via the conversation_analyses DB trigger) and shows up correctly in
+  // Today, instead of staying invisible until a human clicks "Analyze".
+  // Never throws — see analyzeConversationSystem's own try/catch.
+  const { analyzeConversationSystem } = await import(
+    "@/lib/services/outreach-intelligence"
+  );
+  await analyzeConversationSystem(
+    client,
+    tenantSlug,
+    prospectId,
+    inserted?.id as string | undefined
+  );
 
   return { ok: true };
 }
