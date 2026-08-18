@@ -9,12 +9,13 @@
 
 import { showsNgConfig } from "./shows-ng";
 import { egoticketsConfig } from "./egotickets";
+import { mogosEventConfig } from "./mogosevent";
 import type { EventPlatformConfig, EventPlatformStatus } from "./types";
 
 export type { EventCandidate, EventPlatformConfig, EventPlatformStatus } from "./types";
 
 // Platforms with a working in-house parser (types.ts EventPlatformConfig).
-const BUILT_CONFIGS: EventPlatformConfig[] = [showsNgConfig, egoticketsConfig];
+const BUILT_CONFIGS: EventPlatformConfig[] = [showsNgConfig, egoticketsConfig, mogosEventConfig];
 
 // Platforms researched but NOT built as a full parser, with the reason.
 // `unconfirmed` ones (real content, no confirmed listing page with a price
@@ -113,6 +114,47 @@ export const RESEARCHED_NOT_BUILT: Array<{
     status: "no_public_directory",
     researchNote:
       "VERIFIED (2026-07-08): tiqbuy.com now redirects to a HugeDomains \"this domain is for sale — $995\" parking page. The company is confirmed inactive/dead, not just under-researched — matches the earlier landscape-research note that it was founded 2018 and unfunded. Drop entirely.",
+    listingUrls: [],
+  },
+  // ── Added 2026-08-18, user-suggested search for more platforms ──────────
+  {
+    id: "allevents_ng",
+    label: "Allevents.ng",
+    status: "unconfirmed",
+    researchNote:
+      "VERIFIED via plain fetch: /en/ is genuinely server-rendered with real article.event-item cards (title, date, venue, category) — a much better signal than most 'unconfirmed' entries here. BUT price and organizer are NOT in the server HTML: the detail page renders ticket type/price via a client-side call keyed on data-eventId, and no organizer name appears anywhere in the raw markup. No schema.org Event JSON-LD either (0 matches), so it doesn't even get the generic fallback. Wiring this as 'active' would silently mark every event unpaid (isPaid defaults false with no price found) — worse than not scraping it at all. Needs someone to find the actual pricing endpoint before this can be a real parser.",
+    listingUrls: ["https://www.allevents.ng/en/"],
+  },
+  {
+    id: "nairabox",
+    label: "Nairabox",
+    status: "extension_needed",
+    researchNote:
+      "VERIFIED via plain fetch (2026-08-18): homepage, /events, and /discover all return the identical 1-word SPA shell ('Nairabox') — confirmed client-rendered, same category as Clooza/Tickethub/Eventpadi. Not verified via real Chrome yet (unlike those three) — unconfirmed whether it exposes organizer profile pages worth capturing. Worth a real-browser check before prioritizing for extension capture.",
+    listingUrls: ["https://nairabox.com/events"],
+  },
+  {
+    id: "afritickets",
+    label: "Afritickets",
+    status: "no_public_directory",
+    researchNote:
+      "VERIFIED via plain fetch (2026-08-18): homepage is a generic B2B 'digital marketplace' pitch (lifestyle/business/event/travel management) gated behind 'Log in to Dashboard' — /events 404s. No public browsable event directory found. Same shape as Selar/Obodo/Unboxd.",
+    listingUrls: [],
+  },
+  {
+    id: "gruve_events",
+    label: "Gruve.events",
+    status: "extension_needed",
+    researchNote:
+      "Added 2026-08-18 (user-suggested). IMPORTANT: this gruve.events is a Web3/crypto ticketing site ('Book or host Web3 events. Crypto or fiat payment, verified on-chain tickets') per its own Organization JSON-LD — flag to the user that this may not be the same 'Gruve' as the Pulse gruve tenant / the event-ticketing company referenced elsewhere in this codebase's outbound templates, despite the identical name. VERIFIED via plain fetch: /discover returns Next.js's own BAILOUT_TO_CLIENT_SIDE_RENDERING marker with zero real content — fully client-rendered, same category as Clooza/Tickethub.",
+    listingUrls: ["https://www.gruve.events/discover"],
+  },
+  {
+    id: "fewtickets",
+    label: "Fewtickets",
+    status: "no_public_directory",
+    researchNote:
+      "VERIFIED (2026-08-18): fewtickets.com redirects (via a window.onload JS redirect, not even a real page) straight to a GoDaddy 'domain for sale' parking page. Dead/unclaimed domain, same as Tiqbuy. Drop entirely.",
     listingUrls: [],
   },
 ];

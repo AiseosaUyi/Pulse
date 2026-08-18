@@ -710,7 +710,11 @@ export function OutboundClient({
               >
                 {sortBy === "followup" ? "Needs follow-up first" : "Sort: most recent"}
               </button>
-              <AddProspectQuickForm onSubmit={handleAddProspect} />
+              <AddProspectsEntry
+                tenantSlug={tenantSlug}
+                onSubmitManual={handleAddProspect}
+                onGoToDiscovery={() => setTab("discovery")}
+              />
               <button
                 type="button"
                 onClick={() => setImportModalOpen(true)}
@@ -767,17 +771,10 @@ export function OutboundClient({
                 <p className="text-foreground font-semibold">
                   No prospects yet.
                 </p>
-                <p className="text-xs text-text-muted mt-2 mb-4">
-                  Search your niche on Discovery, or add one manually above.
+                <p className="text-xs text-text-muted mt-2">
+                  Use the <strong>Add prospects</strong> button above to search
+                  your niche online or add one manually.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setTab("discovery")}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold bg-primary-500 text-white hover:bg-primary-600 transition-colors"
-                >
-                  Go to Discovery
-                  <ArrowRight size={14} />
-                </button>
               </div>
             ) : (
               <ul className="divide-y divide-border/30 rounded-xl border border-border bg-card overflow-hidden">
@@ -1091,10 +1088,20 @@ function StatusFilter({
   );
 }
 
-function AddProspectQuickForm({
-  onSubmit,
+// Single entry point for getting new prospects into the pipeline — either
+// search online (creates + immediately runs a saved search, same actions
+// DiscoveryView uses) or add one manually. Previously these lived in two
+// disconnected places (a tiny ghost "Add prospect" button here, vs. a whole
+// separate "Discovery" tab for search) — merged per founder feedback that
+// having to leave the Pipeline tab to search was confusing UX.
+function AddProspectsEntry({
+  tenantSlug,
+  onSubmitManual,
+  onGoToDiscovery,
 }: {
-  onSubmit: (input: {
+  tenantSlug: string;
+  onGoToDiscovery: () => void;
+  onSubmitManual: (input: {
     platform: OutboundPlatform;
     handle: string;
     displayName?: string;
@@ -1104,23 +1111,54 @@ function AddProspectQuickForm({
   }) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"search" | "manual">("search");
+
+  // Manual-add fields
   const [platform, setPlatform] = useState<OutboundPlatform>("instagram");
   const [handle, setHandle] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [signal, setSignal] = useState("");
   const [profileUrl, setProfileUrl] = useState("");
-  const [isPending, startTransition] = useTransition();
+  const [manualPending, startManual] = useTransition();
+
+  // Search-online fields
+  const [searchName, setSearchName] = useState("");
+  const [searchPlatform, setSearchPlatform] = useState<OutboundPlatform>("instagram");
+  const [signalType, setSignalType] = useState<SignalType>("keyword");
+  const [query, setQuery] = useState("");
+  const [autoQualify, setAutoQualify] = useState(true);
+  const [searchPending, startSearch] = useTransition();
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchResult, setSearchResult] = useState<{
+    inserted: number;
+    qualified: number;
+    skipped: number;
+    candidates: number;
+    diagnostic?: string;
+  } | null>(null);
+
+  const resetAll = () => {
+    setHandle(""); setDisplayName(""); setBio(""); setSignal(""); setProfileUrl("");
+    setSearchName(""); setQuery(""); setSearchResult(null); setSearchError(null);
+  };
 
   const close = () => {
     setOpen(false);
-    setHandle(""); setDisplayName(""); setBio(""); setSignal(""); setProfileUrl("");
+    const shouldReload = Boolean(searchResult && searchResult.inserted > 0);
+    resetAll();
+    setMode("search");
+    // Search results land via a saved search + run — the shared `prospects`
+    // list on this page was only ever populated once from the server, so
+    // (same pattern as ImportProspectsModal's onImported) a reload is what
+    // actually brings the new rows into view.
+    if (shouldReload) location.reload();
   };
 
-  const submit = () => {
+  const submitManual = () => {
     if (!handle.trim()) return;
-    startTransition(async () => {
-      await onSubmit({
+    startManual(async () => {
+      await onSubmitManual({
         platform,
         handle: handle.trim(),
         displayName: displayName.trim() || undefined,
@@ -1132,55 +1170,210 @@ function AddProspectQuickForm({
     });
   };
 
+  const submitSearch = () => {
+    if (!query.trim()) return;
+    setSearchError(null);
+    startSearch(async () => {
+      const name = searchName.trim() || query.trim();
+      const created = await createProspectSearch(tenantSlug, {
+        name,
+        platform: searchPlatform,
+        signalType,
+        query: query.trim(),
+        autoQualify,
+      });
+      if (!created.success) {
+        setSearchError(created.error);
+        return;
+      }
+      const run = await runProspectSearchNow(tenantSlug, created.search.id);
+      if (!run.success) {
+        setSearchError(run.error);
+        return;
+      }
+      setSearchResult({
+        inserted: run.inserted,
+        qualified: run.qualified,
+        skipped: run.skipped,
+        candidates: run.candidates,
+        diagnostic: run.diagnostic,
+      });
+    });
+  };
+
   return (
     <>
-      <Button size="sm" variant="ghost" onClick={() => setOpen(true)} className="gap-1.5">
+      <Button size="sm" onClick={() => setOpen(true)} className="gap-1.5">
         <Plus size={14} />
-        Add prospect
+        Add prospects
       </Button>
-      <Dialog open={open} onClose={close} locked={isPending} size="lg">
+      <Dialog open={open} onClose={close} locked={manualPending || searchPending} size="lg">
         <div className="p-5 space-y-4">
-          <h3 className="text-base font-semibold text-foreground">Add prospect</h3>
-          <div className="grid md:grid-cols-2 gap-3">
-            <div>
-              <Label>Platform</Label>
-              <select
-                value={platform}
-                onChange={(e) => setPlatform(e.target.value as OutboundPlatform)}
-                className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
-              >
-                {OUTBOUND_PLATFORMS.map((p) => (
-                  <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label>Handle</Label>
-              <Input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@sarahbuilds" />
-            </div>
-            <div>
-              <Label>Display name</Label>
-              <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Sarah Chen" />
-            </div>
-            <div>
-              <Label>Profile URL</Label>
-              <Input value={profileUrl} onChange={(e) => setProfileUrl(e.target.value)} placeholder="https://instagram.com/sarahbuilds" />
-            </div>
-          </div>
           <div>
-            <Label>Bio (optional)</Label>
-            <Input value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Freelance brand strategist, helping startups find their voice" />
+            <h3 className="text-base font-semibold text-foreground">Add prospects</h3>
+            <p className="text-xs text-text-muted mt-0.5">
+              Search online for new leads, or add one you already know about.
+            </p>
           </div>
-          <div>
-            <Label>Signal (why did we find them?)</Label>
-            <Textarea rows={3} value={signal} onChange={(e) => setSignal(e.target.value)} placeholder="Posted about growing their newsletter to 5k. Used hashtag #creatoreconomy" />
+
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-sidebar border border-border w-fit">
+            <button
+              type="button"
+              onClick={() => setMode("search")}
+              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                mode === "search"
+                  ? "bg-card text-foreground shadow-sm font-medium"
+                  : "text-text-muted hover:text-foreground"
+              }`}
+            >
+              Search online
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("manual")}
+              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                mode === "manual"
+                  ? "bg-card text-foreground shadow-sm font-medium"
+                  : "text-text-muted hover:text-foreground"
+              }`}
+            >
+              Add manually
+            </button>
           </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button size="sm" variant="ghost" onClick={close} disabled={isPending}>Cancel</Button>
-            <Button size="sm" onClick={submit} disabled={isPending || !handle.trim()}>
-              {isPending ? "Adding…" : "Add prospect"}
-            </Button>
-          </div>
+
+          {mode === "search" && (
+            <div className="space-y-3">
+              {searchResult ? (
+                <div className="rounded-lg border border-status-green/30 bg-status-green/5 px-3 py-2.5 text-sm text-status-green">
+                  Added {searchResult.inserted} new prospect
+                  {searchResult.inserted === 1 ? "" : "s"}
+                  {searchResult.qualified > 0 && ` · ${searchResult.qualified} auto-qualified`}
+                  {searchResult.skipped > 0 && ` · ${searchResult.skipped} already in pipeline`}
+                  {searchResult.candidates === 0 &&
+                    ` · ${searchResult.diagnostic ?? "no results came back — try a broader or different query"}`}
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-text-muted leading-relaxed">
+                    Runs against Google site-search right now and adds any matches to your
+                    pipeline. This also saves as a search you can re-run later from{" "}
+                    <button type="button" onClick={onGoToDiscovery} className="underline hover:text-foreground">
+                      Discovery
+                    </button>.
+                  </p>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <div>
+                      <Label>Platform</Label>
+                      <select
+                        value={searchPlatform}
+                        onChange={(e) => setSearchPlatform(e.target.value as OutboundPlatform)}
+                        className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+                      >
+                        {OUTBOUND_PLATFORMS.filter((p) => p !== "manual" && p !== "other").map((p) => (
+                          <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label>Signal type</Label>
+                      <select
+                        value={signalType}
+                        onChange={(e) => setSignalType(e.target.value as SignalType)}
+                        className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+                      >
+                        {SIGNAL_TYPES.filter((s) => s !== "manual").map((s) => (
+                          <option key={s} value={s}>{SIGNAL_LABELS[s]}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Search query</Label>
+                    <Input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder={signalType === "hashtag" ? "#solopreneur" : "freelance designer remote"}
+                    />
+                  </div>
+                  <div>
+                    <Label>Name this search (optional)</Label>
+                    <Input
+                      value={searchName}
+                      onChange={(e) => setSearchName(e.target.value)}
+                      placeholder="Defaults to your query"
+                    />
+                  </div>
+                  <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoQualify}
+                      onChange={(e) => setAutoQualify(e.target.checked)}
+                      className="mt-0.5 accent-primary-500"
+                    />
+                    <span>Auto-qualify new prospects — AI scores fit and marks as qualified / skip</span>
+                  </label>
+                  {searchError && (
+                    <p className="text-xs text-status-red">{searchError}</p>
+                  )}
+                </>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <Button size="sm" variant="ghost" onClick={close} disabled={searchPending}>
+                  {searchResult ? "Done" : "Cancel"}
+                </Button>
+                {!searchResult && (
+                  <Button size="sm" onClick={submitSearch} disabled={searchPending || !query.trim()}>
+                    {searchPending ? "Searching…" : "Search & add"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {mode === "manual" && (
+            <div className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <Label>Platform</Label>
+                  <select
+                    value={platform}
+                    onChange={(e) => setPlatform(e.target.value as OutboundPlatform)}
+                    className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+                  >
+                    {OUTBOUND_PLATFORMS.map((p) => (
+                      <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label>Handle</Label>
+                  <Input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@sarahbuilds" />
+                </div>
+                <div>
+                  <Label>Display name</Label>
+                  <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Sarah Chen" />
+                </div>
+                <div>
+                  <Label>Profile URL</Label>
+                  <Input value={profileUrl} onChange={(e) => setProfileUrl(e.target.value)} placeholder="https://instagram.com/sarahbuilds" />
+                </div>
+              </div>
+              <div>
+                <Label>Bio (optional)</Label>
+                <Input value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Freelance brand strategist, helping startups find their voice" />
+              </div>
+              <div>
+                <Label>Signal (why did we find them?)</Label>
+                <Textarea rows={3} value={signal} onChange={(e) => setSignal(e.target.value)} placeholder="Posted about growing their newsletter to 5k. Used hashtag #creatoreconomy" />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button size="sm" variant="ghost" onClick={close} disabled={manualPending}>Cancel</Button>
+                <Button size="sm" onClick={submitManual} disabled={manualPending || !handle.trim()}>
+                  {manualPending ? "Adding…" : "Add prospect"}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </Dialog>
     </>
