@@ -262,7 +262,7 @@ export function publicUrlFor(storagePath: string | null): string | null {
 }
 
 /** Paths without a prefix segment (e.g. "tenant/yyyymm/hash.ext") are Supabase-era. */
-function isLegacySupabasePath(p: string): boolean {
+export function isLegacySupabasePath(p: string): boolean {
   return (
     !p.startsWith("assets/") &&
     !p.startsWith("videos/") &&

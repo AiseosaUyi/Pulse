@@ -9,6 +9,7 @@ import { listBlogPostsApi, getBlogPostRecordApi, createManualBlogPostApi } from 
 import { listBlogPostVersionsApi } from "@/lib/services/blog-versions";
 import { composeAndSaveApi } from "@/lib/services/social-drafts";
 import { composeModes } from "@/lib/ai/compose-take";
+import { captureSpaceInputSchema, createSpaceCaptureApi, completeSpaceCaptureApi } from "@/lib/services/spaces";
 
 const BRIEF_STATUSES = ["draft", "approved", "published", "dismissed"] as const;
 const BLOG_STATUSES = ["draft", "editing", "review", "published", "archived"] as const;
@@ -160,6 +161,52 @@ export function registerContentTools(server: McpServer) {
       if (!gate.ok) return gate.error;
       const { tenantSlug, admin, createdBy } = gate.context;
       const result = await composeAndSaveApi(admin, tenantSlug, createdBy, args);
+      if ("error" in result) return mcpToolError(result.error);
+      return mcpToolResult(result);
+    }
+  );
+
+  server.registerTool(
+    "pulse_capture_space",
+    {
+      title: "Start an X Space capture",
+      description:
+        "Start capturing an X/Twitter Space's audio: creates a saved_content row and returns an R2 presigned upload URL to PUT the finished mp3 to. Extraction itself happens outside Pulse — it needs a logged-in X session and a long-running download, see scripts/space-capture/download_space.sh — this tool only registers the capture and hands back where to send the bytes. Follow up with pulse_complete_space once the PUT succeeds. Mutates data.",
+      inputSchema: {
+        spaceUrl: z.string().min(1),
+        title: z.string().min(1).max(300).nullable().optional(),
+        hostHandle: z.string().min(1).max(100).nullable().optional(),
+        durationS: z.number().int().positive().nullable().optional(),
+        transcript: z.string().nullable().optional(),
+      },
+    },
+    async (args, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "content:write");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin, createdBy } = gate.context;
+      const parsed = captureSpaceInputSchema.safeParse(args);
+      if (!parsed.success) {
+        return mcpToolError(parsed.error.issues.map((i) => i.message).join("; "));
+      }
+      const result = await createSpaceCaptureApi(admin, tenantSlug, createdBy, parsed.data);
+      if ("error" in result) return mcpToolError(result.error);
+      return mcpToolResult(result);
+    }
+  );
+
+  server.registerTool(
+    "pulse_complete_space",
+    {
+      title: "Mark an X Space capture extracted",
+      description:
+        "Mark an X Space capture as extracted once the mp3 has been PUT to the presigned upload URL returned by pulse_capture_space. Errors if no file is found at the expected storage location yet. Mutates data.",
+      inputSchema: { captureId: z.string().uuid() },
+    },
+    async ({ captureId }, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "content:write");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin } = gate.context;
+      const result = await completeSpaceCaptureApi(admin, tenantSlug, captureId);
       if ("error" in result) return mcpToolError(result.error);
       return mcpToolResult(result);
     }

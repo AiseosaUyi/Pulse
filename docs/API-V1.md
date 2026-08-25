@@ -411,6 +411,8 @@ a sync or a rule evaluation manually.
 | GET | `/api/v1/blog-posts/:id` | `content:read` | Single blog post + its latest saved version. |
 | POST | `/api/v1/blog-posts` | `content:write` | Create a draft blog post (title and/or targetKeyword and/or extraContext — at least one required). AI-generated. |
 | POST | `/api/v1/captions/compose` | `content:write` | AI-compose a multi-platform caption take from a source URL or angle. |
+| POST | `/api/v1/spaces` | `content:write` | Start an X/Twitter Space capture — creates a `saved_content` row, returns an R2 presigned upload URL. Used by `scripts/space-capture/download_space.sh` (see `docs/space-capture-setup.md`); extraction runs on your own machine, not Pulse's server, since it needs a logged-in X session and a long-running download. |
+| POST | `/api/v1/spaces/:captureId/complete` | `content:write` | Mark a Space capture `extracted` once the mp3 PUT to the presigned URL has finished. 409s if no object is found at the expected storage path yet. |
 
 **`GET /api/v1/briefs?status=draft&limit=25&offset=0`** — `status` is one of
 `draft`/`approved`/`published`/`dismissed`.
@@ -833,6 +835,8 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 | `pulse_get_blog_post` | `GET /blog-posts/:id` | `content:read` |
 | `pulse_create_blog_post` | `POST /blog-posts` | `content:write` |
 | `pulse_compose_caption` | `POST /captions/compose` | `content:write` |
+| `pulse_capture_space` | `POST /spaces` | `content:write` |
+| `pulse_complete_space` | `POST /spaces/:captureId/complete` | `content:write` |
 
 **Notifications / mobile approvals**
 
@@ -844,7 +848,7 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 No `pulse_approve`/`pulse_reject` tools — approval must be a deliberate human action taken via the
 signed link, not something an AI agent can call on the tenant's behalf.
 
-55 tools total across all 10 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
+57 tools total across all 10 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
 Analytics, Ads platform, Content, Notifications) — every group in the original build spec, plus
 the ads platform added after it.
 
