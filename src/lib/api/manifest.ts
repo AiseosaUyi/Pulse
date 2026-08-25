@@ -75,6 +75,8 @@ export const API_V1_MANIFEST: ManifestEntry[] = [
   { method: "GET", path: "/api/v1/blog-posts/:id", scope: "content:read", description: "Single blog post + its latest version." },
   { method: "POST", path: "/api/v1/blog-posts", scope: "content:write", description: "Create a draft blog post (title and/or targetKeyword and/or extraContext — at least one required). AI-generated." },
   { method: "POST", path: "/api/v1/captions/compose", scope: "content:write", description: "AI-compose a multi-platform caption take from a source URL or angle." },
+  { method: "POST", path: "/api/v1/spaces", scope: "content:write", description: "Start an X/Twitter Space capture: creates a saved_content row and returns an R2 presigned upload URL. Used by scripts/space-capture/download_space.sh, which extracts the audio locally (a logged-in X session + long-running download, so it can't run server-side)." },
+  { method: "POST", path: "/api/v1/spaces/:captureId/complete", scope: "content:write", description: "Mark a Space capture extracted once the mp3 PUT to the presigned URL has finished." },
 
   // Notifications / mobile approvals (Part 3)
   { method: "POST", path: "/api/v1/briefings/send", scope: "publish:write | content:write", description: "Send a scheduled post or content brief for human approval via a signed link, delivered by email or WhatsApp. Scope depends on targetType." },

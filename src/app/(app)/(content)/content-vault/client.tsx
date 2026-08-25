@@ -180,6 +180,13 @@ function SavedRow({
     content.extractionStatus === "extracted" && !!content.sourceUrl;
   const downloadUrl = `/api/vault/download/${content.id}`;
 
+  // X Space captures (and anything else stored as audio) keep the bytes
+  // themselves — unlike re-resolved video, there's a real publicUrl to
+  // play inline without a download round trip.
+  const isAudio = (content.storedMime ?? "").startsWith("audio/");
+  const canPlayInline =
+    isAudio && content.extractionStatus === "extracted" && !!content.publicUrl;
+
   return (
     <div className="p-4 hover:bg-card-hover transition-colors group">
       <div className="flex items-start gap-3">
@@ -205,7 +212,9 @@ function SavedRow({
               )}
             </>
           ) : (
-            <span>{content.thumbnailEmoji ?? "🔖"}</span>
+            <span>
+              {content.thumbnailEmoji ?? (isAudio ? "🎙️" : "🔖")}
+            </span>
           )}
         </a>
         <div className="flex-1 min-w-0">
@@ -310,6 +319,15 @@ function SavedRow({
                 </span>
               ))}
             </div>
+          )}
+
+          {canPlayInline && (
+            <audio
+              controls
+              preload="none"
+              src={content.publicUrl ?? undefined}
+              className="w-full h-9 mt-3"
+            />
           )}
 
           {canRedownload && (

@@ -6,7 +6,9 @@ import {
   STORAGE_BUCKET,
   fetchBytes,
   SaveAssetError,
+  isLegacySupabasePath,
 } from "@/lib/storage/save-asset";
+import { r2PublicUrl, isR2Configured } from "@/lib/storage/r2";
 import {
   resolveTikTok,
   TikTokResolveError,
@@ -59,6 +61,8 @@ function extFromMime(mime: string | null | undefined): string {
       return "webp";
     case "image/gif":
       return "gif";
+    case "audio/mpeg":
+      return "mp3";
     default:
       return "mp4";
   }
@@ -110,36 +114,72 @@ export async function GET(
     );
   }
 
-  // Path A: legacy stored file.
+  // Path A: stored file (legacy Supabase Storage row, or current R2 asset —
+  // e.g. an X Space captured via scripts/space-capture/download_space.sh).
   if (row.stored_path) {
-    const admin = createAdminClient();
-    const { data: blob, error: dlError } = await admin.storage
-      .from(STORAGE_BUCKET)
-      .download(row.stored_path);
+    if (isLegacySupabasePath(row.stored_path)) {
+      const admin = createAdminClient();
+      const { data: blob, error: dlError } = await admin.storage
+        .from(STORAGE_BUCKET)
+        .download(row.stored_path);
 
-    if (dlError || !blob) {
-      console.error("[vault/download] storage read failed", {
+      if (dlError || !blob) {
+        console.error("[vault/download] storage read failed", {
+          id,
+          userId: user.id,
+          path: row.stored_path,
+          message: dlError?.message ?? "no data",
+        });
+        return NextResponse.json(
+          { error: `Storage read failed: ${dlError?.message ?? "no data"}` },
+          { status: 502 }
+        );
+      }
+
+      const mime = row.stored_mime || blob.type || "video/mp4";
+      const ext = extFromMime(mime);
+      const filename = `${slugify(row.title)}.${ext}`;
+
+      return new Response(blob.stream(), {
+        status: 200,
+        headers: {
+          "Content-Type": mime,
+          "Content-Disposition": `attachment; filename="${filename}"`,
+          "Content-Length": String(blob.size),
+          "Cache-Control": "private, no-store",
+        },
+      });
+    }
+
+    if (!isR2Configured()) {
+      return NextResponse.json({ error: "Storage is not configured" }, { status: 500 });
+    }
+
+    const r2Res = await fetch(r2PublicUrl(row.stored_path));
+    if (!r2Res.ok || !r2Res.body) {
+      console.error("[vault/download] R2 read failed", {
         id,
         userId: user.id,
         path: row.stored_path,
-        message: dlError?.message ?? "no data",
+        status: r2Res.status,
       });
       return NextResponse.json(
-        { error: `Storage read failed: ${dlError?.message ?? "no data"}` },
+        { error: `Storage read failed: HTTP ${r2Res.status}` },
         { status: 502 }
       );
     }
 
-    const mime = row.stored_mime || blob.type || "video/mp4";
+    const mime = row.stored_mime || r2Res.headers.get("content-type") || "video/mp4";
     const ext = extFromMime(mime);
     const filename = `${slugify(row.title)}.${ext}`;
+    const contentLength = r2Res.headers.get("content-length");
 
-    return new Response(blob.stream(), {
+    return new Response(r2Res.body, {
       status: 200,
       headers: {
         "Content-Type": mime,
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "Content-Length": String(blob.size),
+        ...(contentLength ? { "Content-Length": contentLength } : {}),
         "Cache-Control": "private, no-store",
       },
     });
