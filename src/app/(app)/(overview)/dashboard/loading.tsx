@@ -17,8 +17,16 @@ export default function DashboardLoading() {
         </div>
       </div>
 
+      {/* Action Queue skeleton — the body of the page */}
+      <div className="mb-6 rounded-2xl border border-border bg-card p-5 space-y-3">
+        <div className="h-5 w-28 bg-border/50 rounded animate-skeleton" />
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-16 rounded-lg bg-border/30 animate-skeleton" />
+        ))}
+      </div>
+
       {/* Stat card skeletons */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4">
         <StatCardSkeleton />
         <StatCardSkeleton />
         <StatCardSkeleton />

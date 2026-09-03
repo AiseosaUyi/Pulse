@@ -4,44 +4,96 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { PlatformBreakdown } from "@/components/dashboard/PlatformBreakdown";
 import { PulseSuggestions } from "@/components/dashboard/PulseSuggestions";
-import { CoachFeed } from "@/components/coach/CoachFeed";
 import { WeeklyReviewBanner } from "@/components/dashboard/WeeklyReviewBanner";
 import { NeedsYouBanner } from "@/components/needs-you/NeedsYouBanner";
+import { ActionQueueBoard } from "@/components/action-queue/ActionQueueBoard";
 import { getDashboardStats, getPlatforms, getSuggestions } from "@/lib/services/dashboard";
 import { getSetupStatus } from "@/lib/services/setup-status";
 import { getNotifications } from "@/lib/services/notifications";
 import { getTenant } from "@/lib/services/tenants";
-import { listActiveCoachActions } from "@/lib/services/coach";
 import { getLatestWeeklyReview } from "@/lib/services/weekly-reviews";
+import { listActionQueue, type QueueGroupKey } from "@/lib/services/action-queue";
+import { listTenantMembers } from "@/lib/services/team";
 import { CadenceRail } from "@/app/(app)/(social)/composer/CadenceRail";
 import { getTracker } from "@/lib/services/cadence";
 import { formatCurrency } from "@/lib/utils/format";
-import { getCurrentTenant } from "@/lib/auth";
+import { getCurrentTenant, getCurrentUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+
+const SUPPORT_VISIBLE_GROUPS: QueueGroupKey[] = ["needs_reply", "follow_ups_due", "going_cold"];
+
+function queueSummary(groups: Awaited<ReturnType<typeof listActionQueue>>["groups"]): string {
+  const reply = groups.find((g) => g.key === "needs_reply");
+  const decision = groups.find((g) => g.key === "needs_decision");
+  const parts: string[] = [];
+  if (reply && reply.count > 0) parts.push(`${reply.count} need${reply.count === 1 ? "s" : ""} a reply`);
+  if (decision && decision.count > 0) parts.push(`${decision.count} need${decision.count === 1 ? "s" : ""} a decision`);
+
+  const oldest = reply?.rows[0]?.receivedAt;
+  if (oldest) {
+    const days = Math.floor((Date.now() - new Date(oldest).getTime()) / (24 * 60 * 60 * 1000));
+    if (days >= 1) parts.push(`oldest waiting ${days} day${days === 1 ? "" : "s"}`);
+  }
+
+  return parts.length > 0 ? parts.join(" · ") : "All caught up";
+}
 
 export default async function DashboardPage() {
   const currentTenant = await getCurrentTenant();
   const tenantSlug = currentTenant?.slug ?? "";
   const accountType = currentTenant?.accountType ?? "startup";
+  const role = currentTenant?.role ?? "member";
+  const user = await getCurrentUser();
+  const supabase = await createClient();
 
-  const [tenant, stats, platforms, suggestions, notifications, coachActions, weeklyReview, tracker, setupStatus] = await Promise.all([
+  const [tenant, stats, notifications, setupStatus, queueResult, members] = await Promise.all([
     getTenant(tenantSlug),
     getDashboardStats(tenantSlug),
-    getPlatforms(tenantSlug),
-    getSuggestions(tenantSlug),
     getNotifications(tenantSlug),
-    listActiveCoachActions(tenantSlug, 8),
-    getLatestWeeklyReview(tenantSlug),
-    getTracker(tenantSlug),
     getSetupStatus(tenantSlug, accountType),
+    listActionQueue(supabase, tenantSlug, { currentUserId: user?.id }),
+    listTenantMembers(supabase, tenantSlug),
   ]);
 
-  if (!tenant || !stats) {
+  if (!tenant || !stats || !user) {
     return (
       <div className="p-4 md:p-8">
         <p className="text-text-secondary">Tenant not found.</p>
       </div>
     );
   }
+
+  // Role-aware rendering only — a presentation choice, not the security
+  // boundary. The real fence is RLS: migration 105's action_items policy
+  // already restricts a support member to kind IN (reply, follow_up) rows
+  // even under a direct Supabase call; this just keeps the rest of the
+  // page (ad spend, prospect counts, weekly review) off their screen too.
+  if (role === "support") {
+    return (
+      <div className="p-4 md:p-8 max-w-[1200px]">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold text-foreground">Dashboard</h1>
+            <p className="text-text-secondary text-sm mt-0.5">{queueSummary(queueResult.groups)}</p>
+          </div>
+          <NotificationBell notifications={notifications} />
+        </div>
+        <ActionQueueBoard
+          initial={queueResult}
+          currentUserId={user.id}
+          members={members}
+          visibleGroups={SUPPORT_VISIBLE_GROUPS}
+        />
+      </div>
+    );
+  }
+
+  const [platforms, suggestions, weeklyReview, tracker] = await Promise.all([
+    getPlatforms(tenantSlug),
+    getSuggestions(tenantSlug),
+    getLatestWeeklyReview(tenantSlug),
+    getTracker(tenantSlug),
+  ]);
 
   const adSpendFormatted = {
     ...stats.adSpend,
@@ -51,22 +103,13 @@ export default async function DashboardPage() {
         : formatCurrency(Number(stats.adSpend.value), tenant.currency),
   };
 
-  const now = new Date();
-  const weekLabel = now.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-
   return (
     <div className="p-4 md:p-8 max-w-[1200px]">
-      {/* Header */}
+      {/* Header — live queue state instead of a static week label */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6 md:mb-8">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-text-secondary text-sm mt-0.5">
-            Week of {weekLabel}
-          </p>
+          <p className="text-text-secondary text-sm mt-0.5">{queueSummary(queueResult.groups)}</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           <NotificationBell notifications={notifications} />
@@ -74,10 +117,6 @@ export default async function DashboardPage() {
             Weekly report
             <ArrowUpRight size={14} />
           </Link>
-          <button className="flex items-center gap-2 px-3 md:px-4 py-2 border border-border rounded-lg text-xs md:text-sm text-foreground hover:bg-card-hover transition-colors duration-150 active:scale-[0.98] touch-manipulation">
-            Ask Pulse
-            <ArrowUpRight size={14} />
-          </button>
         </div>
       </div>
 
@@ -86,8 +125,14 @@ export default async function DashboardPage() {
         <NeedsYouBanner status={setupStatus} />
       </div>
 
-      {/* Stat Cards — startup sees prospects + ad spend; individual sees posts + engagement */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+      {/* The Action Queue — this is the body of the page. Coach actions
+          (formerly a standalone CoachFeed block) are absorbed into it. */}
+      <div className="mb-6">
+        <ActionQueueBoard initial={queueResult} currentUserId={user.id} members={members} />
+      </div>
+
+      {/* The numbers, compressed below the queue — context, not the job */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4">
         <StatCard data={stats.socialReach} />
         <StatCard data={stats.profileScore} scoreMax={100} />
         {accountType === "individual" ? (
@@ -103,20 +148,6 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      {/* Weekly business review — synthesis of what Pulse shipped this week */}
-      <div className="mb-4">
-        <WeeklyReviewBanner
-          tenantSlug={tenantSlug}
-          initial={weeklyReview}
-        />
-      </div>
-
-      {/* AI Coach — priority actions queue */}
-      <div className="mb-4">
-        <CoachFeed tenantSlug={tenantSlug} initial={coachActions} />
-      </div>
-
-      {/* Today's posting windows */}
       {tracker && (
         <div className="mb-4 rounded-2xl border border-border bg-card p-5">
           <div className="flex items-center justify-between mb-4">
@@ -129,11 +160,21 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Two-column bottom */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <PlatformBreakdown platforms={platforms} />
-        <PulseSuggestions suggestions={suggestions} />
-      </div>
+      {/* This week — collapsed by default; PlatformBreakdown/PulseSuggestions/
+          WeeklyReviewBanner also live at /own-analytics and /weekly-report. */}
+      <details className="rounded-2xl border border-border bg-card">
+        <summary className="cursor-pointer list-none p-5 text-sm font-semibold text-foreground flex items-center justify-between">
+          This week
+          <span className="text-xs font-normal text-text-muted">Platform breakdown, suggestions, business review</span>
+        </summary>
+        <div className="px-5 pb-5 space-y-4">
+          <WeeklyReviewBanner tenantSlug={tenantSlug} initial={weeklyReview} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <PlatformBreakdown platforms={platforms} />
+            <PulseSuggestions suggestions={suggestions} />
+          </div>
+        </div>
+      </details>
     </div>
   );
 }

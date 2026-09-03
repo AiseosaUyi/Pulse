@@ -59,6 +59,14 @@ export interface InboxItem {
   sentiment: string;
   aiDraft: Record<string, unknown> | null;
   approvalStatus: string | null;
+  status: string;
+  assignedTo: string | null;
+  sentBody: string | null;
+  proposedReply: string | null;
+  proposedReplyAuthor: string | null;
+  externalId: string | null;
+  priority: string;
+  dueAt: string | null;
 }
 
 export async function listInboxItems(
@@ -97,6 +105,14 @@ export async function listInboxItems(
       sentiment: row.sentiment,
       aiDraft: row.ai_draft,
       approvalStatus: row.approval_status,
+      status: row.status ?? "open",
+      assignedTo: row.assigned_to ?? null,
+      sentBody: row.sent_body ?? null,
+      proposedReply: row.proposed_reply ?? null,
+      proposedReplyAuthor: row.proposed_reply_author ?? null,
+      externalId: row.external_id ?? null,
+      priority: row.priority ?? "normal",
+      dueAt: row.due_at ?? null,
     })),
     total: count ?? 0,
   };
@@ -146,7 +162,11 @@ export async function draftAndSaveReply(
 
 /** Mirrors markAsReplied() in actions/engagement.ts, but explicitly
  * tenant-scoped — that action relies on RLS alone, which doesn't apply
- * under admin-client token auth. */
+ * under admin-client token auth. Also keeps the Action Queue status model
+ * (migration 105) consistent: resolving a reply here is the same
+ * transition as resolving it from the queue's setQueueStatus, so
+ * GET /api/v1/inbox?unanswered=true and the queue never disagree about
+ * whether this row is still open. */
 export async function markInboxReplied(
   client: SupabaseClient,
   tenantSlug: string,
@@ -154,7 +174,7 @@ export async function markInboxReplied(
 ): Promise<{ ok: true } | { ok: false; status: 404 | 500; error?: string }> {
   const { data, error } = await client
     .from("engagement_items")
-    .update({ replied: true, read: true })
+    .update({ replied: true, read: true, status: "resolved", resolved_at: new Date().toISOString() })
     .eq("tenant_slug", tenantSlug)
     .eq("id", itemId)
     .select("id")

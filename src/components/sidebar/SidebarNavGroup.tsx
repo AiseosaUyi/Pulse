@@ -1,11 +1,13 @@
+import type { ReactNode } from "react";
 import { SidebarNavItem } from "./SidebarNavItem";
 import type { NavGroup } from "@/lib/nav-config";
 
 interface SidebarNavGroupProps {
   group: NavGroup;
+  badges?: Record<string, ReactNode>;
 }
 
-export function SidebarNavGroup({ group }: SidebarNavGroupProps) {
+export function SidebarNavGroup({ group, badges }: SidebarNavGroupProps) {
   return (
     <div className="mt-4 first:mt-0">
       {group.label && (
@@ -21,6 +23,7 @@ export function SidebarNavGroup({ group }: SidebarNavGroupProps) {
             href={item.href}
             iconName={item.iconName}
             childItems={item.children}
+            badge={badges?.[item.href]}
           />
         ))}
       </div>

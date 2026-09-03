@@ -59,3 +59,20 @@ export function formatCount(
 ): string {
   return value.toLocaleString("en-US", opts);
 }
+
+// Coarse "how long has this been waiting" — minutes/hours/days only, never
+// seconds, so a render on the server and the same render after client
+// hydration (a few hundred ms apart in practice) virtually never land on
+// different text and trip a hydration mismatch the way a live ticking
+// clock would.
+export function formatRelativeTime(value: string | number | Date): string {
+  const ms = Date.now() - new Date(value).getTime();
+  if (ms < 0) return "just now";
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   LayoutDashboard,
   CircleDot,
@@ -43,9 +43,12 @@ interface SidebarNavItemProps {
   href: string;
   iconName: string;
   childItems?: NavItem[];
+  /** A server-computed node (e.g. ActionQueueBadge) rendered inline — this
+   * component only renders what it's given, never fetches anything itself. */
+  badge?: ReactNode;
 }
 
-export function SidebarNavItem({ label, href, iconName, childItems }: SidebarNavItemProps) {
+export function SidebarNavItem({ label, href, iconName, childItems, badge }: SidebarNavItemProps) {
   const pathname = usePathname();
   const Icon = iconMap[iconName] ?? LayoutDashboard;
 
@@ -117,7 +120,8 @@ export function SidebarNavItem({ label, href, iconName, childItems }: SidebarNav
       )}
     >
       <Icon size={17} className={isActive ? "text-primary-500" : "text-gray-500"} />
-      <span>{label}</span>
+      <span className="flex-1">{label}</span>
+      {badge}
     </Link>
   );
 }

@@ -2,6 +2,7 @@ import { SidebarNav } from "./SidebarNav";
 import { TenantSwitcher } from "./TenantSwitcher";
 import { Logo } from "@/components/ui/Logo";
 import { NeedsYouBadge } from "@/components/needs-you/NeedsYouBadge";
+import { ActionQueueBadge } from "@/components/action-queue/ActionQueueBadge";
 import type { AccountType, TenantMembership } from "@/lib/auth";
 
 interface SidebarProps {
@@ -23,7 +24,11 @@ export function Sidebar({
         <Logo size="md" />
       </div>
 
-      <SidebarNav accountType={currentAccountType} role={currentRole} />
+      <SidebarNav
+        accountType={currentAccountType}
+        role={currentRole}
+        badges={{ "/dashboard": <ActionQueueBadge tenantSlug={currentTenantSlug} /> }}
+      />
 
       {currentRole !== "support" && (
         <NeedsYouBadge tenantSlug={currentTenantSlug} accountType={currentAccountType} />
