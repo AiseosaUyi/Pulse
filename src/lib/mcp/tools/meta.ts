@@ -1,7 +1,9 @@
+import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { requireToolScope, mcpToolResult, type ToolHandlerExtra } from "@/lib/api/mcp-context";
+import { requireToolScope, mcpToolError, mcpToolResult, type ToolHandlerExtra } from "@/lib/api/mcp-context";
 import { getTenantMeta } from "@/lib/services/tenants";
-import { getBrandContext } from "@/lib/ai/brand-positioning";
+import { getBrandContext, setBrandPositioning } from "@/lib/ai/brand-positioning";
+import { setBrandVoice } from "@/lib/ai/brand-voice";
 import { API_V1_MANIFEST } from "@/lib/api/manifest";
 
 export function registerMetaTools(server: McpServer) {
@@ -45,6 +47,39 @@ export function registerMetaTools(server: McpServer) {
       const gate = requireToolScope(extra, null);
       if (!gate.ok) return gate.error;
       return mcpToolResult({ version: "v1", endpoints: API_V1_MANIFEST });
+    }
+  );
+
+  server.registerTool(
+    "pulse_update_brand_voice",
+    {
+      title: "Write brand voice and/or positioning",
+      description:
+        "Write the tenant's brand voice and/or positioning (at least one required) — the config every AI draft/DM/analysis reads. Mutates data. An unauthored/placeholder brand voice means every reply draft is generic copy wearing the tenant's name.",
+      inputSchema: {
+        brandVoice: z.record(z.string(), z.unknown()).optional(),
+        positioning: z.record(z.string(), z.unknown()).optional(),
+      },
+    },
+    async (args, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "admin");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin } = gate.context;
+
+      if (args.brandVoice === undefined && args.positioning === undefined) {
+        return mcpToolError("At least one of brandVoice or positioning is required");
+      }
+      if (args.brandVoice !== undefined) {
+        const result = await setBrandVoice(admin, tenantSlug, args.brandVoice);
+        if (!result.ok) return mcpToolError(result.error);
+      }
+      if (args.positioning !== undefined) {
+        const result = await setBrandPositioning(admin, tenantSlug, args.positioning);
+        if (!result.ok) return mcpToolError(result.error);
+      }
+
+      const brand = await getBrandContext(tenantSlug);
+      return mcpToolResult({ brandVoice: brand.voice, positioning: brand.positioning });
     }
   );
 }

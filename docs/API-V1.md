@@ -69,6 +69,7 @@ the real routes. A skill can call this once to learn what's available without ha
 | Method | Path | Scope | Description |
 |---|---|---|---|
 | GET | `/api/v1/me` | any valid token | Resolve the token to its tenant, brand voice/positioning, and granted scopes. |
+| POST | `/api/v1/me` | `admin` | Write `brandVoice` and/or `positioning` (at least one required). |
 | GET | `/api/v1/manifest` | any valid token | Machine-readable endpoint list (see above). |
 
 **`GET /api/v1/me`** — example response:
@@ -81,6 +82,11 @@ the real routes. A skill can call this once to learn what's available without ha
   "scopes": ["sales:read", "sales:write"]
 }
 ```
+
+**`POST /api/v1/me`** — body `{"brandVoice": {...}}` and/or `{"positioning": {...}}`, same shapes
+as the GET response's fields (validated against the same zod schemas the settings UI uses).
+Returns the saved config. Placeholder/unauthored brand voice is a P0 on `/needs-you` and flagged
+on every `pulse_reply_draft` output until this is actually written — see Engagement below.
 
 ### Sales / outbound
 
@@ -284,11 +290,29 @@ the `sync-post-metrics` cron already has).
 
 ### Engagement / inbox
 
+The Action Queue (migration 105) — a unified board of everything needing attention: comments/DMs
+(`engagement_items`), non-message items like decisions/escalations/opportunities (`action_items`),
+plus follow-ups/going-cold prospects and active coach actions mapped in read-only. This is the
+write path for an agent working the real platform in a browser (e.g. Cowork) to put what it
+observes into Pulse — `POST /api/v1/inbox` was the missing endpoint; everything below it exists so
+what an agent pushes is visible/editable in the UI, and what a human edits/resolves is visible on
+the agent's next read.
+
 | Method | Path | Scope | Description |
 |---|---|---|---|
 | GET | `/api/v1/inbox` | `engage:read` | Comments/DMs needing a response. |
+| POST | `/api/v1/inbox` | `engage:write` | Upsert an observed comment/DM, deduped by `(platform, externalId)`. |
+| PATCH | `/api/v1/inbox/:id` | `engage:write` | Edit `proposedReply`, `priority`, `dueAt`, `assignedTo`. |
+| POST | `/api/v1/inbox/:id/status` | `engage:write` | Set status: `open`/`snoozed`/`resolved`/`dismissed`. |
 | POST | `/api/v1/inbox/:id/reply-draft` | `engage:write` | Generate an on-brand reply draft. |
-| POST | `/api/v1/inbox/:id/replied` | `engage:write` | Mark an inbox item handled. |
+| POST | `/api/v1/inbox/:id/replied` | `engage:write` | Mark an inbox item handled — alias for status:"resolved". |
+| GET | `/api/v1/action-queue` | `engage:read` | The full grouped board: needs a reply, needs a decision, follow-ups due, going cold, opportunities. |
+| GET | `/api/v1/action-items` | `engage:read` | Non-message items only. |
+| POST | `/api/v1/action-items` | `engage:write` | Upsert a non-message item by `dedupeKey`. |
+| PATCH | `/api/v1/action-items/:id` | `engage:write` | Same editable fields as inbox PATCH. |
+| POST | `/api/v1/action-items/:id/status` | `engage:write` | Same status transitions as inbox status. |
+| POST | `/api/v1/agent-runs` | `engage:write` | Open a run (`agent` name, optional `surface`). Returns `runId`. |
+| POST | `/api/v1/agent-runs/:id/finish` | `engage:write` | Close a run with a `summary`. |
 
 **`GET /api/v1/inbox?platform=instagram&unanswered=true&limit=25&offset=0`**
 
@@ -299,22 +323,67 @@ the `sync-post-metrics` cron already has).
       "id": "...", "type": "comment", "platform": "instagram",
       "fromName": "...", "fromHandle": "...", "content": "...",
       "receivedAt": "...", "read": false, "replied": false,
-      "sentiment": "question", "aiDraft": null, "approvalStatus": null
+      "sentiment": "question", "aiDraft": null, "approvalStatus": null,
+      "status": "open", "assignedTo": null, "sentBody": null,
+      "proposedReply": null, "proposedReplyAuthor": null,
+      "externalId": "...", "priority": "normal", "dueAt": null
     }
   ],
   "nextCursor": null
 }
 ```
 
-**`POST /api/v1/inbox/:id/reply-draft`** — no body. Writes the draft into `ai_draft` +
-`approval_status: "pending_review"` on the item (same as the in-app approval queue) and returns it:
+**`POST /api/v1/inbox`** — the write path. Body:
 
 ```json
-{ "draft": { "body": "...", "confidence": "high" } }
+{
+  "platform": "instagram", "type": "comment",
+  "externalId": "stable-id-you-can-re-derive-next-sweep",
+  "fromName": "...", "fromHandle": "...", "content": "...",
+  "receivedAt": "2026-09-03T12:00:00Z"
+}
+```
+
+Calling this twice with the same `(platform, externalId)` updates the row instead of duplicating
+it — `externalId` must be something you can consistently re-derive from the page on the next
+sweep (a comment/message id from the DOM or URL), not a value that changes between sweeps.
+
+**`GET /api/v1/action-queue`** — response:
+
+```json
+{
+  "groups": [
+    { "key": "needs_reply", "label": "Needs a reply", "count": 3, "rows": [ /* QueueRow[] */ ] },
+    { "key": "needs_decision", "label": "Needs a decision", "count": 0, "rows": [] },
+    { "key": "follow_ups_due", "label": "Follow-ups due", "count": 0, "rows": [] },
+    { "key": "going_cold", "label": "Going cold", "count": 0, "rows": [] },
+    { "key": "opportunities", "label": "Opportunities", "count": 0, "rows": [] }
+  ],
+  "total": 3
+}
+```
+
+**`POST /api/v1/agent-runs`** + **`POST /api/v1/agent-runs/:id/finish`** — bracket a sweep so "new
+since the last run" is answerable without re-deriving it from chat history:
+
+```json
+// POST /api/v1/agent-runs  { "agent": "agent-social", "surface": "instagram" }
+// -> { "runId": "..." }
+// ...push observations via POST /api/v1/inbox...
+// POST /api/v1/agent-runs/:runId/finish  { "summary": { "commentsSeen": 4, "dmsSeen": 2 } }
+```
+
+**`POST /api/v1/inbox/:id/reply-draft`** — no body. Writes the draft into `ai_draft` +
+`approval_status: "pending_review"` on the item (same as the in-app approval queue) and returns it.
+The response now also carries `brandVoiceUnauthored: true` when the tenant's brand voice reads as
+unedited placeholder copy — check this before treating the draft as genuinely on-brand:
+
+```json
+{ "draft": { "body": "...", "confidence": "high", "confidenceScore": 0.8, "brandVoiceUnauthored": false } }
 ```
 
 **`POST /api/v1/inbox/:id/replied`** — no body. `{"success": true}`, or 404 if the item isn't
-found for this tenant.
+found for this tenant. Unchanged — an alias for `POST /api/v1/inbox/:id/status {"status":"resolved"}`.
 
 ### Intelligence
 
@@ -744,6 +813,7 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 |---|---|---|
 | `pulse_whoami` | `GET /me` | any valid token |
 | `pulse_manifest` | `GET /manifest` | any valid token |
+| `pulse_update_brand_voice` | `POST /me` | `admin` |
 
 **Sales**
 
@@ -773,13 +843,31 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 | `pulse_record_published` | `POST /posts/:id/published` | `publish:write` |
 | `pulse_record_post_metrics` | `POST /posts/:id/metrics` | `publish:write` |
 
-**Engagement**
+**Engagement — the Action Queue**
+
+The write path for an agent working the real platform in a browser (e.g. Cowork) to put what it
+observes into Pulse, and read it back after a human edits/resolves in the UI. `pulse_upsert_inbox_item`
+is the important one — call it once per comment/DM you observe, with a stable `externalId` you can
+re-derive on the next sweep (calling it twice with the same `externalId` updates, never duplicates).
+Bracket a sweep with `pulse_start_run`/`pulse_finish_run` so "new since last run" doesn't have to be
+re-derived from chat history.
 
 | Tool | REST twin | Scope |
 |---|---|---|
 | `pulse_inbox` | `GET /inbox` | `engage:read` |
+| `pulse_upsert_inbox_item` | `POST /inbox` | `engage:write` |
 | `pulse_reply_draft` | `POST /inbox/:id/reply-draft` | `engage:write` |
 | `pulse_mark_replied` | `POST /inbox/:id/replied` | `engage:write` |
+| `pulse_action_queue` | `GET /action-queue` | `engage:read` |
+| `pulse_set_proposed_reply` | — (`PATCH /inbox/:id` twin) | `engage:write` |
+| `pulse_set_queue_status` | — (`POST /inbox/:id/status` twin) | `engage:write` |
+| `pulse_assign_queue_row` | — (`PATCH /inbox/:id` twin) | `engage:write` |
+| `pulse_upsert_action_item` | `POST /action-items` | `engage:write` |
+| `pulse_start_run` | `POST /agent-runs` | `engage:write` |
+| `pulse_finish_run` | `POST /agent-runs/:id/finish` | `engage:write` |
+
+`pulse_set_proposed_reply`/`pulse_set_queue_status`/`pulse_assign_queue_row` take `{source: "engagement"|"action"|"coach"|"prospect", id}` — `source` is whichever the row came
+from in `pulse_action_queue`'s output, not always `"engagement"`.
 
 **Intelligence**
 
@@ -848,9 +936,9 @@ REST endpoint sections above; call `pulse_manifest` for the always-current sourc
 No `pulse_approve`/`pulse_reject` tools — approval must be a deliberate human action taken via the
 signed link, not something an AI agent can call on the tenant's behalf.
 
-57 tools total across all 10 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
+66 tools total across all 10 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
 Analytics, Ads platform, Content, Notifications) — every group in the original build spec, plus
-the ads platform added after it.
+the ads platform tools and the Action Queue write path added after it.
 
 ### Deviations (MCP)
 

@@ -5,7 +5,7 @@
 // mobile approvals) land.
 
 export interface ManifestEntry {
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "PATCH";
   path: string;
   scope: string | null;
   description: string;
@@ -14,6 +14,7 @@ export interface ManifestEntry {
 export const API_V1_MANIFEST: ManifestEntry[] = [
   // Meta
   { method: "GET", path: "/api/v1/me", scope: null, description: "Resolve the token to its tenant, brand voice/positioning, and granted scopes." },
+  { method: "POST", path: "/api/v1/me", scope: "admin", description: "Write brand voice and/or positioning for the tenant (at least one required)." },
   { method: "GET", path: "/api/v1/manifest", scope: null, description: "This list." },
 
   // Sales / outbound
@@ -40,8 +41,18 @@ export const API_V1_MANIFEST: ManifestEntry[] = [
 
   // Engagement
   { method: "GET", path: "/api/v1/inbox", scope: "engage:read", description: "Comments/DMs needing a response (filter platform, unanswered)." },
+  { method: "POST", path: "/api/v1/inbox", scope: "engage:write", description: "Upsert an observed comment/DM (dedup key: platform + externalId). The write half of the shared inbox — an agent working the real platform in a browser puts what it sees here." },
+  { method: "PATCH", path: "/api/v1/inbox/:id", scope: "engage:write", description: "Edit an inbox item: proposedReply, priority, dueAt, assignedTo, externalUrl." },
+  { method: "POST", path: "/api/v1/inbox/:id/status", scope: "engage:write", description: "Set an inbox item's status: open/snoozed/resolved/dismissed, with an optional note or snooze time." },
   { method: "POST", path: "/api/v1/inbox/:id/reply-draft", scope: "engage:write", description: "Generate an on-brand reply draft for an inbox item." },
-  { method: "POST", path: "/api/v1/inbox/:id/replied", scope: "engage:write", description: "Mark an inbox item handled." },
+  { method: "POST", path: "/api/v1/inbox/:id/replied", scope: "engage:write", description: "Mark an inbox item handled. Alias for POST /api/v1/inbox/:id/status {status:'resolved'} — kept for existing callers." },
+  { method: "GET", path: "/api/v1/action-queue", scope: "engage:read", description: "The unified attention board: needs a reply, needs a decision, follow-ups due, going cold, opportunities. Filter status/kind/priority/assignedTo/platform/since." },
+  { method: "GET", path: "/api/v1/action-items", scope: "engage:read", description: "Non-message action items (decisions, escalations, opportunities, chores) — filter same as action-queue." },
+  { method: "POST", path: "/api/v1/action-items", scope: "engage:write", description: "Upsert a non-message action item by dedupeKey." },
+  { method: "PATCH", path: "/api/v1/action-items/:id", scope: "engage:write", description: "Edit an action item: proposedReply, priority, dueAt, assignedTo, externalUrl." },
+  { method: "POST", path: "/api/v1/action-items/:id/status", scope: "engage:write", description: "Set an action item's status: open/snoozed/resolved/dismissed, with an optional note or snooze time." },
+  { method: "POST", path: "/api/v1/agent-runs", scope: "engage:write", description: "Open an agent run (agent name, optional surface). Returns runId." },
+  { method: "POST", path: "/api/v1/agent-runs/:id/finish", scope: "engage:write", description: "Close an agent run with a summary." },
 
   // Intelligence
   { method: "GET", path: "/api/v1/intel/feed", scope: "intel:read", description: "Competitor intel signals (filter contentType/since)." },

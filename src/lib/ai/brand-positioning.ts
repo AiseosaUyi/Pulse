@@ -4,7 +4,8 @@
 // cover*. Both live in `tenants.settings` — voice at `brand_voice`,
 // positioning at `brand_positioning`. Never replace each other.
 
-import { z } from "zod";
+import { z, type ZodIssue } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBrandVoice, type BrandVoice } from "@/lib/ai/brand-voice";
 
@@ -69,6 +70,42 @@ export function isBrandPositioningComplete(
   value: unknown
 ): value is BrandPositioning {
   return brandPositioningSchema.safeParse(value).success;
+}
+
+/**
+ * Client-injected setter — same shared-write-path reasoning as
+ * setBrandVoice in brand-voice.ts. Used by both the
+ * settings/brand-positioning server action (session client) and the
+ * /api/v1/me POST route + pulse_update_brand_voice MCP tool (admin client).
+ */
+export async function setBrandPositioning(
+  client: SupabaseClient,
+  tenantSlug: string,
+  input: unknown
+): Promise<{ ok: true; data: BrandPositioning } | { ok: false; error: string; issues?: ZodIssue[] }> {
+  const parsed = brandPositioningSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues.map((i) => i.message).join(" · "),
+      issues: parsed.error.issues,
+    };
+  }
+
+  const { data: tenant, error: readError } = await client
+    .from("tenants")
+    .select("settings")
+    .eq("slug", tenantSlug)
+    .maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+
+  const existing = (tenant?.settings as Record<string, unknown>) ?? {};
+  const merged = { ...existing, brand_positioning: parsed.data };
+
+  const { error: writeError } = await client.from("tenants").update({ settings: merged }).eq("slug", tenantSlug);
+  if (writeError) return { ok: false, error: writeError.message };
+
+  return { ok: true, data: parsed.data };
 }
 
 /**

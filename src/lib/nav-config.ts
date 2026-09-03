@@ -103,21 +103,26 @@ export function navGroupsForAccountType(accountType: NavAccountType): NavGroup[]
     .filter((group) => group.items.length > 0);
 }
 
+// Hrefs a `support` member can reach — the Action Queue board (their daily
+// work surface, migration 105) and the shared inbox. See navGroupsForRole.
+const SUPPORT_VISIBLE_HREFS = new Set(["/dashboard", "/conversations"]);
+
 /**
  * Second-pass curation applied AFTER navGroupsForAccountType(): a `support`
- * role is restricted to Conversations only, regardless of persona. This is
- * a UI convenience — hiding a link a support agent couldn't use anyway —
- * not the actual security boundary. The real boundary is Postgres RLS
- * (migration 103's is_support_member() restrictive policies); this
- * function has zero effect on what a support-role member can read/write
- * via a direct Supabase API call.
+ * role is restricted to Dashboard + Conversations, regardless of persona.
+ * This is a UI convenience — hiding a link a support agent couldn't use
+ * anyway — not the actual security boundary. The real boundary is Postgres
+ * RLS (migration 103's is_support_member() restrictive policies, and
+ * migration 105's narrower kind-scoped restrictive policy on
+ * action_items); this function has zero effect on what a support-role
+ * member can read/write via a direct Supabase API call.
  */
 export function navGroupsForRole(groups: NavGroup[], role: NavRole): NavGroup[] {
   if (role !== "support") return groups;
   return groups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => item.href === "/conversations"),
+      items: group.items.filter((item) => SUPPORT_VISIBLE_HREFS.has(item.href)),
     }))
     .filter((group) => group.items.length > 0);
 }

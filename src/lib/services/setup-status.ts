@@ -12,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getDiscoveryConfig } from "@/lib/scrape/discovery-config";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
 import { getBrandPositioning } from "@/lib/ai/brand-positioning";
+import { getBrandVoiceHealth } from "@/lib/services/brand-voice-health";
 import { getOutboundFilters } from "@/lib/server/outbound-filters";
 
 export type SetupItemKind = "key" | "sign-in" | "info" | "decision" | "access";
@@ -84,6 +85,19 @@ const CHECK_DEFINITIONS: CheckDefinition[] = [
     kind: "info",
     href: "/settings/brand-voice",
     detect: async (ctx) => !!(await getBrandVoice(ctx.tenantSlug)),
+  },
+  {
+    key: "brand_voice_authored",
+    label: "Actually write your brand voice",
+    hint: "A brand voice is set, but it still reads like the onboarding placeholder — every AI-drafted reply is currently generic voice wearing your name.",
+    unblocks: "Real on-brand DM/comment replies instead of placeholder copy an agent could send without noticing.",
+    priority: "P0",
+    kind: "info",
+    href: "/settings/brand-voice",
+    // Deliberately separate from the "brand_voice" existence check above:
+    // Gruve's case is "exists but was never actually authored," which that
+    // check can't catch (it only asks whether the jsonb key is present).
+    detect: async (ctx) => !(await getBrandVoiceHealth(ctx.tenantSlug)).unauthored,
   },
   {
     key: "brand_positioning",

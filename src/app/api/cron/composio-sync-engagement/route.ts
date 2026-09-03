@@ -44,6 +44,12 @@ export async function POST(req: Request) {
     const since = conn.lastSyncedAt
       ? new Date(conn.lastSyncedAt).getTime()
       : 0;
+    // Tracks upsert failures that return {error} without throwing — a
+    // thrown exception already skips the last_synced_at advance below via
+    // the catch block, but a per-row upsert error previously didn't, so a
+    // partially-failed run could still mark itself fully synced and strand
+    // whatever failed with no retry and no alert. See docs/ACTION-QUEUE-BRIEF.md §2.2.
+    let itemErrors = 0;
 
     try {
       // Comments — fetch recent media, then comments per media.
@@ -69,12 +75,14 @@ export async function POST(req: Request) {
                 read: false,
                 replied: false,
                 created_at: c.timestamp,
+                received_at: c.timestamp,
                 meta: commentMeta,
               },
               { onConflict: "tenant_slug,platform,external_id" }
             )
             .select("id")
             .single();
+          if (error) itemErrors += 1;
           if (!error) {
             summary.commentsAdded += 1;
             // Track A Phase 3 — merged-but-inert (see maybeAutoReply's own
@@ -129,12 +137,14 @@ export async function POST(req: Request) {
                 read: false,
                 replied: false,
                 created_at: msg.createdAt,
+                received_at: msg.createdAt,
                 meta: dmMeta,
               },
               { onConflict: "tenant_slug,platform,external_id" }
             )
             .select("id")
             .single();
+          if (engErr) itemErrors += 1;
           if (!engErr) {
             summary.dmsAdded += 1;
             // Track A Phase 3 — see the comment loop above for the same
@@ -189,10 +199,26 @@ export async function POST(req: Request) {
         }
       }
 
-      await admin
-        .from("connected_accounts")
-        .update({ last_synced_at: new Date().toISOString(), last_error: null })
-        .eq("id", conn.id);
+      if (itemErrors === 0) {
+        // 24h overlap window, not the exact sync moment — a comment/DM
+        // that lands in the gap between "we read the platform" and "we
+        // wrote the row" would otherwise be skipped forever once the
+        // watermark passes it. uq_engagement_items_external makes
+        // re-scanning the overlap idempotent (upsert, not insert).
+        const overlapWatermark = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        await admin
+          .from("connected_accounts")
+          .update({ last_synced_at: overlapWatermark, last_error: null })
+          .eq("id", conn.id);
+      } else {
+        // Leave last_synced_at untouched so the next run re-scans this
+        // same window instead of silently stranding whatever failed.
+        summary.failed += 1;
+        await admin
+          .from("connected_accounts")
+          .update({ last_error: `${itemErrors} item(s) failed to sync` })
+          .eq("id", conn.id);
+      }
     } catch (err) {
       summary.failed += 1;
       const message = err instanceof Error ? err.message : "unknown";

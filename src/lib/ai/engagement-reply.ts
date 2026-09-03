@@ -15,6 +15,7 @@ import {
   buildPositioningBlock,
 } from "@/lib/ai/brand-positioning";
 import { stripBannedDashes } from "@/lib/blog/content-flags";
+import { detectUnauthoredBrandVoice } from "@/lib/services/brand-voice-health";
 
 export const replyDraftSchema = z.object({
   body: z.string().min(1).describe("The reply, ready to send. No preamble."),
@@ -33,7 +34,12 @@ export const replyDraftSchema = z.object({
     .describe("Numeric confidence (0-1) this reply is safe to send as-is without human review."),
 });
 
-export type ReplyDraft = z.infer<typeof replyDraftSchema>;
+export type ReplyDraft = z.infer<typeof replyDraftSchema> & {
+  /** True when the tenant's brand voice reads as unauthored placeholder
+   * copy (see brand-voice-health.ts) — this draft is on-brand in form
+   * only, and a human/agent should not send it without noticing. */
+  brandVoiceUnauthored: boolean;
+};
 
 export interface ReplyDraftInput {
   tenantSlug: string;
@@ -104,6 +110,7 @@ export async function generateEngagementReplyDraft(
     return {
       ...result.output,
       body: stripBannedDashes(result.output.body, voice),
+      brandVoiceUnauthored: detectUnauthoredBrandVoice(voice, input.tenantName).unauthored,
     };
   } catch (err) {
     await logAiCall({

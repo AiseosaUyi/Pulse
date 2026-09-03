@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getTenant } from "@/lib/services/tenants";
-import { getBrandVoice } from "@/lib/ai/brand-voice";
+import { getBrandVoice, setBrandVoice } from "@/lib/ai/brand-voice";
 import { generateBrief, BriefGenerationError } from "@/lib/ai/generate-brief";
 import type { PatternCluster } from "@/lib/ai/group-patterns";
 import type { IntelCard } from "@/lib/types/intelligence";
@@ -177,20 +177,8 @@ export async function updateBrandVoice(
   }
 ): Promise<ActionResult> {
   const supabase = await createClient();
-  const { data: tenant } = await supabase
-    .from("tenants")
-    .select("settings")
-    .eq("slug", tenantSlug)
-    .single();
-  const settings = {
-    ...((tenant?.settings as Record<string, unknown>) ?? {}),
-    brand_voice: voice,
-  };
-  const { error } = await supabase
-    .from("tenants")
-    .update({ settings })
-    .eq("slug", tenantSlug);
-  if (error) return { success: false, error: error.message };
+  const result = await setBrandVoice(supabase, tenantSlug, voice);
+  if (!result.ok) return { success: false, error: result.error };
   revalidatePath("/settings/brand-voice");
   revalidatePath("/content-briefs");
   return { success: true };
