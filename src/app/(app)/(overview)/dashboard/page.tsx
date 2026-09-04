@@ -13,7 +13,6 @@ import { getNotifications } from "@/lib/services/notifications";
 import { getTenant } from "@/lib/services/tenants";
 import { getLatestWeeklyReview } from "@/lib/services/weekly-reviews";
 import { listActionQueue, type QueueGroupKey } from "@/lib/services/action-queue";
-import { listTenantMembers } from "@/lib/services/team";
 import { CadenceRail } from "@/app/(app)/(social)/composer/CadenceRail";
 import { getTracker } from "@/lib/services/cadence";
 import { formatCurrency } from "@/lib/utils/format";
@@ -24,10 +23,17 @@ const SUPPORT_VISIBLE_GROUPS: QueueGroupKey[] = ["needs_reply", "follow_ups_due"
 
 function queueSummary(groups: Awaited<ReturnType<typeof listActionQueue>>["groups"]): string {
   const reply = groups.find((g) => g.key === "needs_reply");
-  const decision = groups.find((g) => g.key === "needs_decision");
+  // The service groups chores in with decisions/escalations (§0.7 of the
+  // build plan); the board splits them into a separate collapsed "Chores"
+  // section, so the header count has to match what the decision PANE
+  // actually shows, not the raw service group — otherwise "16 need a
+  // decision" points at a pane that only has 3 cards in it.
+  const decisionCount = (groups.find((g) => g.key === "needs_decision")?.rows ?? []).filter(
+    (r) => r.kind !== "chore"
+  ).length;
   const parts: string[] = [];
   if (reply && reply.count > 0) parts.push(`${reply.count} need${reply.count === 1 ? "s" : ""} a reply`);
-  if (decision && decision.count > 0) parts.push(`${decision.count} need${decision.count === 1 ? "s" : ""} a decision`);
+  if (decisionCount > 0) parts.push(`${decisionCount} decision${decisionCount === 1 ? "" : "s"}`);
 
   const oldest = reply?.rows[0]?.receivedAt;
   if (oldest) {
@@ -46,13 +52,12 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   const supabase = await createClient();
 
-  const [tenant, stats, notifications, setupStatus, queueResult, members] = await Promise.all([
+  const [tenant, stats, notifications, setupStatus, queueResult] = await Promise.all([
     getTenant(tenantSlug),
     getDashboardStats(tenantSlug),
     getNotifications(tenantSlug),
     getSetupStatus(tenantSlug, accountType),
     listActionQueue(supabase, tenantSlug, { currentUserId: user?.id }),
-    listTenantMembers(supabase, tenantSlug),
   ]);
 
   if (!tenant || !stats || !user) {
@@ -62,6 +67,12 @@ export default async function DashboardPage() {
       </div>
     );
   }
+
+  // Queue activity log (who opened/copied/resolved what, and when) is
+  // owner/admin-only — same bar as inviting teammates. queue_activity_log's
+  // RLS enforces this independently; this just decides whether to render
+  // the affordance at all.
+  const canSeeActivity = role === "owner" || role === "admin";
 
   // Role-aware rendering only — a presentation choice, not the security
   // boundary. The real fence is RLS: migration 105's action_items policy
@@ -80,8 +91,7 @@ export default async function DashboardPage() {
         </div>
         <ActionQueueBoard
           initial={queueResult}
-          currentUserId={user.id}
-          members={members}
+          canSeeActivity={canSeeActivity}
           visibleGroups={SUPPORT_VISIBLE_GROUPS}
         />
       </div>
@@ -128,7 +138,7 @@ export default async function DashboardPage() {
       {/* The Action Queue — this is the body of the page. Coach actions
           (formerly a standalone CoachFeed block) are absorbed into it. */}
       <div className="mb-6">
-        <ActionQueueBoard initial={queueResult} currentUserId={user.id} members={members} />
+        <ActionQueueBoard initial={queueResult} canSeeActivity={canSeeActivity} />
       </div>
 
       {/* The numbers, compressed below the queue — context, not the job */}
