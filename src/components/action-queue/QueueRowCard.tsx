@@ -8,12 +8,10 @@
 // progressively less space for rows that only need recognizing, not
 // composing.
 //
-// Colour carries urgency only — PRIORITY_TONE is the only place a border/
-// background colour appears on this component, reused verbatim from
-// needs-you/page.tsx's own PRIORITY_TONE so there's one urgency scale in
-// the app, not two. No manual claim/snooze ceremony: every open/copy/
-// resolve is logged instead (queue-activity.ts) so an owner/admin can see
-// who handled what without a lock step.
+// No card-wide colour wash for urgency (see NEUTRAL_TONE below) — and no
+// manual claim/snooze ceremony: every open/copy/resolve is logged instead
+// (queue-activity.ts) so an owner/admin can see who handled what without a
+// lock step.
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
@@ -22,20 +20,19 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/utils/format";
-import type { QueueRow, QueuePriority, QueueStatus } from "@/lib/services/action-queue";
+import type { QueueRow, QueueStatus } from "@/lib/services/action-queue";
 import type { QueueActivityEntry } from "@/lib/services/queue-activity";
 import { saveProposedReply, setRowStatus, logRowActivity, getRowActivity } from "@/lib/actions/action-queue";
 
 export type QueueRowVariant = "compose" | "card" | "line";
 
-// Same scale as needs-you/page.tsx's PRIORITY_TONE — one urgency palette
-// for the whole app, not a second one invented here.
-const PRIORITY_TONE: Record<QueuePriority, string> = {
-  urgent: "border-status-red/30 bg-status-red/5",
-  high: "border-status-yellow/30 bg-status-yellow/5",
-  normal: "border-border bg-card",
-  low: "border-border bg-card",
-};
+// A full-card colour wash per priority (pink/yellow backgrounds) read as
+// noisy on both mobile and desktop — urgency is now carried by text/icon
+// signals only (the "overdue"/"aged" red labels below), not by tinting the
+// whole row. Every row gets the same neutral chrome regardless of priority;
+// `row.priority` still exists on the data model, just isn't rendered as a
+// background colour anymore.
+const NEUTRAL_TONE = "md:border-border md:bg-card";
 
 const AGE_SLA_MS = 48 * 60 * 60 * 1000; // matches outreach-intelligence.ts's own "isAging" threshold
 
@@ -166,8 +163,8 @@ export function QueueRowCard({
     return (
       <div
         className={cn(
-          "flex items-center gap-2 rounded-md border px-2.5 py-2 text-sm transition-colors",
-          overdue ? "border-status-red/40" : "border-border/50 hover:border-border",
+          "flex items-center gap-2 border-b px-0 py-2 text-sm transition-colors md:rounded-md md:border md:px-2.5",
+          overdue ? "border-status-red/40" : "border-border/40 md:border-border/50 md:hover:border-border",
           assignedToOther && "opacity-60"
         )}
       >
@@ -222,13 +219,20 @@ export function QueueRowCard({
   // ── card: decision / escalation / opportunity — title, why, one action ─
   if (variant === "card") {
     return (
-      <div className={cn("rounded-lg border p-3 space-y-1.5", PRIORITY_TONE[row.priority], assignedToOther && "opacity-60")}>
+      <div
+        className={cn(
+          "border-b px-0 py-3 space-y-1.5 md:rounded-lg md:border md:p-3",
+          "border-border/40",
+          NEUTRAL_TONE,
+          assignedToOther && "opacity-60"
+        )}
+      >
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-medium text-foreground">{row.title}</p>
           <span className="shrink-0 text-[11px] text-text-muted" suppressHydrationWarning>{formatRelativeTime(row.receivedAt)}</span>
         </div>
         {row.why && <p className="text-xs text-text-secondary">{row.why}</p>}
-        <div className="flex items-center gap-1.5 pt-0.5">
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           {row.externalUrl && (
             <Button asChild variant="tertiary" size="xs" onClick={handleView}>
               <a href={row.externalUrl} target="_blank" rel="noreferrer">
@@ -258,7 +262,13 @@ export function QueueRowCard({
 
   // ── compose: reply — full card, editable textarea ──────────────────────
   return (
-    <div className={cn("rounded-lg border p-3 transition-colors", PRIORITY_TONE[row.priority], assignedToOther && "opacity-60")}>
+    <div
+      className={cn(
+        "border-b border-border/40 px-0 py-3 transition-colors md:rounded-lg md:border md:p-3",
+        NEUTRAL_TONE,
+        assignedToOther && "opacity-60"
+      )}
+    >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="text-sm font-medium text-foreground truncate">{row.fromName ?? row.title}</span>
         {row.platform && <span className="text-[11px] text-text-muted capitalize">{row.platform}</span>}

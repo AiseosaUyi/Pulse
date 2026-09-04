@@ -33,6 +33,16 @@ const SECONDARY_MAX_H = "240px";
 // exists only in this component's local layout, never sent to the API.
 type BoardSectionKey = QueueGroupKey | "chores";
 
+// Mobile splits the 6 possible sections into two tab groups of at most 3
+// each — a single 6-way pill strip meant Opportunities/Going cold/Chores
+// were only reachable by discovering a horizontal scroll, which reads as
+// hidden rather than just lower-priority. Primary mirrors desktop's
+// priority column (needs_reply / needs_decision / follow_ups_due);
+// secondary is desktop's own two "below the fold, always visible" sections
+// plus Opportunities, grouped the same way here instead of tabbed away.
+const PRIMARY_KEYS: BoardSectionKey[] = ["needs_reply", "needs_decision", "follow_ups_due"];
+const SECONDARY_KEYS: BoardSectionKey[] = ["opportunities", "going_cold", "chores"];
+
 interface Section {
   key: BoardSectionKey;
   label: string;
@@ -60,7 +70,6 @@ export function ActionQueueBoard({
   const [result, setResult] = useState(initial);
   const [filter, setFilter] = useState<QueueFilterState>({ platform: "", kind: "" });
   const [showResolved, setShowResolved] = useState(false);
-  const [activeTab, setActiveTab] = useState<BoardSectionKey | null>(null);
   const isMobile = !useMediaQuery("(min-width: 768px)");
 
   const fetchQueue = useCallback(
@@ -121,7 +130,6 @@ export function ActionQueueBoard({
 
   const nonEmptySections = sections.filter((s) => s.rows.length > 0);
   const allEmpty = nonEmptySections.length === 0;
-  const activeSection = nonEmptySections.find((s) => s.key === activeTab) ?? nonEmptySections[0];
 
   if (showResolved) {
     const resolvedRows = result.groups[0]?.rows ?? [];
@@ -151,13 +159,7 @@ export function ActionQueueBoard({
         {allEmpty ? (
           <p className="py-8 text-center text-sm text-text-secondary">Nothing needs attention right now.</p>
         ) : isMobile ? (
-          <MobileTabs
-            sections={nonEmptySections}
-            active={activeSection}
-            onSelect={setActiveTab}
-            canSeeActivity={canSeeActivity}
-            onChanged={onChanged}
-          />
+          <MobileBoard sections={nonEmptySections} canSeeActivity={canSeeActivity} onChanged={onChanged} />
         ) : (
           <DesktopLayout sections={sections} canSeeActivity={canSeeActivity} onChanged={onChanged} />
         )}
@@ -210,29 +212,59 @@ function DesktopLayout({
   );
 }
 
-function MobileTabs({
+// Two independent tab groups, both always visible (never one hidden behind
+// the other) — primary mirrors desktop's priority column, secondary holds
+// the three lower-urgency sections desktop already renders below the fold.
+// Each group is capped at 3 tabs by PRIMARY_KEYS/SECONDARY_KEYS so neither
+// strip needs a horizontal scroll to reach every tab.
+function MobileBoard({
   sections,
-  active,
-  onSelect,
   canSeeActivity,
   onChanged,
 }: {
   sections: Section[];
-  active: Section;
-  onSelect: (key: BoardSectionKey) => void;
   canSeeActivity: boolean;
   onChanged: () => void;
 }) {
+  const primary = sections.filter((s) => PRIMARY_KEYS.includes(s.key));
+  const secondary = sections.filter((s) => SECONDARY_KEYS.includes(s.key));
+
+  return (
+    <div className="space-y-5">
+      {primary.length > 0 && (
+        <MobileTabGroup sections={primary} canSeeActivity={canSeeActivity} onChanged={onChanged} />
+      )}
+      {secondary.length > 0 && (
+        <div className={cn(primary.length > 0 && "pt-5 border-t border-border/40")}>
+          <MobileTabGroup sections={secondary} canSeeActivity={canSeeActivity} onChanged={onChanged} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MobileTabGroup({
+  sections,
+  canSeeActivity,
+  onChanged,
+}: {
+  sections: Section[];
+  canSeeActivity: boolean;
+  onChanged: () => void;
+}) {
+  const [activeKey, setActiveKey] = useState<BoardSectionKey>(sections[0].key);
+  const active = sections.find((s) => s.key === activeKey) ?? sections[0];
+
   return (
     <div>
-      <div className="flex gap-1.5 overflow-x-auto pb-2 mb-3 -mx-1 px-1">
+      <div className="flex flex-wrap gap-1.5 mb-3">
         {sections.map((s) => (
           <button
             key={s.key}
             type="button"
-            onClick={() => onSelect(s.key)}
+            onClick={() => setActiveKey(s.key)}
             className={cn(
-              "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
+              "px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
               active.key === s.key ? "bg-primary-500 text-white" : "bg-border/40 text-text-secondary hover:text-foreground"
             )}
           >
@@ -240,7 +272,7 @@ function MobileTabs({
           </button>
         ))}
       </div>
-      <div className="max-h-[60vh] overflow-y-auto pr-1">
+      <div>
         {active.key === "going_cold" ? (
           <GoingColdSection rows={active.rows} onChanged={onChanged} />
         ) : (

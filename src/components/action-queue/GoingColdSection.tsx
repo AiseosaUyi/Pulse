@@ -45,7 +45,7 @@ export function GoingColdSection({ rows, onChanged }: { rows: QueueRow[]; onChan
 
   return (
     <div className="space-y-2">
-      <SimpleGrid cols={2} colsMd={3} colsLg={4} gap={2}>
+      <SimpleGrid cols={1} colsMd={3} colsLg={4} gap={2}>
         {rows.map((row) => (
           <GoingColdChip
             key={row.id}
