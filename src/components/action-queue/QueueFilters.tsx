@@ -1,11 +1,8 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-
 export interface QueueFilterState {
   platform: string;
   kind: string;
-  assignedTo: "everyone" | "me" | "unassigned";
 }
 
 const PLATFORMS = ["instagram", "tiktok", "twitter", "linkedin"];
@@ -52,24 +49,6 @@ export function QueueFilters({
           </option>
         ))}
       </select>
-
-      <div className="flex items-center rounded-lg border border-border p-0.5">
-        {(["everyone", "me", "unassigned"] as const).map((opt) => (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => onChange({ ...value, assignedTo: opt })}
-            className={cn(
-              "px-2.5 h-7 rounded-md text-xs font-medium capitalize transition-colors",
-              value.assignedTo === opt
-                ? "bg-primary-50 text-primary-500"
-                : "text-text-secondary hover:text-foreground"
-            )}
-          >
-            {opt}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

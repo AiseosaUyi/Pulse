@@ -1,56 +1,53 @@
-"use client";
+import type { QueueRow } from "@/lib/services/action-queue";
+import { SimpleGrid } from "@/components/ui/SimpleGrid";
+import { QueueRowCard, type QueueRowVariant } from "./QueueRowCard";
+import { SectionHeader } from "./SectionHeader";
 
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { QueueGroup as QueueGroupData } from "@/lib/services/action-queue";
-import { QueueRowCard } from "./QueueRowCard";
-import type { TenantMemberSummary } from "@/lib/services/team";
-
+// No collapse state, no scroll of its own — a plain header + grid. Height/
+// scroll is owned by whoever composes this (ActionQueueBoard), since a
+// fixed-height region often needs to span several QueueGroups sharing one
+// scrollbar (e.g. the whole "Needs a decision" pane), not one per group.
 export function QueueGroup({
-  group,
-  currentUserId,
-  members,
+  label,
+  rows,
+  variant,
+  cols = 1,
+  colsMd,
+  colsLg,
+  canSeeActivity,
   onChanged,
-  defaultOpen = true,
+  showHeader = true,
 }: {
-  group: QueueGroupData;
-  currentUserId: string;
-  members: TenantMemberSummary[];
+  label: string;
+  rows: QueueRow[];
+  variant: QueueRowVariant;
+  cols?: 1 | 2 | 3 | 4;
+  colsMd?: 1 | 2 | 3 | 4;
+  colsLg?: 1 | 2 | 3 | 4;
+  canSeeActivity: boolean;
   onChanged: () => void;
-  defaultOpen?: boolean;
+  /** false inside the mobile tab panel — the tab itself already carries
+   * the label + count, so the group's own header would just repeat it. */
+  showHeader?: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
-  if (group.count === 0) return null;
+  // Empty groups render nothing — five "nothing here" panels is the same
+  // clutter problem in a different costume (docs/ACTION-QUEUE-LAYOUT.md).
+  if (rows.length === 0) return null;
 
   return (
-    <div className="border-b border-border/50 last:border-b-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between py-2.5 px-1 text-left"
-      >
-        <span className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-foreground">{group.label}</span>
-          <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-border/50 text-text-secondary">
-            {group.count}
-          </span>
-        </span>
-        <ChevronDown size={16} className={cn("text-text-muted transition-transform duration-200", open && "rotate-180")} />
-      </button>
-      {open && (
-        <div className="pb-3 space-y-2">
-          {group.rows.map((row) => (
-            <QueueRowCard
-              key={`${row.source}:${row.id}`}
-              row={row}
-              currentUserId={currentUserId}
-              members={members}
-              onChanged={onChanged}
-            />
-          ))}
-        </div>
-      )}
+    <div>
+      {showHeader && <SectionHeader label={label} count={rows.length} />}
+      <SimpleGrid cols={cols} colsMd={colsMd} colsLg={colsLg} gap={2}>
+        {rows.map((row) => (
+          <QueueRowCard
+            key={`${row.source}:${row.id}`}
+            row={row}
+            variant={variant}
+            canSeeActivity={canSeeActivity}
+            onChanged={onChanged}
+          />
+        ))}
+      </SimpleGrid>
     </div>
   );
 }
