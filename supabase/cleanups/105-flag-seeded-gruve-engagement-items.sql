@@ -7,15 +7,22 @@
 -- recoverable/inspectable but drops out of every board query
 -- (listActionQueue only reads status IN ('open','snoozed')).
 --
--- Review the SELECT below before running the UPDATE — if any of these 8
+-- First pass of this script (now fixed below) incorrectly scoped the
+-- UPDATE to `platform = 'instagram'` even though the diagnosis found
+-- manual rows across every platform — 3 (twitter, tiktok, linkedin) were
+-- still open and showing in "Needs a reply" as if real, discovered when
+-- verifying the board only ever displays MCP-pushed or cron-synced data,
+-- never anything hardcoded/seeded. Platform restriction removed.
+--
+-- Review the SELECT below before running the UPDATE — if any of these
 -- rows turn out to be real human-entered notes worth keeping, dismiss
 -- fewer than all of them, or handle their `replied` state individually
 -- first.
 
-select id, type, from_handle, content, received_at, replied
+select id, platform, type, from_handle, content, received_at, replied
 from engagement_items
-where tenant_slug = 'gruve' and platform = 'instagram' and source = 'manual';
+where tenant_slug = 'gruve' and source = 'manual' and status != 'dismissed';
 
 update engagement_items
 set status = 'dismissed', resolved_at = now()
-where tenant_slug = 'gruve' and platform = 'instagram' and source = 'manual' and status != 'dismissed';
+where tenant_slug = 'gruve' and source = 'manual' and status != 'dismissed';
