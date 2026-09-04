@@ -29,6 +29,12 @@ const upsertSchema = z.object({
   sentiment: z.enum(["positive", "neutral", "negative", "question"]).nullable().optional(),
   priority: z.enum(["urgent", "high", "normal", "low"]).optional(),
   meta: z.record(z.string(), z.unknown()).optional(),
+  why: z.string().nullable().optional(),
+  body: z.string().nullable().optional(),
+  proposedReply: z.string().optional(),
+  proposedReplyAuthor: z.enum(["agent", "human", "ai_generated"]).optional(),
+  status: z.enum(["open", "snoozed", "resolved", "dismissed"]).optional(),
+  prospectId: z.string().nullable().optional(),
 });
 
 export function OPTIONS() {

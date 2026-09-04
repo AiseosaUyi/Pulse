@@ -72,6 +72,7 @@ export async function GET(req: Request) {
 const upsertSchema = z.object({
   platform: z.enum(OUTBOUND_PLATFORMS),
   handle: z.string().min(1),
+  externalAccountId: z.string().nullable().optional(),
   displayName: z.string().nullable().optional(),
   profileUrl: z.string().nullable().optional(),
   bio: z.string().nullable().optional(),

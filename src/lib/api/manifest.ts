@@ -41,9 +41,10 @@ export const API_V1_MANIFEST: ManifestEntry[] = [
 
   // Engagement
   { method: "GET", path: "/api/v1/inbox", scope: "engage:read", description: "Comments/DMs needing a response (filter platform, unanswered)." },
-  { method: "POST", path: "/api/v1/inbox", scope: "engage:write", description: "Upsert an observed comment/DM (dedup key: platform + externalId). The write half of the shared inbox — an agent working the real platform in a browser puts what it sees here." },
+  { method: "POST", path: "/api/v1/inbox", scope: "engage:write", description: "Upsert an observed comment/DM (dedup key: platform + externalId). Optionally attach why/body/proposedReply/status/prospectId in the same call — each omitted independently on a repeat upsert, never reset to null. The write half of the shared inbox — an agent working the real platform in a browser puts what it sees here." },
   { method: "PATCH", path: "/api/v1/inbox/:id", scope: "engage:write", description: "Edit an inbox item: proposedReply, priority, dueAt, assignedTo, externalUrl." },
   { method: "POST", path: "/api/v1/inbox/:id/status", scope: "engage:write", description: "Set an inbox item's status: open/snoozed/resolved/dismissed, with an optional note or snooze time." },
+  { method: "POST", path: "/api/v1/inbox/:id/sent-reply", scope: "engage:write", description: "Record what was actually sent for a reply posted outside Pulse (e.g. through a browser session). Writes sent_body, marks resolved." },
   { method: "POST", path: "/api/v1/inbox/:id/reply-draft", scope: "engage:write", description: "Generate an on-brand reply draft for an inbox item." },
   { method: "POST", path: "/api/v1/inbox/:id/replied", scope: "engage:write", description: "Mark an inbox item handled. Alias for POST /api/v1/inbox/:id/status {status:'resolved'} — kept for existing callers." },
   { method: "GET", path: "/api/v1/action-queue", scope: "engage:read", description: "The unified attention board: needs a reply, needs a decision, follow-ups due, going cold, opportunities. Filter status/kind/priority/assignedTo/platform/since." },

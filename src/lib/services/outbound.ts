@@ -18,6 +18,7 @@ type ProspectRow = Omit<
   ProspectRecord,
   | "tenantSlug"
   | "searchId"
+  | "externalAccountId"
   | "displayName"
   | "profileUrl"
   | "avatarUrl"
@@ -33,6 +34,7 @@ type ProspectRow = Omit<
 > & {
   tenant_slug: string;
   search_id: string | null;
+  external_account_id: string | null;
   display_name: string | null;
   profile_url: string | null;
   avatar_url: string | null;
@@ -58,6 +60,7 @@ function prospectRowTo(row: ProspectRow): ProspectRecord {
     id: row.id,
     tenantSlug: row.tenant_slug,
     searchId: row.search_id,
+    externalAccountId: row.external_account_id,
     platform: row.platform,
     handle: row.handle,
     displayName: row.display_name,
@@ -243,6 +246,9 @@ function normalizeHandle(raw: string): string {
 export interface UpsertProspectInput {
   platform: OutboundPlatform;
   handle: string;
+  /** Prefer this as the match key when present — see ProspectRecord's
+   * own doc comment for why (handles change, ids don't). */
+  externalAccountId?: string | null;
   displayName?: string | null;
   profileUrl?: string | null;
   bio?: string | null;
@@ -251,9 +257,20 @@ export interface UpsertProspectInput {
   signalData?: Record<string, unknown>;
 }
 
-/** Upsert-by-(tenant, platform, handle), mirroring the logic inline in
- * `/api/ext/prospect` (POST) — extracted here so /api/v1 shares it
- * without touching the extension route's own copy. */
+/** Upsert-by-(tenant, platform, handle) — or, when externalAccountId is
+ * given, upsert-by-(tenant, platform, external_account_id) instead, since
+ * that's stable across a rename and handle isn't. A single Postgres
+ * upsert can't express "conflict on X OR Y", so this is a lookup-then-
+ * write in application code: try the stable id first (also matches a
+ * prospect that was previously only handle-matched, once it gets an id
+ * for the first time); fall back to the handle-keyed upsert unchanged
+ * when no id is given, so existing callers with no id see no behavior
+ * change. uq_prospects_external_account (migration 107) is the DB-level
+ * backstop against a duplicate id slipping through either path.
+ *
+ * Mirrors the logic inline in `/api/ext/prospect` (POST) — extracted
+ * here so /api/v1 shares it without touching the extension route's own
+ * copy. */
 export async function upsertProspect(
   client: SupabaseClient,
   tenantSlug: string,
@@ -261,24 +278,61 @@ export async function upsertProspect(
 ): Promise<{ prospect: ProspectRecord; dm: OutboundDmRecord | null } | null> {
   const handle = normalizeHandle(input.handle);
   if (!handle) return null;
-  const { data, error } = await client
-    .from("prospects")
-    .upsert(
-      {
-        tenant_slug: tenantSlug,
-        platform: input.platform,
-        handle,
-        display_name: input.displayName ?? null,
-        profile_url: input.profileUrl ?? null,
-        bio: input.bio ?? null,
-        follower_count: input.followerCount ?? null,
-        signal_summary: input.signalSummary ?? null,
-        signal_data: input.signalData ?? undefined,
-      },
-      { onConflict: "tenant_slug,platform,handle" }
-    )
-    .select("*")
-    .single();
+
+  const fields = {
+    display_name: input.displayName ?? null,
+    profile_url: input.profileUrl ?? null,
+    bio: input.bio ?? null,
+    follower_count: input.followerCount ?? null,
+    signal_summary: input.signalSummary ?? null,
+    signal_data: input.signalData ?? undefined,
+  };
+
+  let data: Record<string, unknown> | null = null;
+  let error: { message: string } | null = null;
+
+  if (input.externalAccountId) {
+    const { data: existing } = await client
+      .from("prospects")
+      .select("id")
+      .eq("tenant_slug", tenantSlug)
+      .eq("platform", input.platform)
+      .eq("external_account_id", input.externalAccountId)
+      .maybeSingle();
+
+    if (existing) {
+      // Known account, possibly renamed — update handle too, don't leave
+      // the stale one behind.
+      ({ data, error } = await client
+        .from("prospects")
+        .update({ handle, ...fields })
+        .eq("id", existing.id)
+        .select("*")
+        .single());
+    } else {
+      // First time this account gets a stable id — still upsert on
+      // handle so a prospect matched by handle before today gets the id
+      // attached instead of duplicated.
+      ({ data, error } = await client
+        .from("prospects")
+        .upsert(
+          { tenant_slug: tenantSlug, platform: input.platform, handle, external_account_id: input.externalAccountId, ...fields },
+          { onConflict: "tenant_slug,platform,handle" }
+        )
+        .select("*")
+        .single());
+    }
+  } else {
+    ({ data, error } = await client
+      .from("prospects")
+      .upsert(
+        { tenant_slug: tenantSlug, platform: input.platform, handle, ...fields },
+        { onConflict: "tenant_slug,platform,handle" }
+      )
+      .select("*")
+      .single());
+  }
+
   if (error || !data) return null;
   const prospect = prospectRowTo(data as ProspectRow);
   const dm = await latestDm(client, tenantSlug, prospect.id);
