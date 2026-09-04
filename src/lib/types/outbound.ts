@@ -80,6 +80,12 @@ export interface ProspectRecord {
   searchId: string | null;
   platform: OutboundPlatform;
   handle: string;
+  /** Stable platform account id, when known — Instagram handles can (and
+   * do) change; this is what upsertProspect prefers as the conflict
+   * target over handle when present, so a renamed account updates instead
+   * of creating a duplicate. Null for prospects discovered before this
+   * existed, or on platforms with no stable id available. */
+  externalAccountId: string | null;
   displayName: string | null;
   profileUrl: string | null;
   avatarUrl: string | null;

@@ -13,6 +13,7 @@ import {
   setProposedReply,
   setQueueStatus,
   assignQueueRow,
+  recordSentReply,
   startAgentRun,
   finishAgentRun,
   type RowRef,
@@ -57,7 +58,7 @@ export function registerActionQueueTools(server: McpServer) {
     {
       title: "Put an observed comment/DM into the inbox",
       description:
-        "Upsert a comment or DM you observed on the real platform, deduplicated by (platform, externalId) — calling this twice for the same item updates it, never duplicates. This is the write path that lets you put what you see into Pulse. Mutates data.",
+        "Upsert a comment or DM you observed on the real platform, deduplicated by (platform, externalId) — calling this twice for the same item updates it, never duplicates. This is the write path that lets you put what you see into Pulse. proposedReply/status/prospectId are optional on every call — omit them to leave whatever's already there untouched, rather than resetting it. Mutates data.",
       inputSchema: {
         platform: z.enum(PLATFORMS),
         type: z.enum(TYPES),
@@ -71,6 +72,14 @@ export function registerActionQueueTools(server: McpServer) {
         sentiment: z.enum(["positive", "neutral", "negative", "question"]).nullable().optional(),
         priority: z.enum(PRIORITIES).optional(),
         meta: z.record(z.string(), z.unknown()).optional(),
+        why: z.string().nullable().optional().describe("Your one-line reason this is on the board."),
+        body: z.string().nullable().optional().describe("Longer detail beyond the message content, if any."),
+        proposedReply: z.string().optional().describe("Attach a draft in this same call instead of a separate pulse_set_proposed_reply."),
+        proposedReplyAuthor: z.enum(["agent", "human", "ai_generated"]).optional(),
+        status: z.enum(STATUSES).optional().describe(
+          "Set explicitly only when you observed the message was already answered between sweeps — e.g. 'resolved' records it as history without it ever entering the open queue. Omit to leave the existing status alone on a repeat upsert."
+        ),
+        prospectId: z.string().nullable().optional().describe("Link to a known prospect. Omit to leave an existing link untouched."),
       },
     },
     async (args, extra: ToolHandlerExtra) => {
@@ -80,6 +89,30 @@ export function registerActionQueueTools(server: McpServer) {
       const result = await upsertEngagementItem(admin, tenantSlug, args);
       if (!result.ok) return mcpToolError(result.error);
       return mcpToolResult(result);
+    }
+  );
+
+  server.registerTool(
+    "pulse_record_sent_reply",
+    {
+      title: "Record what was actually sent",
+      description:
+        "Record the wording of a reply that was posted directly on the platform (e.g. through a browser session) rather than via pulse_set_proposed_reply + a Pulse-side send — otherwise that reply leaves no record of what it said. Marks the item resolved. engagement_items (comments/DMs) only. Mutates data.",
+      inputSchema: {
+        id: z.string(),
+        sentBody: z.string().min(1),
+      },
+    },
+    async ({ id, sentBody }, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "engage:write");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin } = gate.context;
+      // approvedBy omitted — an MCP caller has no user session, so this is
+      // always agent-authored (approved_by IS NULL is the existing AI-vs-
+      // human signal; see recordSentReply's own doc comment).
+      const result = await recordSentReply(admin, tenantSlug, { source: "engagement", id }, { sentBody });
+      if (!result.ok) return mcpToolError(result.error ?? "Row not found");
+      return mcpToolResult({ success: true });
     }
   );
 

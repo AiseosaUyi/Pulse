@@ -16,7 +16,8 @@
 // who handled what without a lock step.
 
 import { useState, useTransition } from "react";
-import { ExternalLink, Copy, Check, RotateCcw, History, ChevronDown, MoreHorizontal } from "lucide-react";
+import Link from "next/link";
+import { ExternalLink, Copy, Check, RotateCcw, History, ChevronDown, MoreHorizontal, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
@@ -142,6 +143,16 @@ export function QueueRowCard({
     </div>
   );
 
+  const prospectLink = row.prospectId && (
+    <Link
+      href={`/leads?prospect=${row.prospectId}`}
+      className="inline-flex items-center gap-1 text-[11px] text-primary-500 hover:underline shrink-0"
+    >
+      <UserRound size={11} />
+      Prospect
+    </Link>
+  );
+
   const activityButton = canSeeActivity && (
     <Button variant="ghost" size="xs" onClick={toggleActivity}>
       <History size={12} />
@@ -226,6 +237,7 @@ export function QueueRowCard({
               </a>
             </Button>
           )}
+          {prospectLink}
           {!isResolved ? (
             <Button variant="ghost" size="xs" onClick={() => applyStatus("resolved")}>
               <Check size={12} />
@@ -257,6 +269,7 @@ export function QueueRowCard({
           · {formatRelativeTime(row.receivedAt)}
         </span>
         {overdue && <span className="text-[11px] font-medium text-status-red">· overdue</span>}
+        {prospectLink}
       </div>
 
       {row.why && <p className="mt-1 text-xs italic text-text-muted">{row.why}</p>}

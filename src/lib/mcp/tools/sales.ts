@@ -79,10 +79,12 @@ export function registerSalesTools(server: McpServer) {
     "pulse_upsert_prospect",
     {
       title: "Upsert prospect",
-      description: "Create or update a prospect, deduplicated by (platform, handle). Mutates data.",
+      description:
+        "Create or update a prospect, deduplicated by (platform, handle) — or by externalAccountId when given, which is preferred: Instagram handles change, and a renamed account without externalAccountId creates a duplicate instead of updating. Mutates data.",
       inputSchema: {
         platform: z.enum(OUTBOUND_PLATFORMS),
         handle: z.string().min(1),
+        externalAccountId: z.string().nullable().optional(),
         displayName: z.string().nullable().optional(),
         profileUrl: z.string().nullable().optional(),
         bio: z.string().nullable().optional(),

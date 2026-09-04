@@ -105,6 +105,7 @@ export async function createProspect(
       status: data.status,
       quality: data.quality,
       duplicateOfId: data.duplicate_of_id ?? null,
+      externalAccountId: data.external_account_id ?? null,
       notes: data.notes,
       category: data.category ?? null,
       location: data.location ?? null,

@@ -50,6 +50,10 @@ export interface QueueRow {
   snoozedUntil: string | null;
   receivedAt: string;
   resolvedAt: string | null;
+  /** The prospect this row is about, if any — set directly (prospect-
+   * source rows), or linked (engagement/action rows the agent tied to a
+   * known prospect). Null for coach rows, which have no prospect concept. */
+  prospectId: string | null;
 }
 
 export interface QueueGroup {
@@ -119,8 +123,8 @@ function engagementRowToQueueRow(row: Record<string, unknown>): QueueRow {
     platform: (row.platform as string | null) ?? null,
     channel: engagementChannel(type),
     title: (row.content as string) ?? "",
-    body: null,
-    why: null,
+    body: (row.body as string | null) ?? null,
+    why: (row.why as string | null) ?? null,
     fromName: (row.from_name as string | null) ?? null,
     fromHandle: (row.from_handle as string | null) ?? null,
     externalUrl: (row.external_url as string | null) ?? null,
@@ -135,6 +139,7 @@ function engagementRowToQueueRow(row: Record<string, unknown>): QueueRow {
     snoozedUntil: (row.snoozed_until as string | null) ?? null,
     receivedAt: row.received_at as string,
     resolvedAt: (row.resolved_at as string | null) ?? null,
+    prospectId: (row.prospect_id as string | null) ?? null,
   };
 }
 
@@ -162,6 +167,7 @@ function actionItemRowToQueueRow(row: Record<string, unknown>): QueueRow {
     snoozedUntil: (row.snoozed_until as string | null) ?? null,
     receivedAt: row.created_at as string,
     resolvedAt: (row.resolved_at as string | null) ?? null,
+    prospectId: (row.prospect_id as string | null) ?? null,
   };
 }
 
@@ -208,6 +214,7 @@ function coachRowToQueueRow(row: Record<string, unknown>): QueueRow {
     snoozedUntil: (row.snoozed_until as string | null) ?? null,
     receivedAt: row.created_at as string,
     resolvedAt: (row.completed_at as string | null) ?? null,
+    prospectId: null,
   };
 }
 
@@ -235,6 +242,7 @@ function prospectToQueueRow(p: ProspectWithFollowUp): QueueRow {
     snoozedUntil: null,
     receivedAt: p.followUpAt ?? p.lastTouchedAt ?? p.createdAt,
     resolvedAt: null,
+    prospectId: p.id,
   };
 }
 
@@ -443,33 +451,107 @@ export async function upsertEngagementItem(
     sentiment?: string | null;
     priority?: QueuePriority;
     meta?: Record<string, unknown>;
+    /** Parity with upsertActionItem — the agent's one-line reason and any
+     * longer detail, both hardcoded to null in the read path until now. */
+    why?: string | null;
+    body?: string | null;
+    /** Attach a draft in the same call that pushes the item, instead of a
+     * separate pulse_set_proposed_reply round-trip. Omit to leave whatever
+     * proposed_reply already exists untouched on a repeat upsert. */
+    proposedReply?: string;
+    proposedReplyAuthor?: "agent" | "human" | "ai_generated";
+    /** Omit to leave the existing status untouched on a repeat upsert (new
+     * rows still default to 'open' via the column default). Set explicitly
+     * when the agent observes the message was already answered between
+     * sweeps, so it can be recorded as history without ever entering the
+     * open queue. */
+    status?: QueueStatus;
+    /** Link to a known prospect. Omit to leave an existing link untouched;
+     * pass null explicitly to clear it. */
+    prospectId?: string | null;
   }
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const payload: Record<string, unknown> = {
+    tenant_slug: tenantSlug,
+    type: input.type,
+    platform: input.platform,
+    external_id: input.externalId,
+    source: "agent",
+    from_name: input.fromName,
+    from_handle: input.fromHandle ?? null,
+    content: input.content,
+    post_title: input.postTitle ?? null,
+    external_url: input.externalUrl ?? null,
+    received_at: input.receivedAt,
+    sentiment: input.sentiment ?? "neutral",
+    priority: input.priority ?? "normal",
+    meta: input.meta ?? {},
+    why: input.why ?? null,
+    body: input.body ?? null,
+    // undefined values are dropped by JSON.stringify before the request
+    // ever reaches PostgREST, so an omitted field is genuinely untouched
+    // on conflict — not reset to null. Same idiom as upsertProspect's
+    // `signal_data: input.signalData ?? undefined`.
+    prospect_id: input.prospectId,
+  };
+  if (input.proposedReply !== undefined) {
+    payload.proposed_reply = input.proposedReply;
+    payload.proposed_reply_author = input.proposedReplyAuthor ?? "agent";
+  }
+  if (input.status !== undefined) {
+    payload.status = input.status;
+    if (input.status === "resolved") {
+      payload.replied = true;
+      payload.resolved_at = new Date().toISOString();
+    }
+  }
+
   const { data, error } = await client
     .from("engagement_items")
-    .upsert(
-      {
-        tenant_slug: tenantSlug,
-        type: input.type,
-        platform: input.platform,
-        external_id: input.externalId,
-        source: "agent",
-        from_name: input.fromName,
-        from_handle: input.fromHandle ?? null,
-        content: input.content,
-        post_title: input.postTitle ?? null,
-        external_url: input.externalUrl ?? null,
-        received_at: input.receivedAt,
-        sentiment: input.sentiment ?? "neutral",
-        priority: input.priority ?? "normal",
-        meta: input.meta ?? {},
-      },
-      { onConflict: "tenant_slug,platform,external_id" }
-    )
+    .upsert(payload, { onConflict: "tenant_slug,platform,external_id" })
     .select("id")
     .single();
   if (error || !data) return { ok: false, error: error?.message ?? "Upsert failed" };
   return { ok: true, id: data.id as string };
+}
+
+/** Records what was actually sent — the reply itself, not just that the
+ * item is resolved. engagement_items only: action_items/coach_actions/
+ * prospects have no sent_body/approval_status concept (they aren't part of
+ * the conversation-thread system Conversations reads). approvedBy omitted
+ * (or explicitly null) means agent/AI-authored — approved_by IS NULL is
+ * the existing AI-vs-human signal conversations.ts's deriveReply() already
+ * relies on; pass a user id only when a human is the one recording it.
+ * Sets both the legacy approval_status (still read by the conversation
+ * thread view) and the current status/resolved_at (read by the queue), so
+ * the row is consistent in both systems, not just one. */
+export async function recordSentReply(
+  client: SupabaseClient,
+  tenantSlug: string,
+  rowRef: RowRef,
+  input: { sentBody: string; approvedBy?: string | null }
+): Promise<MutationResult> {
+  if (rowRef.source !== "engagement") return unsupported("Recording a sent reply");
+  const nowIso = new Date().toISOString();
+  const { data, error } = await client
+    .from("engagement_items")
+    .update({
+      replied: true,
+      read: true,
+      sent_body: input.sentBody,
+      approval_status: "sent",
+      approved_by: input.approvedBy ?? null,
+      approved_at: nowIso,
+      status: "resolved",
+      resolved_at: nowIso,
+    })
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", rowRef.id)
+    .select("id")
+    .maybeSingle();
+  if (error) return { ok: false, status: 500, error: error.message };
+  if (!data) return { ok: false, status: 404 };
+  return { ok: true };
 }
 
 export async function upsertActionItem(

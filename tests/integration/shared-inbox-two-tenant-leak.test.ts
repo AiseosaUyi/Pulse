@@ -111,6 +111,7 @@ suite("Track A Phase 3: two-tenant AI-away config/leak isolation", () => {
       body: `Reply from ${input.tenantName}: re "${input.item.content}"`,
       confidence: "high",
       confidenceScore: 0.9,
+      brandVoiceUnauthored: false,
     }));
     vi.mocked(dispatchEngagementItemReply).mockResolvedValue({ success: true });
     vi.mocked(dispatchInboundMessageReply).mockResolvedValue({ success: true });

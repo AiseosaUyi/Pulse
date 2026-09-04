@@ -121,6 +121,7 @@ export async function POST(req: Request) {
     status: prospectRow.status,
     quality: prospectRow.quality ?? "unscored",
     duplicateOfId: prospectRow.duplicate_of_id ?? null,
+    externalAccountId: prospectRow.external_account_id ?? null,
     notes: prospectRow.notes,
     category: prospectRow.category ?? null,
     location: prospectRow.location ?? null,
