@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listTeamMembers } from "@/lib/services/team";
 import type { TeamMemberRecord, ScoreboardMetrics } from "@/lib/types/team";
-import type { ProspectRecord } from "@/lib/types/outbound";
 
 export interface ReplyNowItem {
   id: string;
@@ -187,15 +186,11 @@ function matchesOwner(rowOwner: string | null | undefined, filterOwner: string):
 // Helper to calculate start & end of current week (Monday 00:00:00 to Sunday 23:59:59)
 export function getWeekBounds(now = new Date()): { weekStart: string; weekEnd: string } {
   const d = new Date(now);
-  const day = d.getDay(); // 0 is Sunday, 1 is Monday...
+  const day = d.getUTCDay(); // 0 is Sunday, 1 is Monday...
   const diffToMonday = (day === 0 ? -6 : 1) - day;
-  const monday = new Date(d);
-  monday.setDate(d.getDate() + diffToMonday);
-  monday.setHours(0, 0, 0, 0);
+  const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + diffToMonday, 0, 0, 0, 0));
 
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
+  const sunday = new Date(Date.UTC(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate() + 6, 23, 59, 59, 999));
 
   return {
     weekStart: monday.toISOString(),
@@ -215,8 +210,6 @@ export async function getMyDay(
   } = {}
 ): Promise<MyDayData> {
   const now = options.nowMs ? new Date(options.nowMs) : new Date();
-  const nowIso = now.toISOString();
-  const todayStart = nowIso.slice(0, 10);
   const todayEnd = new Date(now);
   todayEnd.setHours(23, 59, 59, 999);
   const todayEndIso = todayEnd.toISOString();

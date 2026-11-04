@@ -22,7 +22,8 @@ import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/utils/format";
 import type { QueueRow, QueueStatus } from "@/lib/services/action-queue";
 import type { QueueActivityEntry } from "@/lib/services/queue-activity";
-import { saveProposedReply, setRowStatus, logRowActivity, getRowActivity } from "@/lib/actions/action-queue";
+import { saveProposedReply, setRowStatus, logRowActivity, getRowActivity, setRowOwner } from "@/lib/actions/action-queue";
+import { OwnerChip } from "@/components/dashboard/OwnerChip";
 
 export type QueueRowVariant = "compose" | "card" | "line";
 
@@ -60,6 +61,7 @@ export function QueueRowCard({
 }) {
   const [, startTransition] = useTransition();
   const [optimisticStatus, setOptimisticStatus] = useState<QueueStatus | null>(null);
+  const [optimisticOwner, setOptimisticOwner] = useState<string | null>(row.owner ?? null);
   const [replyDraft, setReplyDraft] = useState(row.proposedReply ?? "");
   const [copied, setCopied] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
@@ -87,6 +89,21 @@ export function QueueRowCard({
         toast.error("Couldn't update", res.error);
       } else {
         toast.success(next === "resolved" ? "Resolved" : next === "dismissed" ? "Dismissed" : "Reopened");
+        onChanged();
+      }
+    });
+  }
+
+  function handleOwnerChange(nextOwner: string | null) {
+    const prev = optimisticOwner;
+    setOptimisticOwner(nextOwner);
+    startTransition(async () => {
+      const res = await setRowOwner(rowRef, nextOwner);
+      if (!res.success) {
+        setOptimisticOwner(prev);
+        toast.error("Couldn't update owner", res.error);
+      } else {
+        toast.success(nextOwner ? `Assigned to ${nextOwner}` : "Unassigned");
         onChanged();
       }
     });
@@ -182,6 +199,7 @@ export function QueueRowCard({
             {row.actionLabel ?? "Open"}
           </a>
         )}
+        <OwnerChip owner={optimisticOwner} onChange={handleOwnerChange} compact />
         {!isResolved && (
           <div className="relative shrink-0">
             <button
@@ -242,6 +260,7 @@ export function QueueRowCard({
             </Button>
           )}
           {prospectLink}
+          <OwnerChip owner={optimisticOwner} onChange={handleOwnerChange} compact />
           {!isResolved ? (
             <Button variant="ghost" size="xs" onClick={() => applyStatus("resolved")}>
               <Check size={12} />
@@ -280,6 +299,7 @@ export function QueueRowCard({
         </span>
         {overdue && <span className="text-[11px] font-medium text-status-red">· overdue</span>}
         {prospectLink}
+        <OwnerChip owner={optimisticOwner} onChange={handleOwnerChange} compact />
       </div>
 
       {row.why && <p className="mt-1 text-xs italic text-text-muted">{row.why}</p>}
