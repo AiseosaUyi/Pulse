@@ -27,6 +27,7 @@ export const API_V1_MANIFEST: ManifestEntry[] = [
   { method: "GET", path: "/api/v1/outbound/filters", scope: "sales:read", description: "The tenant's outbound discovery filters (keywords, geo, competitors)." },
   { method: "POST", path: "/api/v1/event-leads", scope: "sales:write", description: "Capture an event/organizer lead from a known ticketing platform." },
   { method: "GET", path: "/api/v1/follow-ups", scope: "sales:read", description: "Today's outreach queue: overdue, due today, new replies, going cold." },
+  { method: "GET", path: "/api/v1/my-day", scope: "sales:read", description: "Daily work list ('My day'): reply now, ready to send, follow up today, find contact, scoreboard (filter owner)." },
   { method: "POST", path: "/api/v1/prospects/:id/notes", scope: "sales:write", description: "Log a note on a prospect." },
   { method: "POST", path: "/api/v1/prospects/:id/stage", scope: "sales:write", description: "Transition a prospect's pipeline status, with a reason." },
   { method: "POST", path: "/api/v1/prospects/:id/inbound", scope: "sales:write", description: "Record an inbound reply observed on-platform." },

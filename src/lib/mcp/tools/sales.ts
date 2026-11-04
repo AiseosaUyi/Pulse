@@ -12,7 +12,9 @@ import {
   setProspectDuplicate,
   recordInboundMessage,
   addProspectNoteAdmin,
+  setProspectOwner,
 } from "@/lib/services/outbound";
+import { getMyDay } from "@/lib/services/my-day";
 import { getConversationThread, getOutreachToday } from "@/lib/services/outreach-intelligence";
 import { listTemplates } from "@/lib/services/outbound-templates";
 import { getOutboundFilters } from "@/lib/server/outbound-filters";
@@ -319,6 +321,48 @@ export function registerSalesTools(server: McpServer) {
       const { tenantSlug, admin } = gate.context;
       const templates = await listTemplates(admin, tenantSlug, { status });
       return mcpToolResult({ data: templates });
+    }
+  );
+
+  server.registerTool(
+    "pulse_my_day",
+    {
+      title: "Get My Day work list",
+      description:
+        "Daily personal work list across 5 sections: reply now, ready to send, follow up today, find contact, and weekly scoreboard. Scoped to current tenant. Read-only.",
+      inputSchema: {
+        owner: z
+          .string()
+          .optional()
+          .describe("Team member name to filter by (e.g. 'Abdul', 'Abas', 'Olamide') or 'all'/'everyone'."),
+      },
+    },
+    async ({ owner }, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "sales:read");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin } = gate.context;
+      const data = await getMyDay(admin, tenantSlug, { owner });
+      return mcpToolResult(data);
+    }
+  );
+
+  server.registerTool(
+    "pulse_set_prospect_owner",
+    {
+      title: "Set prospect owner",
+      description: "Assign or reassign a prospect to a team member (or null to unassign). Protected by sales:write.",
+      inputSchema: {
+        prospectId: z.string().uuid().describe("The prospect's ID"),
+        owner: z.string().nullable().describe("Team member name (e.g. 'Abdul', 'Abas', 'Aise') or null to unassign"),
+      },
+    },
+    async ({ prospectId, owner }, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "sales:write");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin } = gate.context;
+      const result = await setProspectOwner(admin, tenantSlug, prospectId, owner);
+      if (!result.ok) return mcpToolError(result.error);
+      return mcpToolResult({ ok: true, prospect: result.prospect });
     }
   );
 }
