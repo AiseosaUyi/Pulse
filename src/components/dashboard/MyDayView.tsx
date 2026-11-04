@@ -89,7 +89,7 @@ export function MyDayView({
       if (saved !== initialData.owner) {
         startTransition(async () => {
           setSelectedPerson(saved);
-          const fresh = await fetchMyDayAction(saved);
+          const fresh = await fetchMyDayAction(tenantSlug, saved);
           if (fresh) setData(fresh);
         });
       }
@@ -101,12 +101,12 @@ export function MyDayView({
         localStorage.setItem(LOCAL_STORAGE_KEY, match.name);
         startTransition(async () => {
           setSelectedPerson(match.name);
-          const fresh = await fetchMyDayAction(match.name);
+          const fresh = await fetchMyDayAction(tenantSlug, match.name);
           if (fresh) setData(fresh);
         });
       }
     }
-  }, [currentUserName, initialData.owner, initialData.team]);
+  }, [currentUserName, initialData.owner, initialData.team, tenantSlug]);
 
   // List of team members
   const teamMemberNames = useMemo(() => {
@@ -122,7 +122,7 @@ export function MyDayView({
     setSelectedPerson(newPerson);
     localStorage.setItem(LOCAL_STORAGE_KEY, newPerson);
     startTransition(async () => {
-      const fresh = await fetchMyDayAction(newPerson);
+      const fresh = await fetchMyDayAction(tenantSlug, newPerson);
       if (fresh) setData(fresh);
     });
   }
@@ -289,7 +289,7 @@ export function MyDayView({
       } else {
         toast.success("Contact saved · moving to Ready to send");
         // Refetch to cleanly move between sections
-        const fresh = await fetchMyDayAction(selectedPerson);
+        const fresh = await fetchMyDayAction(tenantSlug, selectedPerson);
         if (fresh) setData(fresh);
       }
     });
