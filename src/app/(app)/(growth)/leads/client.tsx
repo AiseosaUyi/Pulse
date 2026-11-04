@@ -47,7 +47,11 @@ import {
   updateProspectStatus,
   markInboundRead,
   updateProspect as updateProspectAction,
+  setProspectOwnerAction,
+  setProspectPriorityAction,
 } from "@/lib/actions/outbound";
+import { OwnerChip } from "@/components/dashboard/OwnerChip";
+import { PriorityChip } from "@/components/dashboard/PriorityChip";
 import {
   createProspectSearch,
   deleteProspectSearch,
@@ -335,6 +339,8 @@ export function OutboundClient({
   const [statusFilter, setStatusFilter] = useState<ProspectStatus | "all">(
     "all"
   );
+  const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [qualityFilter, setQualityFilter] = useState<QualityTab>("all");
   const [sortBy, setSortBy] = useState<"updated" | "followup">("updated");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -386,16 +392,22 @@ export function OutboundClient({
   const goToPage = (
     nextPage: number,
     filterOverride?: string,
-    qualityOverride?: QualityTab
+    qualityOverride?: QualityTab,
+    ownerOverride?: string,
+    priorityOverride?: string
   ) => {
     const activeFilter = filterOverride ?? statusFilter;
     const activeQuality = qualityOverride ?? qualityFilter;
+    const activeOwner = ownerOverride ?? ownerFilter;
+    const activePriority = priorityOverride ?? priorityFilter;
     startPageLoad(async () => {
       const res = await fetchProspectsPage(
         tenantSlug,
         nextPage,
         activeFilter === "all" ? undefined : activeFilter,
-        activeQuality
+        activeQuality,
+        activeOwner === "all" ? undefined : activeOwner,
+        activePriority === "all" ? undefined : activePriority
       );
       setProspects(res.data);
       setTotalCount(res.total);
@@ -407,6 +419,16 @@ export function OutboundClient({
   const handleStatusChange = (val: ProspectStatus | "all") => {
     setStatusFilter(val);
     goToPage(0, val);
+  };
+
+  const handleOwnerChange = (val: string) => {
+    setOwnerFilter(val);
+    goToPage(0, undefined, undefined, val, undefined);
+  };
+
+  const handlePriorityChange = (val: string) => {
+    setPriorityFilter(val);
+    goToPage(0, undefined, undefined, undefined, val);
   };
 
   const handleQualityChange = (val: QualityTab) => {
@@ -699,6 +721,8 @@ export function OutboundClient({
             />
             <div className="flex items-center gap-2 flex-wrap">
               <StatusFilter value={statusFilter} onChange={handleStatusChange} />
+              <OwnerFilter value={ownerFilter} onChange={handleOwnerChange} />
+              <PriorityFilter value={priorityFilter} onChange={handlePriorityChange} />
               <button
                 type="button"
                 onClick={() => setSortBy(s => s === "updated" ? "followup" : "updated")}
@@ -843,6 +867,23 @@ export function OutboundClient({
                               {STATUS_LABELS[p.status]}
                             </span>
                             <QualityBadge p={p} tenantSlug={tenantSlug} onUpdate={updateProspect} />
+                            <PriorityChip
+                              priority={p.priority ?? ((p.signalData as Record<string, unknown>)?.priority as string) ?? "A"}
+                              editable
+                              onChange={async (newPriority) => {
+                                updateProspect({ ...p, priority: newPriority });
+                                await setProspectPriorityAction(tenantSlug, p.id, newPriority);
+                              }}
+                            />
+                            <OwnerChip
+                              owner={p.owner ?? ((p.signalData as Record<string, unknown>)?.owner as string) ?? null}
+                              editable
+                              onChange={async (newOwner) => {
+                                updateProspect({ ...p, owner: newOwner });
+                                await setProspectOwnerAction(tenantSlug, p.id, newOwner);
+                              }}
+                              compact
+                            />
                             {p.qualificationScore != null && (
                               <span className="text-[10px] text-text-muted">
                                 · {p.qualificationScore}
@@ -1084,6 +1125,52 @@ function StatusFilter({
           {STATUS_LABELS[s]}
         </option>
       ))}
+    </select>
+  );
+}
+
+function OwnerFilter({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const members = ["Aise", "Abas", "Abdul", "Olamide", "Ambassador 1", "Ambassador 2"];
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-9 px-3 rounded-lg border border-border bg-card text-xs text-foreground"
+    >
+      <option value="all">All owners</option>
+      <option value="unassigned">Unassigned</option>
+      {members.map((m) => (
+        <option key={m} value={m}>
+          {m}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function PriorityFilter({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-9 px-3 rounded-lg border border-border bg-card text-xs text-foreground"
+    >
+      <option value="all">All priorities</option>
+      <option value="A">Priority A</option>
+      <option value="B">Priority B</option>
+      <option value="C">Priority C</option>
     </select>
   );
 }

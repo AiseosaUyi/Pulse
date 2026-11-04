@@ -7,6 +7,8 @@ import { PulseSuggestions } from "@/components/dashboard/PulseSuggestions";
 import { WeeklyReviewBanner } from "@/components/dashboard/WeeklyReviewBanner";
 import { NeedsYouBanner } from "@/components/needs-you/NeedsYouBanner";
 import { ActionQueueBoard } from "@/components/action-queue/ActionQueueBoard";
+import { DashboardMainView } from "@/components/dashboard/DashboardMainView";
+import { getMyDay } from "@/lib/services/my-day";
 import { getDashboardStats, getPlatforms, getSuggestions } from "@/lib/services/dashboard";
 import { getSetupStatus } from "@/lib/services/setup-status";
 import { getNotifications } from "@/lib/services/notifications";
@@ -55,12 +57,13 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   const supabase = await createClient();
 
-  const [tenant, stats, notifications, setupStatus, queueResult] = await Promise.all([
+  const [tenant, stats, notifications, setupStatus, queueResult, myDayData] = await Promise.all([
     getTenant(tenantSlug),
     getDashboardStats(tenantSlug),
     getNotifications(tenantSlug),
     getSetupStatus(tenantSlug, accountType),
     listActionQueue(supabase, tenantSlug, { currentUserId: user?.id }),
+    getMyDay(supabase, tenantSlug, { currentUserId: user?.id }),
   ]);
 
   if (!tenant || !stats || !user) {
@@ -92,8 +95,11 @@ export default async function DashboardPage() {
           </div>
           <NotificationBell notifications={notifications} />
         </div>
-        <ActionQueueBoard
-          initial={queueResult}
+        <DashboardMainView
+          myDayData={myDayData}
+          tenantSlug={tenantSlug}
+          currentUserName={user.displayName || user.username}
+          queueResult={queueResult}
           canSeeActivity={canSeeActivity}
           visibleGroups={SUPPORT_VISIBLE_GROUPS}
         />
@@ -145,10 +151,15 @@ export default async function DashboardPage() {
       {/* Tasks due today */}
       <DashboardTasksWidget occurrences={todayTasks} tenantSlug={tenantSlug} />
 
-      {/* The Action Queue — this is the body of the page. Coach actions
-          (formerly a standalone CoachFeed block) are absorbed into it. */}
+      {/* The main workspace — My Day work list + Social inbox tabs */}
       <div className="mb-6">
-        <ActionQueueBoard initial={queueResult} canSeeActivity={canSeeActivity} />
+        <DashboardMainView
+          myDayData={myDayData}
+          tenantSlug={tenantSlug}
+          currentUserName={user.displayName || user.username}
+          queueResult={queueResult}
+          canSeeActivity={canSeeActivity}
+        />
       </div>
 
       {/* The numbers, compressed below the queue — context, not the job */}
