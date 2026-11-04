@@ -31,6 +31,8 @@ function prospectRowTo(row: Record<string, unknown>): ProspectRecord {
     verifiedName: (row.verified_name as string) ?? null,
     eventTitle: (row.event_title as string) ?? null,
     phone: (row.phone as string) ?? null,
+    owner: (row.owner as string | null) ?? ((row.signal_data as Record<string, unknown>)?.owner as string | null) ?? null,
+    priority: (row.priority as string | null) ?? ((row.signal_data as Record<string, unknown>)?.priority as string | null) ?? null,
     lastReachoutAt: (row.last_reachout_at as string) ?? null,
     lastTouchedAt: (row.last_touched_at as string) ?? null,
     createdAt: row.created_at as string,

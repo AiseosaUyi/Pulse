@@ -49,6 +49,8 @@ type ProspectRow = Omit<
   verified_name: string | null;
   event_title: string | null;
   phone: string | null;
+  owner?: string | null;
+  priority?: string | null;
   last_reachout_at: string | null;
   last_touched_at: string | null;
   created_at: string;
@@ -81,6 +83,8 @@ function prospectRowTo(row: ProspectRow): ProspectRecord {
     verifiedName: row.verified_name,
     eventTitle: row.event_title,
     phone: row.phone,
+    owner: (row.owner as string | null) ?? ((row.signal_data as Record<string, unknown>)?.owner as string | null) ?? null,
+    priority: (row.priority as string | null) ?? ((row.signal_data as Record<string, unknown>)?.priority as string | null) ?? null,
     lastReachoutAt: row.last_reachout_at,
     lastTouchedAt: row.last_touched_at,
     createdAt: row.created_at,
@@ -95,6 +99,8 @@ export async function listProspects(
     status?: ProspectStatus | "all";
     platform?: OutboundPlatform;
     quality?: ProspectQuality | "all";
+    owner?: string;
+    priority?: string;
     duplicatesOnly?: boolean;
     qualificationScoreMin?: number;
     search?: string;
@@ -126,6 +132,16 @@ export async function listProspects(
   }
   if (filter.qualificationScoreMin !== undefined) {
     query = query.gte("qualification_score", filter.qualificationScoreMin);
+  }
+  if (filter.owner && filter.owner !== "all") {
+    if (filter.owner === "unassigned") {
+      query = query.or("owner.is.null,signal_data->>owner.is.null");
+    } else {
+      query = query.or(`owner.ilike.%${filter.owner}%,signal_data->>owner.ilike.%${filter.owner}%`);
+    }
+  }
+  if (filter.priority && filter.priority !== "all") {
+    query = query.or(`priority.eq.${filter.priority},signal_data->>priority.eq.${filter.priority}`);
   }
   if (filter.search) {
     // Spliced into a raw PostgREST `.or(...)` filter string below — strip
@@ -779,4 +795,137 @@ export async function countProspectQualityKpis(
     if (row.duplicate_of_id) counts.duplicates++;
   }
   return counts;
+}
+
+export async function setProspectOwner(
+  client: SupabaseClient,
+  tenantSlug: string,
+  prospectId: string,
+  owner: string | null
+): Promise<{ ok: true; prospect?: ProspectRecord } | { ok: false; error: string }> {
+  const { data, error } = await client
+    .from("prospects")
+    .update({ owner, updated_at: new Date().toISOString() })
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", prospectId)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "42703") {
+      const { data: cur } = await client.from("prospects").select("signal_data").eq("id", prospectId).maybeSingle();
+      const signalData = (cur?.signal_data ?? {}) as Record<string, unknown>;
+      const { data: updated, error: sigErr } = await client
+        .from("prospects")
+        .update({ signal_data: { ...signalData, owner }, updated_at: new Date().toISOString() })
+        .eq("tenant_slug", tenantSlug)
+        .eq("id", prospectId)
+        .select("*")
+        .maybeSingle();
+      if (sigErr) return { ok: false, error: sigErr.message };
+      return { ok: true, prospect: updated ? prospectRowTo(updated as ProspectRow) : undefined };
+    }
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, prospect: data ? prospectRowTo(data as ProspectRow) : undefined };
+}
+
+export async function setProspectPriority(
+  client: SupabaseClient,
+  tenantSlug: string,
+  prospectId: string,
+  priority: string | null
+): Promise<{ ok: true; prospect?: ProspectRecord } | { ok: false; error: string }> {
+  const { data, error } = await client
+    .from("prospects")
+    .update({ priority, updated_at: new Date().toISOString() })
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", prospectId)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "42703") {
+      const { data: cur } = await client.from("prospects").select("signal_data").eq("id", prospectId).maybeSingle();
+      const signalData = (cur?.signal_data ?? {}) as Record<string, unknown>;
+      const { data: updated, error: sigErr } = await client
+        .from("prospects")
+        .update({ signal_data: { ...signalData, priority }, updated_at: new Date().toISOString() })
+        .eq("tenant_slug", tenantSlug)
+        .eq("id", prospectId)
+        .select("*")
+        .maybeSingle();
+      if (sigErr) return { ok: false, error: sigErr.message };
+      return { ok: true, prospect: updated ? prospectRowTo(updated as ProspectRow) : undefined };
+    }
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, prospect: data ? prospectRowTo(data as ProspectRow) : undefined };
+}
+
+export async function markProspectSent(
+  client: SupabaseClient,
+  tenantSlug: string,
+  prospectId: string,
+  senderName?: string | null
+): Promise<{ ok: true; prospect?: ProspectRecord } | { ok: false; error: string }> {
+  const now = new Date().toISOString();
+  const { data, error } = await client
+    .from("prospects")
+    .update({
+      status: "sent",
+      last_reachout_at: now,
+      last_touched_at: now,
+      updated_at: now,
+    })
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", prospectId)
+    .select("*")
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+
+  const noteBody = senderName
+    ? `Message marked sent by ${senderName} on ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+    : `Message marked sent on ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+
+  await client.from("prospect_notes").insert({
+    tenant_slug: tenantSlug,
+    prospect_id: prospectId,
+    body: noteBody,
+    created_by: senderName ?? "team",
+  });
+
+  return { ok: true, prospect: data ? prospectRowTo(data as ProspectRow) : undefined };
+}
+
+export async function setProspectContact(
+  client: SupabaseClient,
+  tenantSlug: string,
+  prospectId: string,
+  contact: string
+): Promise<{ ok: true; prospect?: ProspectRecord } | { ok: false; error: string }> {
+  const trimmed = contact.trim();
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  if (trimmed.includes("@") && !trimmed.startsWith("@")) {
+    patch.phone = trimmed;
+  } else if (/^\+?[\d\s\-()]+$/.test(trimmed) && trimmed.replace(/\D/g, "").length >= 7) {
+    patch.phone = trimmed;
+  } else {
+    const cleanHandle = trimmed.replace(/^@/, "").replace(/.*instagram\.com\//, "").replace(/\/.*$/, "").trim().toLowerCase();
+    patch.handle = cleanHandle;
+    patch.platform = "instagram";
+  }
+
+  const { data, error } = await client
+    .from("prospects")
+    .update(patch)
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", prospectId)
+    .select("*")
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, prospect: data ? prospectRowTo(data as ProspectRow) : undefined };
 }

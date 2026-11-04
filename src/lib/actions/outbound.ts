@@ -13,6 +13,10 @@ import {
   recordInboundMessage,
   findProspectIdByHandle,
   getProspectHandle,
+  setProspectOwner,
+  setProspectPriority,
+  markProspectSent,
+  setProspectContact,
 } from "@/lib/services/outbound";
 import {
   draftOutboundDmAi,
@@ -112,6 +116,8 @@ export async function createProspect(
       verifiedName: data.verified_name ?? null,
       eventTitle: data.event_title ?? null,
       phone: data.phone ?? null,
+      owner: data.owner ?? null,
+      priority: data.priority ?? null,
       lastReachoutAt: data.last_reachout_at ?? null,
       lastTouchedAt: data.last_touched_at,
       createdAt: data.created_at,
@@ -491,7 +497,9 @@ export async function fetchProspectsPage(
   tenantSlug: string,
   page: number,
   statusFilter?: string,
-  qualityFilter?: ProspectQuality | "all" | "duplicates"
+  qualityFilter?: ProspectQuality | "all" | "duplicates",
+  ownerFilter?: string,
+  priorityFilter?: string
 ): Promise<{ data: import("@/lib/types/outbound").ProspectRecord[]; total: number }> {
   const user = await getCurrentUser();
   if (!user) return { data: [], total: 0 };
@@ -503,7 +511,61 @@ export async function fetchProspectsPage(
     duplicatesOnly: qualityFilter === "duplicates",
     quality:
       qualityFilter && qualityFilter !== "duplicates" ? qualityFilter : undefined,
+    owner: ownerFilter,
+    priority: priorityFilter,
   });
+}
+
+export async function setProspectOwnerAction(
+  tenantSlug: string,
+  prospectId: string,
+  owner: string | null
+): Promise<ActionResult<{ prospect?: ProspectRecord }>> {
+  const supabase = await createClient();
+  const res = await setProspectOwner(supabase, tenantSlug, prospectId, owner);
+  if (!res.ok) return { success: false, error: res.error };
+  revalidatePath("/leads");
+  revalidatePath("/dashboard");
+  return { success: true, prospect: res.prospect };
+}
+
+export async function setProspectPriorityAction(
+  tenantSlug: string,
+  prospectId: string,
+  priority: string | null
+): Promise<ActionResult<{ prospect?: ProspectRecord }>> {
+  const supabase = await createClient();
+  const res = await setProspectPriority(supabase, tenantSlug, prospectId, priority);
+  if (!res.ok) return { success: false, error: res.error };
+  revalidatePath("/leads");
+  revalidatePath("/dashboard");
+  return { success: true, prospect: res.prospect };
+}
+
+export async function markProspectSentAction(
+  tenantSlug: string,
+  prospectId: string,
+  senderName?: string | null
+): Promise<ActionResult<{ prospect?: ProspectRecord }>> {
+  const supabase = await createClient();
+  const res = await markProspectSent(supabase, tenantSlug, prospectId, senderName);
+  if (!res.ok) return { success: false, error: res.error };
+  revalidatePath("/leads");
+  revalidatePath("/dashboard");
+  return { success: true, prospect: res.prospect };
+}
+
+export async function setProspectContactAction(
+  tenantSlug: string,
+  prospectId: string,
+  contact: string
+): Promise<ActionResult<{ prospect?: ProspectRecord }>> {
+  const supabase = await createClient();
+  const res = await setProspectContact(supabase, tenantSlug, prospectId, contact);
+  if (!res.ok) return { success: false, error: res.error };
+  revalidatePath("/leads");
+  revalidatePath("/dashboard");
+  return { success: true, prospect: res.prospect };
 }
 
 export async function bulkDeleteProspects(

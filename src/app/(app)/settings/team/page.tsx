@@ -6,6 +6,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Input } from "@/components/ui/input";
 import { SettingsForm } from "@/components/settings/SettingsForm";
 import { InviteLink } from "@/components/settings/InviteLink";
+import { TeamRosterSection } from "@/components/settings/TeamRosterSection";
+import { listTeamMembers } from "@/lib/services/team";
 import { inviteTeammate, revokeInvitation, removeMember } from "../actions";
 import { SettingsPageHeading } from "../_shared";
 
@@ -93,7 +95,11 @@ export default async function TeamSettingsPage() {
   const tenant = await getCurrentTenant();
   if (!tenant) redirect("/signup?step=company");
 
-  const { members, invites } = await loadTeam(tenant.slug);
+  const supabase = await createClient();
+  const [{ members, invites }, teamRoster] = await Promise.all([
+    loadTeam(tenant.slug),
+    listTeamMembers(supabase, tenant.slug),
+  ]);
   const canInvite = tenant.role === "owner" || tenant.role === "admin";
 
   return (
@@ -221,6 +227,8 @@ export default async function TeamSettingsPage() {
           </p>
         )}
       </section>
+
+      <TeamRosterSection members={teamRoster} tenantSlug={tenant.slug} />
     </div>
   );
 }

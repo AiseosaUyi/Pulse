@@ -5,7 +5,7 @@
 // mobile approvals) land.
 
 export interface ManifestEntry {
-  method: "GET" | "POST" | "PATCH";
+  method: "GET" | "POST" | "PATCH" | "DELETE";
   path: string;
   scope: string | null;
   description: string;
@@ -95,4 +95,15 @@ export const API_V1_MANIFEST: ManifestEntry[] = [
   { method: "GET", path: "/api/v1/approvals/pending", scope: "content:read", description: "Approval requests sent but not yet approved/rejected/expired." },
   { method: "POST", path: "/api/v1/approvals/:token/approve", scope: null, description: "Approve a pending request. Auth is the signed token itself, not a bearer tenant_api_token — called only by the public /approve/[token] page." },
   { method: "POST", path: "/api/v1/approvals/:token/reject", scope: null, description: "Reject a pending request, with an optional reason. Same token-in-path auth as approve." },
+
+  // Tasks & Habits
+  { method: "GET", path: "/api/v1/tasks", scope: "tasks:read", description: "List team tasks and habits with owner, schedule, and current streak." },
+  { method: "POST", path: "/api/v1/tasks", scope: "tasks:write", description: "Create a task or recurring habit." },
+  { method: "GET", path: "/api/v1/tasks/:id", scope: "tasks:read", description: "Get task details with audit events and comment thread." },
+  { method: "PATCH", path: "/api/v1/tasks/:id", scope: "tasks:write", description: "Update a task's title, schedule, owner, checklist or status." },
+  { method: "DELETE", path: "/api/v1/tasks/:id", scope: "tasks:write", description: "Archive a task (admin only)." },
+  { method: "GET", path: "/api/v1/tasks/today", scope: "tasks:read", description: "Get dated task occurrences for today or specified date." },
+  { method: "POST", path: "/api/v1/tasks/occurrences/:id/complete", scope: "tasks:write", description: "Mark a task occurrence completed with proof validation." },
+  { method: "GET", path: "/api/v1/tasks/report", scope: "tasks:read", description: "Generate Friday standup report (JSON and WhatsApp format)." },
+  { method: "GET", path: "/api/v1/tasks/breaches", scope: "tasks:read", description: "List missed task occurrences (breaches)." },
 ];

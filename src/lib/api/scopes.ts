@@ -16,6 +16,8 @@ export const API_V1_SCOPES = [
   "publish:write",
   "engage:read",
   "engage:write",
+  "tasks:read",
+  "tasks:write",
   "admin",
 ] as const;
 
@@ -29,6 +31,8 @@ export const DEFAULT_API_V1_SCOPES: ApiV1Scope[] = [
   "analytics:read",
   "publish:read",
   "engage:read",
+  "tasks:read",
+  "tasks:write",
 ];
 
 export const API_V1_SCOPE_GROUPS: Array<{ label: string; scopes: ApiV1Scope[] }> = [
@@ -39,6 +43,7 @@ export const API_V1_SCOPE_GROUPS: Array<{ label: string; scopes: ApiV1Scope[] }>
   { label: "Analytics", scopes: ["analytics:read"] },
   { label: "Publish", scopes: ["publish:read", "publish:write"] },
   { label: "Engage", scopes: ["engage:read", "engage:write"] },
+  { label: "Tasks", scopes: ["tasks:read", "tasks:write"] },
   { label: "Admin", scopes: ["admin"] },
 ];
 

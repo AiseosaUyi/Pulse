@@ -104,6 +104,8 @@ export interface ProspectRecord {
   verifiedName: string | null;
   eventTitle: string | null;
   phone: string | null;
+  owner: string | null;
+  priority: string | null;
   lastReachoutAt: string | null;
   lastTouchedAt: string | null;
   createdAt: string;

@@ -33,6 +33,7 @@ export const navGroups: NavGroup[] = [
     label: "",
     items: [
       { label: "Dashboard", href: "/dashboard", iconName: "LayoutDashboard" },
+      { label: "Tasks", href: "/tasks", iconName: "CheckSquare" },
       { label: "Analytics", href: "/own-analytics", iconName: "BarChart3", surfaces: ["startup"] },
     ],
   },

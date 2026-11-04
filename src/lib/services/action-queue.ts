@@ -13,14 +13,15 @@ import { getOutreachToday, type ProspectWithFollowUp } from "@/lib/services/outr
 export type QueueSource = "engagement" | "action" | "coach" | "prospect";
 export type QueueKind = "reply" | "follow_up" | "decision" | "escalation" | "opportunity" | "chore";
 export type QueuePriority = "urgent" | "high" | "normal" | "low";
-export type QueueStatus = "open" | "snoozed" | "resolved" | "dismissed";
+export type QueueStatus = "open" | "snoozed" | "resolved" | "dismissed" | "archived";
 export type QueueGroupKey =
   | "needs_reply"
   | "needs_decision"
   | "follow_ups_due"
   | "going_cold"
   | "opportunities"
-  | "resolved";
+  | "resolved"
+  | "archived";
 
 export interface RowRef {
   source: QueueSource;
@@ -46,6 +47,7 @@ export interface QueueRow {
   priority: QueuePriority;
   status: QueueStatus;
   assignedTo: string | null;
+  owner: string | null;
   dueAt: string | null;
   snoozedUntil: string | null;
   receivedAt: string;
@@ -69,6 +71,7 @@ export interface ListActionQueueFilter {
   priority?: QueuePriority;
   /** "me" resolves against currentUserId; "unassigned" means assignedTo is null. */
   assignedTo?: "me" | "unassigned" | string;
+  owner?: string;
   currentUserId?: string;
   platform?: string;
   since?: string;
@@ -135,6 +138,7 @@ function engagementRowToQueueRow(row: Record<string, unknown>): QueueRow {
     priority: ((row.priority as QueuePriority) ?? "normal"),
     status: ((row.status as QueueStatus) ?? "open"),
     assignedTo: (row.assigned_to as string | null) ?? null,
+    owner: (row.owner as string | null) ?? (row.assigned_to as string | null) ?? null,
     dueAt: (row.due_at as string | null) ?? null,
     snoozedUntil: (row.snoozed_until as string | null) ?? null,
     receivedAt: row.received_at as string,
@@ -163,6 +167,7 @@ function actionItemRowToQueueRow(row: Record<string, unknown>): QueueRow {
     priority: ((row.priority as QueuePriority) ?? "normal"),
     status: ((row.status as QueueStatus) ?? "open"),
     assignedTo: (row.assigned_to as string | null) ?? null,
+    owner: (row.owner as string | null) ?? (row.assigned_to as string | null) ?? null,
     dueAt: (row.due_at as string | null) ?? null,
     snoozedUntil: (row.snoozed_until as string | null) ?? null,
     receivedAt: row.created_at as string,
@@ -210,6 +215,7 @@ function coachRowToQueueRow(row: Record<string, unknown>): QueueRow {
     priority: priorityNum === 1 ? "urgent" : priorityNum === 2 ? "high" : "normal",
     status: COACH_STATUS_TO_QUEUE[(row.status as string) ?? "pending"] ?? "open",
     assignedTo: null,
+    owner: null,
     dueAt: (row.due_at as string | null) ?? null,
     snoozedUntil: (row.snoozed_until as string | null) ?? null,
     receivedAt: row.created_at as string,
@@ -238,6 +244,7 @@ function prospectToQueueRow(p: ProspectWithFollowUp): QueueRow {
     priority: "normal",
     status: "open",
     assignedTo: null,
+    owner: p.owner ?? null,
     dueAt: p.followUpAt,
     snoozedUntil: null,
     receivedAt: p.followUpAt ?? p.lastTouchedAt ?? p.createdAt,
@@ -261,6 +268,13 @@ function matchesCommonFilters(row: QueueRow, filter: ListActionQueueFilter): boo
     row.assignedTo !== filter.assignedTo
   )
     return false;
+  if (filter.owner) {
+    if (filter.owner === "unassigned") {
+      if (row.owner) return false;
+    } else if (filter.owner !== "all") {
+      if (!row.owner || row.owner.toLowerCase() !== filter.owner.toLowerCase()) return false;
+    }
+  }
   if (filter.since && new Date(row.receivedAt).getTime() < new Date(filter.since).getTime()) return false;
   return true;
 }
@@ -282,25 +296,42 @@ async function listQueueHistory(
   tenantSlug: string,
   filter: ListActionQueueFilter
 ): Promise<ListActionQueueResult> {
-  const status = filter.status as "resolved" | "dismissed";
+  const status = filter.status as "resolved" | "dismissed" | "archived";
   const limit = filter.limit ?? 50;
   const offset = filter.offset ?? 0;
+  const isArchived = status === "archived";
 
   const [engRes, actionRes] = await Promise.all([
-    client
-      .from("engagement_items")
-      .select("*", { count: "exact" })
-      .eq("tenant_slug", tenantSlug)
-      .eq("status", status)
-      .order("resolved_at", { ascending: false })
-      .range(offset, offset + limit - 1),
-    client
-      .from("action_items")
-      .select("*", { count: "exact" })
-      .eq("tenant_slug", tenantSlug)
-      .eq("status", status)
-      .order("resolved_at", { ascending: false })
-      .range(offset, offset + limit - 1),
+    isArchived
+      ? client
+          .from("engagement_items")
+          .select("*", { count: "exact" })
+          .eq("tenant_slug", tenantSlug)
+          .or("status.eq.archived,meta->>archived.eq.true")
+          .order("resolved_at", { ascending: false })
+          .range(offset, offset + limit - 1)
+      : client
+          .from("engagement_items")
+          .select("*", { count: "exact" })
+          .eq("tenant_slug", tenantSlug)
+          .eq("status", status)
+          .order("resolved_at", { ascending: false })
+          .range(offset, offset + limit - 1),
+    isArchived
+      ? client
+          .from("action_items")
+          .select("*", { count: "exact" })
+          .eq("tenant_slug", tenantSlug)
+          .or("status.eq.archived,meta->>archived.eq.true")
+          .order("resolved_at", { ascending: false })
+          .range(offset, offset + limit - 1)
+      : client
+          .from("action_items")
+          .select("*", { count: "exact" })
+          .eq("tenant_slug", tenantSlug)
+          .eq("status", status)
+          .order("resolved_at", { ascending: false })
+          .range(offset, offset + limit - 1),
   ]);
 
   const rows = sortRows(
@@ -315,8 +346,8 @@ async function listQueueHistory(
   return {
     groups: [
       {
-        key: "resolved",
-        label: status === "resolved" ? "Resolved" : "Dismissed",
+        key: isArchived ? "archived" : "resolved",
+        label: isArchived ? "Archived" : status === "resolved" ? "Resolved" : "Dismissed",
         rows,
         count: rows.length,
       },
@@ -330,7 +361,7 @@ export async function listActionQueue(
   tenantSlug: string,
   filter: ListActionQueueFilter = {}
 ): Promise<ListActionQueueResult> {
-  if (filter.status === "resolved" || filter.status === "dismissed") {
+  if (filter.status === "resolved" || filter.status === "dismissed" || filter.status === "archived") {
     return listQueueHistory(client, tenantSlug, filter);
   }
 
@@ -825,5 +856,52 @@ export async function finishAgentRun(
     .select("id")
     .maybeSingle();
   if (error || !data) return { ok: false, status: 404 };
+  return { ok: true };
+}
+
+export async function setQueueOwner(
+  client: SupabaseClient,
+  tenantSlug: string,
+  rowRef: RowRef,
+  owner: string | null
+): Promise<MutationResult> {
+  if (rowRef.source === "coach") {
+    return unsupported("Coach action owner");
+  }
+
+  if (rowRef.source === "prospect") {
+    const { error } = await client
+      .from("prospects")
+      .update({ owner })
+      .eq("tenant_slug", tenantSlug)
+      .eq("id", rowRef.id);
+    if (error) {
+      if (error.code === "42703") {
+        const { data: p } = await client
+          .from("prospects")
+          .select("signal_data")
+          .eq("id", rowRef.id)
+          .maybeSingle();
+        const cur = (p?.signal_data ?? {}) as Record<string, unknown>;
+        await client
+          .from("prospects")
+          .update({ signal_data: { ...cur, owner } })
+          .eq("id", rowRef.id);
+        return { ok: true };
+      }
+      return { ok: false, status: 500, error: error.message };
+    }
+    return { ok: true };
+  }
+
+  const table = rowRef.source === "engagement" ? "engagement_items" : "action_items";
+  const { error } = await client
+    .from(table)
+    .update({ owner })
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", rowRef.id);
+  if (error && error.code !== "42703") {
+    return { ok: false, status: 500, error: error.message };
+  }
   return { ok: true };
 }

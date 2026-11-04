@@ -166,5 +166,26 @@ export async function getNotifications(tenantSlug: string): Promise<Notification
     });
   }
 
+  // 6. Tasks due
+  const { data: pendingTaskRows } = await supabase
+    .from("task_occurrences")
+    .select("id, status")
+    .eq("tenant_slug", tenantSlug)
+    .eq("status", "pending")
+    .limit(10);
+
+  if (pendingTaskRows && pendingTaskRows.length > 0) {
+    out.push({
+      id: "tasks-due",
+      type: "action",
+      title: `${pendingTaskRows.length} team task${pendingTaskRows.length === 1 ? "" : "s"} due today`,
+      description: "Keep streaks alive — complete daily habits and checklist items.",
+      timestamp: "Today",
+      read: false,
+      actionUrl: "/tasks",
+      actionLabel: "View tasks",
+    });
+  }
+
   return out;
 }

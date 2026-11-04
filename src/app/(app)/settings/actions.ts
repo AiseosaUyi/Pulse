@@ -201,3 +201,82 @@ export async function removeMember(formData: FormData) {
   revalidatePath("/settings");
   return result(true, "Member removed");
 }
+
+export async function saveTeamMember(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const role = String(formData.get("role") ?? "").trim();
+  const active = formData.get("active") !== "false";
+  const eventsCreated = Number(formData.get("eventsCreated") ?? 0);
+  const conversations = Number(formData.get("conversations") ?? 0);
+  const reachOuts = Number(formData.get("reachOuts") ?? 0);
+  const organicDms = Number(formData.get("organicDms") ?? 0);
+
+  if (!name) return result(false, "Name is required");
+  if (!role) return result(false, "Role is required");
+
+  const tenant = await getCurrentTenant();
+  if (!tenant) return result(false, "No active tenant");
+
+  const supabase = await createClient();
+  const { upsertTeamMember } = await import("@/lib/services/team");
+  const res = await upsertTeamMember(supabase, tenant.slug, {
+    name,
+    role,
+    active,
+    weeklyTargets: { eventsCreated, conversations, reachOuts, organicDms },
+  });
+
+  if (!res.ok) return result(false, res.error);
+
+  revalidatePath("/settings/team");
+  revalidatePath("/dashboard");
+  return result(true, "Team member saved");
+}
+
+export async function updateTeamMemberTargetsAction(
+  memberId: string,
+  targets: import("@/lib/types/team").WeeklyTargets
+) {
+  const tenant = await getCurrentTenant();
+  if (!tenant) return result(false, "No active tenant");
+
+  const supabase = await createClient();
+  const { updateTeamMember } = await import("@/lib/services/team");
+  const res = await updateTeamMember(supabase, tenant.slug, memberId, { weeklyTargets: targets });
+
+  if (!res.ok) return result(false, res.error);
+
+  revalidatePath("/settings/team");
+  revalidatePath("/dashboard");
+  return result(true, "Targets updated");
+}
+
+export async function toggleTeamMemberActiveAction(memberId: string, active: boolean) {
+  const tenant = await getCurrentTenant();
+  if (!tenant) return result(false, "No active tenant");
+
+  const supabase = await createClient();
+  const { updateTeamMember } = await import("@/lib/services/team");
+  const res = await updateTeamMember(supabase, tenant.slug, memberId, { active });
+
+  if (!res.ok) return result(false, res.error);
+
+  revalidatePath("/settings/team");
+  revalidatePath("/dashboard");
+  return result(true, active ? "Activated" : "Deactivated");
+}
+
+export async function deleteTeamMemberAction(memberId: string) {
+  const tenant = await getCurrentTenant();
+  if (!tenant) return result(false, "No active tenant");
+
+  const supabase = await createClient();
+  const { deleteTeamMember } = await import("@/lib/services/team");
+  const res = await deleteTeamMember(supabase, tenant.slug, memberId);
+
+  if (!res.ok) return result(false, res.error);
+
+  revalidatePath("/settings/team");
+  revalidatePath("/dashboard");
+  return result(true, "Team member removed");
+}

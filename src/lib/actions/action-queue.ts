@@ -14,6 +14,7 @@ import {
   setQueueStatus,
   setPriority,
   setDueAt,
+  setQueueOwner,
   type RowRef,
   type QueuePriority,
   type QueueStatus,
@@ -45,6 +46,7 @@ const STATUS_TO_ACTIVITY: Record<QueueStatus, QueueActivityAction | null> = {
   open: "reopened",
   dismissed: "dismissed",
   snoozed: "snoozed",
+  archived: null,
 };
 
 export async function setRowStatus(
@@ -136,5 +138,15 @@ export async function setRowDueAt(rowRef: RowRef, dueAt: string | null): Promise
   const result = await setDueAt(ctx.supabase, ctx.tenantSlug, rowRef, dueAt);
   if (!result.ok) return { success: false, error: "Couldn't update" };
   revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function setRowOwner(rowRef: RowRef, owner: string | null): Promise<ActionResult> {
+  const ctx = await withContext();
+  if ("error" in ctx) return { success: false, error: ctx.error };
+  const result = await setQueueOwner(ctx.supabase, ctx.tenantSlug, rowRef, owner);
+  if (!result.ok) return { success: false, error: result.error ?? "Couldn't update owner" };
+  revalidatePath("/dashboard");
+  revalidatePath("/leads");
   return { success: true };
 }

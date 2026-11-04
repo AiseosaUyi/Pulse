@@ -18,6 +18,9 @@ import { getTracker } from "@/lib/services/cadence";
 import { formatCurrency } from "@/lib/utils/format";
 import { getCurrentTenant, getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getTenantTimezone, getOccurrencesForDate } from "@/lib/services/tasks";
+import { getTenantToday } from "@/lib/tasks/date-utils";
+import { DashboardTasksWidget } from "@/components/tasks/DashboardTasksWidget";
 
 const SUPPORT_VISIBLE_GROUPS: QueueGroupKey[] = ["needs_reply", "follow_ups_due", "going_cold"];
 
@@ -98,11 +101,15 @@ export default async function DashboardPage() {
     );
   }
 
-  const [platforms, suggestions, weeklyReview, tracker] = await Promise.all([
+  const timezone = await getTenantTimezone(supabase, tenantSlug);
+  const todayStr = getTenantToday(timezone);
+
+  const [platforms, suggestions, weeklyReview, tracker, todayTasks] = await Promise.all([
     getPlatforms(tenantSlug),
     getSuggestions(tenantSlug),
     getLatestWeeklyReview(tenantSlug),
     getTracker(tenantSlug),
+    getOccurrencesForDate(supabase, tenantSlug, todayStr),
   ]);
 
   const adSpendFormatted = {
@@ -134,6 +141,9 @@ export default async function DashboardPage() {
       <div className="mb-4">
         <NeedsYouBanner status={setupStatus} />
       </div>
+
+      {/* Tasks due today */}
+      <DashboardTasksWidget occurrences={todayTasks} tenantSlug={tenantSlug} />
 
       {/* The Action Queue — this is the body of the page. Coach actions
           (formerly a standalone CoachFeed block) are absorbed into it. */}

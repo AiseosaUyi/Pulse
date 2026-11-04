@@ -13,6 +13,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 let scrapeHandler: typeof import("../../src/app/api/cron/scrape-trends/route").POST;
 let briefsHandler: typeof import("../../src/app/api/cron/generate-briefs/route").POST;
 let digestHandler: typeof import("../../src/app/api/cron/weekly-digest/route").POST;
+let tasksDailyHandler: typeof import("../../src/app/api/cron/tasks-daily/route").POST;
+let tasksDigestHandler: typeof import("../../src/app/api/cron/tasks-digest/route").POST;
 
 beforeAll(async () => {
   // Force the gate into production-strict mode for this file.
@@ -28,6 +30,8 @@ beforeAll(async () => {
   scrapeHandler = (await import("../../src/app/api/cron/scrape-trends/route")).POST;
   briefsHandler = (await import("../../src/app/api/cron/generate-briefs/route")).POST;
   digestHandler = (await import("../../src/app/api/cron/weekly-digest/route")).POST;
+  tasksDailyHandler = (await import("../../src/app/api/cron/tasks-daily/route")).POST;
+  tasksDigestHandler = (await import("../../src/app/api/cron/tasks-digest/route")).POST;
 });
 
 function makeRequest(headers: Record<string, string>): Request {
@@ -42,6 +46,8 @@ describe("cron routes: auth gate", () => {
     ["scrape-trends", () => scrapeHandler],
     ["generate-briefs", () => briefsHandler],
     ["weekly-digest", () => digestHandler],
+    ["tasks-daily", () => tasksDailyHandler],
+    ["tasks-digest", () => tasksDigestHandler],
   ])("%s rejects missing authorization", async (_name, getHandler) => {
     const res = await getHandler()(makeRequest({}));
     expect(res.status).toBe(401);

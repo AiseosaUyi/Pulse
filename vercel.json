@@ -126,6 +126,14 @@
     {
       "path": "/api/cron/spike-alert-email",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/tasks-daily",
+      "schedule": "5 * * * *"
+    },
+    {
+      "path": "/api/cron/tasks-digest",
+      "schedule": "0 * * * *"
     }
   ]
 }
