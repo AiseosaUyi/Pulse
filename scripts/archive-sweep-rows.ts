@@ -1,5 +1,9 @@
 #!/usr/bin/env tsx
 
+try {
+  process.loadEnvFile?.(".env.local");
+} catch {}
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { archiveOldSweepRows } from "@/lib/services/archive-sweep";
 
