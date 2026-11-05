@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useMemo } from "react";
+import { useState, useEffect, useTransition } from "react";
 import Link from "next/link";
 import {
   MessageSquare,
@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { OwnerChip } from "@/components/dashboard/OwnerChip";
 import { PriorityChip } from "@/components/dashboard/PriorityChip";
+import { usePeople } from "@/lib/hooks/usePeople";
 import type {
   MyDayData,
   ReplyNowItem,
@@ -41,8 +42,6 @@ import {
 import { setRowStatus, setRowOwner } from "@/lib/actions/action-queue";
 import { snoozeFollowUp, clearFollowUp } from "@/lib/actions/conversation-intelligence";
 
-const LOCAL_STORAGE_KEY = "pulse-my-day-person";
-
 export function MyDayView({
   initialData,
   tenantSlug,
@@ -53,12 +52,8 @@ export function MyDayView({
   currentUserName?: string | null;
 }) {
   const [data, setData] = useState<MyDayData>(initialData);
-  const [selectedPerson, setSelectedPerson] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem(LOCAL_STORAGE_KEY) || initialData.owner || "all";
-    }
-    return initialData.owner || "all";
-  });
+  const { activePeople, tagGroups, selectedAssignee, setSelectedAssignee } = usePeople(tenantSlug);
+  const selectedPerson = selectedAssignee || initialData.owner || "all";
   const [, startTransition] = useTransition();
 
   // Collapsed states per section
@@ -69,7 +64,7 @@ export function MyDayView({
     findContact: false,
     scoreboard: false,
   });
-  const [waitingOnAiseOpen, setWaitingOnAiseOpen] = useState(false);
+  const [waitingOnOpen, setWaitingOnOpen] = useState(false);
 
   // Copy feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -81,50 +76,17 @@ export function MyDayView({
   // Snooze dropdown open: itemId -> boolean
   const [snoozeMenuOpenId, setSnoozeMenuOpenId] = useState<string | null>(null);
 
-  // Initialize selected person on mount from localStorage or user mapping
+  // Fetch updated data when URL assignee changes
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (saved) {
-      if (saved !== initialData.owner) {
-        startTransition(async () => {
-          setSelectedPerson(saved);
-          const fresh = await fetchMyDayAction(tenantSlug, saved);
-          if (fresh) setData(fresh);
-        });
-      }
-    } else if (currentUserName) {
-      const match = initialData.team.find(
-        (m) => m.name.toLowerCase() === currentUserName.toLowerCase()
-      );
-      if (match) {
-        localStorage.setItem(LOCAL_STORAGE_KEY, match.name);
-        startTransition(async () => {
-          setSelectedPerson(match.name);
-          const fresh = await fetchMyDayAction(tenantSlug, match.name);
-          if (fresh) setData(fresh);
-        });
-      }
-    }
-  }, [currentUserName, initialData.owner, initialData.team, tenantSlug]);
-
-  // List of team members
-  const teamMemberNames = useMemo(() => {
-    const names = data.team.map((m) => m.name);
-    // Ensure default roster is present if unmigrated
-    if (names.length === 0) {
-      return ["Aise", "Abas", "Abdul", "Olamide", "Ambassador 1", "Ambassador 2"];
-    }
-    return names;
-  }, [data.team]);
-
-  function switchPerson(newPerson: string) {
-    setSelectedPerson(newPerson);
-    localStorage.setItem(LOCAL_STORAGE_KEY, newPerson);
+    if (!selectedAssignee) return;
     startTransition(async () => {
-      const fresh = await fetchMyDayAction(tenantSlug, newPerson);
+      const fresh = await fetchMyDayAction(tenantSlug, selectedAssignee);
       if (fresh) setData(fresh);
     });
+  }, [selectedAssignee, tenantSlug]);
+
+  function switchPerson(newPerson: string) {
+    setSelectedAssignee(newPerson);
   }
 
   function toggleSection(key: string) {
@@ -147,7 +109,7 @@ export function MyDayView({
     setData((prev) => ({
       ...prev,
       replyNow: prev.replyNow.filter((r) => r.id !== item.id),
-      waitingOnAise: prev.waitingOnAise.filter((r) => r.id !== item.id),
+      waitingOn: (prev.waitingOn || []).filter((r) => r.id !== item.id),
     }));
 
     startTransition(async () => {
@@ -170,7 +132,7 @@ export function MyDayView({
       return {
         ...prev,
         replyNow: selectedPerson === "all" ? update(prev.replyNow) : prev.replyNow.filter((r) => r.id !== item.id),
-        waitingOnAise: selectedPerson === "all" ? update(prev.waitingOnAise) : prev.waitingOnAise.filter((r) => r.id !== item.id),
+        waitingOn: selectedPerson === "all" ? update(prev.waitingOn || []) : (prev.waitingOn || []).filter((r) => r.id !== item.id),
       };
     });
 
@@ -255,6 +217,23 @@ export function MyDayView({
     });
   }
 
+  function handleReassignFollowUp(item: FollowUpTodayItem, newOwnerInput: string | null) {
+    setData((prev) => ({
+      ...prev,
+      followUpToday: prev.followUpToday.map((f) => (f.id === item.id ? { ...f, owner: newOwnerInput } : f)),
+      droppedFollowUps: (prev.droppedFollowUps ?? []).map((f) => (f.id === item.id ? { ...f, owner: newOwnerInput } : f)),
+    }));
+
+    startTransition(async () => {
+      if (item.source === "prospect" && item.prospectId) {
+        await setProspectOwnerAction(tenantSlug, item.prospectId, newOwnerInput);
+      } else {
+        await setRowOwner({ source: "action", id: item.id }, newOwnerInput);
+      }
+      toast.success(newOwnerInput ? "Owner updated" : "Unassigned");
+    });
+  }
+
   function handleDoneFollowUp(item: FollowUpTodayItem) {
     setData((prev) => ({
       ...prev,
@@ -313,7 +292,7 @@ export function MyDayView({
             type="button"
             onClick={() => switchPerson("all")}
             className={cn(
-              "px-3 py-1.5 text-xs font-semibold rounded-full border transition-all whitespace-nowrap",
+              "px-3 py-1.5 text-xs font-semibold rounded-full border transition-all whitespace-nowrap cursor-pointer",
               selectedPerson === "all"
                 ? "bg-primary-500 text-white border-primary-500 shadow-sm"
                 : "border-border/60 bg-card text-text-secondary hover:text-foreground hover:bg-card-hover"
@@ -321,21 +300,66 @@ export function MyDayView({
           >
             Everyone
           </button>
-          {teamMemberNames.map((name) => {
-            const isSelected = selectedPerson.toLowerCase() === name.toLowerCase();
+          <button
+            type="button"
+            onClick={() => switchPerson("me")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-semibold rounded-full border transition-all whitespace-nowrap cursor-pointer",
+              selectedPerson === "me"
+                ? "bg-primary-500 text-white border-primary-500 shadow-sm"
+                : "border-border/60 bg-card text-text-secondary hover:text-foreground hover:bg-card-hover"
+            )}
+          >
+            Me
+          </button>
+          <button
+            type="button"
+            onClick={() => switchPerson("unassigned")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-semibold rounded-full border transition-all whitespace-nowrap cursor-pointer",
+              selectedPerson === "unassigned"
+                ? "bg-primary-500 text-white border-primary-500 shadow-sm"
+                : "border-border/60 bg-card text-text-secondary hover:text-foreground hover:bg-card-hover"
+            )}
+          >
+            Unassigned
+          </button>
+          {activePeople.map((person) => {
+            const isSelected =
+              selectedPerson === person.id ||
+              selectedPerson.toLowerCase() === person.name.toLowerCase();
             return (
               <button
-                key={name}
+                key={person.id}
                 type="button"
-                onClick={() => switchPerson(name)}
+                onClick={() => switchPerson(person.id)}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-semibold rounded-full border transition-all whitespace-nowrap",
+                  "px-3 py-1.5 text-xs font-semibold rounded-full border transition-all whitespace-nowrap cursor-pointer",
                   isSelected
                     ? "bg-primary-500 text-white border-primary-500 shadow-sm"
                     : "border-border/60 bg-card text-text-secondary hover:text-foreground hover:bg-card-hover"
                 )}
               >
-                {name}
+                {person.name}
+              </button>
+            );
+          })}
+          {tagGroups.map((tagName) => {
+            const tagId = `tag:${tagName}`;
+            const isSelected = selectedPerson === tagId;
+            return (
+              <button
+                key={tagId}
+                type="button"
+                onClick={() => switchPerson(tagId)}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-semibold rounded-full border transition-all whitespace-nowrap cursor-pointer",
+                  isSelected
+                    ? "bg-primary-500 text-white border-primary-500 shadow-sm"
+                    : "border-border/60 bg-card text-text-secondary hover:text-foreground hover:bg-card-hover"
+                )}
+              >
+                #{tagName}
               </button>
             );
           })}
@@ -421,8 +445,8 @@ export function MyDayView({
                     <div className="flex items-center gap-2">
                       <OwnerChip
                         owner={item.owner}
-                        teamMembers={teamMemberNames}
-                        onChange={(newOwner) => handleReassignReply(item, newOwner)}
+                        ownerPersonId={item.ownerPersonId}
+                        onChange={(newOwner, personId) => handleReassignReply(item, personId ?? newOwner)}
                         compact
                       />
                     </div>
@@ -487,43 +511,57 @@ export function MyDayView({
               ))
             )}
 
-            {/* Waiting on Aise collapsible sub-section */}
-            {data.waitingOnAise.length > 0 && (
-              <div className="border-t border-border/40 bg-sidebar/20 p-3">
-                <button
-                  type="button"
-                  onClick={() => setWaitingOnAiseOpen((v) => !v)}
-                  className="flex items-center justify-between w-full text-xs text-text-muted hover:text-foreground font-medium"
-                >
-                  <span>Waiting on Aise ({data.waitingOnAise.length})</span>
-                  {waitingOnAiseOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
+            {/* Waiting on others collapsible sub-section */}
+            {data.waitingOn && data.waitingOn.length > 0 && (() => {
+              const items = data.waitingOn;
+              const waitingNames = Array.from(new Set(items.map((w) => w.waitingOnPersonName).filter(Boolean)));
+              const label = waitingNames.length === 1
+                ? `Waiting on ${waitingNames[0]}`
+                : waitingNames.length > 1
+                ? `Waiting on ${waitingNames.join(", ")}`
+                : "Waiting on review";
+              return (
+                <div className="border-t border-border/40 bg-sidebar/20 p-3">
+                  <button
+                    type="button"
+                    onClick={() => setWaitingOnOpen((v) => !v)}
+                    className="flex items-center justify-between w-full text-xs text-text-muted hover:text-foreground font-medium cursor-pointer"
+                  >
+                    <span>{label} ({items.length})</span>
+                    {waitingOnOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </button>
 
-                {waitingOnAiseOpen && (
-                  <div className="mt-2 space-y-2">
-                    {data.waitingOnAise.map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-2.5 rounded-lg border border-border/30 bg-card text-xs flex items-center justify-between gap-2"
-                      >
-                        <div className="min-w-0">
-                          <p className="font-semibold text-foreground truncate">
-                            {item.displayName || `@${item.handle}`} · {item.platform}
-                          </p>
-                          <p className="text-text-muted truncate mt-0.5">&ldquo;{item.body}&rdquo;</p>
+                  {waitingOnOpen && (
+                    <div className="mt-2 space-y-2">
+                      {items.map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-2.5 rounded-lg border border-border/30 bg-card text-xs flex items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-semibold text-foreground truncate">
+                              {item.displayName || `@${item.handle}`} · {item.platform}
+                              {item.waitingOnPersonName ? (
+                                <span className="ml-1 text-[11px] text-primary-500 font-normal">
+                                  (waiting on {item.waitingOnPersonName})
+                                </span>
+                              ) : null}
+                            </p>
+                            <p className="text-text-muted truncate mt-0.5">&ldquo;{item.body}&rdquo;</p>
+                          </div>
+                          <OwnerChip
+                            owner={item.owner}
+                            ownerPersonId={item.ownerPersonId}
+                            onChange={(newOwner, personId) => handleReassignReply(item, personId ?? newOwner)}
+                            compact
+                          />
                         </div>
-                        <OwnerChip
-                          owner={item.owner}
-                          teamMembers={teamMemberNames}
-                          onChange={(newOwner) => handleReassignReply(item, newOwner)}
-                          compact
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -582,8 +620,8 @@ export function MyDayView({
 
                     <OwnerChip
                       owner={item.owner}
-                      teamMembers={teamMemberNames}
-                      onChange={(newOwner) => handleReassignReady(item, newOwner)}
+                      ownerPersonId={item.ownerPersonId}
+                      onChange={(newOwner, personId) => handleReassignReady(item, personId ?? newOwner)}
                       compact
                     />
                   </div>
@@ -697,7 +735,8 @@ export function MyDayView({
 
                     <OwnerChip
                       owner={item.owner}
-                      teamMembers={teamMemberNames}
+                      ownerPersonId={item.ownerPersonId}
+                      onChange={(newOwner, personId) => handleReassignFollowUp(item, personId ?? newOwner)}
                       compact
                     />
                   </div>
@@ -771,6 +810,45 @@ export function MyDayView({
                 </div>
               ))
             )}
+
+            {/* Dropped leads sub-section per B6 */}
+            {data.droppedFollowUps && data.droppedFollowUps.length > 0 && (
+              <div className="border-t border-border/40 bg-sidebar/20 p-3 mt-3">
+                <div className="text-xs font-semibold text-text-muted flex items-center justify-between mb-2">
+                  <span>Dropped Leads ({data.droppedFollowUps.length})</span>
+                  <span className="text-[10px] text-text-muted">2+ unanswered attempts</span>
+                </div>
+                <div className="space-y-2">
+                  {data.droppedFollowUps.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-2.5 rounded-lg border border-border/30 bg-card/60 text-xs flex items-center justify-between gap-2 opacity-80"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="font-semibold text-foreground mr-1.5">{item.name}</span>
+                        <span className="text-text-muted">@{item.handle}</span>
+                        <span className="ml-2 text-[10px] bg-muted px-1.5 py-0.5 rounded text-text-muted">
+                          {item.attemptsCount} attempts
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {item.externalUrl && (
+                          <Link href={item.externalUrl} className="text-xs text-primary-500 hover:underline">
+                            View
+                          </Link>
+                        )}
+                        <OwnerChip
+                          owner={item.owner}
+                          ownerPersonId={item.ownerPersonId}
+                          onChange={(newOwner, personId) => handleReassignFollowUp(item, personId ?? newOwner)}
+                          compact
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -825,7 +903,13 @@ export function MyDayView({
 
                     <OwnerChip
                       owner={item.owner}
-                      teamMembers={teamMemberNames}
+                      ownerPersonId={item.ownerPersonId}
+                      onChange={(newOwner, personId) => {
+                        startTransition(async () => {
+                          await setProspectOwnerAction(tenantSlug, item.id, personId ?? newOwner);
+                          toast.success(newOwner ? "Owner updated" : "Unassigned");
+                        });
+                      }}
                       compact
                     />
                   </div>

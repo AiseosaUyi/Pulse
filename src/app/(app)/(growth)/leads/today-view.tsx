@@ -22,6 +22,7 @@ import type { OutreachTodayData, ProspectWithFollowUp } from "@/lib/services/out
 import { PLATFORM_LABELS, isUnresolvedProspectHandle } from "@/lib/types/outbound";
 import type { ProspectRecord } from "@/lib/types/outbound";
 import { OwnerChip } from "@/components/dashboard/OwnerChip";
+import { usePeople } from "@/lib/hooks/usePeople";
 
 const SNOOZE_OPTIONS = [
   { label: "+3 days", days: 3 },
@@ -380,16 +381,25 @@ export function TodayView({
   tenantSlug: string;
   onOpenThread: (prospect: ProspectRecord) => void;
 }) {
+  const { activePeople, tagGroups } = usePeople(tenantSlug);
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
 
-  const filterByOwner = (item: { owner?: string | null; signalData?: Record<string, unknown> } | null | undefined) => {
-    if (ownerFilter === "all") return true;
+  const filterByOwner = (item: { owner?: string | null; owner_person_id?: string | null; signalData?: Record<string, unknown> } | null | undefined) => {
+    if (ownerFilter === "all" || ownerFilter === "everyone") return true;
     if (!item) return ownerFilter === "unassigned";
     const itemOwner = item.owner ?? ((item.signalData as Record<string, unknown>)?.owner as string | null) ?? null;
-    if (!itemOwner) return ownerFilter === "unassigned";
-    const io = itemOwner.toLowerCase();
-    const fo = ownerFilter.toLowerCase();
-    return io.includes(fo) || fo.includes(io);
+    const itemPersonId = item.owner_person_id ?? null;
+    if (!itemOwner && !itemPersonId) return ownerFilter === "unassigned";
+
+    if (ownerFilter.startsWith("tag:")) {
+      const tagName = ownerFilter.slice(4).toLowerCase();
+      const matchingPeople = activePeople.filter((p) => p.tags?.includes(tagName)).map((p) => p.id);
+      return matchingPeople.includes(itemPersonId || "");
+    }
+
+    if (itemPersonId && itemPersonId === ownerFilter) return true;
+    if (itemOwner && itemOwner.toLowerCase().trim() === ownerFilter.toLowerCase().trim()) return true;
+    return false;
   };
 
   const overdue = data.overdue.filter(filterByOwner);
@@ -451,9 +461,14 @@ export function TodayView({
         >
           <option value="all">All owners</option>
           <option value="unassigned">Unassigned</option>
-          {["Aise", "Abas", "Abdul", "Olamide", "Ambassador 1", "Ambassador 2"].map((m) => (
-            <option key={m} value={m}>
-              {m}
+          {activePeople.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name} {m.tags?.includes("ambassador") ? "(Ambassador)" : ""}
+            </option>
+          ))}
+          {tagGroups.map((tg) => (
+            <option key={tg} value={`tag:${tg}`}>
+              Tag: {tg}s
             </option>
           ))}
         </select>

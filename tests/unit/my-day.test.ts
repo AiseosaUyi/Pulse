@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { describe, it, expect } from "vitest";
 import { parseApprovedNote, hasUsableContact, getWeekBounds, getMyDay } from "@/lib/services/my-day";
 
@@ -68,9 +68,9 @@ describe("My Day: Note Parsing & Contact Validation", () => {
   });
 
   it("calculates Monday to Sunday week bounds correctly", () => {
-    // Midweek date: Wednesday, Nov 4, 2026
+    // Midweek date: Wednesday, Nov 4, 2026 in UTC
     const wed = new Date("2026-11-04T12:00:00Z");
-    const { weekStart, weekEnd } = getWeekBounds(wed);
+    const { weekStart, weekEnd } = getWeekBounds(wed, "UTC");
 
     const start = new Date(weekStart);
     const end = new Date(weekEnd);
@@ -143,10 +143,29 @@ describe("My Day: Sorting, Owner Filter, & Tenant Isolation", () => {
             limitVal = num;
             return chain;
           },
+          maybeSingle() {
+            const allRows = tenantData[table] ?? [];
+            const tenantRows = currentTenant
+              ? allRows.filter((r) => r.tenant_slug === currentTenant || r.slug === currentTenant)
+              : allRows;
+            const filtered = tenantRows.filter((r) => filters.every((f) => f(r)));
+            return Promise.resolve({ data: filtered[0] ?? null, error: null });
+          },
+          single() {
+            const allRows = tenantData[table] ?? [];
+            const tenantRows = currentTenant
+              ? allRows.filter((r) => r.tenant_slug === currentTenant || r.slug === currentTenant)
+              : allRows;
+            const filtered = tenantRows.filter((r) => filters.every((f) => f(r)));
+            return Promise.resolve({
+              data: filtered[0] ?? null,
+              error: filtered[0] ? null : { message: "Not found" },
+            });
+          },
           then(resolve: (res: { data: any[]; error: null }) => void) {
             const allRows = tenantData[table] ?? [];
             const tenantRows = currentTenant
-              ? allRows.filter((r) => r.tenant_slug === currentTenant)
+              ? allRows.filter((r) => r.tenant_slug === currentTenant || r.slug === currentTenant)
               : allRows;
             const filtered = tenantRows.filter((r) => filters.every((f) => f(r))).slice(0, limitVal);
             resolve({ data: filtered, error: null });
@@ -158,10 +177,14 @@ describe("My Day: Sorting, Owner Filter, & Tenant Isolation", () => {
   }
 
   const mockDbData = {
-    tenant_team_members: [
-      { tenant_slug: "gruve", name: "Abdul", role: "Partnerships", active: true, weekly_targets: {} },
-      { tenant_slug: "gruve", name: "Abas", role: "Marketing", active: true, weekly_targets: {} },
-      { tenant_slug: "sippy", name: "Sarah", role: "Sales", active: true, weekly_targets: {} },
+    tenants: [
+      { slug: "gruve", name: "Gruve", timezone: "Africa/Lagos" },
+      { slug: "sippy", name: "Sippy", timezone: "Africa/Lagos" },
+    ],
+    team_people: [
+      { id: "person-abdul", tenant_slug: "gruve", name: "Abdul", role_title: "Partnerships", active: true, weekly_targets: {} },
+      { id: "person-abas", tenant_slug: "gruve", name: "Abas", role_title: "Marketing", active: true, weekly_targets: {} },
+      { id: "person-sarah", tenant_slug: "sippy", name: "Sarah", role_title: "Sales", active: true, weekly_targets: {} },
     ],
     inbound_messages: [
       {
@@ -197,6 +220,7 @@ describe("My Day: Sorting, Owner Filter, & Tenant Isolation", () => {
         display_name: "Miss Lagos Pageant",
         platform: "instagram",
         status: "approved",
+        owner_person_id: "person-abdul",
         owner: "Abdul",
         priority: "A",
         phone: null,
@@ -211,6 +235,7 @@ describe("My Day: Sorting, Owner Filter, & Tenant Isolation", () => {
         display_name: "Rave Culture Fest",
         platform: "instagram",
         status: "approved",
+        owner_person_id: "person-abas",
         owner: "Abas",
         priority: "B",
         phone: null,
@@ -225,6 +250,7 @@ describe("My Day: Sorting, Owner Filter, & Tenant Isolation", () => {
         display_name: "Boba Shop",
         platform: "instagram",
         status: "approved",
+        owner_person_id: "person-sarah",
         owner: "Sarah",
         priority: "A",
         phone: null,
