@@ -3,20 +3,14 @@
 import { useState } from "react";
 import { UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const DEFAULT_TEAM_MEMBERS = [
-  "Aise",
-  "Abas",
-  "Abdul",
-  "Olamide",
-  "Ambassador 1",
-  "Ambassador 2",
-];
+import type { TeamPerson } from "@/lib/types/tasks";
+import { usePeople } from "@/lib/hooks/usePeople";
 
 interface OwnerChipProps {
   owner: string | null;
-  teamMembers?: string[];
-  onChange?: (newOwner: string | null) => void | Promise<void>;
+  ownerPersonId?: string | null;
+  people?: TeamPerson[];
+  onChange?: (newOwner: string | null, personId?: string | null) => void | Promise<void>;
   editable?: boolean;
   className?: string;
   compact?: boolean;
@@ -24,39 +18,52 @@ interface OwnerChipProps {
 
 export function OwnerChip({
   owner,
-  teamMembers = DEFAULT_TEAM_MEMBERS,
+  ownerPersonId,
+  people: propPeople,
   onChange,
   editable = true,
   className,
   compact = false,
 }: OwnerChipProps) {
   const [editing, setEditing] = useState(false);
-  const displayOwner = owner?.trim() || "Unassigned";
-  const isUnassigned = !owner || owner.trim() === "" || owner.toLowerCase() === "unassigned";
+  const hookPeople = usePeople();
+  const people = propPeople || hookPeople.activePeople;
 
-  // Build clean unique list including current owner if not in standard list
-  const memberList = Array.from(
-    new Set([...teamMembers, ...(owner && !isUnassigned ? [owner] : [])])
-  );
+  // Resolve display name
+  let displayOwner = "Unassigned";
+  if (ownerPersonId) {
+    const p = people.find((item) => item.id === ownerPersonId);
+    if (p) displayOwner = p.name;
+    else if (owner && owner.trim()) displayOwner = owner.trim();
+  } else if (owner && owner.trim() && owner.toLowerCase() !== "unassigned") {
+    displayOwner = owner.trim();
+  }
+
+  const isUnassigned = displayOwner === "Unassigned";
 
   if (editable && editing && onChange) {
     return (
       <select
         autoFocus
-        value={isUnassigned ? "" : owner}
+        value={ownerPersonId || ""}
         onBlur={() => setEditing(false)}
         onChange={(e) => {
           setEditing(false);
           const val = e.target.value.trim();
-          onChange(val === "" ? null : val);
+          if (val === "" || val === "unassigned") {
+            onChange(null, null);
+          } else {
+            const p = people.find((item) => item.id === val);
+            onChange(p?.name ?? null, p?.id ?? null);
+          }
         }}
         onClick={(e) => e.stopPropagation()}
-        className="text-[11px] font-medium bg-card border border-primary-500/40 rounded px-1.5 py-0.5 text-foreground outline-none shadow-sm"
+        className="text-[11px] font-medium bg-card border border-primary-500/40 rounded px-1.5 py-0.5 text-foreground outline-hidden shadow-xs"
       >
         <option value="">Unassigned</option>
-        {memberList.map((m) => (
-          <option key={m} value={m}>
-            {m}
+        {people.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name} {p.tags?.includes("ambassador") ? "(Ambassador)" : ""}
           </option>
         ))}
       </select>
@@ -81,7 +88,7 @@ export function OwnerChip({
           setEditing(true);
         }}
         className={cn(
-          "inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-border/60 bg-card hover:border-primary-500/40 hover:bg-card-hover transition-colors shrink-0",
+          "inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-border/60 bg-card hover:border-primary-500/40 hover:bg-card-hover transition-colors shrink-0 cursor-pointer",
           compact && "px-1.5 py-0 text-[10px]",
           className
         )}

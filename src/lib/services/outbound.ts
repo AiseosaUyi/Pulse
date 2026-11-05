@@ -801,30 +801,37 @@ export async function setProspectOwner(
   client: SupabaseClient,
   tenantSlug: string,
   prospectId: string,
-  owner: string | null
+  ownerInput: string | null
 ): Promise<{ ok: true; prospect?: ProspectRecord } | { ok: false; error: string }> {
+  let ownerPersonId: string | null = null;
+  let ownerName: string | null = null;
+
+  if (ownerInput && ownerInput.trim() && ownerInput.toLowerCase() !== "unassigned") {
+    const trimmed = ownerInput.trim();
+    const { data: person, error: pErr } = await client
+      .from("team_people")
+      .select("id, name")
+      .eq("tenant_slug", tenantSlug)
+      .or(`id.eq.${trimmed},name.ilike.${trimmed}`)
+      .maybeSingle();
+
+    if (pErr || !person) {
+      return { ok: false, error: `Unknown person: "${trimmed}". Must be a valid person ID or exact name.` };
+    }
+    ownerPersonId = person.id;
+    ownerName = person.name;
+  }
+
+  // Update without bumping updated_at so scoreboard counts aren't falsely affected
   const { data, error } = await client
     .from("prospects")
-    .update({ owner, updated_at: new Date().toISOString() })
+    .update({ owner: ownerName, owner_person_id: ownerPersonId })
     .eq("tenant_slug", tenantSlug)
     .eq("id", prospectId)
     .select("*")
     .maybeSingle();
 
   if (error) {
-    if (error.code === "42703") {
-      const { data: cur } = await client.from("prospects").select("signal_data").eq("id", prospectId).maybeSingle();
-      const signalData = (cur?.signal_data ?? {}) as Record<string, unknown>;
-      const { data: updated, error: sigErr } = await client
-        .from("prospects")
-        .update({ signal_data: { ...signalData, owner }, updated_at: new Date().toISOString() })
-        .eq("tenant_slug", tenantSlug)
-        .eq("id", prospectId)
-        .select("*")
-        .maybeSingle();
-      if (sigErr) return { ok: false, error: sigErr.message };
-      return { ok: true, prospect: updated ? prospectRowTo(updated as ProspectRow) : undefined };
-    }
     return { ok: false, error: error.message };
   }
   return { ok: true, prospect: data ? prospectRowTo(data as ProspectRow) : undefined };
@@ -836,28 +843,18 @@ export async function setProspectPriority(
   prospectId: string,
   priority: string | null
 ): Promise<{ ok: true; prospect?: ProspectRecord } | { ok: false; error: string }> {
+  const cleanPriority = priority ? priority.trim().toUpperCase() : null;
+
+  // Update without bumping updated_at
   const { data, error } = await client
     .from("prospects")
-    .update({ priority, updated_at: new Date().toISOString() })
+    .update({ priority: cleanPriority })
     .eq("tenant_slug", tenantSlug)
     .eq("id", prospectId)
     .select("*")
     .maybeSingle();
 
   if (error) {
-    if (error.code === "42703") {
-      const { data: cur } = await client.from("prospects").select("signal_data").eq("id", prospectId).maybeSingle();
-      const signalData = (cur?.signal_data ?? {}) as Record<string, unknown>;
-      const { data: updated, error: sigErr } = await client
-        .from("prospects")
-        .update({ signal_data: { ...signalData, priority }, updated_at: new Date().toISOString() })
-        .eq("tenant_slug", tenantSlug)
-        .eq("id", prospectId)
-        .select("*")
-        .maybeSingle();
-      if (sigErr) return { ok: false, error: sigErr.message };
-      return { ok: true, prospect: updated ? prospectRowTo(updated as ProspectRow) : undefined };
-    }
     return { ok: false, error: error.message };
   }
   return { ok: true, prospect: data ? prospectRowTo(data as ProspectRow) : undefined };

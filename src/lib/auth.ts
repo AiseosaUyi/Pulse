@@ -55,7 +55,7 @@ export async function getUserTenants(): Promise<TenantMembership[]> {
 
   // Must filter by user_id explicitly: the memberships RLS policy lets you
   // read any membership in a tenant you belong to (so /settings/team can
-  // display co-members). Without this filter the query would return Aise's
+  // display co-members). Without this filter the query would return another member's
   // owner row to a user who's only a member of the same tenant.
   const { data, error } = await supabase
     .from("memberships")

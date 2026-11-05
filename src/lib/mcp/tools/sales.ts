@@ -334,7 +334,7 @@ export function registerSalesTools(server: McpServer) {
         owner: z
           .string()
           .optional()
-          .describe("Team member name to filter by (e.g. 'Abdul', 'Abas', 'Olamide') or 'all'/'everyone'."),
+          .describe("Team member name or ID to filter by, or 'all'/'everyone'."),
       },
     },
     async ({ owner }, extra: ToolHandlerExtra) => {
@@ -353,7 +353,7 @@ export function registerSalesTools(server: McpServer) {
       description: "Assign or reassign a prospect to a team member (or null to unassign). Protected by sales:write.",
       inputSchema: {
         prospectId: z.string().uuid().describe("The prospect's ID"),
-        owner: z.string().nullable().describe("Team member name (e.g. 'Abdul', 'Abas', 'Aise') or null to unassign"),
+        owner: z.string().nullable().describe("Team member name, team person ID, or null to unassign"),
       },
     },
     async ({ prospectId, owner }, extra: ToolHandlerExtra) => {

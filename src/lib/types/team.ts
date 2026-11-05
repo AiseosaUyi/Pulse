@@ -11,6 +11,9 @@ export interface TeamMemberRecord {
   tenantSlug: string;
   name: string;
   role: string;
+  roleTitle?: string | null;
+  tags?: string[];
+  email?: string | null;
   active: boolean;
   weeklyTargets: WeeklyTargets;
   userId: string | null;

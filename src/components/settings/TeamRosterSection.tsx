@@ -11,14 +11,24 @@ import {
   deleteTeamMemberAction,
   updateTeamMemberTargetsAction,
   toggleTeamMemberActiveAction,
+  linkPersonToUserAction,
 } from "@/app/(app)/settings/actions";
+
+export interface LoginMemberInfo {
+  userId: string;
+  displayName: string;
+  username: string;
+  role: string;
+}
 
 export function TeamRosterSection({
   members: initialMembers,
   tenantSlug,
+  loginMembers = [],
 }: {
   members: TeamMemberRecord[];
   tenantSlug: string;
+  loginMembers?: LoginMemberInfo[];
 }) {
   const [members, setMembers] = useState(initialMembers);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -33,6 +43,20 @@ export function TeamRosterSection({
   });
   const [editTargets, setEditTargets] = useState<WeeklyTargets>({});
   const [isPending, startTransition] = useTransition();
+
+  const handleLinkUser = (personId: string, userId: string | null) => {
+    startTransition(async () => {
+      const res = await linkPersonToUserAction(personId, userId);
+      if (res.success) {
+        setMembers((prev) =>
+          prev.map((m) => (m.id === personId ? { ...m, userId } : m))
+        );
+        toast.success(userId ? "Person linked to login" : "Login unlinked");
+      } else {
+        toast.error("Failed to link person", res.message);
+      }
+    });
+  };
 
   const handleToggleActive = (member: TeamMemberRecord) => {
     const nextActive = !member.active;
@@ -153,7 +177,7 @@ export function TeamRosterSection({
             <div>
               <label className="text-[11px] text-text-muted">Name</label>
               <Input
-                placeholder="e.g. Abdul, Abas, Olamide"
+                placeholder="e.g. Alex Morgan"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 className="h-8 text-xs"
@@ -241,7 +265,7 @@ export function TeamRosterSection({
           return (
             <li key={member.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-semibold text-foreground">{member.name}</span>
                   <span className="text-xs text-text-muted px-2 py-0.5 rounded-full bg-sidebar">
                     {member.role}
@@ -257,6 +281,47 @@ export function TeamRosterSection({
                   >
                     {member.active ? "Active" : "Inactive"}
                   </button>
+
+                  {/* Admin link to login account control */}
+                  {member.userId ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-text-muted bg-sidebar/80 px-2 py-0.5 rounded-full border border-border/30">
+                      <span className="text-status-green font-medium">● Linked</span>
+                      <span>
+                        {loginMembers.find((lm) => lm.userId === member.userId)?.displayName ?? "Login"}
+                      </span>
+                      <button
+                        type="button"
+                        title="Unlink login account"
+                        aria-label="Unlink login account"
+                        disabled={isPending}
+                        onClick={() => handleLinkUser(member.id, null)}
+                        className="text-text-muted hover:text-error-500 ml-0.5"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <select
+                        aria-label="Link to login"
+                        disabled={isPending}
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) handleLinkUser(member.id, e.target.value);
+                        }}
+                        className="text-[11px] h-6 bg-sidebar/80 border border-border/40 rounded px-1.5 text-text-muted hover:text-foreground focus:outline-none"
+                      >
+                        <option value="" disabled>Link to login…</option>
+                        {loginMembers
+                          .filter((lm) => !members.some((other) => other.userId === lm.userId && other.id !== member.id))
+                          .map((lm) => (
+                            <option key={lm.userId} value={lm.userId}>
+                              {lm.displayName} ({lm.username || lm.role})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 {isEditing ? (

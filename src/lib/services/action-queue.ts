@@ -639,7 +639,7 @@ export async function upsertActionItem(
   return { ok: true, id: data.id as string };
 }
 
-type MutationResult = { ok: true } | { ok: false; status: 404 | 500; error?: string };
+type MutationResult = { ok: true } | { ok: false; status: 400 | 404 | 500; error?: string };
 
 function unsupported(op: string): MutationResult {
   return { ok: false, status: 404, error: `${op} is not supported for this row's source` };
@@ -863,32 +863,40 @@ export async function setQueueOwner(
   client: SupabaseClient,
   tenantSlug: string,
   rowRef: RowRef,
-  owner: string | null
+  ownerInput: string | null
 ): Promise<MutationResult> {
   if (rowRef.source === "coach") {
     return unsupported("Coach action owner");
   }
 
+  let ownerPersonId: string | null = null;
+  let ownerName: string | null = null;
+  let userId: string | null = null;
+
+  if (ownerInput && ownerInput.trim() && ownerInput.toLowerCase() !== "unassigned") {
+    const trimmed = ownerInput.trim();
+    const { data: person, error: pErr } = await client
+      .from("team_people")
+      .select("id, name, user_id")
+      .eq("tenant_slug", tenantSlug)
+      .or(`id.eq.${trimmed},name.ilike.${trimmed}`)
+      .maybeSingle();
+
+    if (pErr || !person) {
+      return { ok: false, status: 400, error: `Unknown person: "${trimmed}". Must be a valid person ID or exact name.` };
+    }
+    ownerPersonId = person.id;
+    ownerName = person.name;
+    userId = person.user_id;
+  }
+
   if (rowRef.source === "prospect") {
     const { error } = await client
       .from("prospects")
-      .update({ owner })
+      .update({ owner: ownerName, owner_person_id: ownerPersonId })
       .eq("tenant_slug", tenantSlug)
       .eq("id", rowRef.id);
     if (error) {
-      if (error.code === "42703") {
-        const { data: p } = await client
-          .from("prospects")
-          .select("signal_data")
-          .eq("id", rowRef.id)
-          .maybeSingle();
-        const cur = (p?.signal_data ?? {}) as Record<string, unknown>;
-        await client
-          .from("prospects")
-          .update({ signal_data: { ...cur, owner } })
-          .eq("id", rowRef.id);
-        return { ok: true };
-      }
       return { ok: false, status: 500, error: error.message };
     }
     return { ok: true };
@@ -897,10 +905,14 @@ export async function setQueueOwner(
   const table = rowRef.source === "engagement" ? "engagement_items" : "action_items";
   const { error } = await client
     .from(table)
-    .update({ owner })
+    .update({
+      owner: ownerName,
+      owner_person_id: ownerPersonId,
+      assigned_to: userId,
+    })
     .eq("tenant_slug", tenantSlug)
     .eq("id", rowRef.id);
-  if (error && error.code !== "42703") {
+  if (error) {
     return { ok: false, status: 500, error: error.message };
   }
   return { ok: true };

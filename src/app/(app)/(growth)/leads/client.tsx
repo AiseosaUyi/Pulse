@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition, useCallback } from "react";
 import { formatDateTime } from "@/lib/utils/format";
 import { useSearchParams } from "next/navigation";
+import { usePeople } from "@/lib/hooks/usePeople";
 import {
   Plus,
   Sparkles,
@@ -1136,7 +1137,7 @@ function OwnerFilter({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const members = ["Aise", "Abas", "Abdul", "Olamide", "Ambassador 1", "Ambassador 2"];
+  const { activePeople, tagGroups } = usePeople();
   return (
     <select
       value={value}
@@ -1145,9 +1146,14 @@ function OwnerFilter({
     >
       <option value="all">All owners</option>
       <option value="unassigned">Unassigned</option>
-      {members.map((m) => (
-        <option key={m} value={m}>
-          {m}
+      {activePeople.map((m) => (
+        <option key={m.id} value={m.name}>
+          {m.name} {m.tags?.includes("ambassador") ? "(Ambassador)" : ""}
+        </option>
+      ))}
+      {tagGroups.map((tg) => (
+        <option key={tg} value={`tag:${tg}`}>
+          Tag: {tg}s
         </option>
       ))}
     </select>

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentTenant } from "@/lib/auth";
+import { getCurrentTenant, getCurrentUser } from "@/lib/auth";
 import { sendBrevoEmail, buildInviteEmail, getAppBaseUrl } from "@/lib/integrations/brevo";
 
 function result(success: boolean, message: string) {
@@ -177,7 +177,8 @@ export async function removeMember(formData: FormData) {
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (user?.id === userId) return result(false, "Use sign-out to leave your own account");
+  if (!user) return result(false, "Unauthorized");
+  if (user.id === userId) return result(false, "Use sign-out to leave your own account");
 
   const admin = createAdminClient();
   // Prevent removing the last owner.
@@ -188,6 +189,19 @@ export async function removeMember(formData: FormData) {
     .eq("role", "owner");
   if ((owners ?? []).length <= 1 && owners?.[0]?.user_id === userId) {
     return result(false, "Can't remove the last owner");
+  }
+
+  // Unassign open work for the departing team member
+  const { data: person } = await admin
+    .from("team_people")
+    .select("id")
+    .eq("tenant_slug", tenant.slug)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (person) {
+    const { unassignDepartedPerson } = await import("@/lib/services/tasks");
+    await unassignDepartedPerson(admin, tenant.slug, person.id, user.id);
   }
 
   const { error } = await admin
@@ -203,6 +217,14 @@ export async function removeMember(formData: FormData) {
 }
 
 export async function saveTeamMember(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) return result(false, "Not authenticated");
+  const tenant = await getCurrentTenant();
+  if (!tenant) return result(false, "No active tenant");
+  if (tenant.role !== "owner" && tenant.role !== "admin") {
+    return result(false, "Only owners and admins can manage people");
+  }
+
   const name = String(formData.get("name") ?? "").trim();
   const role = String(formData.get("role") ?? "").trim();
   const active = formData.get("active") !== "false";
@@ -210,18 +232,23 @@ export async function saveTeamMember(formData: FormData) {
   const conversations = Number(formData.get("conversations") ?? 0);
   const reachOuts = Number(formData.get("reachOuts") ?? 0);
   const organicDms = Number(formData.get("organicDms") ?? 0);
+  const tagsRaw = String(formData.get("tags") ?? "").trim();
+  const tags = tagsRaw
+    ? tagsRaw.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean)
+    : undefined;
+  const email = String(formData.get("email") ?? "").trim() || null;
 
   if (!name) return result(false, "Name is required");
   if (!role) return result(false, "Role is required");
 
-  const tenant = await getCurrentTenant();
-  if (!tenant) return result(false, "No active tenant");
-
-  const supabase = await createClient();
+  const admin = createAdminClient();
   const { upsertTeamMember } = await import("@/lib/services/team");
-  const res = await upsertTeamMember(supabase, tenant.slug, {
+  const res = await upsertTeamMember(admin, tenant.slug, {
     name,
     role,
+    roleTitle: role,
+    tags,
+    email,
     active,
     weeklyTargets: { eventsCreated, conversations, reachOuts, organicDms },
   });
@@ -237,12 +264,17 @@ export async function updateTeamMemberTargetsAction(
   memberId: string,
   targets: import("@/lib/types/team").WeeklyTargets
 ) {
+  const user = await getCurrentUser();
+  if (!user) return result(false, "Not authenticated");
   const tenant = await getCurrentTenant();
   if (!tenant) return result(false, "No active tenant");
+  if (tenant.role !== "owner" && tenant.role !== "admin") {
+    return result(false, "Only owners and admins can manage people");
+  }
 
-  const supabase = await createClient();
+  const admin = createAdminClient();
   const { updateTeamMember } = await import("@/lib/services/team");
-  const res = await updateTeamMember(supabase, tenant.slug, memberId, { weeklyTargets: targets });
+  const res = await updateTeamMember(admin, tenant.slug, memberId, { weeklyTargets: targets });
 
   if (!res.ok) return result(false, res.error);
 
@@ -252,12 +284,17 @@ export async function updateTeamMemberTargetsAction(
 }
 
 export async function toggleTeamMemberActiveAction(memberId: string, active: boolean) {
+  const user = await getCurrentUser();
+  if (!user) return result(false, "Not authenticated");
   const tenant = await getCurrentTenant();
   if (!tenant) return result(false, "No active tenant");
+  if (tenant.role !== "owner" && tenant.role !== "admin") {
+    return result(false, "Only owners and admins can manage people");
+  }
 
-  const supabase = await createClient();
+  const admin = createAdminClient();
   const { updateTeamMember } = await import("@/lib/services/team");
-  const res = await updateTeamMember(supabase, tenant.slug, memberId, { active });
+  const res = await updateTeamMember(admin, tenant.slug, memberId, { active }, user.id);
 
   if (!res.ok) return result(false, res.error);
 
@@ -267,16 +304,79 @@ export async function toggleTeamMemberActiveAction(memberId: string, active: boo
 }
 
 export async function deleteTeamMemberAction(memberId: string) {
+  const user = await getCurrentUser();
+  if (!user) return result(false, "Not authenticated");
   const tenant = await getCurrentTenant();
   if (!tenant) return result(false, "No active tenant");
+  if (tenant.role !== "owner" && tenant.role !== "admin") {
+    return result(false, "Only owners and admins can manage people");
+  }
 
-  const supabase = await createClient();
+  const admin = createAdminClient();
   const { deleteTeamMember } = await import("@/lib/services/team");
-  const res = await deleteTeamMember(supabase, tenant.slug, memberId);
+  const res = await deleteTeamMember(admin, tenant.slug, memberId, user.id);
 
   if (!res.ok) return result(false, res.error);
 
   revalidatePath("/settings/team");
   revalidatePath("/dashboard");
   return result(true, "Team member removed");
+}
+
+export async function linkPersonToUserAction(personId: string, userId: string | null) {
+  const user = await getCurrentUser();
+  if (!user) return result(false, "Not authenticated");
+  const tenant = await getCurrentTenant();
+  if (!tenant) return result(false, "No active tenant");
+  if (tenant.role !== "owner" && tenant.role !== "admin") {
+    return result(false, "Only owners and admins can link people to logins");
+  }
+
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const admin = createAdminClient();
+
+  if (userId) {
+    // Check if user is already linked to another person
+    const { data: existing } = await admin
+      .from("team_people")
+      .select("id, name")
+      .eq("tenant_slug", tenant.slug)
+      .eq("user_id", userId)
+      .neq("id", personId)
+      .maybeSingle();
+
+    if (existing) {
+      return result(false, `This user is already linked to ${existing.name}`);
+    }
+
+    const { data: userData } = await admin.auth.admin.getUserById(userId);
+    const userEmail = userData?.user?.email ?? null;
+
+    const { error } = await admin
+      .from("team_people")
+      .update({
+        user_id: userId,
+        email: userEmail,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("tenant_slug", tenant.slug)
+      .eq("id", personId);
+
+    if (error) return result(false, error.message);
+  } else {
+    const { error } = await admin
+      .from("team_people")
+      .update({
+        user_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("tenant_slug", tenant.slug)
+      .eq("id", personId);
+
+    if (error) return result(false, error.message);
+  }
+
+  revalidatePath("/settings/team");
+  revalidatePath("/dashboard");
+  return result(true, userId ? "Linked to login" : "Unlinked from login");
 }

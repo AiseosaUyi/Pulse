@@ -228,7 +228,7 @@ export default async function TeamSettingsPage() {
         )}
       </section>
 
-      <TeamRosterSection members={teamRoster} tenantSlug={tenant.slug} />
+      <TeamRosterSection members={teamRoster} tenantSlug={tenant.slug} loginMembers={members} />
     </div>
   );
 }
