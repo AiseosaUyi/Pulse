@@ -59,6 +59,8 @@ drop policy if exists "members upload task-proofs" on storage.objects;
 drop policy if exists "members read task-proofs" on storage.objects;
 drop policy if exists "tenant members upload task-proofs" on storage.objects;
 drop policy if exists "tenant members read task-proofs" on storage.objects;
+drop policy if exists "tenant members update task-proofs" on storage.objects;
+drop policy if exists "tenant members delete task-proofs" on storage.objects;
 
 create policy "tenant members upload task-proofs" on storage.objects
   for insert with check (
@@ -123,6 +125,9 @@ create table if not exists public.migration_112_precleanup_log (
   change_description text not null,
   logged_at timestamptz not null default now()
 );
+
+alter table public.migration_112_precleanup_log enable row level security;
+revoke all on public.migration_112_precleanup_log from anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5. person_leave workflow & validation

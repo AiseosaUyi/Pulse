@@ -426,4 +426,27 @@ describe("Migration 113 RLS & Server Action Client Audit", () => {
         .join("\n")}`
     ).toEqual([]);
   });
+
+  it("migrations 110 and 112 lock down internal audit tables and views against anon and authenticated access", () => {
+    const migration110 = fs.readFileSync(
+      path.join(process.cwd(), "supabase/migrations/110_one_assignee_model.sql"),
+      "utf-8"
+    );
+    const migration112 = fs.readFileSync(
+      path.join(process.cwd(), "supabase/migrations/112_tasks_security_and_constraints.sql"),
+      "utf-8"
+    );
+
+    // migration 112 precleanup log has RLS enabled and revoked from anon/authenticated
+    expect(migration112).toContain("alter table public.migration_112_precleanup_log enable row level security;");
+    expect(migration112).toContain("revoke all on public.migration_112_precleanup_log from anon, authenticated;");
+
+    // migration 110 ambiguous_owner_matches has RLS enabled and revoked from anon/authenticated
+    expect(migration110).toContain("alter table public.ambiguous_owner_matches enable row level security;");
+    expect(migration110).toContain("revoke all on public.ambiguous_owner_matches from anon, authenticated;");
+
+    // migration 110 unmatched_owner_strings view has security invoker and revoked from anon/authenticated
+    expect(migration110).toContain("security_invoker = true");
+    expect(migration110).toContain("revoke all on public.unmatched_owner_strings from anon, authenticated;");
+  });
 });

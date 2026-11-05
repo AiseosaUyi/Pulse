@@ -321,6 +321,9 @@ create table if not exists public.ambiguous_owner_matches (
   created_at timestamptz not null default now()
 );
 
+alter table public.ambiguous_owner_matches enable row level security;
+revoke all on public.ambiguous_owner_matches from anon, authenticated;
+
 -- Backfill action_items & engagement_items with assigned_to (user_id) directly
 update action_items ai
 set owner_person_id = tp.id
@@ -405,7 +408,8 @@ select public.backfill_owner_person_ids_deterministic('engagement_items');
 drop function public.backfill_owner_person_ids_deterministic(text);
 
 -- View of unmatched owner strings so operators can audit unmapped values cleanly
-create or replace view public.unmatched_owner_strings as
+create or replace view public.unmatched_owner_strings
+with (security_invoker = true) as
 select 'prospects' as source_table, tenant_slug, owner as raw_owner_string, count(*) as row_count
 from prospects
 where owner is not null and trim(owner) <> '' and owner_person_id is null
@@ -420,6 +424,8 @@ select 'engagement_items' as source_table, tenant_slug, owner as raw_owner_strin
 from engagement_items
 where owner is not null and trim(owner) <> '' and owner_person_id is null
 group by tenant_slug, owner;
+
+revoke all on public.unmatched_owner_strings from anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 6. Unassigned tasks & graceful departure handling
