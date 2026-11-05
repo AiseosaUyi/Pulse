@@ -487,7 +487,7 @@ begin
     set owner_person_id = null, owner = null
     where id = v_prospect.id;
 
-    insert into prospect_notes (tenant_slug, prospect_id, author_id, body)
+    insert into prospect_notes (tenant_slug, prospect_id, created_by, body)
     values (
       v_prospect.tenant_slug,
       v_prospect.id,

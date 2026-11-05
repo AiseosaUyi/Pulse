@@ -114,7 +114,7 @@ declare
 begin
   if to_regclass('public.prospect_notes') is not null then
     for n in
-      execute 'select id, tenant_slug, prospect_id, body, author_id, created_at from prospect_notes where body ilike ''First message, approved by%'' order by created_at asc'
+      execute 'select id, tenant_slug, prospect_id, body, created_by, created_at from prospect_notes where body ilike ''First message, approved by%'' order by created_at asc'
     loop
       v_lines := regexp_split_to_array(n.body, E'\n\\s*\n');
       v_header := coalesce(v_lines[1], '');
@@ -155,7 +155,7 @@ begin
         approved_message = coalesce(prospects.approved_message, v_msg),
         approved_channel = coalesce(prospects.approved_channel, v_chan),
         approved_contact = coalesce(prospects.approved_contact, nullif(v_contact, '')),
-        approved_by = coalesce(prospects.approved_by, n.author_id),
+        approved_by = coalesce(prospects.approved_by, n.created_by),
         approved_by_person_id = coalesce(prospects.approved_by_person_id, v_person_id),
         approved_at = coalesce(prospects.approved_at, n.created_at)
       where id = n.prospect_id;
