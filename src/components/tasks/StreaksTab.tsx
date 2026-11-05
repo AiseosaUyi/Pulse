@@ -3,10 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   Flame,
-  AlertTriangle,
   CheckCircle2,
-  HelpCircle,
-  ExternalLink,
   ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +13,6 @@ import type {
   PersonStreakGroup,
   StreakSquare,
   TaskOccurrence,
-  TeamPerson,
 } from "@/lib/types/tasks";
 import { excuseOccurrenceAction } from "@/lib/actions/tasks";
 
@@ -107,11 +103,11 @@ export function StreaksTab({
                   <span className="text-sm font-bold text-foreground">
                     {grp.person.name}
                   </span>
-                  {!grp.person.userId && (
-                    <span className="text-[10px] text-text-muted bg-card px-2 py-0.5 rounded-full border border-border">
-                      Ambassador
+                  {grp.person.tags?.map((t) => (
+                    <span key={t} className="text-[10px] text-text-muted bg-card px-2 py-0.5 rounded-full border border-border capitalize">
+                      {t}
                     </span>
-                  )}
+                  ))}
                 </div>
                 <span className="text-xs text-text-muted font-medium">
                   {grp.tasks.length} habit{grp.tasks.length === 1 ? "" : "s"} tracked

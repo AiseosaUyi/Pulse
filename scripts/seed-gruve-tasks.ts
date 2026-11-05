@@ -26,49 +26,72 @@ async function main() {
   const timezone = await getTenantTimezone(client, tenantSlug);
   const todayStr = getTenantToday(timezone);
 
-  // 1. Resolve or create team_people
-  // Known auth profiles in Gruve
-  const KNOWN_MEMBERS = [
-    { name: "Olamide", userId: "c776f5c0-ab6f-4783-9611-803a760ad75b" },
-    { name: "Abas", userId: "bf83db6b-86ba-4d5a-8f3a-742eb13dd81c" },
-    { name: "Abdul", userId: "4ba907de-8329-4c0a-923e-81adf6ef6542" },
-    { name: "Aise", userId: "e2e34d7e-828c-4edc-8209-f0c068453662" },
-    { name: "Oki", userId: null }, // Ambassador without login
+  // 1. Resolve or create team_people by looking users up via email
+  const TARGET_ROLES = [
+    { key: "social", emailQuery: process.env.GRUVE_SOCIAL_EMAIL || "olamide", defaultName: "Social Media Lead", role: "Social Lead" },
+    { key: "inbox", emailQuery: process.env.GRUVE_INBOX_EMAIL || "abas", defaultName: "Community & Inbox Lead", role: "Support Lead" },
+    { key: "outreach", emailQuery: process.env.GRUVE_OUTREACH_EMAIL || "abdul", defaultName: "Growth & Outreach Lead", role: "Growth Lead" },
+    { key: "admin", emailQuery: process.env.GRUVE_ADMIN_EMAIL || "aise", defaultName: "Founder", role: "Admin" },
+    { key: "ambassador", emailQuery: process.env.GRUVE_AMBASSADOR_EMAIL || "ambassador", defaultName: "Campus Ambassador", role: "Ambassador" },
   ];
 
-  const existingPeople = await getTenantPeople(client, tenantSlug, { activeOnly: false });
-  const peopleMap = new Map<string, string>(); // name -> id
+  const { data: usersData } = await client.auth.admin.listUsers();
+  const allUsers = usersData?.users ?? [];
 
-  for (const km of KNOWN_MEMBERS) {
-    const found = existingPeople.find(
-      (p) => p.name.toLowerCase() === km.name.toLowerCase() || (km.userId && p.userId === km.userId)
+  const existingPeople = await getTenantPeople(client, tenantSlug, { activeOnly: false });
+  const rolePeopleMap = new Map<string, string>(); // roleKey -> personId
+  let resolvedCreatorId: string | null = null;
+
+  for (const r of TARGET_ROLES) {
+    const matchedUser = allUsers.find((u) =>
+      u.email?.toLowerCase().includes(r.emailQuery.toLowerCase())
     );
+
+    const resolvedUserId = matchedUser?.id ?? null;
+    const resolvedEmail = matchedUser?.email ?? null;
+    const resolvedName = matchedUser?.user_metadata?.display_name ||
+      matchedUser?.user_metadata?.full_name ||
+      (resolvedEmail ? resolvedEmail.split("@")[0] : r.defaultName);
+
+    if (r.key === "admin" && resolvedUserId) {
+      resolvedCreatorId = resolvedUserId;
+    }
+
+    // Match against existing team_people by userId, email, or role
+    const found = existingPeople.find((p) =>
+      (resolvedUserId && p.userId === resolvedUserId) ||
+      (resolvedEmail && p.email?.toLowerCase() === resolvedEmail.toLowerCase()) ||
+      (p.roleTitle?.toLowerCase() === r.role.toLowerCase())
+    );
+
     if (found) {
-      peopleMap.set(km.name, found.id);
-      console.log(`Found existing team person: ${found.name} (${found.id})`);
+      rolePeopleMap.set(r.key, found.id);
+      console.log(`Resolved team person for ${r.key}: ${found.name} (${found.id})`);
     } else {
       const created = await createTeamPerson(client, tenantSlug, {
-        name: km.name,
-        userId: km.userId,
+        name: resolvedName,
+        userId: resolvedUserId,
+        roleTitle: r.role,
+        email: resolvedEmail,
       });
-      peopleMap.set(km.name, created.id);
-      console.log(`Created team person: ${created.name} (${created.id})`);
+      rolePeopleMap.set(r.key, created.id);
+      console.log(`Created team person for ${r.key}: ${created.name} (${created.id})`);
     }
   }
 
-  const olamideId = peopleMap.get("Olamide")!;
-  const abasId = peopleMap.get("Abas")!;
-  const abdulId = peopleMap.get("Abdul")!;
-  const aiseId = peopleMap.get("Aise")!;
-  const okiId = peopleMap.get("Oki")!;
-  const creatorId = "e2e34d7e-828c-4edc-8209-f0c068453662"; // Aise (admin)
+  const socialPersonId = rolePeopleMap.get("social")!;
+  const inboxPersonId = rolePeopleMap.get("inbox")!;
+  const outreachPersonId = rolePeopleMap.get("outreach")!;
+  const adminPersonId = rolePeopleMap.get("admin")!;
+  const ambassadorPersonId = rolePeopleMap.get("ambassador")!;
+  const creatorId = resolvedCreatorId || adminPersonId;
 
   // 2. Define Tasks to seed (from Section 10 of build spec)
   const tasksToSeed = [
-    // Olamide
+    // Social Media Lead
     {
       title: "Daily post on Gruve Lagos",
-      ownerPersonId: olamideId,
+      ownerPersonId: socialPersonId,
       kind: "recurring" as const,
       startDate: todayStr,
       recurrence: "daily" as const,
@@ -85,7 +108,7 @@ async function main() {
     },
     {
       title: "This week in Lagos slides",
-      ownerPersonId: olamideId,
+      ownerPersonId: socialPersonId,
       kind: "recurring" as const,
       startDate: todayStr,
       recurrence: "weekly" as const,
@@ -95,7 +118,7 @@ async function main() {
     },
     {
       title: "Area reel",
-      ownerPersonId: olamideId,
+      ownerPersonId: socialPersonId,
       kind: "recurring" as const,
       startDate: todayStr,
       recurrence: "weekly" as const,
@@ -105,7 +128,7 @@ async function main() {
     },
     {
       title: "Don't be bored this weekend roundup",
-      ownerPersonId: olamideId,
+      ownerPersonId: socialPersonId,
       kind: "recurring" as const,
       startDate: todayStr,
       recurrence: "weekly" as const,
@@ -116,7 +139,7 @@ async function main() {
     },
     {
       title: "Event reel shot at an event",
-      ownerPersonId: olamideId,
+      ownerPersonId: socialPersonId,
       kind: "recurring" as const,
       startDate: todayStr,
       recurrence: "weekly" as const,
@@ -126,7 +149,7 @@ async function main() {
     },
     {
       title: "Reply to all comments",
-      ownerPersonId: olamideId,
+      ownerPersonId: socialPersonId,
       kind: "recurring" as const,
       startDate: todayStr,
       recurrence: "daily" as const,
@@ -134,10 +157,10 @@ async function main() {
       tags: ["social", "engagement"],
     },
 
-    // Abas
+    // Community & Inbox Lead
     {
       title: "Clear Pulse Today and the IG inbox",
-      ownerPersonId: abasId,
+      ownerPersonId: inboxPersonId,
       kind: "recurring" as const,
       startDate: todayStr,
       recurrence: "daily" as const,
@@ -147,7 +170,7 @@ async function main() {
     },
     {
       title: "Ambassador outreach check-in",
-      ownerPersonId: abasId,
+      ownerPersonId: inboxPersonId,
       kind: "recurring" as const,
       startDate: todayStr,
       recurrence: "weekdays" as const,
@@ -157,10 +180,10 @@ async function main() {
       tags: ["ambassadors"],
     },
 
-    // Abdul
+    // Growth & Outreach Lead
     {
       title: "Send outreach from Pulse Pipeline",
-      ownerPersonId: abdulId,
+      ownerPersonId: outreachPersonId,
       kind: "recurring" as const,
       startDate: todayStr,
       recurrence: "weekdays" as const,
@@ -171,7 +194,7 @@ async function main() {
     },
     {
       title: "Chase list",
-      ownerPersonId: abdulId,
+      ownerPersonId: outreachPersonId,
       kind: "recurring" as const,
       startDate: todayStr,
       recurrence: "weekly" as const,
@@ -181,7 +204,7 @@ async function main() {
     },
 
     // Everyone
-    ...[olamideId, abasId, abdulId, aiseId, okiId].map((personId) => ({
+    ...[socialPersonId, inboxPersonId, outreachPersonId, adminPersonId, ambassadorPersonId].map((personId) => ({
       title: "Friday standup numbers ready",
       ownerPersonId: personId,
       kind: "recurring" as const,

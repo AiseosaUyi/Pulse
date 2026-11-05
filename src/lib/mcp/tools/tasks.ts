@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { hasScope } from "@/lib/api/scopes";
 import {
   requireToolScope,
   mcpToolError,
@@ -12,6 +13,10 @@ import {
   createTask,
   updateTask,
   completeOccurrence,
+  uncompleteOccurrence,
+  excuseOccurrence,
+  addTaskComment,
+  recordPersonLeave,
   getStandupReport,
   getBreaches,
   getStreaksAndBreaches,
@@ -46,7 +51,10 @@ export function registerTasksTools(server: McpServer) {
         const match = people.find(
           (p) => p.id === args.person || p.name.toLowerCase() === args.person?.toLowerCase()
         );
-        personId = match?.id ?? args.person;
+        if (!match) {
+          return mcpToolError(`Team person "${args.person}" not found.`);
+        }
+        personId = match.id;
       }
 
       const tasks = await listTasks(admin, tenantSlug, {
@@ -100,7 +108,10 @@ export function registerTasksTools(server: McpServer) {
         const match = people.find(
           (p) => p.id === args.person || p.name.toLowerCase() === args.person?.toLowerCase()
         );
-        personId = match?.id ?? args.person;
+        if (!match) {
+          return mcpToolError(`Team person "${args.person}" not found.`);
+        }
+        personId = match.id;
       }
 
       const occurrences = await getOccurrencesForDate(admin, tenantSlug, targetDate, { personId });
@@ -152,6 +163,11 @@ export function registerTasksTools(server: McpServer) {
         return mcpToolError(`Team person "${args.owner}" not found. Available people: ${people.map((p) => p.name).join(", ")}`);
       }
 
+      const creatorId = createdBy ?? match.userId;
+      if (!creatorId) {
+        return mcpToolError("A valid user context is required to create a task.");
+      }
+
       try {
         const task = await createTask(
           admin,
@@ -178,7 +194,7 @@ export function registerTasksTools(server: McpServer) {
             tags: args.tags,
             checklist: args.checklist,
           },
-          createdBy ?? match.userId ?? "00000000-0000-0000-0000-000000000000"
+          creatorId
         );
 
         return mcpToolResult({ success: true, task });
@@ -206,9 +222,11 @@ export function registerTasksTools(server: McpServer) {
         pausedUntil: z.string().optional(),
         startDate: z.string().optional(),
         endDate: z.string().optional(),
+        dueDate: z.string().optional().describe("YYYY-MM-DD"),
         dueTime: z.string().optional(),
         recurrence: z.enum(["daily", "weekdays", "weekly", "monthly"]).optional(),
         recurrenceDays: z.array(z.number().min(1).max(7)).optional(),
+        recurrenceMonthDay: z.number().min(1).max(31).optional(),
         proofRequired: z.enum(["none", "link", "note", "image"]).optional(),
         proofHint: z.string().optional(),
         metricLabel: z.string().optional(),
@@ -221,6 +239,10 @@ export function registerTasksTools(server: McpServer) {
       const gate = requireToolScope(extra, "tasks:write");
       if (!gate.ok) return gate.error;
       const { tenantSlug, admin, createdBy } = gate.context;
+
+      if (!createdBy) {
+        return mcpToolError("A valid user context is required to update a task.");
+      }
 
       let ownerPersonId: string | undefined;
       if (args.owner) {
@@ -246,9 +268,11 @@ export function registerTasksTools(server: McpServer) {
             pausedUntil: args.pausedUntil,
             startDate: args.startDate,
             endDate: args.endDate,
+            dueDate: args.dueDate,
             dueTime: args.dueTime,
             recurrence: args.recurrence,
             recurrenceDays: args.recurrenceDays,
+            recurrenceMonthDay: args.recurrenceMonthDay,
             proofRequired: args.proofRequired,
             proofHint: args.proofHint,
             metricLabel: args.metricLabel,
@@ -256,7 +280,7 @@ export function registerTasksTools(server: McpServer) {
             tags: args.tags,
             checklist: args.checklist,
           },
-          createdBy ?? "00000000-0000-0000-0000-000000000000"
+          createdBy
         );
 
         return mcpToolResult({ success: true, task: updated });
@@ -278,6 +302,7 @@ export function registerTasksTools(server: McpServer) {
         occurrenceId: z.string().uuid(),
         proofUrl: z.string().optional(),
         proofNote: z.string().optional(),
+        proofImagePath: z.string().optional(),
         metricValue: z.number().optional(),
       },
     },
@@ -286,12 +311,19 @@ export function registerTasksTools(server: McpServer) {
       if (!gate.ok) return gate.error;
       const { tenantSlug, admin, createdBy } = gate.context;
 
+      if (!createdBy) {
+        return mcpToolError("A valid user context is required to complete an occurrence.");
+      }
+
+      const isAdmin = hasScope(gate.context.scopes, "admin");
+
       const result = await completeOccurrence(admin, tenantSlug, {
         occurrenceId: args.occurrenceId,
-        completedBy: createdBy ?? "00000000-0000-0000-0000-000000000000",
-        isAdmin: true, // MCP operator acts as admin on behalf of tenant
+        completedBy: createdBy,
+        isAdmin,
         proofUrl: args.proofUrl,
         proofNote: args.proofNote,
+        proofImagePath: args.proofImagePath,
         metricValue: args.metricValue,
       });
 
@@ -303,7 +335,163 @@ export function registerTasksTools(server: McpServer) {
     }
   );
 
-  // 6. pulse_task_report
+  // 6. pulse_uncomplete_occurrence
+  server.registerTool(
+    "pulse_uncomplete_occurrence",
+    {
+      title: "Uncomplete a task occurrence",
+      description: "Reverts a completed task occurrence back to pending. Mutates data.",
+      inputSchema: {
+        occurrenceId: z.string().uuid(),
+      },
+    },
+    async (args, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "tasks:write");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin, createdBy } = gate.context;
+
+      if (!createdBy) {
+        return mcpToolError("A valid user context is required to uncomplete an occurrence.");
+      }
+
+      const isAdmin = hasScope(gate.context.scopes, "admin");
+      const result = await uncompleteOccurrence(admin, tenantSlug, args.occurrenceId, createdBy, isAdmin);
+
+      if (!result.ok) {
+        return mcpToolError(result.error ?? "Failed to uncomplete occurrence");
+      }
+      return mcpToolResult({ success: true });
+    }
+  );
+
+  // 7. pulse_excuse_occurrence
+  server.registerTool(
+    "pulse_excuse_occurrence",
+    {
+      title: "Excuse a missed task occurrence",
+      description: "Excuses a missed occurrence with a mandatory reason (Admin only). Mutates data.",
+      inputSchema: {
+        occurrenceId: z.string().uuid(),
+        reason: z.string().min(1).describe("Reason for excusing the missed occurrence"),
+      },
+    },
+    async (args, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "tasks:write");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin, createdBy } = gate.context;
+
+      if (!createdBy) {
+        return mcpToolError("A valid user context is required to excuse an occurrence.");
+      }
+
+      const result = await excuseOccurrence(admin, tenantSlug, args.occurrenceId, createdBy, args.reason);
+      if (!result.ok) {
+        return mcpToolError(result.error ?? "Failed to excuse occurrence");
+      }
+      return mcpToolResult({ success: true });
+    }
+  );
+
+  // 8. pulse_add_task_comment
+  server.registerTool(
+    "pulse_add_task_comment",
+    {
+      title: "Add a comment to a task or occurrence",
+      description: "Appends a comment to a task thread. Mutates data.",
+      inputSchema: {
+        taskId: z.string().uuid(),
+        occurrenceId: z.string().uuid().optional(),
+        body: z.string().min(1),
+      },
+    },
+    async (args, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "tasks:write");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin, createdBy } = gate.context;
+
+      if (!createdBy) {
+        return mcpToolError("A valid user context is required to add a comment.");
+      }
+
+      try {
+        const comment = await addTaskComment(admin, tenantSlug, {
+          taskId: args.taskId,
+          occurrenceId: args.occurrenceId,
+          author: createdBy,
+          body: args.body,
+        });
+        return mcpToolResult({ success: true, comment });
+      } catch (err: unknown) {
+        return mcpToolError(err instanceof Error ? err.message : "Failed to add comment");
+      }
+    }
+  );
+
+  // 9. pulse_record_leave
+  server.registerTool(
+    "pulse_record_leave",
+    {
+      title: "Record or request leave for a team member",
+      description: "Records leave, automatically skipping scheduled occurrences for that period. Mutates data.",
+      inputSchema: {
+        person: z.string().describe("Team person ID or name"),
+        startsOn: z.string().describe("YYYY-MM-DD"),
+        endsOn: z.string().describe("YYYY-MM-DD"),
+        reason: z.string().optional(),
+      },
+    },
+    async (args, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "tasks:write");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin, createdBy } = gate.context;
+
+      if (!createdBy) {
+        return mcpToolError("A valid user context is required to record leave.");
+      }
+
+      const people = await getTenantPeople(admin, tenantSlug, { activeOnly: false });
+      const match = people.find(
+        (p) => p.id === args.person || p.name.toLowerCase() === args.person.toLowerCase()
+      );
+      if (!match) return mcpToolError(`Team person "${args.person}" not found.`);
+
+      try {
+        const leave = await recordPersonLeave(admin, tenantSlug, {
+          personId: match.id,
+          startsOn: args.startsOn,
+          endsOn: args.endsOn,
+          reason: args.reason,
+          createdBy,
+          status: "approved",
+        });
+        return mcpToolResult({ success: true, leave });
+      } catch (err: unknown) {
+        return mcpToolError(err instanceof Error ? err.message : "Failed to record leave");
+      }
+    }
+  );
+
+  // 10. pulse_list_people
+  server.registerTool(
+    "pulse_list_people",
+    {
+      title: "List tenant team people",
+      description: "List all team people for the tenant with roles, tags, targets and active status. Read-only.",
+      inputSchema: {
+        activeOnly: z.boolean().optional().default(false),
+      },
+    },
+    async (args, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "tasks:read");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin } = gate.context;
+
+      const people = await getTenantPeople(admin, tenantSlug, { activeOnly: args.activeOnly });
+      return mcpToolResult(people);
+    }
+  );
+
+  // 11. pulse_task_report
   server.registerTool(
     "pulse_task_report",
     {
@@ -327,7 +515,8 @@ export function registerTasksTools(server: McpServer) {
         const match = people.find(
           (p) => p.id === args.person || p.name.toLowerCase() === args.person?.toLowerCase()
         );
-        personId = match?.id ?? args.person;
+        if (!match) return mcpToolError(`Team person "${args.person}" not found.`);
+        personId = match.id;
       }
 
       const report = await getStandupReport(admin, tenantSlug, args.from, args.to, personId);
@@ -335,7 +524,7 @@ export function registerTasksTools(server: McpServer) {
     }
   );
 
-  // 7. pulse_task_breaches
+  // 12. pulse_task_breaches
   server.registerTool(
     "pulse_task_breaches",
     {
@@ -359,7 +548,8 @@ export function registerTasksTools(server: McpServer) {
         const match = people.find(
           (p) => p.id === args.person || p.name.toLowerCase() === args.person?.toLowerCase()
         );
-        personId = match?.id ?? args.person;
+        if (!match) return mcpToolError(`Team person "${args.person}" not found.`);
+        personId = match.id;
       }
 
       const breaches = await getBreaches(admin, tenantSlug, args.from, args.to, personId);

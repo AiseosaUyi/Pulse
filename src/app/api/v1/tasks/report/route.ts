@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   const todayStr = getTenantToday(timezone);
 
   let from = searchParams.get("from");
-  let to = searchParams.get("to") || todayStr;
+  const to = searchParams.get("to") || todayStr;
   const person = searchParams.get("person");
 
   if (!from) {

@@ -582,6 +582,24 @@ approved / already rejected, the last two showing a read-only copy of what was d
 placeholder for the link — proactive WhatsApp messages outside the 24h customer-service window
 require a template, plain text isn't deliverable).
 
+### Tasks & Habits (Accountability Engine)
+
+The Tasks and Habits engine (migrations 109-113) manages recurring operational habits, one-offs, checklist items, leave tracking, streak matrices, and standup reporting. Assignees are unified onto `team_people`. Supported scopes: `tasks:read` and `tasks:write` (or `admin`).
+
+| Method | Path | Scope | Description |
+|---|---|---|---|
+| GET | `/api/v1/tasks` | `tasks:read` | List tasks for tenant (filter by status, ownerPersonId, priority, kind). |
+| POST | `/api/v1/tasks` | `tasks:write` | Create a task (validated against `createTaskSchema`). |
+| GET | `/api/v1/tasks/:id` | `tasks:read` | Retrieve single task with checklist template. |
+| PATCH | `/api/v1/tasks/:id` | `tasks:write` | Update task fields, reschedule occurrences. |
+| DELETE | `/api/v1/tasks/:id` | `tasks:write` | Archive task and clean up future pending occurrences. |
+| GET | `/api/v1/tasks/occurrences` | `tasks:read` | List occurrences by date range, owner, or status. |
+| POST | `/api/v1/tasks/occurrences/:id/complete` | `tasks:write` | Complete occurrence with proof and metrics. Supports same-day missed recovery. |
+| POST | `/api/v1/tasks/occurrences/:id/uncomplete` | `tasks:write` | Revert completed occurrence to pending (same day only). |
+| POST | `/api/v1/tasks/occurrences/:id/excuse` | `tasks:write` | Admin-forgive a missed occurrence with a reason. |
+| GET | `/api/v1/tasks/report` | `tasks:read` | WhatsApp-formatted standup report over date range. |
+| GET | `/api/v1/people` | `tasks:read` | List team people and roles for the tenant. |
+
 ## Not yet shipped
 
 Every endpoint group in the original build spec — Sales, Publishing, Engagement, Content, SEO,
@@ -933,12 +951,28 @@ from in `pulse_action_queue`'s output, not always `"engagement"`.
 | `pulse_send_briefing` | `POST /briefings/send` | `publish:write` (scheduled_post) or `content:write` (content_brief) |
 | `pulse_list_pending_approvals` | `GET /approvals/pending` | `content:read` |
 
+**Tasks & Accountability**
+
+| Tool | REST twin | Scope |
+|---|---|---|
+| `pulse_list_tasks` | `GET /tasks` | `tasks:read` |
+| `pulse_create_task` | `POST /tasks` | `tasks:write` |
+| `pulse_update_task` | `PATCH /tasks/:id` | `tasks:write` |
+| `pulse_archive_task` | `DELETE /tasks/:id` | `tasks:write` |
+| `pulse_list_occurrences` | `GET /tasks/occurrences` | `tasks:read` |
+| `pulse_complete_occurrence` | `POST /tasks/occurrences/:id/complete` | `tasks:write` |
+| `pulse_uncomplete_occurrence` | `POST /tasks/occurrences/:id/uncomplete` | `tasks:write` |
+| `pulse_excuse_occurrence` | `POST /tasks/occurrences/:id/excuse` | `tasks:write` |
+| `pulse_add_task_comment` | — (MCP-only) | `tasks:write` |
+| `pulse_list_people` | `GET /people` | `tasks:read` |
+| `pulse_record_leave` | — (MCP-only) | `tasks:write` |
+
 No `pulse_approve`/`pulse_reject` tools — approval must be a deliberate human action taken via the
 signed link, not something an AI agent can call on the tenant's behalf.
 
-66 tools total across all 10 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
-Analytics, Ads platform, Content, Notifications) — every group in the original build spec, plus
-the ads platform tools and the Action Queue write path added after it.
+77 tools total across all 11 groups (Meta, Sales, Publishing, Engagement, Intelligence, SEO,
+Analytics, Ads platform, Content, Notifications, Tasks) — every group in the build spec, plus
+the ads platform tools, the Action Queue write path, and Tasks accountability engine.
 
 ### Deviations (MCP)
 

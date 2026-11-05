@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { CheckCircle2, ArrowRight, Flame } from "lucide-react";
+import { CheckCircle2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/Toaster";
 import type { TaskOccurrence } from "@/lib/types/tasks";
@@ -10,10 +11,11 @@ import { completeOccurrenceAction } from "@/lib/actions/tasks";
 
 interface DashboardTasksWidgetProps {
   occurrences: TaskOccurrence[];
-  tenantSlug: string;
+  tenantSlug?: string;
 }
 
-export function DashboardTasksWidget({ occurrences, tenantSlug }: DashboardTasksWidgetProps) {
+export function DashboardTasksWidget({ occurrences }: DashboardTasksWidgetProps) {
+  const router = useRouter();
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
 
@@ -27,7 +29,7 @@ export function DashboardTasksWidget({ occurrences, tenantSlug }: DashboardTasks
     const hasChecks = (occ.checks ?? []).length > 0;
 
     if (proofReq !== "none" || hasChecks) {
-      window.location.href = `/tasks?tab=today`;
+      router.push("/tasks?tab=today");
       return;
     }
 

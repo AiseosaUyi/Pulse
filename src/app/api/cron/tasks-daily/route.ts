@@ -1,5 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateMissingOccurrences, markMissedOccurrences } from "@/lib/services/tasks";
+import { verifyCronRequest } from "@/lib/cron/auth";
+
+export const maxDuration = 300;
 
 export async function GET(request: Request): Promise<Response> {
   return handleCron(request);
@@ -10,9 +13,11 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 async function handleCron(request: Request): Promise<Response> {
-  const auth = request.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = verifyCronRequest({
+    getHeader: (name) => request.headers.get(name),
+  });
+  if (!authResult.ok) {
+    return Response.json({ error: authResult.error }, { status: authResult.status });
   }
 
   const admin = createAdminClient();

@@ -1,6 +1,9 @@
+import type { WeeklyTargets } from "./team";
+
 export type TaskPriority = "urgent" | "high" | "normal" | "low";
 export type TaskKind = "one_off" | "recurring";
 export type TaskRecurrence = "daily" | "weekdays" | "weekly" | "monthly";
+export type RecurrenceFrequency = TaskRecurrence;
 export type ProofRequired = "none" | "link" | "note" | "image";
 export type TaskStatus = "active" | "paused" | "archived";
 export type OccurrenceStatus = "pending" | "done" | "missed" | "excused" | "skipped";
@@ -12,8 +15,13 @@ export interface TeamPerson {
   name: string;
   userId: string | null;
   leadPersonId: string | null;
+  roleTitle?: string | null;
+  tags: string[];
+  weeklyTargets: WeeklyTargets;
+  email?: string | null;
   active: boolean;
   createdAt: string;
+  updatedAt?: string;
   leadPerson?: TeamPerson | null;
 }
 
@@ -113,6 +121,9 @@ export interface PersonLeave {
   startsOn: string; // YYYY-MM-DD
   endsOn: string; // YYYY-MM-DD
   reason: string | null;
+  status: "requested" | "approved" | "declined" | "cancelled";
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
   createdBy: string;
   createdAt: string;
   person?: TeamPerson;
@@ -203,7 +214,7 @@ export interface StandupReport {
 export interface CreateTaskInput {
   title: string;
   description?: string | null;
-  ownerPersonId: string;
+  ownerPersonId?: string | null;
   priority?: TaskPriority;
   kind: TaskKind;
   startDate: string; // YYYY-MM-DD
@@ -226,7 +237,7 @@ export interface CreateTaskInput {
 export interface UpdateTaskInput {
   title?: string;
   description?: string | null;
-  ownerPersonId?: string;
+  ownerPersonId?: string | null;
   priority?: TaskPriority;
   kind?: TaskKind;
   startDate?: string;

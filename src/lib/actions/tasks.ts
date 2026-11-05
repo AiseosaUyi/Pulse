@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentTenant, getCurrentUser, requireUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentTenant, requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CreateTaskInput, UpdateTaskInput } from "@/lib/types/tasks";
+import { createTaskSchema, updateTaskSchema } from "@/lib/validation/tasks";
 import {
   addTaskComment,
   archiveTask,
@@ -14,6 +14,9 @@ import {
   excuseOccurrence,
   getTaskById,
   recordPersonLeave,
+  approvePersonLeave,
+  declinePersonLeave,
+  cancelPersonLeave,
   toggleChecklistItem,
   uncompleteOccurrence,
   updateTask,
@@ -28,13 +31,18 @@ export async function createTaskAction(input: CreateTaskInput) {
   const currentTenant = await getCurrentTenant();
   if (!currentTenant) return { success: false, error: "No active tenant" };
 
+  const parsed = createTaskSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid task data" };
+  }
+
   const tenantSlug = currentTenant.slug;
   const isAdmin = checkIsAdmin(currentTenant.role);
 
   // Members can create tasks for themselves, admins can create for anyone
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
-  if (!isAdmin) {
+  if (!isAdmin && input.ownerPersonId) {
     // If member, verify that owner_person_id links to their own user_id
     const { data: person } = await supabase
       .from("team_people")
@@ -64,14 +72,19 @@ export async function updateTaskAction(taskId: string, input: UpdateTaskInput) {
   const currentTenant = await getCurrentTenant();
   if (!currentTenant) return { success: false, error: "No active tenant" };
 
+  const parsed = updateTaskSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid update data" };
+  }
+
   const tenantSlug = currentTenant.slug;
   const isAdmin = checkIsAdmin(currentTenant.role);
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const existing = await getTaskById(supabase, tenantSlug, taskId);
   if (!existing) return { success: false, error: "Task not found" };
 
-  // Permission check: admin or owner of task
+  // Permission check: admin or owner of task (C7)
   if (!isAdmin) {
     const { data: ownerPerson } = await supabase
       .from("team_people")
@@ -81,6 +94,14 @@ export async function updateTaskAction(taskId: string, input: UpdateTaskInput) {
 
     if (ownerPerson?.user_id !== user.id) {
       return { success: false, error: "Only admins or task owners can edit this task" };
+    }
+
+    // Restrict ownerPersonId and priority changes to admins (C7)
+    if (input.ownerPersonId !== undefined && input.ownerPersonId !== existing.ownerPersonId) {
+      return { success: false, error: "Only admins can reassign tasks to another person" };
+    }
+    if (input.priority !== undefined && input.priority !== existing.priority) {
+      return { success: false, error: "Only admins can change task priority" };
     }
   }
 
@@ -104,7 +125,7 @@ export async function archiveTaskAction(taskId: string) {
     return { success: false, error: "Only admins can archive tasks" };
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   try {
     await archiveTask(supabase, currentTenant.slug, taskId, user.id);
     revalidatePath("/tasks");
@@ -127,7 +148,7 @@ export async function completeOccurrenceAction(params: {
   const currentTenant = await getCurrentTenant();
   if (!currentTenant) return { success: false, error: "No active tenant" };
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const isAdmin = checkIsAdmin(currentTenant.role);
 
   const result = await completeOccurrence(supabase, currentTenant.slug, {
@@ -154,7 +175,7 @@ export async function uncompleteOccurrenceAction(occurrenceId: string) {
   const currentTenant = await getCurrentTenant();
   if (!currentTenant) return { success: false, error: "No active tenant" };
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const isAdmin = checkIsAdmin(currentTenant.role);
 
   const result = await uncompleteOccurrence(
@@ -183,7 +204,7 @@ export async function excuseOccurrenceAction(occurrenceId: string, reason: strin
     return { success: false, error: "Only admins can excuse missed tasks" };
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const result = await excuseOccurrence(
     supabase,
     currentTenant.slug,
@@ -206,25 +227,36 @@ export async function toggleCheckAction(checkId: string, checked: boolean) {
   const currentTenant = await getCurrentTenant();
   if (!currentTenant) return { success: false, error: "No active tenant" };
 
-  const supabase = await createClient();
-  await toggleChecklistItem(supabase, currentTenant.slug, checkId, checked, user.id);
+  const isAdmin = checkIsAdmin(currentTenant.role);
+  const supabase = createAdminClient();
+  const result = await toggleChecklistItem(supabase, currentTenant.slug, checkId, checked, user.id, isAdmin);
+  if (!result.ok) {
+    return { success: false, error: result.error ?? "Failed to toggle check item" };
+  }
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
   return { success: true };
 }
 
-export async function addCommentAction(taskId: string, occurrenceId: string | null, body: string) {
+export async function addCommentAction(
+  taskId: string,
+  occurrenceIdOrBody: string | null,
+  body?: string
+) {
   const user = await requireUser();
   const currentTenant = await getCurrentTenant();
   if (!currentTenant) return { success: false, error: "No active tenant" };
 
-  const supabase = await createClient();
+  const occurrenceId = body !== undefined ? occurrenceIdOrBody : null;
+  const commentBody = body !== undefined ? body : (occurrenceIdOrBody ?? "");
+
+  const supabase = createAdminClient();
   try {
     const comment = await addTaskComment(supabase, currentTenant.slug, {
       taskId,
       occurrenceId,
       author: user.id,
-      body,
+      body: commentBody,
     });
     revalidatePath("/tasks");
     return { success: true, comment };
@@ -244,7 +276,11 @@ export async function recordLeaveAction(params: {
   const currentTenant = await getCurrentTenant();
   if (!currentTenant) return { success: false, error: "No active tenant" };
 
-  const supabase = await createClient();
+  if (params.startsOn > params.endsOn) {
+    return { success: false, error: "Leave start date must be on or before end date" };
+  }
+
+  const supabase = createAdminClient();
   const isAdmin = checkIsAdmin(currentTenant.role);
 
   if (!isAdmin) {
@@ -263,6 +299,7 @@ export async function recordLeaveAction(params: {
     const leave = await recordPersonLeave(supabase, currentTenant.slug, {
       ...params,
       createdBy: user.id,
+      status: isAdmin ? "approved" : "requested",
     });
     revalidatePath("/tasks");
     return { success: true, leave };
@@ -272,16 +309,71 @@ export async function recordLeaveAction(params: {
   }
 }
 
+export async function approveLeaveAction(leaveId: string) {
+  const user = await requireUser();
+  const currentTenant = await getCurrentTenant();
+  if (!currentTenant) return { success: false, error: "No active tenant" };
+  if (!checkIsAdmin(currentTenant.role)) return { success: false, error: "Only admins can approve leave" };
+
+  const supabase = createAdminClient();
+  try {
+    await approvePersonLeave(supabase, currentTenant.slug, leaveId, user.id);
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to approve leave";
+    return { success: false, error: message };
+  }
+}
+
+export async function declineLeaveAction(leaveId: string) {
+  const user = await requireUser();
+  const currentTenant = await getCurrentTenant();
+  if (!currentTenant) return { success: false, error: "No active tenant" };
+  if (!checkIsAdmin(currentTenant.role)) return { success: false, error: "Only admins can decline leave" };
+
+  const supabase = createAdminClient();
+  try {
+    await declinePersonLeave(supabase, currentTenant.slug, leaveId, user.id);
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to decline leave";
+    return { success: false, error: message };
+  }
+}
+
+export async function cancelLeaveAction(leaveId: string) {
+  const user = await requireUser();
+  const currentTenant = await getCurrentTenant();
+  if (!currentTenant) return { success: false, error: "No active tenant" };
+  const isAdmin = checkIsAdmin(currentTenant.role);
+
+  const supabase = createAdminClient();
+  try {
+    await cancelPersonLeave(supabase, currentTenant.slug, leaveId, user.id, isAdmin);
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to cancel leave";
+    return { success: false, error: message };
+  }
+}
+
 export async function createTeamPersonAction(params: {
   name: string;
   userId?: string | null;
   leadPersonId?: string | null;
 }) {
-  const user = await requireUser();
+  await requireUser();
   const currentTenant = await getCurrentTenant();
   if (!currentTenant) return { success: false, error: "No active tenant" };
 
-  const supabase = await createClient();
+  if (!checkIsAdmin(currentTenant.role)) {
+    return { success: false, error: "Only admins can add team members" };
+  }
+
+  const supabase = createAdminClient();
   try {
     const person = await createTeamPerson(supabase, currentTenant.slug, params);
     revalidatePath("/tasks");

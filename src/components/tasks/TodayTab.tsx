@@ -13,7 +13,6 @@ import {
   Upload,
   Link as LinkIcon,
   FileText,
-  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,8 +109,8 @@ export function TodayTab({
             }`}
           >
             <span>{p.name}</span>
-            {!p.userId && (
-              <span className="text-[10px] opacity-75">(ambassador)</span>
+            {p.tags?.length > 0 && (
+              <span className="text-[10px] opacity-75">({p.tags[0]})</span>
             )}
           </button>
         ))}
@@ -230,8 +229,6 @@ function TaskCard({
   occurrence,
   isOverdue,
   streak = 0,
-  currentUserId,
-  isAdmin,
   onEdit,
 }: TaskCardProps) {
   const task = occurrence.task;
@@ -556,7 +553,7 @@ interface DoneTaskRowProps {
   onEdit?: () => void;
 }
 
-function DoneTaskRow({ occurrence, isAdmin, currentUserId, onEdit }: DoneTaskRowProps) {
+function DoneTaskRow({ occurrence }: DoneTaskRowProps) {
   const task = occurrence.task;
   const [isPending, startTransition] = useTransition();
 

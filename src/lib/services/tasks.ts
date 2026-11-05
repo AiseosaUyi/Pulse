@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CreateTaskInput,
+  LinkedType,
   OccurrenceStatus,
   PersonLeave,
   PersonStreakGroup,
@@ -11,8 +12,12 @@ import type {
   Task,
   TaskComment,
   TaskEvent,
+  TaskKind,
   TaskOccurrence,
   TaskOccurrenceCheck,
+  TaskPriority,
+  TaskRecurrence,
+  TaskStatus,
   TaskStreakRow,
   TeamPerson,
   UpdateTaskInput,
@@ -43,6 +48,27 @@ export async function getTenantTimezone(
   return (data?.timezone as string) || "Africa/Lagos";
 }
 
+function mapOwnerRaw(
+  ownerRaw: Record<string, unknown> | null | undefined,
+  fallbackTenantSlug?: string
+): TeamPerson | undefined {
+  if (!ownerRaw) return undefined;
+  return {
+    id: (ownerRaw.id as string) || "",
+    tenantSlug: (ownerRaw.tenant_slug as string) || fallbackTenantSlug || "",
+    name: (ownerRaw.name as string) || "",
+    userId: (ownerRaw.user_id as string) ?? null,
+    leadPersonId: (ownerRaw.lead_person_id as string) ?? null,
+    roleTitle: (ownerRaw.role_title as string) || null,
+    tags: (ownerRaw.tags as string[]) || [],
+    weeklyTargets: (ownerRaw.weekly_targets as Record<string, number>) || {},
+    email: (ownerRaw.email as string) || null,
+    active: ownerRaw.active !== undefined ? Boolean(ownerRaw.active) : true,
+    createdAt: (ownerRaw.created_at as string) || "",
+    updatedAt: (ownerRaw.updated_at as string) || (ownerRaw.created_at as string) || "",
+  };
+}
+
 export async function getTenantPeople(
   client: SupabaseClient,
   tenantSlug: string,
@@ -50,7 +76,7 @@ export async function getTenantPeople(
 ): Promise<TeamPerson[]> {
   let query = client
     .from("team_people")
-    .select("id, tenant_slug, name, user_id, lead_person_id, active, created_at")
+    .select("id, tenant_slug, name, user_id, lead_person_id, role_title, tags, weekly_targets, email, active, created_at, updated_at")
     .eq("tenant_slug", tenantSlug)
     .order("name", { ascending: true });
 
@@ -67,8 +93,13 @@ export async function getTenantPeople(
     name: r.name as string,
     userId: (r.user_id as string) ?? null,
     leadPersonId: (r.lead_person_id as string) ?? null,
+    roleTitle: (r.role_title as string) || null,
+    tags: (r.tags as string[]) || [],
+    weeklyTargets: (r.weekly_targets as Record<string, number>) || {},
+    email: (r.email as string) || null,
     active: r.active as boolean,
     createdAt: r.created_at as string,
+    updatedAt: (r.updated_at as string) || (r.created_at as string),
   }));
 
   const byId = new Map(people.map((p) => [p.id, p]));
@@ -84,7 +115,15 @@ export async function getTenantPeople(
 export async function createTeamPerson(
   client: SupabaseClient,
   tenantSlug: string,
-  params: { name: string; userId?: string | null; leadPersonId?: string | null }
+  params: {
+    name: string;
+    userId?: string | null;
+    leadPersonId?: string | null;
+    roleTitle?: string | null;
+    tags?: string[];
+    weeklyTargets?: Record<string, number>;
+    email?: string | null;
+  }
 ): Promise<TeamPerson> {
   const { data, error } = await client
     .from("team_people")
@@ -93,6 +132,10 @@ export async function createTeamPerson(
       name: params.name.trim(),
       user_id: params.userId ?? null,
       lead_person_id: params.leadPersonId ?? null,
+      role_title: params.roleTitle ?? null,
+      tags: params.tags ?? [],
+      weekly_targets: params.weeklyTargets ?? {},
+      email: params.email ?? null,
       active: true,
     })
     .select()
@@ -108,21 +151,161 @@ export async function createTeamPerson(
     name: data.name as string,
     userId: (data.user_id as string) ?? null,
     leadPersonId: (data.lead_person_id as string) ?? null,
+    roleTitle: (data.role_title as string) || null,
+    tags: (data.tags as string[]) || [],
+    weeklyTargets: (data.weekly_targets as Record<string, number>) || {},
+    email: (data.email as string) || null,
     active: data.active as boolean,
     createdAt: data.created_at as string,
+    updatedAt: (data.updated_at as string) || (data.created_at as string),
   };
+}
+
+export async function unassignDepartedPerson(
+  client: SupabaseClient,
+  tenantSlug: string,
+  personId: string,
+  actorId?: string | null
+): Promise<{ ok: boolean; count?: number; error?: string }> {
+  // 1. Fetch person details
+  const { data: person } = await client
+    .from("team_people")
+    .select("id, name, tenant_slug")
+    .eq("id", personId)
+    .maybeSingle();
+
+  if (!person) {
+    return { ok: false, error: "Person not found" };
+  }
+
+  // 2. Mark person inactive
+  await client
+    .from("team_people")
+    .update({ active: false, updated_at: new Date().toISOString() })
+    .eq("id", personId);
+
+  // Try DB RPC first
+  try {
+    const { error: rpcErr } = await client.rpc("unassign_departed_person", {
+      p_person_id: personId,
+      p_actor_id: actorId ?? null,
+    });
+    if (!rpcErr) {
+      return { ok: true };
+    }
+  } catch {
+    // Fall back to client queries below
+  }
+
+  // 3. Unassign open prospects & add note
+  const { data: openProspects } = await client
+    .from("prospects")
+    .select("id")
+    .eq("tenant_slug", tenantSlug)
+    .eq("owner_person_id", personId)
+    .not("status", "in", '("closed_won","closed_lost","dismissed","unqualified")');
+
+  if (openProspects && openProspects.length > 0) {
+    const pIds = openProspects.map((p) => p.id);
+    await client
+      .from("prospects")
+      .update({ owner_person_id: null, owner: null })
+      .in("id", pIds);
+
+    const notes = pIds.map((pId) => ({
+      tenant_slug: tenantSlug,
+      prospect_id: pId,
+      author_id: actorId ?? null,
+      body: `Unassigned on departure (previous owner: ${person.name})`,
+    }));
+    await client.from("prospect_notes").insert(notes);
+  }
+
+  // 4. Unassign open action items & engagement items
+  await client
+    .from("action_items")
+    .update({ owner_person_id: null, owner: null, assigned_to: null })
+    .eq("tenant_slug", tenantSlug)
+    .eq("owner_person_id", personId)
+    .in("status", ["open", "snoozed"]);
+
+  await client
+    .from("engagement_items")
+    .update({ owner_person_id: null, owner: null, assigned_to: null })
+    .eq("tenant_slug", tenantSlug)
+    .eq("owner_person_id", personId)
+    .in("status", ["open", "snoozed"]);
+
+  // 5. Tasks: pause recurring tasks, unassign one-offs
+  const { data: openTasks } = await client
+    .from("tasks")
+    .select("id, kind, status")
+    .eq("tenant_slug", tenantSlug)
+    .eq("owner_person_id", personId)
+    .in("status", ["active", "paused"]);
+
+  for (const t of openTasks ?? []) {
+    const patch: Record<string, unknown> = {
+      owner_person_id: null,
+      updated_at: new Date().toISOString(),
+    };
+    if (t.kind === "recurring") {
+      patch.status = "paused";
+    }
+    await client.from("tasks").update(patch).eq("id", t.id);
+
+    await logTaskEvent(client, tenantSlug, {
+      taskId: t.id,
+      actor: actorId ?? null,
+      action: "unassigned_on_departure",
+      payload: {
+        previous_owner_id: personId,
+        previous_owner_name: person.name,
+      },
+    });
+  }
+
+  // Unassign pending occurrences so they don't count as breaches for anyone
+  await client
+    .from("task_occurrences")
+    .update({ owner_person_id: null })
+    .eq("tenant_slug", tenantSlug)
+    .eq("owner_person_id", personId)
+    .eq("status", "pending");
+
+  return { ok: true };
 }
 
 export async function updateTeamPerson(
   client: SupabaseClient,
   tenantSlug: string,
   id: string,
-  patch: Partial<{ name: string; userId: string | null; leadPersonId: string | null; active: boolean }>
+  patch: Partial<{
+    name: string;
+    userId: string | null;
+    leadPersonId: string | null;
+    roleTitle: string | null;
+    tags: string[];
+    weeklyTargets: Record<string, number>;
+    email: string | null;
+    active: boolean;
+  }>,
+  actorId?: string | null
 ): Promise<TeamPerson> {
-  const updateData: Record<string, unknown> = {};
+  if (patch.active === false) {
+    await unassignDepartedPerson(client, tenantSlug, id, actorId);
+  }
+
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
   if (patch.name !== undefined) updateData.name = patch.name.trim();
   if (patch.userId !== undefined) updateData.user_id = patch.userId;
   if (patch.leadPersonId !== undefined) updateData.lead_person_id = patch.leadPersonId;
+  if (patch.roleTitle !== undefined) updateData.role_title = patch.roleTitle;
+  if (patch.tags !== undefined) updateData.tags = patch.tags;
+  if (patch.weeklyTargets !== undefined) updateData.weekly_targets = patch.weeklyTargets;
+  if (patch.email !== undefined) updateData.email = patch.email;
   if (patch.active !== undefined) updateData.active = patch.active;
 
   const { data, error } = await client
@@ -143,8 +326,13 @@ export async function updateTeamPerson(
     name: data.name as string,
     userId: (data.user_id as string) ?? null,
     leadPersonId: (data.lead_person_id as string) ?? null,
+    roleTitle: (data.role_title as string) || null,
+    tags: (data.tags as string[]) || [],
+    weeklyTargets: (data.weekly_targets as Record<string, number>) || {},
+    email: (data.email as string) || null,
     active: data.active as boolean,
     createdAt: data.created_at as string,
+    updatedAt: (data.updated_at as string) || (data.created_at as string),
   };
 }
 
@@ -203,6 +391,7 @@ export async function notifyDiscordTask(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
+      signal: AbortSignal.timeout(5000),
     });
   } catch (err) {
     console.error("Failed to post Discord task webhook:", err);
@@ -225,6 +414,7 @@ export async function generateOccurrencesForTask(
   daysAhead = 7
 ): Promise<number> {
   if (task.status === "archived") return 0;
+  if (task.kind === "recurring" && !task.ownerPersonId) return 0;
 
   const todayStr = getTenantToday(timezone);
   const startFrom = task.startDate > todayStr ? task.startDate : todayStr;
@@ -236,12 +426,13 @@ export async function generateOccurrencesForTask(
   const rangeEnd = task.endDate && task.endDate < endAt ? task.endDate : endAt;
   const dates = getDatesInRange(startFrom, rangeEnd);
 
-  // Fetch leave for the owner in this range
+  // Fetch approved leave for the owner in this range
   const { data: leaveRows } = await client
     .from("person_leave")
     .select("starts_on, ends_on")
     .eq("tenant_slug", task.tenantSlug)
     .eq("person_id", task.ownerPersonId)
+    .eq("status", "approved")
     .lte("starts_on", rangeEnd)
     .gte("ends_on", startFrom);
 
@@ -271,38 +462,60 @@ export async function generateOccurrencesForTask(
     const isLeave = isLeaveDate(dateStr);
     const status: OccurrenceStatus = isPaused || isLeave ? "skipped" : "pending";
 
-    // Insert occurrence
+    // Upsert occurrence with ignoreDuplicates (P1)
     const { data: occData, error: occErr } = await client
       .from("task_occurrences")
-      .insert({
-        tenant_slug: task.tenantSlug,
-        task_id: task.id,
-        owner_person_id: task.ownerPersonId,
-        occurs_on: dateStr,
-        due_at: dueAt,
-        status,
-      })
+      .upsert(
+        {
+          tenant_slug: task.tenantSlug,
+          task_id: task.id,
+          owner_person_id: task.ownerPersonId,
+          occurs_on: dateStr,
+          due_at: dueAt,
+          status,
+        },
+        { onConflict: "task_id, occurs_on", ignoreDuplicates: true }
+      )
       .select("id")
-      .single();
+      .maybeSingle();
 
     if (occErr) {
-      // 23505 is unique violation (already exists), ignore idempotently
+      console.error(`Failed to upsert occurrence for task ${task.id} on ${dateStr}:`, occErr);
       continue;
     }
 
-    createdCount++;
+    let targetOccId = occData?.id;
+    if (occData) {
+      createdCount++;
+    } else {
+      // Existed before; get ID to verify checklist exists
+      const { data: existingOcc } = await client
+        .from("task_occurrences")
+        .select("id")
+        .eq("task_id", task.id)
+        .eq("occurs_on", dateStr)
+        .maybeSingle();
+      targetOccId = existingOcc?.id;
+    }
 
-    // Copy checklist items to task_occurrence_checks
-    if (occData && templateChecks && templateChecks.length > 0) {
-      const checksToInsert = templateChecks.map((t) => ({
-        tenant_slug: task.tenantSlug,
-        occurrence_id: occData.id,
-        position: t.position as number,
-        label: t.label as string,
-        checked: false,
-      }));
+    // Ensure checklist items exist in task_occurrence_checks
+    if (targetOccId && templateChecks && templateChecks.length > 0) {
+      const { data: existingChecks } = await client
+        .from("task_occurrence_checks")
+        .select("id")
+        .eq("occurrence_id", targetOccId)
+        .limit(1);
 
-      await client.from("task_occurrence_checks").insert(checksToInsert);
+      if (!existingChecks || existingChecks.length === 0) {
+        const checksToInsert = templateChecks.map((t) => ({
+          tenant_slug: task.tenantSlug,
+          occurrence_id: targetOccId,
+          position: t.position as number,
+          label: t.label as string,
+          checked: false,
+        }));
+        await client.from("task_occurrence_checks").insert(checksToInsert);
+      }
     }
   }
 
@@ -338,7 +551,8 @@ export async function markMissedOccurrences(
 ): Promise<{ markedMissed: number; markedSkipped: number }> {
   const nowIso = new Date().toISOString();
 
-  // Find all pending occurrences where due_at < nowIso
+  // Find all pending occurrences where due_at < nowIso and owner_person_id is not null.
+  // Unassigned occurrences are skipped from the sweep per departure rules (they do not produce breaches).
   const { data: pendingRows, error } = await client
     .from("task_occurrences")
     .select(`
@@ -360,28 +574,41 @@ export async function markMissedOccurrences(
     `)
     .eq("tenant_slug", tenantSlug)
     .eq("status", "pending")
+    .not("owner_person_id", "is", null)
     .lt("due_at", nowIso);
 
   if (error || !pendingRows || pendingRows.length === 0) {
     return { markedMissed: 0, markedSkipped: 0 };
   }
 
-  // Pre-fetch leave for owners
-  const ownerIds = [...new Set(pendingRows.map((r) => r.owner_person_id as string))];
+  // Pre-fetch approved leave for owners
+  const ownerIds = [...new Set(pendingRows.map((r) => r.owner_person_id as string).filter(Boolean))];
   const { data: leaves } = await client
     .from("person_leave")
     .select("person_id, starts_on, ends_on")
     .eq("tenant_slug", tenantSlug)
+    .eq("status", "approved")
     .in("person_id", ownerIds);
 
   let markedMissed = 0;
   let markedSkipped = 0;
 
   for (const row of pendingRows) {
+    if (!row.owner_person_id) continue;
     const occursOn = row.occurs_on as string;
     const ownerId = row.owner_person_id as string;
     const taskData = row.tasks as unknown as { title: string; status: string; paused_until: string | null };
     const personData = row.team_people as unknown as { name: string };
+
+    if (taskData?.status === "archived") {
+      await client
+        .from("task_occurrences")
+        .delete()
+        .eq("id", row.id)
+        .eq("status", "pending");
+      markedSkipped++;
+      continue;
+    }
 
     const isOnLeave = (leaves ?? []).some(
       (l) => l.person_id === ownerId && l.starts_on <= occursOn && l.ends_on >= occursOn
@@ -392,50 +619,58 @@ export async function markMissedOccurrences(
       (!taskData.paused_until || occursOn <= taskData.paused_until);
 
     if (isOnLeave || isTaskPaused) {
-      // Mark as skipped
-      await client
+      // Mark as skipped with status guard
+      const { data: skippedData } = await client
         .from("task_occurrences")
         .update({ status: "skipped" })
-        .eq("id", row.id);
+        .eq("id", row.id)
+        .eq("status", "pending")
+        .select("id");
 
-      await logTaskEvent(client, tenantSlug, {
-        taskId: row.task_id as string,
-        occurrenceId: row.id as string,
-        action: "skipped",
-        payload: { reason: isOnLeave ? "person_leave" : "task_paused" },
-      });
-      markedSkipped++;
+      if (skippedData && skippedData.length > 0) {
+        await logTaskEvent(client, tenantSlug, {
+          taskId: row.task_id as string,
+          occurrenceId: row.id as string,
+          action: "skipped",
+          payload: { reason: isOnLeave ? "person_leave" : "task_paused" },
+        });
+        markedSkipped++;
+      }
     } else {
-      // Mark as missed (BREACH)
-      await client
+      // Mark as missed (BREACH) with status guard
+      const { data: missedData } = await client
         .from("task_occurrences")
         .update({ status: "missed" })
-        .eq("id", row.id);
+        .eq("id", row.id)
+        .eq("status", "pending")
+        .select("id");
 
-      await logTaskEvent(client, tenantSlug, {
-        taskId: row.task_id as string,
-        occurrenceId: row.id as string,
-        action: "missed",
-        payload: { occursOn },
-      });
-      markedMissed++;
+      if (missedData && missedData.length > 0) {
+        await logTaskEvent(client, tenantSlug, {
+          taskId: row.task_id as string,
+          occurrenceId: row.id as string,
+          action: "missed",
+          payload: { occursOn },
+        });
+        markedMissed++;
 
-      // Trigger Discord breach notification
-      const taskTitle = taskData?.title ?? "Task";
-      const ownerName = personData?.name ?? "Team member";
-      const [y, m, d] = occursOn.split("-").map(Number);
-      const dateObj = new Date(Date.UTC(y, m - 1, d));
-      const formattedDate = dateObj.toLocaleDateString("en-GB", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-      });
+        // Trigger Discord breach notification
+        const taskTitle = taskData?.title ?? "Task";
+        const ownerName = personData?.name ?? "Team member";
+        const [y, m, d] = occursOn.split("-").map(Number);
+        const dateObj = new Date(Date.UTC(y, m - 1, d));
+        const formattedDate = dateObj.toLocaleDateString("en-GB", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+        });
 
-      await notifyDiscordTask(
-        client,
-        tenantSlug,
-        `❌ Missed. ${ownerName}, *${taskTitle}*, ${formattedDate}`
-      );
+        notifyDiscordTask(
+          client,
+          tenantSlug,
+          `❌ Missed. ${ownerName}, *${taskTitle}*, ${formattedDate}`
+        ).catch((err) => console.error("Failed to notify discord:", err));
+      }
     }
   }
 
@@ -546,17 +781,7 @@ export async function listTasks(
       tags: (r.tags as string[]) ?? [],
       createdAt: r.created_at as string,
       updatedAt: r.updated_at as string,
-      owner: ownerRaw
-        ? {
-            id: ownerRaw.id as string,
-            tenantSlug: ownerRaw.tenant_slug as string,
-            name: ownerRaw.name as string,
-            userId: (ownerRaw.user_id as string) ?? null,
-            leadPersonId: (ownerRaw.lead_person_id as string) ?? null,
-            active: ownerRaw.active as boolean,
-            createdAt: ownerRaw.created_at as string,
-          }
-        : undefined,
+      owner: mapOwnerRaw(ownerRaw, tenantSlug),
       checklist: checksRaw
         .map((c) => ({
           id: c.id as string,
@@ -577,8 +802,95 @@ export async function getTaskById(
   tenantSlug: string,
   taskId: string
 ): Promise<Task | null> {
-  const tasks = await listTasks(client, tenantSlug, { status: undefined });
-  return tasks.find((t) => t.id === taskId) ?? null;
+  const { data: row, error } = await client
+    .from("tasks")
+    .select(`
+      id,
+      tenant_slug,
+      title,
+      description,
+      owner_person_id,
+      created_by,
+      priority,
+      kind,
+      start_date,
+      end_date,
+      due_date,
+      due_time,
+      recurrence,
+      recurrence_days,
+      recurrence_month_day,
+      proof_required,
+      proof_hint,
+      metric_label,
+      metric_target,
+      linked_type,
+      linked_id,
+      tags,
+      status,
+      paused_until,
+      created_at,
+      updated_at,
+      task_checklist_items (
+        id,
+        tenant_slug,
+        task_id,
+        position,
+        label
+      )
+    `)
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", taskId)
+    .maybeSingle();
+
+  if (error || !row) return null;
+
+  const checklistItems =
+    (row.task_checklist_items as unknown as Array<{
+      id: string;
+      tenant_slug?: string;
+      task_id?: string;
+      position: number;
+      label: string;
+    }>) ?? [];
+
+  return {
+    id: row.id as string,
+    tenantSlug: row.tenant_slug as string,
+    title: row.title as string,
+    description: (row.description as string) ?? null,
+    ownerPersonId: (row.owner_person_id as string) ?? null,
+    createdBy: (row.created_by as string) ?? "",
+    priority: row.priority as TaskPriority,
+    kind: row.kind as TaskKind,
+    startDate: row.start_date as string,
+    endDate: (row.end_date as string) ?? null,
+    dueDate: (row.due_date as string) ?? null,
+    dueTime: (row.due_time as string) ?? null,
+    recurrence: (row.recurrence as TaskRecurrence) ?? null,
+    recurrenceDays: (row.recurrence_days as number[]) ?? null,
+    recurrenceMonthDay: (row.recurrence_month_day as number) ?? null,
+    proofRequired: row.proof_required as ProofRequired,
+    proofHint: (row.proof_hint as string) ?? null,
+    metricLabel: (row.metric_label as string) ?? null,
+    metricTarget: row.metric_target !== null && row.metric_target !== undefined ? Number(row.metric_target) : null,
+    linkedType: (row.linked_type as LinkedType) ?? null,
+    linkedId: (row.linked_id as string) ?? null,
+    tags: (row.tags as string[]) ?? [],
+    status: row.status as TaskStatus,
+    pausedUntil: (row.paused_until as string) ?? null,
+    createdAt: row.created_at as string,
+    updatedAt: (row.updated_at as string) || (row.created_at as string),
+    checklist: checklistItems
+      .map((c) => ({
+        id: c.id,
+        tenantSlug: c.tenant_slug ?? (row.tenant_slug as string),
+        taskId: c.task_id ?? (row.id as string),
+        position: c.position,
+        label: c.label,
+      }))
+      .sort((a, b) => a.position - b.position),
+  };
 }
 
 export async function createTask(
@@ -712,6 +1024,61 @@ export async function updateTask(
     });
   }
 
+  // Rule: Shortened end_date deletes future pending occurrences beyond new end date
+  if (patch.endDate !== undefined && patch.endDate !== null) {
+    await client
+      .from("task_occurrences")
+      .delete()
+      .eq("task_id", taskId)
+      .gt("occurs_on", patch.endDate)
+      .eq("status", "pending");
+  }
+
+  // Rule: Changed recurrence removes stale future pending occurrences so new ones can be generated
+  const recurrenceChanged =
+    (patch.recurrence !== undefined && patch.recurrence !== existing.recurrence) ||
+    (patch.recurrenceDays !== undefined &&
+      JSON.stringify(patch.recurrenceDays) !== JSON.stringify(existing.recurrenceDays)) ||
+    (patch.recurrenceMonthDay !== undefined &&
+      patch.recurrenceMonthDay !== existing.recurrenceMonthDay);
+
+  if (recurrenceChanged) {
+    await client
+      .from("task_occurrences")
+      .delete()
+      .eq("task_id", taskId)
+      .gte("occurs_on", todayStr)
+      .eq("status", "pending");
+  }
+
+  // Rule: Changed due_time updates due_at on pending occurrences from today forward
+  if (patch.dueTime !== undefined && patch.dueTime !== existing.dueTime) {
+    const { data: pendingToUpdate } = await client
+      .from("task_occurrences")
+      .select("id, occurs_on")
+      .eq("task_id", taskId)
+      .gte("occurs_on", todayStr)
+      .eq("status", "pending");
+
+    for (const p of pendingToUpdate ?? []) {
+      const newDueAt = getIsoDueAt(p.occurs_on as string, patch.dueTime, timezone);
+      await client
+        .from("task_occurrences")
+        .update({ due_at: newDueAt })
+        .eq("id", p.id);
+    }
+  }
+
+  // Rule: Resuming paused task restores skipped occurrences back to pending
+  if (patch.status === "active" && existing.status === "paused") {
+    await client
+      .from("task_occurrences")
+      .update({ status: "pending" })
+      .eq("task_id", taskId)
+      .gte("occurs_on", todayStr)
+      .eq("status", "skipped");
+  }
+
   // Rule: Pausing task turns future pending occurrences in pause window into skipped
   if (patch.status === "paused") {
     let query = client
@@ -760,10 +1127,25 @@ export async function updateTask(
 
     if (pendingOccs && pendingOccs.length > 0) {
       const occIds = pendingOccs.map((o) => o.id);
+
+      // Fetch existing checks to preserve ticks when labels match (P1)
+      const { data: existingChecks } = await client
+        .from("task_occurrence_checks")
+        .select("occurrence_id, label, checked")
+        .in("occurrence_id", occIds);
+
+      const checkedMap = new Map<string, boolean>();
+      for (const c of existingChecks ?? []) {
+        checkedMap.set(
+          `${c.occurrence_id}::${(c.label as string).trim().toLowerCase()}`,
+          Boolean(c.checked)
+        );
+      }
+
       // Delete their checks
       await client.from("task_occurrence_checks").delete().in("occurrence_id", occIds);
 
-      // Re-insert new checks
+      // Re-insert new checks preserving checked state
       if (patch.checklist.length > 0) {
         const batchChecks: Array<{
           tenant_slug: string;
@@ -774,12 +1156,14 @@ export async function updateTask(
         }> = [];
         for (const occId of occIds) {
           patch.checklist.forEach((label, idx) => {
+            const isChecked =
+              checkedMap.get(`${occId}::${label.trim().toLowerCase()}`) ?? false;
             batchChecks.push({
               tenant_slug: tenantSlug,
               occurrence_id: occId,
               position: idx + 1,
               label: label.trim(),
-              checked: false,
+              checked: isChecked,
             });
           });
         }
@@ -812,6 +1196,9 @@ export async function archiveTask(
   taskId: string,
   adminUserId: string
 ): Promise<void> {
+  const timezone = await getTenantTimezone(client, tenantSlug);
+  const todayStr = getTenantToday(timezone);
+
   const { error } = await client
     .from("tasks")
     .update({ status: "archived" })
@@ -819,6 +1206,14 @@ export async function archiveTask(
     .eq("tenant_slug", tenantSlug);
 
   if (error) throw new Error(`Failed to archive task: ${error.message}`);
+
+  // Delete pending occurrences from today forward so archived tasks produce no breaches
+  await client
+    .from("task_occurrences")
+    .delete()
+    .eq("task_id", taskId)
+    .gte("occurs_on", todayStr)
+    .eq("status", "pending");
 
   await logTaskEvent(client, tenantSlug, {
     taskId,
@@ -973,17 +1368,7 @@ export async function getOccurrencesForDate(
       createdAt: r.created_at as string,
       checks,
       completedByProfile: r.completed_by ? profileMap.get(r.completed_by) : undefined,
-      owner: ownerRaw
-        ? {
-            id: ownerRaw.id as string,
-            tenantSlug: ownerRaw.tenant_slug as string,
-            name: ownerRaw.name as string,
-            userId: (ownerRaw.user_id as string) ?? null,
-            leadPersonId: (ownerRaw.lead_person_id as string) ?? null,
-            active: ownerRaw.active as boolean,
-            createdAt: ownerRaw.created_at as string,
-          }
-        : undefined,
+      owner: mapOwnerRaw(ownerRaw, tenantSlug),
       task: taskRaw
         ? {
             id: taskRaw.id as string,
@@ -1142,17 +1527,7 @@ export async function getOverdueOccurrences(
         checkedAt: (c.checked_at as string) ?? null,
         checkedBy: (c.checked_by as string) ?? null,
       })),
-      owner: ownerRaw
-        ? {
-            id: ownerRaw.id as string,
-            tenantSlug: ownerRaw.tenant_slug as string,
-            name: ownerRaw.name as string,
-            userId: (ownerRaw.user_id as string) ?? null,
-            leadPersonId: (ownerRaw.lead_person_id as string) ?? null,
-            active: ownerRaw.active as boolean,
-            createdAt: ownerRaw.created_at as string,
-          }
-        : undefined,
+      owner: mapOwnerRaw(ownerRaw, tenantSlug),
       task: taskRaw
         ? {
             id: taskRaw.id as string,
@@ -1195,8 +1570,61 @@ export async function toggleChecklistItem(
   tenantSlug: string,
   checkId: string,
   checked: boolean,
-  userId: string
-): Promise<void> {
+  userId: string,
+  isAdmin = false
+): Promise<{ ok: boolean; error?: string }> {
+  // Check occurrence status & ownership (C6)
+  const { data: checkRow, error } = await client
+    .from("task_occurrence_checks")
+    .select(`
+      id,
+      occurrence_id,
+      task_occurrences (
+        id,
+        status,
+        owner_person_id,
+        team_people (
+          user_id,
+          lead_person_id
+        )
+      )
+    `)
+    .eq("id", checkId)
+    .eq("tenant_slug", tenantSlug)
+    .single();
+
+  if (error || !checkRow) return { ok: false, error: "Check item not found" };
+
+  const occ = checkRow.task_occurrences as unknown as {
+    id: string;
+    status: OccurrenceStatus;
+    owner_person_id: string;
+    team_people: { user_id: string | null; lead_person_id: string | null };
+  };
+
+  if (occ.status !== "pending" && occ.status !== "missed") {
+    return { ok: false, error: "Cannot modify checklist on a non-pending task occurrence" };
+  }
+
+  let hasPermission = isAdmin;
+  if (!hasPermission && occ.team_people?.user_id === userId) {
+    hasPermission = true;
+  }
+  if (!hasPermission && occ.team_people?.lead_person_id) {
+    const { data: leadPerson } = await client
+      .from("team_people")
+      .select("user_id")
+      .eq("id", occ.team_people.lead_person_id)
+      .single();
+    if (leadPerson?.user_id === userId) {
+      hasPermission = true;
+    }
+  }
+
+  if (!hasPermission) {
+    return { ok: false, error: "You do not have permission to check items for this task" };
+  }
+
   await client
     .from("task_occurrence_checks")
     .update({
@@ -1206,6 +1634,8 @@ export async function toggleChecklistItem(
     })
     .eq("id", checkId)
     .eq("tenant_slug", tenantSlug);
+
+  return { ok: true };
 }
 
 /**
@@ -1273,9 +1703,28 @@ export async function completeOccurrence(
   const timezone = await getTenantTimezone(client, tenantSlug);
   const todayStr = getTenantToday(timezone);
   const occursOn = occRow.occurs_on as string;
+  const currentStatus = occRow.status as OccurrenceStatus;
 
-  // Day constraint: can be completed until 23:59 of its day
-  if (occursOn < todayStr && !params.isAdmin) {
+  // Status transitions & guards (C3)
+  if (currentStatus === "done") {
+    return { ok: false, error: "Task occurrence is already completed" };
+  }
+  if (currentStatus === "excused") {
+    return { ok: false, error: "Excused occurrences cannot be completed" };
+  }
+  if (currentStatus === "skipped") {
+    return { ok: false, error: "Skipped occurrences cannot be completed" };
+  }
+  if (currentStatus === "missed") {
+    // Decision, recommended default: A same-day late completion flips missed to done
+    // with completed_late = true and a "recovered" audit event.
+    if (occursOn !== todayStr && !params.isAdmin) {
+      return { ok: false, error: "Missed occurrences from past days can only be completed by an admin" };
+    }
+  }
+
+  // Day constraint: pending occurrences can be completed until 23:59 of their day
+  if (occursOn < todayStr && currentStatus === "pending" && !params.isAdmin) {
     return { ok: false, error: "This task occurrence is from a past day and can only be changed by an admin" };
   }
 
@@ -1327,26 +1776,57 @@ export async function completeOccurrence(
     return { ok: false, error: `All checklist items must be ticked (${checks.length - unchecked.length} of ${checks.length} completed)` };
   }
 
-  // Proof validation
+  // Metric target validation (C6)
+  if (task.metric_target !== null && task.metric_target !== undefined) {
+    if (params.metricValue === undefined || params.metricValue === null || isNaN(Number(params.metricValue))) {
+      return { ok: false, error: "A numeric metric value is required to complete this task" };
+    }
+    if (Number(params.metricValue) < 0) {
+      return { ok: false, error: "Metric value cannot be negative" };
+    }
+    // Honest partial work (e.g. 40 of 50 DMs) is counted as done rather than blocked as a breach;
+    // the accountability streak grid flags it visually as belowTarget.
+  }
+
+  // Proof validation (C6)
   if (task.proof_required === "link") {
     const url = params.proofUrl?.trim();
     if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
       return { ok: false, error: "A valid link (starting with http:// or https://) is required as proof" };
     }
   } else if (task.proof_required === "note") {
-    if (!params.proofNote?.trim()) {
+    const note = params.proofNote?.trim() ?? "";
+    if (!note) {
       return { ok: false, error: "A written note is required as proof" };
     }
+    if (note.length < 10) {
+      return { ok: false, error: "Proof note must be at least 10 characters long" };
+    }
   } else if (task.proof_required === "image") {
-    if (!params.proofImagePath?.trim()) {
+    const imagePath = params.proofImagePath?.trim();
+    if (!imagePath) {
       return { ok: false, error: "An image upload is required as proof" };
+    }
+    if (!imagePath.startsWith(`${tenantSlug}/`)) {
+      return { ok: false, error: "Proof image path must belong to current tenant" };
+    }
+    if (client.storage) {
+      const lastSlash = imagePath.lastIndexOf("/");
+      const dir = lastSlash >= 0 ? imagePath.substring(0, lastSlash) : "";
+      const fileName = lastSlash >= 0 ? imagePath.substring(lastSlash + 1) : imagePath;
+      const { data: files } = await client.storage.from("task-proofs").list(dir, { search: fileName });
+      const fileFound = files && files.some((f: { name: string }) => f.name === fileName);
+      if (!fileFound) {
+        return { ok: false, error: "Proof image not found in storage" };
+      }
     }
   }
 
-  // Late check: completed after due_at but same day
+  // Late check & recovery
   const now = new Date();
   const dueAt = new Date(occRow.due_at as string);
-  const isLate = now > dueAt && occursOn === todayStr;
+  const isRecovered = currentStatus === "missed";
+  const isLate = isRecovered || now > dueAt;
 
   const updatePatch: Record<string, unknown> = {
     status: "done",
@@ -1359,22 +1839,25 @@ export async function completeOccurrence(
     metric_value: params.metricValue !== undefined ? params.metricValue : null,
   };
 
-  const { error: updateErr } = await client
+  const { data: updatedOcc, error: updateErr } = await client
     .from("task_occurrences")
     .update(updatePatch)
     .eq("id", params.occurrenceId)
-    .eq("tenant_slug", tenantSlug);
+    .eq("tenant_slug", tenantSlug)
+    .eq("status", currentStatus)
+    .select("id");
 
-  if (updateErr) {
-    return { ok: false, error: updateErr.message };
+  if (updateErr || !updatedOcc || updatedOcc.length === 0) {
+    return { ok: false, error: "Failed to complete occurrence (status may have changed concurrently)" };
   }
 
   await logTaskEvent(client, tenantSlug, {
     taskId: occRow.task_id as string,
     occurrenceId: params.occurrenceId,
     actor: params.completedBy,
-    action: "completed",
+    action: isRecovered ? "recovered" : "completed",
     payload: {
+      previousStatus: currentStatus,
       completedLate: isLate,
       proofUrl: params.proofUrl,
       metricValue: params.metricValue,
@@ -1401,7 +1884,7 @@ export async function completeOccurrence(
     }
   }
 
-  // Discord notification
+  // Discord notification (not awaited per P1)
   const ownerName = ownerPerson.name;
   let discordMsg = `✅ ${ownerName} completed *${task.title}*`;
   if (task.kind === "recurring") {
@@ -1410,7 +1893,9 @@ export async function completeOccurrence(
   if (params.proofUrl) {
     discordMsg += `\nProof: ${params.proofUrl}`;
   }
-  await notifyDiscordTask(client, tenantSlug, discordMsg);
+  notifyDiscordTask(client, tenantSlug, discordMsg).catch((err) =>
+    console.error("Failed to notify discord:", err)
+  );
 
   return { ok: true };
 }
@@ -1441,6 +1926,10 @@ export async function uncompleteOccurrence(
 
   if (error || !occRow) return { ok: false, error: "Occurrence not found" };
 
+  if (occRow.status !== "done") {
+    return { ok: false, error: "Only completed task occurrences can be uncompleted" };
+  }
+
   const timezone = await getTenantTimezone(client, tenantSlug);
   const todayStr = getTenantToday(timezone);
   const occursOn = occRow.occurs_on as string;
@@ -1452,7 +1941,7 @@ export async function uncompleteOccurrence(
     return { ok: false, error: "A member can only un-complete their own task on the same day" };
   }
 
-  await client
+  const { data: uncompletedData, error: uncompleteErr } = await client
     .from("task_occurrences")
     .update({
       status: "pending",
@@ -1461,7 +1950,13 @@ export async function uncompleteOccurrence(
       completed_late: false,
     })
     .eq("id", occurrenceId)
-    .eq("tenant_slug", tenantSlug);
+    .eq("tenant_slug", tenantSlug)
+    .eq("status", "done")
+    .select("id");
+
+  if (uncompleteErr || !uncompletedData || uncompletedData.length === 0) {
+    return { ok: false, error: "Failed to uncomplete occurrence (status may have changed)" };
+  }
 
   await logTaskEvent(client, tenantSlug, {
     taskId: occRow.task_id as string,
@@ -1500,7 +1995,7 @@ export async function excuseOccurrence(
     return { ok: false, error: "Only missed task occurrences can be excused" };
   }
 
-  await client
+  const { data: excusedData, error: excuseErr } = await client
     .from("task_occurrences")
     .update({
       status: "excused",
@@ -1508,7 +2003,13 @@ export async function excuseOccurrence(
       excused_reason: reason.trim(),
     })
     .eq("id", occurrenceId)
-    .eq("tenant_slug", tenantSlug);
+    .eq("tenant_slug", tenantSlug)
+    .eq("status", "missed")
+    .select("id");
+
+  if (excuseErr || !excusedData || excusedData.length === 0) {
+    return { ok: false, error: "Failed to excuse occurrence (status may have changed)" };
+  }
 
   await logTaskEvent(client, tenantSlug, {
     taskId: occRow.task_id as string,
@@ -1524,6 +2025,24 @@ export async function excuseOccurrence(
 // ─────────────────────────────────────────────────────────────────────────────
 // Streaks and Breaches View (Accountability View)
 // ─────────────────────────────────────────────────────────────────────────────
+
+async function fetchOccurrencesPaginated<T>(
+  fetcher: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>
+): Promise<T[]> {
+  const PAGE_SIZE = 1000;
+  let page = 0;
+  const allRows: T[] = [];
+  while (true) {
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data, error } = await fetcher(from, to);
+    if (error || !data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    page++;
+  }
+  return allRows;
+}
 
 export async function getStreaksAndBreaches(
   client: SupabaseClient,
@@ -1547,24 +2066,32 @@ export async function getStreaksAndBreaches(
     status: undefined, // include active & paused
   });
 
-  // Fetch occurrences in date range
-  const { data: occData } = await client
-    .from("task_occurrences")
-    .select(`
-      id,
-      task_id,
-      owner_person_id,
-      occurs_on,
-      status,
-      completed_late,
-      proof_url,
-      proof_note,
-      proof_image_path,
-      metric_value
-    `)
-    .eq("tenant_slug", tenantSlug)
-    .gte("occurs_on", addDays(startStr, -60)) // extra history for streak calculation
-    .lte("occurs_on", todayStr);
+  // Fetch occurrences in date range with pagination to exceed 1000 row cap (C4)
+  const occData = await fetchOccurrencesPaginated<Record<string, unknown>>(async (from, to) => {
+    let q = client
+      .from("task_occurrences")
+      .select(`
+        id,
+        task_id,
+        owner_person_id,
+        occurs_on,
+        status,
+        completed_late,
+        proof_url,
+        proof_note,
+        proof_image_path,
+        metric_value
+      `)
+      .eq("tenant_slug", tenantSlug)
+      .not("owner_person_id", "is", null)
+      .gte("occurs_on", addDays(startStr, -60))
+      .lte("occurs_on", todayStr);
+
+    if (options?.personId) {
+      q = q.eq("owner_person_id", options.personId);
+    }
+    return await q.range(from, to);
+  });
 
   // Group occurrences by taskId
   const occsByTask = new Map<string, Array<Record<string, unknown>>>();
@@ -1606,15 +2133,15 @@ export async function getStreaksAndBreaches(
 
       for (const d of datesInRange) {
         const occ = occMap.get(d);
-        const isScheduled = isTaskScheduledForDate(task, d);
 
-        if (!occ && !isScheduled) {
+        // Missing occurrence rows render as "none", NOT "missed" (C4)
+        if (!occ) {
           squares.push({ date: d, status: "none" });
           continue;
         }
 
-        const status = occ?.status ?? (isScheduled ? "missed" : "none");
-        if (status !== "none" && status !== "skipped") {
+        const status = occ.status;
+        if (status !== "skipped") {
           scheduledCount++;
           if (status === "done" || status === "excused") {
             completedOrExcusedCount++;
@@ -1710,6 +2237,7 @@ export async function getBreaches(
     `)
     .eq("tenant_slug", tenantSlug)
     .eq("status", "missed")
+    .not("owner_person_id", "is", null)
     .gte("occurs_on", from)
     .lte("occurs_on", to)
     .order("occurs_on", { ascending: false });
@@ -1744,17 +2272,7 @@ export async function getBreaches(
       excusedReason: null,
       createdAt: r.created_at as string,
       checks: [],
-      owner: ownerRaw
-        ? {
-            id: ownerRaw.id as string,
-            tenantSlug: tenantSlug,
-            name: ownerRaw.name as string,
-            userId: null,
-            leadPersonId: null,
-            active: true,
-            createdAt: "",
-          }
-        : undefined,
+      owner: mapOwnerRaw(ownerRaw, tenantSlug),
       task: taskRaw
         ? {
             id: taskRaw.id as string,
@@ -1801,47 +2319,67 @@ export async function getStandupReport(
   personId?: string
 ): Promise<StandupReport> {
   const timezone = await getTenantTimezone(client, tenantSlug);
-  const people = await getTenantPeople(client, tenantSlug, { activeOnly: false });
+  // Exclude inactive members unless specifically requested (C5)
+  const people = await getTenantPeople(client, tenantSlug, { activeOnly: personId ? false : true });
   const targetPeople = personId ? people.filter((p) => p.id === personId) : people;
 
-  // Occurrences in range
-  const { data: occs } = await client
-    .from("task_occurrences")
+  // Occurrences in range with pagination (C4, C5)
+  const occs = await fetchOccurrencesPaginated<Record<string, unknown>>(async (f, t) => {
+    let q = client
+      .from("task_occurrences")
+      .select(`
+        id,
+        task_id,
+        owner_person_id,
+        occurs_on,
+        status,
+        completed_at,
+        proof_url,
+        metric_value,
+        tasks (
+          id,
+          title,
+          kind,
+          metric_label,
+          metric_target
+        )
+      `)
+      .eq("tenant_slug", tenantSlug)
+      .not("owner_person_id", "is", null)
+      .gte("occurs_on", from)
+      .lte("occurs_on", to);
+
+    if (personId) {
+      q = q.eq("owner_person_id", personId);
+    }
+    return await q.range(f, t);
+  });
+
+  // Query one_off tasks with their occurrences to know which are genuinely open (C5)
+  const { data: oneOffTasks } = await client
+    .from("tasks")
     .select(`
       id,
-      task_id,
+      title,
       owner_person_id,
-      occurs_on,
+      due_date,
       status,
-      completed_at,
-      proof_url,
-      metric_value,
-      tasks (
+      task_occurrences (
         id,
-        title,
-        kind,
-        metric_label,
-        metric_target
+        status
       )
     `)
     .eq("tenant_slug", tenantSlug)
-    .gte("occurs_on", from)
-    .lte("occurs_on", to);
-
-  // Open one-off tasks
-  const { data: oneOffTasks } = await client
-    .from("tasks")
-    .select("id, title, owner_person_id, due_date, status")
-    .eq("tenant_slug", tenantSlug)
     .eq("kind", "one_off")
-    .eq("status", "active");
+    .not("owner_person_id", "is", null)
+    .neq("status", "archived");
 
   const todayStr = getTenantToday(timezone);
 
   const peopleStats: StandupPersonStats[] = [];
 
   for (const person of targetPeople) {
-    const personOccs = (occs ?? []).filter((o) => o.owner_person_id === person.id);
+    const personOccs = occs.filter((o) => o.owner_person_id === person.id);
 
     // Completed tasks
     const completedTasks: StandupPersonStats["completedTasks"] = [];
@@ -1869,7 +2407,8 @@ export async function getStandupReport(
         });
       }
 
-      if (task.kind === "recurring") {
+      // Denominator in recurring stats excludes pending and skipped (C5)
+      if (task.kind === "recurring" && occ.status !== "pending" && occ.status !== "skipped") {
         const entry = recurringMap.get(task.id) ?? { title: task.title, done: 0, total: 0 };
         entry.total++;
         if (occ.status === "done" || occ.status === "excused") {
@@ -1912,14 +2451,23 @@ export async function getStandupReport(
       });
     }
 
-    // Open one-off tasks for this person
+    // Open one-off tasks for this person using occurrence status (C5)
     const openOneOff: StandupPersonStats["openOneOffTasks"] = [];
     for (const t of (oneOffTasks ?? []).filter((o) => o.owner_person_id === person.id)) {
+      const occurrences = (t.task_occurrences as unknown as Array<{ status: string }>) ?? [];
+      const isCompleted = occurrences.some(
+        (o) => o.status === "done" || o.status === "excused"
+      );
+      if (isCompleted) continue;
+
       const dueDate = t.due_date as string;
       const isOverdue = dueDate && dueDate < todayStr;
       const [y1, m1, d1] = (dueDate || todayStr).split("-").map(Number);
       const [y2, m2, d2] = todayStr.split("-").map(Number);
-      const diffDays = Math.max(0, Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / (24 * 3600 * 1000)));
+      const diffDays = Math.max(
+        0,
+        Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / (24 * 3600 * 1000))
+      );
 
       openOneOff.push({
         title: t.title as string,
@@ -1939,10 +2487,12 @@ export async function getStandupReport(
   }
 
   // Format WhatsApp plain text (Section 6.4)
-  // Clean WhatsApp formatting: *bold*, bullets, line breaks, NO markdown tables
   let whatsApp = `*Pulse Standup Report (${from} to ${to})*\n\n`;
 
   for (const p of peopleStats) {
+    const totalTasks = p.completedTasks.length + p.recurringStats.length + p.openOneOffTasks.length;
+    if (totalTasks === 0) continue;
+
     whatsApp += `*${p.person.name.toUpperCase()}*\n`;
     whatsApp += `• Completed tasks: ${p.completedTasks.length}\n`;
 
@@ -1966,7 +2516,7 @@ export async function getStandupReport(
       for (const b of p.breaches) {
         whatsApp += `  - ❌ ${b.taskTitle} on ${b.occursOn}\n`;
       }
-    } else {
+    } else if (p.recurringStats.length > 0) {
       whatsApp += `• Breaches: None (100% accountability! 🔥)\n`;
     }
 
@@ -2092,8 +2642,15 @@ export async function recordPersonLeave(
     endsOn: string;
     reason?: string | null;
     createdBy: string;
+    status?: "requested" | "approved";
   }
 ): Promise<PersonLeave> {
+  if (params.startsOn > params.endsOn) {
+    throw new Error("Leave start date must be on or before end date");
+  }
+
+  const status = params.status ?? "approved";
+
   const { data, error } = await client
     .from("person_leave")
     .insert({
@@ -2102,6 +2659,7 @@ export async function recordPersonLeave(
       starts_on: params.startsOn,
       ends_on: params.endsOn,
       reason: params.reason?.trim() ?? null,
+      status,
       created_by: params.createdBy,
     })
     .select()
@@ -2109,15 +2667,28 @@ export async function recordPersonLeave(
 
   if (error || !data) throw new Error(`Failed to record leave: ${error?.message}`);
 
-  // Mark all pending occurrences in that window as skipped
-  await client
-    .from("task_occurrences")
-    .update({ status: "skipped" })
-    .eq("tenant_slug", tenantSlug)
-    .eq("owner_person_id", params.personId)
-    .gte("occurs_on", params.startsOn)
-    .lte("occurs_on", params.endsOn)
-    .eq("status", "pending");
+  // Mark all pending occurrences in that window as skipped only if approved (C7)
+  if (status === "approved") {
+    await client
+      .from("task_occurrences")
+      .update({ status: "skipped" })
+      .eq("tenant_slug", tenantSlug)
+      .eq("owner_person_id", params.personId)
+      .gte("occurs_on", params.startsOn)
+      .lte("occurs_on", params.endsOn)
+      .eq("status", "pending");
+  }
+
+  await logTaskEvent(client, tenantSlug, {
+    actor: params.createdBy,
+    action: status === "approved" ? "leave_approved" : "leave_requested",
+    payload: {
+      personId: params.personId,
+      startsOn: params.startsOn,
+      endsOn: params.endsOn,
+      reason: params.reason,
+    },
+  });
 
   return {
     id: data.id as string,
@@ -2126,9 +2697,126 @@ export async function recordPersonLeave(
     startsOn: data.starts_on as string,
     endsOn: data.ends_on as string,
     reason: (data.reason as string) ?? null,
+    status: (data.status as PersonLeave["status"]) ?? "approved",
+    reviewedBy: (data.reviewed_by as string) ?? null,
+    reviewedAt: (data.reviewed_at as string) ?? null,
     createdBy: data.created_by as string,
     createdAt: data.created_at as string,
   };
+}
+
+export async function approvePersonLeave(
+  client: SupabaseClient,
+  tenantSlug: string,
+  leaveId: string,
+  adminUserId: string
+): Promise<void> {
+  const { data: leave, error } = await client
+    .from("person_leave")
+    .update({
+      status: "approved",
+      reviewed_by: adminUserId,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", leaveId)
+    .eq("tenant_slug", tenantSlug)
+    .select("person_id, starts_on, ends_on")
+    .single();
+
+  if (error || !leave) throw new Error("Failed to approve leave");
+
+  await client
+    .from("task_occurrences")
+    .update({ status: "skipped" })
+    .eq("tenant_slug", tenantSlug)
+    .eq("owner_person_id", leave.person_id)
+    .gte("occurs_on", leave.starts_on)
+    .lte("occurs_on", leave.ends_on)
+    .eq("status", "pending");
+
+  await logTaskEvent(client, tenantSlug, {
+    actor: adminUserId,
+    action: "leave_approved",
+    payload: { leaveId, personId: leave.person_id },
+  });
+}
+
+export async function declinePersonLeave(
+  client: SupabaseClient,
+  tenantSlug: string,
+  leaveId: string,
+  adminUserId: string
+): Promise<void> {
+  const { data: leave, error } = await client
+    .from("person_leave")
+    .update({
+      status: "declined",
+      reviewed_by: adminUserId,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", leaveId)
+    .eq("tenant_slug", tenantSlug)
+    .select("person_id")
+    .single();
+
+  if (error || !leave) throw new Error("Failed to decline leave");
+
+  await logTaskEvent(client, tenantSlug, {
+    actor: adminUserId,
+    action: "leave_declined",
+    payload: { leaveId, personId: leave.person_id },
+  });
+}
+
+export async function cancelPersonLeave(
+  client: SupabaseClient,
+  tenantSlug: string,
+  leaveId: string,
+  userId: string,
+  isAdmin: boolean
+): Promise<void> {
+  const { data: leave, error } = await client
+    .from("person_leave")
+    .select("id, person_id, starts_on, ends_on, created_by, status")
+    .eq("id", leaveId)
+    .eq("tenant_slug", tenantSlug)
+    .single();
+
+  if (error || !leave) throw new Error("Leave record not found");
+
+  if (!isAdmin && leave.created_by !== userId) {
+    throw new Error("Only an admin or the requester can cancel leave");
+  }
+
+  const { error: cancelErr } = await client
+    .from("person_leave")
+    .update({ status: "cancelled" })
+    .eq("id", leaveId)
+    .eq("tenant_slug", tenantSlug);
+
+  if (cancelErr) throw new Error("Failed to cancel leave");
+
+  // Restore skipped rows from today forward to pending (C7)
+  const timezone = await getTenantTimezone(client, tenantSlug);
+  const todayStr = getTenantToday(timezone);
+  const restoreFrom = leave.starts_on > todayStr ? leave.starts_on : todayStr;
+
+  if (restoreFrom <= leave.ends_on) {
+    await client
+      .from("task_occurrences")
+      .update({ status: "pending" })
+      .eq("tenant_slug", tenantSlug)
+      .eq("owner_person_id", leave.person_id)
+      .gte("occurs_on", restoreFrom)
+      .lte("occurs_on", leave.ends_on)
+      .eq("status", "skipped");
+  }
+
+  await logTaskEvent(client, tenantSlug, {
+    actor: userId,
+    action: "leave_cancelled",
+    payload: { leaveId, personId: leave.person_id },
+  });
 }
 
 export async function listTaskEvents(

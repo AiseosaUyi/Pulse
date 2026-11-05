@@ -1,24 +1,16 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   X,
-  Plus,
   Trash2,
   ChevronUp,
   ChevronDown,
-  Calendar,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
   Pause,
   Play,
   Archive,
   History,
-  MessageSquare,
   Send,
-  Link as LinkIcon,
-  Flame,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +35,7 @@ import {
   addCommentAction,
   createTeamPersonAction,
 } from "@/lib/actions/tasks";
+import { AssigneePicker } from "@/components/shared/AssigneePicker";
 
 const WEEKDAYS = [
   { day: 1, label: "Mon" },
@@ -65,8 +58,18 @@ interface TaskDrawerProps {
   onTaskSaved?: (task: Task) => void;
 }
 
-export function TaskDrawer({
-  isOpen,
+export function TaskDrawer(props: TaskDrawerProps) {
+  if (!props.isOpen) return null;
+
+  return (
+    <TaskDrawerForm
+      key={props.task?.id ? `task-${props.task.id}` : `new-${props.defaultPersonId ?? "none"}`}
+      {...props}
+    />
+  );
+}
+
+function TaskDrawerForm({
   onClose,
   task,
   people,
@@ -78,26 +81,35 @@ export function TaskDrawer({
   const [activeTab, setActiveTab] = useState<"edit" | "history">("edit");
   const [isPending, startTransition] = useTransition();
 
-  // Form states
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [ownerPersonId, setOwnerPersonId] = useState("");
-  const [priority, setPriority] = useState<TaskPriority>("normal");
-  const [kind, setKind] = useState<TaskKind>("recurring");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [dueTime, setDueTime] = useState("");
-  const [recurrence, setRecurrence] = useState<TaskRecurrence>("daily");
-  const [recurrenceDays, setRecurrenceDays] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [recurrenceMonthDay, setRecurrenceMonthDay] = useState<number>(1);
-  const [proofRequired, setProofRequired] = useState<ProofRequired>("none");
-  const [proofHint, setProofHint] = useState("");
-  const [metricLabel, setMetricLabel] = useState("");
-  const [metricTarget, setMetricTarget] = useState<string>("");
-  const [tags, setTags] = useState<string[]>([]);
+  const today = new Date().toISOString().slice(0, 10);
+  const initialOwner = task
+    ? (task.ownerPersonId ?? "")
+    : (defaultPersonId || people.find((p) => p.userId === currentUserId)?.id || people[0]?.id || "");
+
+  // Form states initialized directly from props
+  const [title, setTitle] = useState(task?.title ?? "");
+  const [description, setDescription] = useState(task?.description ?? "");
+  const [ownerPersonId, setOwnerPersonId] = useState(initialOwner);
+  const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "normal");
+  const [kind, setKind] = useState<TaskKind>(task?.kind ?? "recurring");
+  const [startDate, setStartDate] = useState(task?.startDate ?? today);
+  const [endDate, setEndDate] = useState(task?.endDate ?? "");
+  const [dueDate, setDueDate] = useState(task?.dueDate ?? today);
+  const [dueTime, setDueTime] = useState(task?.dueTime ? task.dueTime.slice(0, 5) : "");
+  const [recurrence, setRecurrence] = useState<TaskRecurrence>(task?.recurrence ?? "daily");
+  const [recurrenceDays, setRecurrenceDays] = useState<number[]>(task?.recurrenceDays ?? [1, 2, 3, 4, 5]);
+  const [recurrenceMonthDay, setRecurrenceMonthDay] = useState<number>(task?.recurrenceMonthDay ?? 1);
+  const [proofRequired, setProofRequired] = useState<ProofRequired>(task?.proofRequired ?? "none");
+  const [proofHint, setProofHint] = useState(task?.proofHint ?? "");
+  const [metricLabel, setMetricLabel] = useState(task?.metricLabel ?? "");
+  const [metricTarget, setMetricTarget] = useState<string>(
+    task?.metricTarget !== null && task?.metricTarget !== undefined ? String(task?.metricTarget) : ""
+  );
+  const [tags, setTags] = useState<string[]>(task?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
-  const [checklist, setChecklist] = useState<string[]>([]);
+  const [checklist, setChecklist] = useState<string[]>(
+    task?.checklist ? task.checklist.map((c) => c.label) : []
+  );
   const [newCheckItem, setNewCheckItem] = useState("");
 
   // Quick add person state
@@ -108,77 +120,29 @@ export function TaskDrawer({
   const [events, setEvents] = useState<TaskEvent[]>([]);
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [newComment, setNewComment] = useState("");
+  const [historyLoaded, setHistoryLoaded] = useState(false);
 
-  // Initialize form when task changes
-  useEffect(() => {
-    if (task) {
-      setTitle(task.title);
-      setDescription(task.description ?? "");
-      setOwnerPersonId(task.ownerPersonId);
-      setPriority(task.priority);
-      setKind(task.kind);
-      setStartDate(task.startDate);
-      setEndDate(task.endDate ?? "");
-      setDueDate(task.dueDate ?? "");
-      setDueTime(task.dueTime ? task.dueTime.slice(0, 5) : "");
-      setRecurrence(task.recurrence ?? "daily");
-      setRecurrenceDays(task.recurrenceDays ?? [1, 2, 3, 4, 5]);
-      setRecurrenceMonthDay(task.recurrenceMonthDay ?? 1);
-      setProofRequired(task.proofRequired);
-      setProofHint(task.proofHint ?? "");
-      setMetricLabel(task.metricLabel ?? "");
-      setMetricTarget(task.metricTarget !== null && task.metricTarget !== undefined ? String(task.metricTarget) : "");
-      setTags(task.tags ?? []);
-      setChecklist(task.checklist ? task.checklist.map((c) => c.label) : []);
-    } else {
-      // Default for new task
-      const today = new Date().toISOString().slice(0, 10);
-      setTitle("");
-      setDescription("");
-      const initialOwner = defaultPersonId || people.find((p) => p.userId === currentUserId)?.id || people[0]?.id || "";
-      setOwnerPersonId(initialOwner);
-      setPriority("normal");
-      setKind("recurring");
-      setStartDate(today);
-      setEndDate("");
-      setDueDate(today);
-      setDueTime("");
-      setRecurrence("daily");
-      setRecurrenceDays([1, 2, 3, 4, 5]);
-      setRecurrenceMonthDay(1);
-      setProofRequired("none");
-      setProofHint("");
-      setMetricLabel("");
-      setMetricTarget("");
-      setTags([]);
-      setChecklist([]);
-    }
-  }, [task, people, defaultPersonId, currentUserId, isOpen]);
-
-  // Load history and comments when drawer opens for existing task
-  useEffect(() => {
-    if (isOpen && task?.id) {
-      fetch(`/api/v1/tasks/${task.id}`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data) {
-            setEvents(data.events ?? []);
-            setComments(data.comments ?? []);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [isOpen, task?.id]);
-
-  if (!isOpen) return null;
+  const loadHistory = () => {
+    if (!task?.id || historyLoaded) return;
+    fetch(`/api/v1/tasks/${task.id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          setEvents(data.events ?? []);
+          setComments(data.comments ?? []);
+          setHistoryLoaded(true);
+        }
+      })
+      .catch(() => {});
+  };
 
   const handleSave = () => {
     if (!title.trim()) {
       toast.error("Task title is required");
       return;
     }
-    if (!ownerPersonId) {
-      toast.error("Please assign an owner to this task");
+    if (kind === "recurring" && !ownerPersonId) {
+      toast.error("Recurring tasks must have an assigned owner (or be one-off)");
       return;
     }
     if (!startDate) {
@@ -194,13 +158,13 @@ export function TaskDrawer({
         const patch: UpdateTaskInput = {
           title: title.trim(),
           description: description.trim() || null,
-          ownerPersonId,
+          ownerPersonId: ownerPersonId || null,
           priority,
           kind,
           startDate,
           endDate: endDate || null,
           dueDate: kind === "one_off" ? dueDate || null : null,
-          dueTime: dueTime ? `${dueTime}:00` : null,
+          dueTime: dueTime ? (dueTime.length === 5 ? `${dueTime}:00` : dueTime) : null,
           recurrence: kind === "recurring" ? recurrence : null,
           recurrenceDays: kind === "recurring" && recurrence === "weekly" ? recurrenceDays : null,
           recurrenceMonthDay: kind === "recurring" && recurrence === "monthly" ? recurrenceMonthDay : null,
@@ -213,26 +177,25 @@ export function TaskDrawer({
         };
 
         const res = await updateTaskAction(task.id, patch);
-        if (!res.success) {
-          toast.error(res.error ?? "Failed to update task");
-          return;
+        if (res.success && res.task) {
+          toast.success("Task updated");
+          onTaskSaved?.(res.task);
+          onClose();
+        } else {
+          toast.error("Failed to update task", res.error);
         }
-
-        toast.success("Task updated");
-        if (res.task && onTaskSaved) onTaskSaved(res.task);
-        onClose();
       } else {
         // Create
         const input: CreateTaskInput = {
           title: title.trim(),
           description: description.trim() || null,
-          ownerPersonId,
+          ownerPersonId: ownerPersonId || null,
           priority,
           kind,
           startDate,
           endDate: endDate || null,
           dueDate: kind === "one_off" ? dueDate || null : null,
-          dueTime: dueTime ? `${dueTime}:00` : null,
+          dueTime: dueTime ? (dueTime.length === 5 ? `${dueTime}:00` : dueTime) : null,
           recurrence: kind === "recurring" ? recurrence : null,
           recurrenceDays: kind === "recurring" && recurrence === "weekly" ? recurrenceDays : null,
           recurrenceMonthDay: kind === "recurring" && recurrence === "monthly" ? recurrenceMonthDay : null,
@@ -245,739 +208,725 @@ export function TaskDrawer({
         };
 
         const res = await createTaskAction(input);
-        if (!res.success) {
-          toast.error(res.error ?? "Failed to create task");
-          return;
+        if (res.success && res.task) {
+          toast.success("Task created");
+          onTaskSaved?.(res.task);
+          onClose();
+        } else {
+          toast.error("Failed to create task", res.error);
         }
-
-        toast.success("Task created");
-        if (res.task && onTaskSaved) onTaskSaved(res.task);
-        onClose();
       }
-    });
-  };
-
-  const handleArchive = () => {
-    if (!task) return;
-    if (!confirm("Are you sure you want to archive this task? Missed occurrences will remain on the accountability record.")) {
-      return;
-    }
-
-    startTransition(async () => {
-      const res = await archiveTaskAction(task.id);
-      if (!res.success) {
-        toast.error(res.error ?? "Failed to archive task");
-        return;
-      }
-      toast.success("Task archived");
-      onClose();
     });
   };
 
   const handleTogglePause = () => {
     if (!task) return;
     const nextStatus = task.status === "paused" ? "active" : "paused";
-
     startTransition(async () => {
       const res = await updateTaskAction(task.id, { status: nextStatus });
-      if (!res.success) {
-        toast.error(res.error ?? "Failed to change task status");
-        return;
+      if (res.success && res.task) {
+        toast.success(nextStatus === "active" ? "Task resumed" : "Task paused");
+        onTaskSaved?.(res.task);
+        onClose();
+      } else {
+        toast.error("Failed to change status", res.error);
       }
-      toast.success(nextStatus === "paused" ? "Task paused" : "Task resumed");
-      if (res.task && onTaskSaved) onTaskSaved(res.task);
-      onClose();
     });
   };
 
-  const handleAddCheckItem = () => {
+  const handleArchive = () => {
+    if (!task) return;
+    if (!confirm("Archive this task? Pending future occurrences will be removed.")) return;
+
+    startTransition(async () => {
+      const res = await archiveTaskAction(task.id);
+      if (res.success) {
+        toast.success("Task archived");
+        onTaskSaved?.({ ...task, status: "archived" });
+        onClose();
+      } else {
+        toast.error("Failed to archive task", res.error);
+      }
+    });
+  };
+
+  const handleAddPerson = () => {
+    if (!newPersonName.trim()) return;
+    startTransition(async () => {
+      const res = await createTeamPersonAction({ name: newPersonName.trim() });
+      if (res.success && res.person) {
+        setOwnerPersonId(res.person.id);
+        setShowAddPerson(false);
+        setNewPersonName("");
+        toast.success(`Added ${res.person.name}`);
+      } else {
+        toast.error("Failed to add person", res.error);
+      }
+    });
+  };
+
+  const handleAddComment = () => {
+    if (!task?.id || !newComment.trim()) return;
+    startTransition(async () => {
+      const res = await addCommentAction(task.id, newComment.trim());
+      if (res.success && res.comment) {
+        setComments((prev) => [res.comment!, ...prev]);
+        setNewComment("");
+        toast.success("Comment added");
+      } else {
+        toast.error("Failed to add comment", res.error);
+      }
+    });
+  };
+
+  const toggleDay = (d: number) => {
+    if (recurrenceDays.includes(d)) {
+      if (recurrenceDays.length > 1) {
+        setRecurrenceDays(recurrenceDays.filter((x) => x !== d));
+      } else {
+        toast.error("Weekly tasks need at least one day selected");
+      }
+    } else {
+      setRecurrenceDays([...recurrenceDays, d].sort());
+    }
+  };
+
+  const addCheckItem = () => {
     if (!newCheckItem.trim()) return;
     setChecklist([...checklist, newCheckItem.trim()]);
     setNewCheckItem("");
   };
 
-  const handleRemoveCheckItem = (idx: number) => {
+  const removeCheckItem = (idx: number) => {
     setChecklist(checklist.filter((_, i) => i !== idx));
   };
 
-  const handleMoveCheckItem = (idx: number, direction: "up" | "down") => {
-    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= checklist.length) return;
-    const updated = [...checklist];
-    const [moved] = updated.splice(idx, 1);
-    updated.splice(targetIdx, 0, moved);
-    setChecklist(updated);
+  const moveCheckItem = (idx: number, dir: -1 | 1) => {
+    const target = idx + dir;
+    if (target < 0 || target >= checklist.length) return;
+    const copy = [...checklist];
+    const temp = copy[idx];
+    copy[idx] = copy[target];
+    copy[target] = temp;
+    setChecklist(copy);
   };
 
-  const handleAddTag = () => {
-    const clean = tagInput.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
-    if (!clean || tags.includes(clean)) return;
-    setTags([...tags, clean]);
+  const addTag = () => {
+    const clean = tagInput.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "");
+    if (!clean) return;
+    if (!tags.includes(clean)) {
+      setTags([...tags, clean]);
+    }
     setTagInput("");
   };
 
-  const handleRemoveTag = (t: string) => {
-    setTags(tags.filter((item) => item !== t));
-  };
-
-  const handleAddPerson = async () => {
-    if (!newPersonName.trim()) return;
-    const res = await createTeamPersonAction({ name: newPersonName.trim() });
-    if (res.success && res.person) {
-      toast.success(`Added ${res.person.name}`);
-      setOwnerPersonId(res.person.id);
-      setShowAddPerson(false);
-      setNewPersonName("");
-    } else {
-      toast.error(res.error ?? "Failed to add person");
-    }
-  };
-
-  const handleSendComment = async () => {
-    if (!task || !newComment.trim()) return;
-    const commentBody = newComment.trim();
-    setNewComment("");
-    const res = await addCommentAction(task.id, null, commentBody);
-    if (res.success && res.comment) {
-      setComments([...comments, res.comment]);
-    } else {
-      toast.error(res.error ?? "Failed to add comment");
-    }
+  const removeTag = (t: string) => {
+    setTags(tags.filter((x) => x !== t));
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs flex justify-end">
-      <div className="w-full max-w-2xl bg-card h-full shadow-2xl flex flex-col border-l border-border animate-in slide-in-from-right duration-200">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-bold text-foreground">
-              {task ? "Edit Task" : "New Team Task"}
-            </h2>
-            <p className="text-xs text-text-muted mt-0.5">
-              {task?.kind === "recurring" ? "Daily habit / recurring" : "One-off team task"}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {task && (
-              <div className="flex rounded-lg border border-border p-0.5 bg-background text-xs">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("edit")}
-                  className={`px-3 py-1 rounded-md font-medium transition-colors ${
-                    activeTab === "edit"
-                      ? "bg-primary-500 text-white"
-                      : "text-text-secondary hover:text-foreground"
+    <div className="fixed inset-0 z-50 overflow-hidden bg-background/80 backdrop-blur-xs animate-in fade-in-0">
+      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+        <div className="w-screen max-w-2xl bg-card border-l border-border shadow-2xl flex flex-col">
+          {/* Header */}
+          <div className="px-6 py-5 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-base font-bold text-foreground">
+                {task ? "Edit Task" : "New Task"}
+              </span>
+              {task && (
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                    task.status === "active"
+                      ? "bg-primary-500/10 text-primary-500"
+                      : task.status === "paused"
+                      ? "bg-status-yellow/10 text-status-yellow"
+                      : "bg-muted text-text-muted"
                   }`}
                 >
-                  Details
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("history")}
-                  className={`px-3 py-1 rounded-md font-medium transition-colors flex items-center gap-1.5 ${
-                    activeTab === "history"
-                      ? "bg-primary-500 text-white"
-                      : "text-text-secondary hover:text-foreground"
-                  }`}
-                >
-                  <History size={13} />
-                  History
-                </button>
-              </div>
-            )}
+                  {task.status}
+                </span>
+              )}
+            </div>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-text-muted hover:text-foreground hover:bg-card-hover transition-colors"
-            >
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              {task && (
+                <div className="flex items-center bg-muted p-0.5 rounded-lg border border-border">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("edit")}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                      activeTab === "edit"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-text-muted hover:text-foreground"
+                    }`}
+                  >
+                    Details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("history");
+                      loadHistory();
+                    }}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                      activeTab === "history"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-text-muted hover:text-foreground"
+                    }`}
+                  >
+                    History & Activity
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 rounded-lg text-text-muted hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {activeTab === "edit" ? (
-            <>
-              {/* Title & Description */}
-              <div className="space-y-4">
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {activeTab === "edit" ? (
+              <>
+                {/* Title */}
                 <div>
                   <label className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-1">
-                    Task Title *
+                    Task Title <span className="text-error-500">*</span>
                   </label>
                   <Input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="e.g. Daily post on Gruve Lagos"
-                    className="font-medium text-base"
+                    className="text-base font-medium"
+                    autoFocus
                   />
                 </div>
 
+                {/* Description */}
                 <div>
                   <label className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-1">
-                    Description (optional markdown)
+                    Description / Context
                   </label>
                   <Textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Instructions, guidelines or context for the owner..."
-                    rows={3}
+                    placeholder="What needs to be done, guidelines, or links..."
+                    rows={2}
                   />
                 </div>
-              </div>
 
-              {/* Owner & Priority */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                      Owner *
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddPerson(!showAddPerson)}
-                      className="text-xs text-primary-500 hover:underline"
-                    >
-                      + Add person
-                    </button>
-                  </div>
-
-                  {showAddPerson ? (
-                    <div className="flex gap-2">
-                      <Input
-                        value={newPersonName}
-                        onChange={(e) => setNewPersonName(e.target.value)}
-                        placeholder="Person name"
-                        className="text-sm"
-                      />
-                      <Button size="sm" onClick={handleAddPerson}>
-                        Add
-                      </Button>
-                    </div>
-                  ) : (
-                    <select
-                      value={ownerPersonId}
-                      onChange={(e) => setOwnerPersonId(e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="" disabled>
-                        Select assignee
-                      </option>
-                      {people.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} {!p.userId ? "(no login)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-1">
-                    Priority
-                  </label>
-                  <select
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                    className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="urgent">Urgent</option>
-                    <option value="high">High</option>
-                    <option value="normal">Normal</option>
-                    <option value="low">Low</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Task Kind & Schedule */}
-              <div className="p-4 rounded-xl border border-border bg-background space-y-4">
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-foreground">
-                    <input
-                      type="radio"
-                      name="task_kind"
-                      checked={kind === "recurring"}
-                      onChange={() => setKind("recurring")}
-                      className="accent-primary-500"
-                    />
-                    Recurring Habit
-                  </label>
-
-                  <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-foreground">
-                    <input
-                      type="radio"
-                      name="task_kind"
-                      checked={kind === "one_off"}
-                      onChange={() => setKind("one_off")}
-                      className="accent-primary-500"
-                    />
-                    One-off Task
-                  </label>
-                </div>
-
-                {kind === "recurring" ? (
-                  <div className="space-y-4 pt-2 border-t border-border">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs font-semibold text-text-secondary block mb-1">
-                          Recurrence
-                        </label>
-                        <select
-                          value={recurrence}
-                          onChange={(e) => setRecurrence(e.target.value as TaskRecurrence)}
-                          className="w-full h-9 px-3 rounded-lg border border-border bg-card text-foreground text-sm"
+                {/* Owner & Priority Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-semibold text-foreground uppercase tracking-wider block">
+                        Assignee
+                      </label>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAddPerson(!showAddPerson)}
+                          className="text-xs text-primary-500 hover:underline"
                         >
-                          <option value="daily">Every day</option>
-                          <option value="weekdays">Weekdays (Mon-Fri)</option>
-                          <option value="weekly">Specific days of week</option>
-                          <option value="monthly">Monthly on day N</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-semibold text-text-secondary block mb-1">
-                          Due Time (optional)
-                        </label>
-                        <Input
-                          type="time"
-                          value={dueTime}
-                          onChange={(e) => setDueTime(e.target.value)}
-                          placeholder="e.g. 18:00 (default: 23:59)"
-                          className="text-sm"
-                        />
-                      </div>
+                          + Add person
+                        </button>
+                      )}
                     </div>
 
-                    {recurrence === "weekly" && (
-                      <div>
-                        <label className="text-xs font-semibold text-text-secondary block mb-2">
-                          Select Days of the Week
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                          {WEEKDAYS.map((w) => {
-                            const isSelected = recurrenceDays.includes(w.day);
-                            return (
-                              <button
-                                key={w.day}
-                                type="button"
-                                onClick={() => {
-                                  if (isSelected) {
-                                    setRecurrenceDays(recurrenceDays.filter((d) => d !== w.day));
-                                  } else {
-                                    setRecurrenceDays([...recurrenceDays, w.day]);
-                                  }
-                                }}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                                  isSelected
-                                    ? "bg-primary-500 text-white"
-                                    : "bg-card border border-border text-text-secondary hover:text-foreground"
-                                }`}
-                              >
-                                {w.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {recurrence === "monthly" && (
-                      <div>
-                        <label className="text-xs font-semibold text-text-secondary block mb-1">
-                          Day of the Month (1-31)
-                        </label>
+                    {showAddPerson ? (
+                      <div className="flex gap-2">
                         <Input
-                          type="number"
-                          min={1}
-                          max={31}
-                          value={recurrenceMonthDay}
-                          onChange={(e) => setRecurrenceMonthDay(Number(e.target.value))}
-                          className="w-32 text-sm"
-                        />
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs font-semibold text-text-secondary block mb-1">
-                          Start Date *
-                        </label>
-                        <Input
-                          type="date"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
+                          value={newPersonName}
+                          onChange={(e) => setNewPersonName(e.target.value)}
+                          placeholder="Person name"
                           className="text-sm"
                         />
+                        <Button size="sm" onClick={handleAddPerson}>
+                          Add
+                        </Button>
                       </div>
+                    ) : (
+                      <AssigneePicker
+                        mode="assign"
+                        value={ownerPersonId || null}
+                        onChange={(val) => setOwnerPersonId(val === "unassigned" ? "" : val)}
+                        people={people}
+                        disabled={!!task && !isAdmin}
+                        className="w-full"
+                      />
+                    )}
+                    {!!task && !isAdmin && (
+                      <p className="text-[11px] text-text-muted mt-1">
+                        Only admins can reassign tasks
+                      </p>
+                    )}
+                  </div>
 
-                      <div>
-                        <label className="text-xs font-semibold text-text-secondary block mb-1">
-                          End Date (optional)
-                        </label>
-                        <Input
-                          type="date"
-                          value={endDate}
-                          onChange={(e) => setEndDate(e.target.value)}
-                          placeholder="Runs indefinitely"
-                          className="text-sm"
-                        />
-                      </div>
+                  <div>
+                    <label className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-1">
+                      Priority
+                    </label>
+                    <select
+                      value={priority}
+                      disabled={!!task && !isAdmin}
+                      onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                      className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500 disabled:opacity-60"
+                    >
+                      <option value="urgent">Urgent</option>
+                      <option value="high">High</option>
+                      <option value="normal">Normal</option>
+                      <option value="low">Low</option>
+                    </select>
+                    {!!task && !isAdmin && (
+                      <p className="text-[11px] text-text-muted mt-1">
+                        Only admins can change priority
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Task Kind & Schedule */}
+                <div className="space-y-4 pt-4 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                      Schedule & Recurrence
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setKind("recurring")}
+                        className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${
+                          kind === "recurring"
+                            ? "bg-primary-500 text-white"
+                            : "bg-muted text-text-muted hover:text-foreground"
+                        }`}
+                      >
+                        Recurring Habit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setKind("one_off")}
+                        className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${
+                          kind === "one_off"
+                            ? "bg-primary-500 text-white"
+                            : "bg-muted text-text-muted hover:text-foreground"
+                        }`}
+                      >
+                        One-off Task
+                      </button>
                     </div>
                   </div>
-                ) : (
-                  <div className="space-y-4 pt-2 border-t border-border">
+
+                  {kind === "one_off" ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-xs font-semibold text-text-secondary block mb-1">
-                          Due Date *
-                        </label>
+                        <label className="text-xs text-text-muted block mb-1">Due Date</label>
                         <Input
                           type="date"
                           value={dueDate}
                           onChange={(e) => setDueDate(e.target.value)}
-                          className="text-sm"
                         />
                       </div>
-
                       <div>
-                        <label className="text-xs font-semibold text-text-secondary block mb-1">
-                          Due Time (optional)
-                        </label>
+                        <label className="text-xs text-text-muted block mb-1">Due Time (optional)</label>
                         <Input
                           type="time"
                           value={dueTime}
                           onChange={(e) => setDueTime(e.target.value)}
-                          className="text-sm"
                         />
                       </div>
                     </div>
+                  ) : (
+                    <div className="space-y-3 bg-muted/40 p-4 rounded-xl border border-border">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs text-text-muted block mb-1">Repeats</label>
+                          <select
+                            value={recurrence}
+                            onChange={(e) => setRecurrence(e.target.value as TaskRecurrence)}
+                            className="w-full h-9 px-3 rounded-lg border border-border bg-card text-foreground text-sm"
+                          >
+                            <option value="daily">Daily (Every day)</option>
+                            <option value="weekdays">Weekdays (Mon–Fri)</option>
+                            <option value="weekly">Weekly (Selected days)</option>
+                            <option value="monthly">Monthly (Specific day)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-text-muted block mb-1">
+                            Due Time each day (optional)
+                          </label>
+                          <Input
+                            type="time"
+                            value={dueTime}
+                            onChange={(e) => setDueTime(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {recurrence === "weekly" && (
+                        <div>
+                          <label className="text-xs text-text-muted block mb-1.5">Active Days</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {WEEKDAYS.map((w) => {
+                              const active = recurrenceDays.includes(w.day);
+                              return (
+                                <button
+                                  key={w.day}
+                                  type="button"
+                                  onClick={() => toggleDay(w.day)}
+                                  className={`w-9 h-9 rounded-lg text-xs font-bold transition-colors ${
+                                    active
+                                      ? "bg-primary-500 text-white"
+                                      : "bg-card border border-border text-text-muted hover:text-foreground"
+                                  }`}
+                                >
+                                  {w.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {recurrence === "monthly" && (
+                        <div>
+                          <label className="text-xs text-text-muted block mb-1">Day of Month</label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={31}
+                            value={recurrenceMonthDay}
+                            onChange={(e) => setRecurrenceMonthDay(Number(e.target.value))}
+                            className="w-24"
+                          />
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                        <div>
+                          <label className="text-xs text-text-muted block mb-1">Start Date</label>
+                          <Input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-text-muted block mb-1">End Date (optional)</label>
+                          <Input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Checklist template */}
+                <div className="space-y-3 pt-4 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-semibold text-foreground uppercase tracking-wider block">
+                        Checklist ({checklist.length})
+                      </span>
+                      <span className="text-xs text-text-muted">
+                        Items the assignee must check off before completing this task
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
 
-              {/* Checklist Template */}
-              <div className="space-y-3">
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wider block">
-                  Checklist Template (All required to complete)
-                </label>
-
-                {checklist.length > 0 && (
                   <div className="space-y-2">
                     {checklist.map((item, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center gap-2 p-2.5 rounded-lg border border-border bg-background"
+                        className="flex items-center gap-2 p-2 rounded-lg bg-card border border-border"
                       >
-                        <span className="text-xs text-text-muted w-5 font-mono">
-                          {idx + 1}.
-                        </span>
-                        <span className="text-sm text-foreground flex-1 font-medium">
-                          {item}
-                        </span>
+                        <span className="text-xs text-text-muted w-5 text-right">{idx + 1}.</span>
+                        <span className="text-sm text-foreground flex-1 truncate">{item}</span>
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => handleMoveCheckItem(idx, "up")}
                             disabled={idx === 0}
+                            onClick={() => moveCheckItem(idx, -1)}
                             className="p-1 text-text-muted hover:text-foreground disabled:opacity-30"
                           >
                             <ChevronUp size={14} />
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleMoveCheckItem(idx, "down")}
                             disabled={idx === checklist.length - 1}
+                            onClick={() => moveCheckItem(idx, 1)}
                             className="p-1 text-text-muted hover:text-foreground disabled:opacity-30"
                           >
                             <ChevronDown size={14} />
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleRemoveCheckItem(idx)}
-                            className="p-1 text-text-muted hover:text-error-500"
+                            onClick={() => removeCheckItem(idx)}
+                            className="p-1 text-error-500 hover:text-error-600"
                           >
                             <Trash2 size={14} />
                           </button>
                         </div>
                       </div>
                     ))}
-                  </div>
-                )}
 
-                <div className="flex gap-2">
-                  <Input
-                    value={newCheckItem}
-                    onChange={(e) => setNewCheckItem(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddCheckItem();
-                      }
-                    }}
-                    placeholder="Add checklist item (e.g. Posted on @gruve_official)"
-                    className="text-sm"
-                  />
-                  <Button type="button" variant="outline" size="sm" onClick={handleAddCheckItem}>
-                    Add
-                  </Button>
-                </div>
-              </div>
-
-              {/* Proof and Measurement */}
-              <div className="space-y-4 p-4 rounded-xl border border-border bg-background">
-                <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                  Proof & Verification
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-text-secondary block mb-1">
-                      Proof Required
-                    </label>
-                    <select
-                      value={proofRequired}
-                      onChange={(e) => setProofRequired(e.target.value as ProofRequired)}
-                      className="w-full h-9 px-3 rounded-lg border border-border bg-card text-foreground text-sm"
-                    >
-                      <option value="none">None (Trust-based)</option>
-                      <option value="link">URL Link (e.g. Discord or post)</option>
-                      <option value="note">Written Note (e.g. summary)</option>
-                      <option value="image">Screenshot / Image upload</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-text-secondary block mb-1">
-                      Proof Hint (optional)
-                    </label>
-                    <Input
-                      value={proofHint}
-                      onChange={(e) => setProofHint(e.target.value)}
-                      placeholder='e.g. "Paste the Discord message link"'
-                      className="text-sm"
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        value={newCheckItem}
+                        onChange={(e) => setNewCheckItem(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addCheckItem();
+                          }
+                        }}
+                        placeholder="Add checklist item (press enter)"
+                        className="text-sm"
+                      />
+                      <Button size="sm" type="button" onClick={addCheckItem}>
+                        Add
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-text-secondary block mb-1">
-                      Metric Label (optional)
-                    </label>
-                    <Input
-                      value={metricLabel}
-                      onChange={(e) => setMetricLabel(e.target.value)}
-                      placeholder='e.g. "DMs sent", "Followers gained"'
-                      className="text-sm"
-                    />
-                  </div>
+                {/* Proof & Metric Requirements */}
+                <div className="space-y-4 pt-4 border-t border-border">
+                  <label className="text-xs font-semibold text-foreground uppercase tracking-wider block">
+                    Proof & Measurement Verification
+                  </label>
 
-                  <div>
-                    <label className="text-xs font-semibold text-text-secondary block mb-1">
-                      Metric Target (optional)
-                    </label>
-                    <Input
-                      type="number"
-                      value={metricTarget}
-                      onChange={(e) => setMetricTarget(e.target.value)}
-                      placeholder="e.g. 10"
-                      className="text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div>
-                <label className="text-xs font-semibold text-foreground uppercase tracking-wider block mb-2">
-                  Tags
-                </label>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {tags.map((t) => (
-                    <span
-                      key={t}
-                      className="px-2.5 py-1 rounded-md text-xs font-medium bg-card-hover border border-border text-foreground flex items-center gap-1.5"
-                    >
-                      #{t}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTag(t)}
-                        className="text-text-muted hover:text-foreground"
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs text-text-muted block mb-1">Proof Required</label>
+                      <select
+                        value={proofRequired}
+                        onChange={(e) => setProofRequired(e.target.value as ProofRequired)}
+                        className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground text-sm"
                       >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddTag();
-                      }
-                    }}
-                    placeholder="Add tag (e.g. social, outreach)"
-                    className="text-sm"
-                  />
-                  <Button type="button" variant="outline" size="sm" onClick={handleAddTag}>
-                    Add
-                  </Button>
-                </div>
-              </div>
+                        <option value="none">None (just check off)</option>
+                        <option value="link">URL Link (e.g. tweet, sheet, PR)</option>
+                        <option value="note">Written Note (e.g. summary, minutes)</option>
+                        <option value="image">Screenshot / Image Upload</option>
+                      </select>
+                    </div>
 
-              {/* Status Actions (Pause, Archive) */}
-              {task && (
-                <div className="pt-4 border-t border-border flex flex-wrap items-center justify-between gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleTogglePause}
-                    className="flex items-center gap-1.5 text-xs"
-                  >
-                    {task.status === "paused" ? (
-                      <>
-                        <Play size={14} className="text-success-500" />
-                        Resume Task
-                      </>
-                    ) : (
-                      <>
-                        <Pause size={14} className="text-warning-500" />
-                        Pause Task
-                      </>
-                    )}
-                  </Button>
+                    <div>
+                      <label className="text-xs text-text-muted block mb-1">
+                        Proof Instructions / Hint
+                      </label>
+                      <Input
+                        value={proofHint}
+                        onChange={(e) => setProofHint(e.target.value)}
+                        placeholder="e.g. Paste link to Instagram post"
+                      />
+                    </div>
+                  </div>
 
-                  {isAdmin && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleArchive}
-                      className="flex items-center gap-1.5 text-xs text-error-500 hover:bg-error-500/10"
-                    >
-                      <Archive size={14} />
-                      Archive Task
-                    </Button>
-                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/30 p-3 rounded-xl border border-border">
+                    <div>
+                      <label className="text-xs text-text-muted block mb-1">
+                        Track a Metric (optional)
+                      </label>
+                      <Input
+                        value={metricLabel}
+                        onChange={(e) => setMetricLabel(e.target.value)}
+                        placeholder="e.g. DMs sent, Calls booked"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-text-muted block mb-1">
+                        Target Value (optional)
+                      </label>
+                      <Input
+                        type="number"
+                        value={metricTarget}
+                        onChange={(e) => setMetricTarget(e.target.value)}
+                        placeholder="e.g. 20"
+                      />
+                    </div>
+                  </div>
                 </div>
-              )}
-            </>
-          ) : (
-            /* History & Audit Tab */
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-3">
-                  Audit Trail
-                </h3>
-                {events.length === 0 ? (
-                  <p className="text-xs text-text-muted">No audit events recorded yet.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {events.map((e) => (
-                      <div
-                        key={e.id}
-                        className="p-3 rounded-lg border border-border bg-background text-xs space-y-1"
+
+                {/* Tags */}
+                <div className="space-y-2 pt-4 border-t border-border">
+                  <label className="text-xs font-semibold text-foreground uppercase tracking-wider block">
+                    Tags
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {tags.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-muted text-foreground border border-border"
                       >
-                        <div className="flex items-center justify-between text-text-secondary">
-                          <span className="font-semibold text-foreground uppercase tracking-wider text-[10px]">
-                            {e.action}
-                          </span>
-                          <span>
-                            {new Date(e.createdAt).toLocaleString("en-GB", {
-                              day: "numeric",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                        </div>
-                        <p className="text-text-secondary">
-                          By <strong className="text-foreground">{e.actorProfile?.displayName ?? "User"}</strong>
-                        </p>
-                      </div>
+                        <span>#{t}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeTag(t)}
+                          className="hover:text-error-500"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
                     ))}
                   </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Comments Section */}
-          {task && (
-            <div className="pt-6 border-t border-border space-y-4">
-              <div className="flex items-center gap-2 text-xs font-semibold text-foreground uppercase tracking-wider">
-                <MessageSquare size={14} />
-                Comments & Discussion
-              </div>
-
-              {comments.length > 0 && (
-                <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
-                  {comments.map((c) => (
-                    <div
-                      key={c.id}
-                      className="p-3 rounded-lg border border-border bg-card text-xs space-y-1"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-foreground">
-                          {c.authorProfile?.displayName ?? "Team member"}
-                        </span>
-                        <span className="text-text-muted text-[10px]">
-                          {new Date(c.createdAt).toLocaleDateString("en-GB", {
-                            day: "numeric",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-                      <p className="text-text-secondary whitespace-pre-wrap">{c.body}</p>
-                    </div>
-                  ))}
+                  <div className="flex gap-2">
+                    <Input
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addTag();
+                        }
+                      }}
+                      placeholder="Add tag (e.g. marketing, sales, content)"
+                      className="text-xs"
+                    />
+                    <Button size="sm" type="button" onClick={addTag}>
+                      Add
+                    </Button>
+                  </div>
                 </div>
-              )}
+              </>
+            ) : (
+              /* History & Comments Tab */
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">
+                    Comments
+                  </h4>
+                  <div className="space-y-3 mb-4">
+                    {comments.length === 0 ? (
+                      <p className="text-xs text-text-muted">No comments yet.</p>
+                    ) : (
+                      comments.map((c) => (
+                        <div
+                          key={c.id}
+                          className="p-3 rounded-xl bg-card border border-border text-xs space-y-1"
+                        >
+                          <div className="flex items-center justify-between text-text-muted">
+                            <span className="font-semibold text-foreground">
+                              {c.authorProfile?.displayName ?? "User"}
+                            </span>
+                            <span>{new Date(c.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                          </div>
+                          <p className="text-foreground">{c.body}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
 
-              <div className="flex gap-2">
-                <Input
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendComment();
-                    }
-                  }}
-                  placeholder="Leave a comment or question..."
-                  className="text-xs"
-                />
+                  <div className="flex gap-2">
+                    <Input
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddComment();
+                        }
+                      }}
+                      placeholder="Add a comment or feedback..."
+                      className="text-xs"
+                    />
+                    <Button size="sm" onClick={handleAddComment} disabled={!newComment.trim() || isPending}>
+                      <Send size={14} />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3 flex items-center gap-1.5">
+                    <History size={14} />
+                    <span>Audit Trail</span>
+                  </h4>
+                  <div className="space-y-2">
+                    {events.length === 0 ? (
+                      <p className="text-xs text-text-muted">No audit events recorded.</p>
+                    ) : (
+                      events.map((e) => (
+                        <div
+                          key={e.id}
+                          className="p-2.5 rounded-lg bg-muted/40 border border-border text-[11px] flex items-center justify-between"
+                        >
+                          <div>
+                            <span className="font-semibold text-foreground uppercase tracking-wide">
+                              {e.action.replace(/_/g, " ")}
+                            </span>
+                            {e.actorProfile?.displayName && (
+                              <span className="text-text-muted ml-1.5">
+                                by {e.actorProfile.displayName}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-text-muted">
+                            {new Date(e.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-border bg-card flex items-center justify-between">
+            {task ? (
+              <div className="flex items-center gap-2">
                 <Button
-                  type="button"
-                  size="sm"
                   variant="outline"
-                  onClick={handleSendComment}
-                  disabled={!newComment.trim()}
+                  size="sm"
+                  onClick={handleTogglePause}
+                  disabled={isPending}
+                  className="text-xs"
                 >
-                  <Send size={14} />
+                  {task.status === "paused" ? (
+                    <>
+                      <Play size={14} className="mr-1 text-primary-500" /> Resume
+                    </>
+                  ) : (
+                    <>
+                      <Pause size={14} className="mr-1 text-status-yellow" /> Pause
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleArchive}
+                  disabled={isPending}
+                  className="text-xs text-error-500 hover:text-error-600"
+                >
+                  <Archive size={14} className="mr-1" /> Archive
                 </Button>
               </div>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div />
+            )}
 
-        {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-3 bg-background">
-          <Button variant="ghost" onClick={onClose} disabled={isPending}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={isPending} className="px-6">
-            {isPending ? "Saving..." : task ? "Save Changes" : "Create Task"}
-          </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={onClose} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={isPending}>
+                {isPending ? "Saving..." : task ? "Save Changes" : "Create Task"}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

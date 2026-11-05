@@ -1,9 +1,8 @@
-import { requireApiContext, type ApiContext } from "@/lib/api/context";
+import { requireApiContext } from "@/lib/api/context";
 import { extractBearer } from "@/lib/api-tokens";
-import { type ApiV1Scope } from "@/lib/api/scopes";
+import { hasScope, type ApiV1Scope } from "@/lib/api/scopes";
 import { corsHeaders } from "@/lib/api/cors";
 import { apiError } from "@/lib/api/respond";
-import { createClient } from "@/lib/supabase/server";
 import { getCurrentTenant, getCurrentUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -29,13 +28,23 @@ export async function requireTasksAuth(
   if (bearer) {
     const apiCtx = await requireApiContext(req, requiredScope, methods);
     if (!apiCtx.ok) return apiCtx;
+
+    if (!apiCtx.context.createdBy && requiredScope.includes("write")) {
+      return {
+        ok: false,
+        response: apiError(400, "API token must have an associated creator user to perform task mutations", headers),
+      };
+    }
+
+    const isAdmin = hasScope(apiCtx.context.scopes, "admin");
+
     return {
       ok: true,
       context: {
         tenantSlug: apiCtx.context.tenantSlug,
         admin: apiCtx.context.admin,
-        userId: apiCtx.context.createdBy ?? "00000000-0000-0000-0000-000000000000",
-        isAdmin: true,
+        userId: apiCtx.context.createdBy ?? "",
+        isAdmin,
       },
     };
   }

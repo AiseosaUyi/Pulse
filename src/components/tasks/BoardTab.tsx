@@ -6,15 +6,11 @@ import {
   Clock,
   AlertCircle,
   HelpCircle,
-  ExternalLink,
-  Flame,
   Filter,
 } from "lucide-react";
+import { getTenantToday, getIsoWeekday, addDays } from "@/lib/tasks/date-utils";
 import type {
-  LinkedType,
-  OccurrenceStatus,
   TaskOccurrence,
-  TaskPriority,
   TeamPerson,
 } from "@/lib/types/tasks";
 
@@ -46,8 +42,16 @@ export function BoardTab({ occurrences, people, onOpenTask }: BoardTabProps) {
   });
 
   // Categorize into 4 Kanban columns
+  // "Done (this week)" is strictly filtered to Monday-Sunday of the current week
+  const todayStr = getTenantToday();
+  const isoWeekday = getIsoWeekday(todayStr); // 1=Mon .. 7=Sun
+  const mondayStr = addDays(todayStr, 1 - isoWeekday);
+  const sundayStr = addDays(todayStr, 7 - isoWeekday);
+
   const todoList = filtered.filter((o) => o.status === "pending");
-  const doneList = filtered.filter((o) => o.status === "done");
+  const doneList = filtered.filter(
+    (o) => o.status === "done" && o.occursOn >= mondayStr && o.occursOn <= sundayStr
+  );
   const missedList = filtered.filter((o) => o.status === "missed");
   const excusedList = filtered.filter((o) => o.status === "excused");
 

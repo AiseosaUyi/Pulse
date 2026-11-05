@@ -5,7 +5,11 @@ import {
   getOccurrencesForDate,
   getBreaches,
   notifyDiscordTask,
+  logTaskEvent,
 } from "@/lib/services/tasks";
+import { verifyCronRequest } from "@/lib/cron/auth";
+
+export const maxDuration = 300;
 
 export async function GET(request: Request): Promise<Response> {
   return handleDigest(request);
@@ -16,9 +20,11 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 async function handleDigest(request: Request): Promise<Response> {
-  const auth = request.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = verifyCronRequest({
+    getHeader: (name) => request.headers.get(name),
+  });
+  if (!authResult.ok) {
+    return Response.json({ error: authResult.error }, { status: authResult.status });
   }
 
   const admin = createAdminClient();
@@ -37,6 +43,20 @@ async function handleDigest(request: Request): Promise<Response> {
       if (currentHour !== 8) continue;
 
       const todayStr = getTenantToday(timezone);
+
+      // Idempotency check: don't send multiple digests on the same date for the same tenant
+      const { data: existingDigest } = await admin
+        .from("task_events")
+        .select("id")
+        .eq("tenant_slug", t.slug)
+        .eq("action", "morning_digest_sent")
+        .filter("payload->>date", "eq", todayStr)
+        .limit(1);
+
+      if (existingDigest && existingDigest.length > 0) {
+        continue;
+      }
+
       const yesterdayStr = addDays(todayStr, -1);
 
       // Tasks due today
@@ -73,6 +93,15 @@ async function handleDigest(request: Request): Promise<Response> {
       }
 
       await notifyDiscordTask(admin, t.slug, digestMsg);
+      await logTaskEvent(admin, t.slug, {
+        actor: "cron:tasks-digest",
+        action: "morning_digest_sent",
+        payload: {
+          date: todayStr,
+          pendingCount: pendingToday.length,
+          breachCount: yesterdayMisses.length,
+        },
+      });
       processed.push(t.slug);
     } catch (err) {
       console.error(`Task digest failed for ${t.slug}:`, err);
