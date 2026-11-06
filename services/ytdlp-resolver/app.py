@@ -220,15 +220,31 @@ def resolve():
     uploader = info.get("uploader") or None
     thumbnail = info.get("thumbnail") or None
 
+    payload: dict[str, Any] = {
+        "ok": True,
+        "kind": "video",
+        "title": title,
+        "duration": duration if isinstance(duration, (int, float)) else None,
+        "uploader": uploader,
+        "thumbnail": thumbnail,
+    }
+    # Diagnostics for authenticated callers: which formats does Instagram offer
+    # to THIS server? (Differs by region/IP.) Never includes URLs.
+    if body.get("debug") is True and isinstance(formats, list):
+        payload["formats"] = [
+            {
+                "id": f.get("format_id"),
+                "ext": f.get("ext"),
+                "vcodec": f.get("vcodec"),
+                "acodec": f.get("acodec"),
+                "height": f.get("height"),
+            }
+            for f in formats
+            if isinstance(f, dict)
+        ]
+
     return Response(
-        json.dumps({
-            "ok": True,
-            "kind": "video",
-            "title": title,
-            "duration": duration if isinstance(duration, (int, float)) else None,
-            "uploader": uploader,
-            "thumbnail": thumbnail,
-        }),
+        json.dumps(payload),
         status=200,
         content_type="application/json",
     )
