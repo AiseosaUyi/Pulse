@@ -124,7 +124,13 @@ def _ytdlp_dl_opts() -> dict[str, Any]:
         "quiet": True,
         "no_warnings": True,
         "extract_flat": False,
-        "format": "b[ext=mp4][vcodec^=avc1]/bv*[vcodec^=avc1]+ba/b[ext=mp4]/bv*+ba/b",
+        # Always merge a video stream WITH an audio stream. Instagram serves
+        # DASH video-only + audio-only, and which codecs exist varies by
+        # server region (Render's IP gets VP9 only, no H.264). The old string
+        # fell through to a bare "b[ext=mp4]" that picked video-only VP9 and
+        # produced a silent file. Sort prefers H.264 when offered, caps at 1080p.
+        "format": "bv*+ba/b",
+        "format_sort": ["vcodec:h264", "res:1080", "ext:mp4:m4a"],
         "merge_output_format": "mp4",
         "max_filesize": 100 * 1024 * 1024,
     }
