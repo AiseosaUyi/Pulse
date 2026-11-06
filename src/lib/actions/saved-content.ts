@@ -12,6 +12,11 @@ import {
   resolveViaCobalt,
   CobaltResolveError,
 } from "@/lib/scrape/cobalt-downloader";
+import {
+  resolveInstagramViaYtdlp,
+  isYtdlpConfigured,
+  YtdlpResolveError,
+} from "@/lib/scrape/ytdlp-resolver";
 import { resolveThumbnail } from "@/lib/scrape/thumbnail-resolver";
 import {
   fetchBytes,
@@ -287,12 +292,24 @@ async function extractViaCobaltAndSave(
 
   // Resolve via cobalt — validates the URL + gets us the filename hint.
   // Video bytes are NOT fetched here; the client downloads directly.
-  let resolved;
+  // Instagram goes through the yt-dlp service when configured: cobalt now
+  // returns only the cover JPG for reels. Without it, cobalt is still tried
+  // but an image result is rejected so we never save a photo as a "video".
+  let resolvedTitle: string | null = null;
   try {
-    resolved = await resolveViaCobalt(url);
+    if (platform === "instagram" && isYtdlpConfigured()) {
+      const r = await resolveInstagramViaYtdlp(url);
+      resolvedTitle = r.title || null;
+    } else {
+      const r = await resolveViaCobalt(url);
+      if (platform === "instagram" && /\.(jpe?g|png|webp)$/i.test(r.filename ?? "")) {
+        throw new Error("Instagram only returned a cover image, not the video");
+      }
+      resolvedTitle = r.filename ?? null;
+    }
   } catch (err) {
     const message =
-      err instanceof CobaltResolveError
+      err instanceof CobaltResolveError || err instanceof YtdlpResolveError
         ? err.message
         : err instanceof Error
           ? err.message
@@ -302,8 +319,8 @@ async function extractViaCobaltAndSave(
       sourceUrl: url,
       sourcePlatform: platform,
       thumbnailEmoji,
-      extractionError: `cobalt resolve failed: ${message}`,
-      reason: `Couldn't extract. Saved as a link — ${message}`,
+      extractionError: `resolve failed: ${message}`,
+      reason: `Couldn't get the video. Saved as a link — ${message}`,
     });
     revalidatePath("/content-vault");
     return row;
@@ -326,7 +343,7 @@ async function extractViaCobaltAndSave(
     }
   }
 
-  const title = resolved.filename ?? fallbackTitleFromUrl(url);
+  const title = resolvedTitle ?? fallbackTitleFromUrl(url);
 
   const { data: row, error: rowError } = await admin
     .from("saved_content")
