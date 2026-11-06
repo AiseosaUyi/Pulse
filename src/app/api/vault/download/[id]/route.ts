@@ -17,6 +17,11 @@ import {
   resolveViaCobalt,
   CobaltResolveError,
 } from "@/lib/scrape/cobalt-downloader";
+import {
+  openInstagramDownload,
+  isYtdlpConfigured,
+  YtdlpResolveError,
+} from "@/lib/scrape/ytdlp-resolver";
 
 export const dynamic = "force-dynamic";
 // Cold cobalt + re-resolve + fetch 50 MB needs ~30-45s worst case.
@@ -197,6 +202,42 @@ export async function GET(
     );
   }
 
+  // Instagram: cobalt only returns the cover JPG for reels now, so when the
+  // yt-dlp service is configured, stream the real merged MP4 from it.
+  if (row.source_platform === "instagram" && isYtdlpConfigured()) {
+    try {
+      const upstream = await openInstagramDownload(row.source_url);
+      if (!upstream.body) {
+        throw new YtdlpResolveError("ytdlp returned an empty body", "upstream_error");
+      }
+      const contentLength = upstream.headers.get("content-length");
+      return new Response(upstream.body, {
+        status: 200,
+        headers: {
+          "Content-Type": "video/mp4",
+          "Content-Disposition": `attachment; filename="${slugify(row.title)}.mp4"`,
+          ...(contentLength ? { "Content-Length": contentLength } : {}),
+          "Cache-Control": "private, no-store",
+        },
+      });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error("[vault/download] ytdlp download failed", {
+        id,
+        userId: user.id,
+        message: reason,
+      });
+      const status = err instanceof YtdlpResolveError ? err.status : "upstream_error";
+      const userMessage =
+        status === "timeout"
+          ? "Download service is slow right now (instagram). Try again in a few seconds — the resolver was warming up."
+          : status === "busy"
+            ? "Download service is busy, try again in a moment."
+            : `Couldn't get the Instagram video: ${reason}. The original post may have been deleted or made private.`;
+      return NextResponse.json({ error: userMessage }, { status: 502 });
+    }
+  }
+
   let freshMediaUrl: string;
   try {
     if (row.source_platform === "tiktok") {
@@ -253,6 +294,15 @@ export async function GET(
   }
 
   const mime = asset.mime || "video/mp4";
+
+  // Never serve a photo as a "video" download (cobalt's reel fallback).
+  if (row.source_platform === "instagram" && mime.toLowerCase().startsWith("image/")) {
+    return NextResponse.json(
+      { error: "Instagram only returned a cover image, not the video." },
+      { status: 502 }
+    );
+  }
+
   const ext = extFromMime(mime);
   const filename = `${slugify(row.title)}.${ext}`;
 
