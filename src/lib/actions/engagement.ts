@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentTenant, requireUser } from "@/lib/auth";
+import { applyStatusConsistency } from "@/lib/services/action-queue";
 import { getTenant } from "@/lib/services/tenants";
 import { generateEngagementReplyDraft } from "@/lib/ai/engagement-reply";
 import { dispatchEngagementItemReply, type DispatchResult } from "@/lib/services/reply-dispatch";
@@ -79,7 +80,11 @@ export async function markAsReplied(itemId: string, replied: boolean) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("engagement_items")
-    .update({ replied, read: true })
+    .update(
+      replied
+        ? { ...applyStatusConsistency("resolved"), read: true }
+        : { replied: false, read: true }
+    )
     .eq("id", itemId);
   if (error) return { success: false, error: error.message };
   revalidatePath("/engagement");
@@ -121,7 +126,7 @@ export async function sendEngagementReply(
   await supabase
     .from("engagement_items")
     .update({
-      replied: true,
+      ...applyStatusConsistency("resolved"),
       read: true,
       sent_body: message,
       approval_status: "sent",

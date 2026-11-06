@@ -158,6 +158,70 @@ suite("/api/v1 action-queue group", () => {
     expect(row?.content).toBe("Updated message");
   });
 
+  it("HOTFIX regression: resolve a row, re-upsert same externalId with status 'open' -> 200 + statusIgnored:true + row still resolved", async () => {
+    const { POST: POST_INBOX } = await import("../../src/app/api/v1/inbox/route");
+    const { POST: POST_STATUS } = await import("../../src/app/api/v1/inbox/[id]/status/route");
+    const extId = `hotfix-regress-${TENANT}`;
+
+    // 1. Initial insert
+    const first = await POST_INBOX(
+      authedRequest("https://test.local/api/v1/inbox", {
+        method: "POST",
+        body: JSON.stringify({
+          platform: "instagram",
+          type: "dm",
+          externalId: extId,
+          fromName: "Hotfix Customer",
+          content: "Initial message",
+          receivedAt: new Date().toISOString(),
+          status: "open",
+        }),
+      })
+    );
+    expect(first.status).toBe(200);
+    const { id } = await first.json();
+
+    // 2. Resolve row
+    const resStatus = await POST_STATUS(
+      authedRequest(`https://test.local/api/v1/inbox/${id}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status: "resolved" }),
+      }),
+      { params: Promise.resolve({ id }) }
+    );
+    expect(resStatus.status).toBe(200);
+
+    // 3. Re-upsert same externalId with status: "open"
+    const second = await POST_INBOX(
+      authedRequest("https://test.local/api/v1/inbox", {
+        method: "POST",
+        body: JSON.stringify({
+          platform: "instagram",
+          type: "dm",
+          externalId: extId,
+          fromName: "Hotfix Customer",
+          content: "Agent sweep observed new timestamp",
+          receivedAt: new Date().toISOString(),
+          status: "open",
+        }),
+      })
+    );
+    expect(second.status).toBe(200);
+    const secondBody = await second.json();
+    expect(secondBody.statusIgnored).toBe(true);
+    expect(secondBody.id).toBe(id);
+
+    // 4. Assert row in database is still resolved
+    const { data: row } = await admin
+      .from("engagement_items")
+      .select("status, replied, resolved_at")
+      .eq("id", id)
+      .single();
+    expect(row?.status).toBe("resolved");
+    expect(row?.replied).toBe(true);
+    expect(row?.resolved_at).not.toBeNull();
+  });
+
   it("GET /action-queue only returns the token's own tenant", async () => {
     const { GET } = await import("../../src/app/api/v1/action-queue/route");
     const res = await GET(authedRequest("https://test.local/api/v1/action-queue"));
