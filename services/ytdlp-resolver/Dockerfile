@@ -22,7 +22,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 
 # Render sets PORT via environment variable; default 10000
-CMD ["gunicorn", "-b", "0.0.0.0:$PORT", \
-     "--workers=1", "--threads=4", \
-     "--timeout=120", \
-     "app:app"]
+# Shell form via sh -c so ${PORT} is actually expanded (exec-form CMD does not).
+CMD ["sh", "-c", "exec gunicorn -b 0.0.0.0:${PORT:-10000} --workers=1 --threads=4 --timeout=120 app:app"]
