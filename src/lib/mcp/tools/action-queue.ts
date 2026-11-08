@@ -18,13 +18,15 @@ import {
   finishAgentRun,
   type RowRef,
 } from "@/lib/services/action-queue";
+import { markHandoff, clearHandoff } from "@/lib/services/handoff";
 
 const KINDS = ["reply", "follow_up", "decision", "escalation", "opportunity", "chore"] as const;
 const PRIORITIES = ["urgent", "high", "normal", "low"] as const;
-const STATUSES = ["open", "snoozed", "resolved", "dismissed"] as const;
+const STATUSES = ["open", "snoozed", "resolved", "dismissed", "handed_off"] as const;
 const SOURCES = ["engagement", "action", "coach", "prospect"] as const;
 const PLATFORMS = ["instagram", "tiktok", "twitter", "linkedin"] as const;
 const TYPES = ["dm", "comment", "mention", "reply"] as const;
+const CHANNELS = ["whatsapp", "phone", "email", "in_person", "other"] as const;
 
 export function registerActionQueueTools(server: McpServer) {
   server.registerTool(
@@ -58,11 +60,12 @@ export function registerActionQueueTools(server: McpServer) {
     {
       title: "Put an observed comment/DM into the inbox",
       description:
-        "Upsert a comment or DM you observed on the real platform, deduplicated by (platform, externalId) — calling this twice for the same item updates it, never duplicates. This is the write path that lets you put what you see into Pulse. proposedReply/status/prospectId are optional on every call — omit them to leave whatever's already there untouched, rather than resetting it. Mutates data.",
+        "Upsert a comment or DM you observed on the real platform, deduplicated by (platform, externalId). Per-message externalIds are required (e.g. ig:dm:<threadId>:<messageId>, ig:comment:<shortcode>:<commentId>). Repeat calls for the same item update it, but status is ONLY honoured on first insert and is ignored on repeat upserts (returns statusIgnored: true). proposedReply/status/prospectId are optional on every call. Mutates data.",
       inputSchema: {
         platform: z.enum(PLATFORMS),
         type: z.enum(TYPES),
         externalId: z.string().min(1),
+        threadExternalId: z.string().optional().describe("Thread external ID (e.g. ig:dm:<threadId>). If omitted, derived from externalId."),
         fromName: z.string().min(1),
         fromHandle: z.string().nullable().optional(),
         content: z.string().min(1),
@@ -77,7 +80,7 @@ export function registerActionQueueTools(server: McpServer) {
         proposedReply: z.string().optional().describe("Attach a draft in this same call instead of a separate pulse_set_proposed_reply."),
         proposedReplyAuthor: z.enum(["agent", "human", "ai_generated"]).optional(),
         status: z.enum(STATUSES).optional().describe(
-          "Set explicitly only when you observed the message was already answered between sweeps — e.g. 'resolved' records it as history without it ever entering the open queue. Omit to leave the existing status alone on a repeat upsert."
+          "Honoured ONLY on first insert. Ignored on repeat upserts of an existing row. E.g. 'resolved' records history without entering the open queue."
         ),
         prospectId: z.string().nullable().optional().describe("Link to a known prospect. Omit to leave an existing link untouched."),
       },
@@ -89,6 +92,59 @@ export function registerActionQueueTools(server: McpServer) {
       const result = await upsertEngagementItem(admin, tenantSlug, args);
       if (!result.ok) return mcpToolError(result.error);
       return mcpToolResult(result);
+    }
+  );
+
+  server.registerTool(
+    "pulse_mark_handoff",
+    {
+      title: "Mark a conversation thread as moved off-platform",
+      description:
+        "Record that an Instagram/social conversation moved to another channel (e.g. WhatsApp). Moves open rows in the thread to handed_off. Idempotent. Mutates data.",
+      inputSchema: {
+        platform: z.enum(PLATFORMS),
+        threadExternalId: z.string().min(1).describe("The thread external ID (e.g. ig:dm:<threadId>)."),
+        channel: z.enum(CHANNELS).or(z.string().min(1)).describe("Destination channel, e.g. whatsapp, phone, email, in_person, other."),
+        contact: z.string().optional().describe("Optional phone number or email."),
+        note: z.string().optional().describe("Optional note, e.g. 'Priye is on this on WhatsApp'."),
+        movedBy: z.string().optional().describe("Person ID or name who took over the conversation."),
+      },
+    },
+    async (args, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "engage:write");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin, createdBy } = gate.context;
+      const result = await markHandoff(admin, tenantSlug, {
+        ...args,
+        movedBy: args.movedBy ?? createdBy ?? null,
+      });
+      if (!result.ok) return mcpToolError(result.error);
+      return mcpToolResult(result);
+    }
+  );
+
+  server.registerTool(
+    "pulse_clear_handoff",
+    {
+      title: "Clear a conversation handoff",
+      description:
+        "Clear an active handoff on a thread when the conversation returns or handoff is undone. Does not auto-reopen rows. Mutates data.",
+      inputSchema: {
+        platform: z.enum(PLATFORMS),
+        threadExternalId: z.string().min(1),
+      },
+    },
+    async (args, extra: ToolHandlerExtra) => {
+      const gate = requireToolScope(extra, "engage:write");
+      if (!gate.ok) return gate.error;
+      const { tenantSlug, admin, createdBy } = gate.context;
+      const result = await clearHandoff(admin, tenantSlug, {
+        platform: args.platform,
+        threadExternalId: args.threadExternalId,
+        clearedBy: createdBy ?? null,
+      });
+      if (!result.ok) return mcpToolError(result.error);
+      return mcpToolResult({ success: true, cleared: true });
     }
   );
 
