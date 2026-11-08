@@ -32,6 +32,7 @@ const SECONDARY_MAX_H = "240px";
 // display-only split of "needs_decision" (see the filter below) that
 // exists only in this component's local layout, never sent to the API.
 type BoardSectionKey = QueueGroupKey | "chores";
+type ViewMode = "queue" | "handed_off" | "resolved";
 
 // Mobile splits the 6 possible sections into two tab groups of at most 3
 // each — a single 6-way pill strip meant Opportunities/Going cold/Chores
@@ -69,13 +70,15 @@ export function ActionQueueBoard({
 }) {
   const [result, setResult] = useState(initial);
   const [filter, setFilter] = useState<QueueFilterState>({ platform: "", kind: "" });
-  const [showResolved, setShowResolved] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("queue");
   const isMobile = !useMediaQuery("(min-width: 768px)");
 
   const fetchQueue = useCallback(
     async (silent: boolean) => {
       const params = new URLSearchParams();
-      if (!silent && showResolved) params.set("status", "resolved");
+      if (viewMode !== "queue") {
+        params.set("status", viewMode);
+      }
       if (filter.platform) params.set("platform", filter.platform);
       if (filter.kind) params.set("kind", filter.kind);
 
@@ -88,7 +91,7 @@ export function ActionQueueBoard({
         // Best-effort — keep showing the last good state.
       }
     },
-    [filter, showResolved]
+    [filter, viewMode]
   );
 
   useEffect(() => {
@@ -96,10 +99,10 @@ export function ActionQueueBoard({
   }, [fetchQueue]);
 
   useEffect(() => {
-    if (showResolved) return;
+    if (viewMode !== "queue") return;
     const iv = setInterval(() => fetchQueue(true), POLL_MS);
     return () => clearInterval(iv);
-  }, [fetchQueue, showResolved]);
+  }, [fetchQueue, viewMode]);
 
   const onChanged = () => fetchQueue(true);
   const show = (key: QueueGroupKey) => !visibleGroups || visibleGroups.includes(key);
@@ -131,11 +134,11 @@ export function ActionQueueBoard({
   const nonEmptySections = sections.filter((s) => s.rows.length > 0);
   const allEmpty = nonEmptySections.length === 0;
 
-  if (showResolved) {
+  if (viewMode === "resolved") {
     const resolvedRows = result.groups[0]?.rows ?? [];
     return (
       <div className="rounded-2xl border border-border bg-card">
-        <BoardHeader showResolved onToggleResolved={() => setShowResolved(false)} />
+        <BoardHeader viewMode={viewMode} onChangeViewMode={setViewMode} />
         <div className="p-5">
           {resolvedRows.length === 0 ? (
             <p className="py-8 text-center text-sm text-text-secondary">Nothing resolved yet.</p>
@@ -149,9 +152,35 @@ export function ActionQueueBoard({
     );
   }
 
+  if (viewMode === "handed_off") {
+    const handedOffRows = result.groups[0]?.rows ?? [];
+    return (
+      <div className="rounded-2xl border border-border bg-card">
+        <BoardHeader viewMode={viewMode} onChangeViewMode={setViewMode}>
+          <QueueFilters value={filter} onChange={setFilter} />
+        </BoardHeader>
+        <div className="p-5">
+          {handedOffRows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-text-secondary">No handed off conversations right now.</p>
+          ) : (
+            <div className="max-h-[560px] overflow-y-auto pr-1">
+              <QueueGroup
+                label="Handed off (oldest first)"
+                rows={handedOffRows}
+                variant="compose"
+                canSeeActivity={canSeeActivity}
+                onChanged={onChanged}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-border bg-card">
-      <BoardHeader showResolved={false} onToggleResolved={() => setShowResolved(true)}>
+      <BoardHeader viewMode={viewMode} onChangeViewMode={setViewMode}>
         <QueueFilters value={filter} onChange={setFilter} />
       </BoardHeader>
 
@@ -316,12 +345,12 @@ function SectionGroup({
 }
 
 function BoardHeader({
-  showResolved,
-  onToggleResolved,
+  viewMode,
+  onChangeViewMode,
   children,
 }: {
-  showResolved: boolean;
-  onToggleResolved: () => void;
+  viewMode: ViewMode;
+  onChangeViewMode: (mode: ViewMode) => void;
   children?: React.ReactNode;
 }) {
   return (
@@ -330,9 +359,44 @@ function BoardHeader({
         <h2 className="text-sm font-semibold text-foreground shrink-0">Action queue</h2>
         {children}
       </div>
-      <button type="button" onClick={onToggleResolved} className="text-xs text-primary-500 hover:underline shrink-0">
-        {showResolved ? "Back to queue" : "Resolved today"}
-      </button>
+      <div className="flex items-center gap-1.5 text-xs">
+        <button
+          type="button"
+          onClick={() => onChangeViewMode("queue")}
+          className={cn(
+            "px-2.5 py-1 rounded-md transition-colors",
+            viewMode === "queue"
+              ? "bg-primary-500/10 text-primary-600 dark:text-primary-400 font-medium"
+              : "text-text-secondary hover:text-foreground"
+          )}
+        >
+          Active queue
+        </button>
+        <button
+          type="button"
+          onClick={() => onChangeViewMode("handed_off")}
+          className={cn(
+            "px-2.5 py-1 rounded-md transition-colors",
+            viewMode === "handed_off"
+              ? "bg-primary-500/10 text-primary-600 dark:text-primary-400 font-medium"
+              : "text-text-secondary hover:text-foreground"
+          )}
+        >
+          Handed off
+        </button>
+        <button
+          type="button"
+          onClick={() => onChangeViewMode("resolved")}
+          className={cn(
+            "px-2.5 py-1 rounded-md transition-colors",
+            viewMode === "resolved"
+              ? "bg-primary-500/10 text-primary-600 dark:text-primary-400 font-medium"
+              : "text-text-secondary hover:text-foreground"
+          )}
+        >
+          Resolved today
+        </button>
+      </div>
     </div>
   );
 }

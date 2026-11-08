@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 const METHODS = "POST";
 
 const statusSchema = z.object({
-  status: z.enum(["open", "snoozed", "resolved", "dismissed"]),
+  status: z.enum(["open", "snoozed", "resolved", "dismissed", "handed_off"]),
   resolutionNote: z.string().optional(),
   snoozedUntil: z.string().optional(),
 });
