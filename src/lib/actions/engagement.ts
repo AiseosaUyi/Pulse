@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentTenant, requireUser } from "@/lib/auth";
-import { applyStatusConsistency } from "@/lib/services/action-queue";
 import { getTenant } from "@/lib/services/tenants";
 import { generateEngagementReplyDraft } from "@/lib/ai/engagement-reply";
 import { dispatchEngagementItemReply, type DispatchResult } from "@/lib/services/reply-dispatch";
+import { applyStatusConsistency } from "@/lib/services/action-queue";
 
 const TYPES = ["dm", "comment", "mention", "reply"] as const;
 const PLATFORMS = ["instagram", "tiktok", "twitter", "linkedin"] as const;
@@ -78,13 +78,11 @@ export async function markAsRead(itemId: string, read: boolean) {
 export async function markAsReplied(itemId: string, replied: boolean) {
   await requireUser();
   const supabase = await createClient();
+  const status = replied ? "resolved" : "open";
+  const consistency = applyStatusConsistency(status);
   const { error } = await supabase
     .from("engagement_items")
-    .update(
-      replied
-        ? { ...applyStatusConsistency("resolved"), read: true }
-        : { replied: false, read: true }
-    )
+    .update({ ...consistency, read: true })
     .eq("id", itemId);
   if (error) return { success: false, error: error.message };
   revalidatePath("/engagement");
@@ -123,10 +121,11 @@ export async function sendEngagementReply(
   // AI-auto-sent) persists the sent text — a thread view needs outbound
   // bubbles to exist as rows, and approved_by IS NULL is the AI-vs-human
   // signal (see lib/services/conversations.ts deriveReply()).
+  const consistency = applyStatusConsistency("resolved", { resolvedBy: user.id });
   await supabase
     .from("engagement_items")
     .update({
-      ...applyStatusConsistency("resolved"),
+      ...consistency,
       read: true,
       sent_body: message,
       approval_status: "sent",

@@ -20,6 +20,7 @@ const upsertSchema = z.object({
   platform: z.enum(["instagram", "tiktok", "twitter", "linkedin"]),
   type: z.enum(["dm", "comment", "mention", "reply"]),
   externalId: z.string().min(1),
+  threadExternalId: z.string().optional(),
   fromName: z.string().min(1),
   fromHandle: z.string().nullable().optional(),
   content: z.string().min(1),
@@ -33,7 +34,7 @@ const upsertSchema = z.object({
   body: z.string().nullable().optional(),
   proposedReply: z.string().optional(),
   proposedReplyAuthor: z.enum(["agent", "human", "ai_generated"]).optional(),
-  status: z.enum(["open", "snoozed", "resolved", "dismissed"]).optional(),
+  status: z.enum(["open", "snoozed", "resolved", "dismissed", "handed_off"]).optional(),
   prospectId: z.string().nullable().optional(),
 });
 
@@ -55,10 +56,12 @@ export async function GET(req: Request) {
     return apiError(400, `Invalid platform: ${platform}`, headers);
   }
   const unansweredOnly = searchParams.get("unanswered") === "true";
+  const status = searchParams.get("status") ?? undefined;
 
   const { data, total } = await listInboxItems(admin, tenantSlug, {
     platform: platform ?? undefined,
     unansweredOnly,
+    status,
     limit,
     offset,
   });
