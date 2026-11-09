@@ -5,6 +5,7 @@ import { getSharedInboxConfig } from "@/lib/services/shared-inbox";
 import { defaultSharedInboxConfig } from "@/lib/shared-inbox/types";
 import { SharedInboxEditor } from "@/components/settings/SharedInboxEditor";
 import { SettingsPageHeading } from "../_shared";
+import { getTenantHandoffStaleDays } from "@/lib/services/handoff";
 
 export default async function SharedInboxSettingsPage() {
   const tenant = await getCurrentTenant();
@@ -14,6 +15,10 @@ export default async function SharedInboxSettingsPage() {
     ? await getSharedInboxConfig(await createClient(), tenantSlug)
     : defaultSharedInboxConfig();
 
+  const handoffStaleDays = tenantSlug
+    ? await getTenantHandoffStaleDays(await createClient(), tenantSlug)
+    : 14;
+
   return (
     <div className="max-w-[720px]">
       <SettingsPageHeading
@@ -21,7 +26,7 @@ export default async function SharedInboxSettingsPage() {
         title="AI inbox coverage"
         subtitle="Let AI draft — and, above a confidence bar you set, auto-send — replies to WhatsApp, Instagram, and LinkedIn messages when your team is away. Off by default; nothing sends until you turn this on."
       />
-      <SharedInboxEditor tenantSlug={tenantSlug} initial={config} />
+      <SharedInboxEditor tenantSlug={tenantSlug} initial={config} handoffStaleDays={handoffStaleDays} />
     </div>
   );
 }
