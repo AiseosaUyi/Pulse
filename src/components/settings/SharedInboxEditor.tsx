@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
 import { saveSharedInboxConfig } from "@/lib/actions/shared-inbox-settings";
+import { saveHandoffStaleDays } from "@/lib/actions/handoff-settings";
 import type { SharedInboxConfig, OfficeHoursWindow } from "@/lib/shared-inbox/types";
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -18,9 +19,11 @@ function newWindowId(): string {
 export function SharedInboxEditor({
   tenantSlug,
   initial,
+  handoffStaleDays = 14,
 }: {
   tenantSlug: string;
   initial: SharedInboxConfig;
+  handoffStaleDays?: number;
 }) {
   const browserTz =
     typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC";
@@ -29,6 +32,7 @@ export function SharedInboxEditor({
     timezone: initial.timezone && initial.timezone !== "UTC" ? initial.timezone : browserTz,
   });
   const [pending, startTransition] = useTransition();
+  const [handoffDays, setHandoffDays] = useState(String(handoffStaleDays));
 
   function patch(p: Partial<SharedInboxConfig>) {
     setConfig((c) => ({ ...c, ...p }));
@@ -79,6 +83,22 @@ export function SharedInboxEditor({
         return;
       }
       toast.success("AI inbox coverage saved.");
+    });
+  }
+
+  async function saveHandoff() {
+    const n = Number(handoffDays);
+    if (isNaN(n) || n < 1 || n > 90) {
+      toast.error("Enter a value between 1 and 90.");
+      return;
+    }
+    startTransition(async () => {
+      const res = await saveHandoffStaleDays(tenantSlug, n);
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Handoff stale days saved.");
     });
   }
 
@@ -226,6 +246,29 @@ export function SharedInboxEditor({
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Handoff stale days */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-white-200 bg-card p-5">
+        <h3 className="text-sm font-bold text-gray-1100">Handed-off conversations</h3>
+        <p className="text-xs text-gray-1000">
+          Re-surface a handed-off thread after N days of no activity. Must be an integer between 1 and 90.
+        </p>
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            min={1}
+            max={90}
+            step={1}
+            value={handoffDays}
+            onChange={(e) => setHandoffDays(e.target.value)}
+            className="w-24 rounded-lg border border-white-200 bg-card px-3 py-2 text-base text-gray-1200 outline-none focus-visible:ring-[3px] focus-visible:ring-blue-500/30"
+          />
+          <span className="text-sm text-gray-1000">days of inactivity</span>
+        </div>
+        <Button type="button" size="sm" variant="outline" onClick={saveHandoff} disabled={pending}>
+          {pending ? "Saving…" : "Save"}
+        </Button>
       </div>
 
       <div>
