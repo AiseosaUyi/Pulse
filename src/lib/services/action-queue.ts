@@ -466,6 +466,18 @@ export async function listActionQueue(
 
 // ── Write ─────────────────────────────────────────────────────────────────
 
+/** Single owner of the status <-> replied/resolved_at invariant that
+ * chk_engagement_items_no_open_replied enforces. Open/snoozed => not replied,
+ * no resolved_at; resolved/dismissed => replied, resolved_at stamped. */
+export function applyStatusConsistency(status: string): {
+  status: string;
+  replied: boolean;
+  resolved_at: string | null;
+} {
+  const closed = status === "resolved" || status === "dismissed";
+  return { status, replied: closed, resolved_at: closed ? new Date().toISOString() : null };
+}
+
 export async function upsertEngagementItem(
   client: SupabaseClient,
   tenantSlug: string,
@@ -501,7 +513,15 @@ export async function upsertEngagementItem(
      * pass null explicitly to clear it. */
     prospectId?: string | null;
   }
-): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; id: string; statusIgnored?: boolean } | { ok: false; error: string }> {
+  const { data: existing } = await client
+    .from("engagement_items")
+    .select("id, status, replied")
+    .eq("tenant_slug", tenantSlug)
+    .eq("platform", input.platform)
+    .eq("external_id", input.externalId)
+    .maybeSingle();
+
   const payload: Record<string, unknown> = {
     tenant_slug: tenantSlug,
     type: input.type,
@@ -519,22 +539,26 @@ export async function upsertEngagementItem(
     meta: input.meta ?? {},
     why: input.why ?? null,
     body: input.body ?? null,
-    // undefined values are dropped by JSON.stringify before the request
-    // ever reaches PostgREST, so an omitted field is genuinely untouched
-    // on conflict — not reset to null. Same idiom as upsertProspect's
-    // `signal_data: input.signalData ?? undefined`.
     prospect_id: input.prospectId,
   };
   if (input.proposedReply !== undefined) {
     payload.proposed_reply = input.proposedReply;
     payload.proposed_reply_author = input.proposedReplyAuthor ?? "agent";
   }
-  if (input.status !== undefined) {
-    payload.status = input.status;
-    if (input.status === "resolved") {
-      payload.replied = true;
-      payload.resolved_at = new Date().toISOString();
+
+  // status is honoured ONLY on first insert. On an existing row the human /
+  // queue owns status, so a repeat sweep can never reopen a resolved item.
+  let statusIgnored = false;
+  if (existing) {
+    statusIgnored = input.status !== undefined;
+    // Self-repair a legacy open+replied row so the update can't trip
+    // chk_engagement_items_no_open_replied.
+    if (existing.status === "open" && existing.replied === true) {
+      payload.replied = false;
+      payload.resolved_at = null;
     }
+  } else if (input.status !== undefined) {
+    Object.assign(payload, applyStatusConsistency(input.status));
   }
 
   const { data, error } = await client
@@ -543,7 +567,7 @@ export async function upsertEngagementItem(
     .select("id")
     .single();
   if (error || !data) return { ok: false, error: error?.message ?? "Upsert failed" };
-  return { ok: true, id: data.id as string };
+  return { ok: true, id: data.id as string, ...(statusIgnored ? { statusIgnored: true } : {}) };
 }
 
 /** Records what was actually sent — the reply itself, not just that the
@@ -721,11 +745,12 @@ export async function setQueueStatus(
 
   const table = rowRef.source === "engagement" ? "engagement_items" : "action_items";
   const patch: Record<string, unknown> = { status: input.status };
-  if (input.status === "resolved") {
+  if (rowRef.source === "engagement") {
+    Object.assign(patch, applyStatusConsistency(input.status));
+  } else if (input.status === "resolved") {
     patch.resolved_at = new Date().toISOString();
-    if (input.resolvedBy) patch.resolved_by = input.resolvedBy;
-    if (rowRef.source === "engagement") patch.replied = true;
   }
+  if (input.status === "resolved" && input.resolvedBy) patch.resolved_by = input.resolvedBy;
   if (input.status === "snoozed" && input.snoozedUntil) patch.snoozed_until = input.snoozedUntil;
   if (input.status !== "snoozed") patch.snoozed_until = null;
   if (table === "action_items" && input.resolutionNote !== undefined) patch.resolution_note = input.resolutionNote;
