@@ -9,11 +9,19 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getOutreachToday, type ProspectWithFollowUp } from "@/lib/services/outreach-intelligence";
+import {
+  getActiveHandoff,
+  getActiveHandoffsMap,
+  getTenantHandoffStaleDays,
+  isHandoffStale,
+  parseThreadExternalId,
+  type HandoffSummary,
+} from "@/lib/services/handoff";
 
 export type QueueSource = "engagement" | "action" | "coach" | "prospect";
 export type QueueKind = "reply" | "follow_up" | "decision" | "escalation" | "opportunity" | "chore";
 export type QueuePriority = "urgent" | "high" | "normal" | "low";
-export type QueueStatus = "open" | "snoozed" | "resolved" | "dismissed" | "archived";
+export type QueueStatus = "open" | "snoozed" | "resolved" | "dismissed" | "archived" | "handed_off";
 export type QueueGroupKey =
   | "needs_reply"
   | "needs_decision"
@@ -21,7 +29,8 @@ export type QueueGroupKey =
   | "going_cold"
   | "opportunities"
   | "resolved"
-  | "archived";
+  | "archived"
+  | "handed_off";
 
 export interface RowRef {
   source: QueueSource;
@@ -56,6 +65,9 @@ export interface QueueRow {
    * source rows), or linked (engagement/action rows the agent tied to a
    * known prospect). Null for coach rows, which have no prospect concept. */
   prospectId: string | null;
+  threadExternalId?: string | null;
+  handoff?: HandoffSummary | null;
+  handoffStale?: boolean;
 }
 
 export interface QueueGroup {
@@ -117,8 +129,15 @@ function engagementActionLabel(type: string): string {
   return "Open";
 }
 
-function engagementRowToQueueRow(row: Record<string, unknown>): QueueRow {
+function engagementRowToQueueRow(
+  row: Record<string, unknown>,
+  handoffInfo?: { handoff: HandoffSummary; isStale: boolean }
+): QueueRow {
   const type = (row.type as string) ?? "comment";
+  const threadExternalId =
+    (row.thread_external_id as string | null) ??
+    parseThreadExternalId(row.external_id as string | null);
+
   return {
     id: row.id as string,
     source: "engagement",
@@ -144,6 +163,9 @@ function engagementRowToQueueRow(row: Record<string, unknown>): QueueRow {
     receivedAt: row.received_at as string,
     resolvedAt: (row.resolved_at as string | null) ?? null,
     prospectId: (row.prospect_id as string | null) ?? null,
+    threadExternalId,
+    handoff: handoffInfo?.handoff ?? null,
+    handoffStale: handoffInfo?.isStale ?? false,
   };
 }
 
@@ -173,6 +195,9 @@ function actionItemRowToQueueRow(row: Record<string, unknown>): QueueRow {
     receivedAt: row.created_at as string,
     resolvedAt: (row.resolved_at as string | null) ?? null,
     prospectId: (row.prospect_id as string | null) ?? null,
+    threadExternalId: null,
+    handoff: null,
+    handoffStale: false,
   };
 }
 
@@ -221,6 +246,9 @@ function coachRowToQueueRow(row: Record<string, unknown>): QueueRow {
     receivedAt: row.created_at as string,
     resolvedAt: (row.completed_at as string | null) ?? null,
     prospectId: null,
+    threadExternalId: null,
+    handoff: null,
+    handoffStale: false,
   };
 }
 
@@ -250,6 +278,9 @@ function prospectToQueueRow(p: ProspectWithFollowUp): QueueRow {
     receivedAt: p.followUpAt ?? p.lastTouchedAt ?? p.createdAt,
     resolvedAt: null,
     prospectId: p.id,
+    threadExternalId: null,
+    handoff: null,
+    handoffStale: false,
   };
 }
 
@@ -296,58 +327,67 @@ async function listQueueHistory(
   tenantSlug: string,
   filter: ListActionQueueFilter
 ): Promise<ListActionQueueResult> {
-  const status = filter.status as "resolved" | "dismissed" | "archived";
+  const status = filter.status as "resolved" | "dismissed" | "archived" | "handed_off";
   const limit = filter.limit ?? 50;
   const offset = filter.offset ?? 0;
   const isArchived = status === "archived";
+  const isHandedOff = status === "handed_off";
+
+  let engQuery = client
+    .from("engagement_items")
+    .select("*", { count: "exact" })
+    .eq("tenant_slug", tenantSlug);
+
+  if (isArchived) {
+    engQuery = engQuery.or("status.eq.archived,meta->>archived.eq.true").order("resolved_at", { ascending: false });
+  } else if (isHandedOff) {
+    engQuery = engQuery.eq("status", "handed_off").order("received_at", { ascending: true });
+  } else {
+    engQuery = engQuery.eq("status", status).order("resolved_at", { ascending: false });
+  }
+
+  let actionQuery = client
+    .from("action_items")
+    .select("*", { count: "exact" })
+    .eq("tenant_slug", tenantSlug);
+
+  if (isArchived) {
+    actionQuery = actionQuery.or("status.eq.archived,meta->>archived.eq.true").order("resolved_at", { ascending: false });
+  } else {
+    actionQuery = actionQuery.eq("status", status).order("resolved_at", { ascending: false });
+  }
 
   const [engRes, actionRes] = await Promise.all([
-    isArchived
-      ? client
-          .from("engagement_items")
-          .select("*", { count: "exact" })
-          .eq("tenant_slug", tenantSlug)
-          .or("status.eq.archived,meta->>archived.eq.true")
-          .order("resolved_at", { ascending: false })
-          .range(offset, offset + limit - 1)
-      : client
-          .from("engagement_items")
-          .select("*", { count: "exact" })
-          .eq("tenant_slug", tenantSlug)
-          .eq("status", status)
-          .order("resolved_at", { ascending: false })
-          .range(offset, offset + limit - 1),
-    isArchived
-      ? client
-          .from("action_items")
-          .select("*", { count: "exact" })
-          .eq("tenant_slug", tenantSlug)
-          .or("status.eq.archived,meta->>archived.eq.true")
-          .order("resolved_at", { ascending: false })
-          .range(offset, offset + limit - 1)
-      : client
-          .from("action_items")
-          .select("*", { count: "exact" })
-          .eq("tenant_slug", tenantSlug)
-          .eq("status", status)
-          .order("resolved_at", { ascending: false })
-          .range(offset, offset + limit - 1),
+    engQuery.range(offset, offset + limit - 1),
+    isHandedOff ? Promise.resolve({ data: [], count: 0, error: null }) : actionQuery.range(offset, offset + limit - 1),
   ]);
+
+  const threads = (engRes.data ?? [])
+    .map((r) => ({
+      platform: r.platform as string,
+      threadExternalId: (r.thread_external_id as string | null) ?? parseThreadExternalId(r.external_id as string | null) ?? "",
+    }))
+    .filter((t) => !!t.platform && !!t.threadExternalId);
+  const handoffsMap = await getActiveHandoffsMap(client, tenantSlug, threads);
 
   const rows = sortRows(
     [
-      ...(engRes.data ?? []).map(engagementRowToQueueRow),
+      ...(engRes.data ?? []).map((r) => {
+        const threadExtId = (r.thread_external_id as string | null) ?? parseThreadExternalId(r.external_id as string | null);
+        const handoffInfo = threadExtId ? handoffsMap.get(`${r.platform}:${threadExtId}`) : undefined;
+        return engagementRowToQueueRow(r, handoffInfo);
+      }),
       ...(actionRes.data ?? []).map(actionItemRowToQueueRow),
     ].filter((r) => matchesCommonFilters(r, filter)),
-    "resolvedAt"
+    isHandedOff ? "receivedAt" : "resolvedAt"
   );
 
   const total = (engRes.count ?? 0) + (actionRes.count ?? 0);
   return {
     groups: [
       {
-        key: isArchived ? "archived" : "resolved",
-        label: isArchived ? "Archived" : status === "resolved" ? "Resolved" : "Dismissed",
+        key: isHandedOff ? "handed_off" : isArchived ? "archived" : "resolved",
+        label: isHandedOff ? "Handed off" : isArchived ? "Archived" : status === "resolved" ? "Resolved" : "Dismissed",
         rows,
         count: rows.length,
       },
@@ -361,7 +401,12 @@ export async function listActionQueue(
   tenantSlug: string,
   filter: ListActionQueueFilter = {}
 ): Promise<ListActionQueueResult> {
-  if (filter.status === "resolved" || filter.status === "dismissed" || filter.status === "archived") {
+  if (
+    filter.status === "resolved" ||
+    filter.status === "dismissed" ||
+    filter.status === "archived" ||
+    filter.status === "handed_off"
+  ) {
     return listQueueHistory(client, tenantSlug, filter);
   }
 
@@ -401,7 +446,19 @@ export async function listActionQueue(
     getOutreachToday(client, tenantSlug),
   ]);
 
-  const engagementRows = (engRes.data ?? []).map(engagementRowToQueueRow);
+  const threads = (engRes.data ?? [])
+    .map((r) => ({
+      platform: r.platform as string,
+      threadExternalId: (r.thread_external_id as string | null) ?? parseThreadExternalId(r.external_id as string | null) ?? "",
+    }))
+    .filter((t) => !!t.platform && !!t.threadExternalId);
+  const handoffsMap = await getActiveHandoffsMap(client, tenantSlug, threads);
+
+  const engagementRows = (engRes.data ?? []).map((r) => {
+    const threadExtId = (r.thread_external_id as string | null) ?? parseThreadExternalId(r.external_id as string | null);
+    const handoffInfo = threadExtId ? handoffsMap.get(`${r.platform}:${threadExtId}`) : undefined;
+    return engagementRowToQueueRow(r, handoffInfo);
+  });
   const actionRows = (actionRes.data ?? []).map(actionItemRowToQueueRow);
   const coachRows = (coachRes.data ?? []).map(coachRowToQueueRow);
 
@@ -466,16 +523,43 @@ export async function listActionQueue(
 
 // ── Write ─────────────────────────────────────────────────────────────────
 
-/** Single owner of the status <-> replied/resolved_at invariant that
- * chk_engagement_items_no_open_replied enforces. Open/snoozed => not replied,
- * no resolved_at; resolved/dismissed => replied, resolved_at stamped. */
-export function applyStatusConsistency(status: string): {
+/**
+ * Centralised status consistency invariant:
+ * - moving to 'open' (or 'handed_off'): nulls resolved_at and sets replied = false.
+ * - moving to 'resolved' or 'dismissed': sets replied = true and stamps resolved_at.
+ * This guarantees the DB constraint chk_engagement_items_no_open_replied is never violated.
+ */
+export function applyStatusConsistency(
+  status: QueueStatus | string,
+  opts?: { resolvedBy?: string | null; resolvedAt?: string | null }
+): {
   status: string;
   replied: boolean;
   resolved_at: string | null;
+  resolved_by?: string | null;
 } {
-  const closed = status === "resolved" || status === "dismissed";
-  return { status, replied: closed, resolved_at: closed ? new Date().toISOString() : null };
+  if (status === "open" || status === "handed_off") {
+    return {
+      status,
+      replied: false,
+      resolved_at: null,
+      resolved_by: null,
+    };
+  }
+  if (status === "resolved" || status === "dismissed") {
+    return {
+      status,
+      replied: true,
+      resolved_at: opts?.resolvedAt ?? new Date().toISOString(),
+      ...(opts?.resolvedBy !== undefined ? { resolved_by: opts.resolvedBy } : {}),
+    };
+  }
+  // snoozed or archived
+  return {
+    status,
+    replied: false,
+    resolved_at: null,
+  };
 }
 
 export async function upsertEngagementItem(
@@ -485,6 +569,7 @@ export async function upsertEngagementItem(
     platform: string;
     type: string;
     externalId: string;
+    threadExternalId?: string | null;
     fromName: string;
     fromHandle?: string | null;
     content: string;
@@ -494,39 +579,120 @@ export async function upsertEngagementItem(
     sentiment?: string | null;
     priority?: QueuePriority;
     meta?: Record<string, unknown>;
-    /** Parity with upsertActionItem — the agent's one-line reason and any
-     * longer detail, both hardcoded to null in the read path until now. */
     why?: string | null;
     body?: string | null;
-    /** Attach a draft in the same call that pushes the item, instead of a
-     * separate pulse_set_proposed_reply round-trip. Omit to leave whatever
-     * proposed_reply already exists untouched on a repeat upsert. */
     proposedReply?: string;
     proposedReplyAuthor?: "agent" | "human" | "ai_generated";
-    /** Omit to leave the existing status untouched on a repeat upsert (new
-     * rows still default to 'open' via the column default). Set explicitly
-     * when the agent observes the message was already answered between
-     * sweeps, so it can be recorded as history without ever entering the
-     * open queue. */
     status?: QueueStatus;
-    /** Link to a known prospect. Omit to leave an existing link untouched;
-     * pass null explicitly to clear it. */
     prospectId?: string | null;
   }
 ): Promise<{ ok: true; id: string; statusIgnored?: boolean } | { ok: false; error: string }> {
+  const threadExternalId =
+    input.threadExternalId ?? parseThreadExternalId(input.externalId);
+
+  // Check if row already exists
   const { data: existing } = await client
     .from("engagement_items")
-    .select("id, status, replied")
+    .select("id, status, replied, resolved_at")
     .eq("tenant_slug", tenantSlug)
     .eq("platform", input.platform)
     .eq("external_id", input.externalId)
     .maybeSingle();
+
+  if (existing) {
+    // REPEAT UPSERT:
+    // IGNORE status when the row already exists. Only honour it on first insert.
+    // Return statusIgnored: true when it was dropped, so callers can log it. Do not error.
+    const statusIgnored = input.status !== undefined;
+
+    const patch: Record<string, unknown> = {
+      type: input.type,
+      from_name: input.fromName,
+      from_handle: input.fromHandle ?? null,
+      content: input.content,
+      post_title: input.postTitle ?? null,
+      external_url: input.externalUrl ?? null,
+      received_at: input.receivedAt,
+      sentiment: input.sentiment ?? "neutral",
+      priority: input.priority ?? "normal",
+      meta: input.meta ?? {},
+      thread_external_id: threadExternalId,
+    };
+    if (input.why !== undefined) patch.why = input.why;
+    if (input.body !== undefined) patch.body = input.body;
+    if (input.prospectId !== undefined) patch.prospect_id = input.prospectId;
+    if (input.proposedReply !== undefined) {
+      patch.proposed_reply = input.proposedReply;
+      patch.proposed_reply_author = input.proposedReplyAuthor ?? "agent";
+    }
+
+    // Defensive self-repair for existing inconsistent rows:
+    // If the existing row in the DB had replied=true and status='open',
+    // updating it would trigger the DB constraint. Self-repair it here:
+    if (existing.status === "open" && existing.replied === true) {
+      patch.replied = false;
+      patch.resolved_at = null;
+    }
+
+    const { data, error } = await client
+      .from("engagement_items")
+      .update(patch)
+      .eq("id", existing.id)
+      .select("id")
+      .single();
+
+    if (error || !data) {
+      // Never surface a DB constraint error to the caller
+      if (error?.message?.includes("chk_engagement_items_no_open_replied")) {
+        console.warn(`[upsertEngagementItem] Constraint conflict on existing row ${existing.id}; self-repairing`);
+        const { data: retryData, error: retryErr } = await client
+          .from("engagement_items")
+          .update({ ...patch, replied: false, resolved_at: null })
+          .eq("id", existing.id)
+          .select("id")
+          .single();
+        if (!retryErr && retryData) {
+          return { ok: true, id: retryData.id as string, statusIgnored };
+        }
+      }
+      return { ok: false, error: error?.message ?? "Update failed" };
+    }
+    return { ok: true, id: data.id as string, statusIgnored };
+  }
+
+  // FIRST INSERT:
+  let initialStatus: QueueStatus = "open";
+  let whyText = input.why ?? null;
+
+  if (input.status !== undefined) {
+    initialStatus = input.status;
+  } else {
+    // Check if there is an active handoff on this thread
+    const activeHandoff = await getActiveHandoff(client, tenantSlug, input.platform, threadExternalId);
+    if (activeHandoff) {
+      const staleDays = await getTenantHandoffStaleDays(client, tenantSlug);
+      const isStale = isHandoffStale(activeHandoff.movedAt, staleDays);
+      const isUrgent = input.priority === "urgent";
+      const isNegative = input.sentiment === "negative";
+
+      if (isStale || isUrgent || isNegative) {
+        initialStatus = "open";
+        const dateStr = new Date(activeHandoff.movedAt).toISOString().split("T")[0];
+        whyText = `new message on a thread handed to ${activeHandoff.channel} on ${dateStr}`;
+      } else {
+        initialStatus = "handed_off";
+      }
+    }
+  }
+
+  const consistency = applyStatusConsistency(initialStatus);
 
   const payload: Record<string, unknown> = {
     tenant_slug: tenantSlug,
     type: input.type,
     platform: input.platform,
     external_id: input.externalId,
+    thread_external_id: threadExternalId,
     source: "agent",
     from_name: input.fromName,
     from_handle: input.fromHandle ?? null,
@@ -537,37 +703,27 @@ export async function upsertEngagementItem(
     sentiment: input.sentiment ?? "neutral",
     priority: input.priority ?? "normal",
     meta: input.meta ?? {},
-    why: input.why ?? null,
+    why: whyText,
     body: input.body ?? null,
     prospect_id: input.prospectId,
+    status: consistency.status,
+    replied: consistency.replied,
+    resolved_at: consistency.resolved_at,
   };
+
   if (input.proposedReply !== undefined) {
     payload.proposed_reply = input.proposedReply;
     payload.proposed_reply_author = input.proposedReplyAuthor ?? "agent";
   }
 
-  // status is honoured ONLY on first insert. On an existing row the human /
-  // queue owns status, so a repeat sweep can never reopen a resolved item.
-  let statusIgnored = false;
-  if (existing) {
-    statusIgnored = input.status !== undefined;
-    // Self-repair a legacy open+replied row so the update can't trip
-    // chk_engagement_items_no_open_replied.
-    if (existing.status === "open" && existing.replied === true) {
-      payload.replied = false;
-      payload.resolved_at = null;
-    }
-  } else if (input.status !== undefined) {
-    Object.assign(payload, applyStatusConsistency(input.status));
-  }
-
   const { data, error } = await client
     .from("engagement_items")
-    .upsert(payload, { onConflict: "tenant_slug,platform,external_id" })
+    .insert(payload)
     .select("id")
     .single();
-  if (error || !data) return { ok: false, error: error?.message ?? "Upsert failed" };
-  return { ok: true, id: data.id as string, ...(statusIgnored ? { statusIgnored: true } : {}) };
+
+  if (error || !data) return { ok: false, error: error?.message ?? "Insert failed" };
+  return { ok: true, id: data.id as string, statusIgnored: false };
 }
 
 /** Records what was actually sent — the reply itself, not just that the
@@ -746,11 +902,19 @@ export async function setQueueStatus(
   const table = rowRef.source === "engagement" ? "engagement_items" : "action_items";
   const patch: Record<string, unknown> = { status: input.status };
   if (rowRef.source === "engagement") {
-    Object.assign(patch, applyStatusConsistency(input.status));
-  } else if (input.status === "resolved") {
-    patch.resolved_at = new Date().toISOString();
+    const consistency = applyStatusConsistency(input.status, { resolvedBy: input.resolvedBy });
+    patch.status = consistency.status;
+    patch.replied = consistency.replied;
+    patch.resolved_at = consistency.resolved_at;
+    if (consistency.resolved_by !== undefined) patch.resolved_by = consistency.resolved_by;
+  } else {
+    if (input.status === "open" || input.status === "handed_off") {
+      patch.resolved_at = null;
+    } else if (input.status === "resolved" || input.status === "dismissed") {
+      patch.resolved_at = new Date().toISOString();
+      if (input.resolvedBy) patch.resolved_by = input.resolvedBy;
+    }
   }
-  if (input.status === "resolved" && input.resolvedBy) patch.resolved_by = input.resolvedBy;
   if (input.status === "snoozed" && input.snoozedUntil) patch.snoozed_until = input.snoozedUntil;
   if (input.status !== "snoozed") patch.snoozed_until = null;
   if (table === "action_items" && input.resolutionNote !== undefined) patch.resolution_note = input.resolutionNote;

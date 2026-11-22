@@ -23,6 +23,9 @@ import { formatRelativeTime } from "@/lib/utils/format";
 import type { QueueRow, QueueStatus } from "@/lib/services/action-queue";
 import type { QueueActivityEntry } from "@/lib/services/queue-activity";
 import { saveProposedReply, setRowStatus, logRowActivity, getRowActivity, setRowOwner } from "@/lib/actions/action-queue";
+import { clearConversationHandoffAction } from "@/lib/actions/handoff";
+import { formatHandoffBadge } from "@/lib/services/handoff";
+import { HandoffModal } from "./HandoffModal";
 import { OwnerChip } from "@/components/dashboard/OwnerChip";
 
 export type QueueRowVariant = "compose" | "card" | "line";
@@ -68,6 +71,7 @@ export function QueueRowCard({
   const [activity, setActivity] = useState<QueueActivityEntry[] | null>(null);
   const [activityLoading, setActivityLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [handoffModalOpen, setHandoffModalOpen] = useState(false);
 
   const rowRef = { source: row.source, id: row.id };
   const status = optimisticStatus ?? row.status;
@@ -77,6 +81,44 @@ export function QueueRowCard({
   const canEditReply = !UNSUPPORTED_SOURCES.has(row.source);
   const message = row.source === "engagement" ? row.title : (row.body ?? row.title);
   const assignedToOther = !!row.assignedTo; // read-only signal now — no claim UI sets this, an agent might
+
+  const threadExternalId = row.threadExternalId ?? (row.source === "engagement" ? row.id : null);
+  const canHandoff = (row.source === "engagement" || row.channel === "dm" || row.channel === "comment") && !!row.platform && !!threadExternalId;
+
+  function handleUndoHandoff() {
+    if (!row.platform || !threadExternalId) return;
+    startTransition(async () => {
+      const res = await clearConversationHandoffAction({
+        platform: row.platform!,
+        threadExternalId,
+      });
+      if (!res.success) {
+        toast.error("Couldn't clear handoff", res.error);
+      } else {
+        toast.success("Handoff undone");
+        onChanged();
+      }
+    });
+  }
+
+  const handoffBadge = row.handoff && (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 shrink-0">
+      <span>{formatHandoffBadge(row.handoff)}</span>
+      <button
+        type="button"
+        onClick={handleUndoHandoff}
+        className="text-emerald-700 dark:text-emerald-300 hover:underline font-semibold text-[10px] ml-0.5 cursor-pointer"
+      >
+        Undo
+      </button>
+    </span>
+  );
+
+  const staleBadge = row.handoffStale && (
+    <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400 shrink-0">
+      No movement in 14 days
+    </span>
+  );
 
   function applyStatus(next: QueueStatus) {
     const prev = status;
@@ -187,6 +229,8 @@ export function QueueRowCard({
       >
         <span className="h-1.5 w-1.5 rounded-full bg-text-muted shrink-0" aria-hidden />
         <span className="flex-1 min-w-0 truncate text-foreground">{row.title}</span>
+        {handoffBadge}
+        {staleBadge}
         <span className="shrink-0 text-[11px] text-text-muted" suppressHydrationWarning>{formatRelativeTime(row.receivedAt)}</span>
         {row.externalUrl && (
           <a
@@ -245,8 +289,12 @@ export function QueueRowCard({
           assignedToOther && "opacity-60"
         )}
       >
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-medium text-foreground">{row.title}</p>
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-medium text-foreground">{row.title}</p>
+            {handoffBadge}
+            {staleBadge}
+          </div>
           <span className="shrink-0 text-[11px] text-text-muted" suppressHydrationWarning>{formatRelativeTime(row.receivedAt)}</span>
         </div>
         {row.why && <p className="text-xs text-text-secondary">{row.why}</p>}
@@ -298,6 +346,8 @@ export function QueueRowCard({
           · {formatRelativeTime(row.receivedAt)}
         </span>
         {overdue && <span className="text-[11px] font-medium text-status-red">· overdue</span>}
+        {handoffBadge}
+        {staleBadge}
         {prospectLink}
         <OwnerChip owner={optimisticOwner} onChange={handleOwnerChange} compact />
       </div>
@@ -331,6 +381,16 @@ export function QueueRowCard({
             {copied ? "Copied" : "Copy reply"}
           </Button>
         )}
+        {!row.handoff && status !== "handed_off" && canHandoff && (
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => setHandoffModalOpen(true)}
+            className="text-text-muted hover:text-foreground"
+          >
+            Moved off {row.platform ? row.platform.charAt(0).toUpperCase() + row.platform.slice(1) : "Instagram"}
+          </Button>
+        )}
         {!isResolved ? (
           <Button variant="ghost" size="xs" onClick={() => applyStatus("resolved")}>
             <Check size={12} />
@@ -345,6 +405,17 @@ export function QueueRowCard({
         {activityButton}
       </div>
       {activityPanel}
+
+      {handoffModalOpen && row.platform && threadExternalId && (
+        <HandoffModal
+          open={handoffModalOpen}
+          onClose={() => setHandoffModalOpen(false)}
+          platform={row.platform}
+          threadExternalId={threadExternalId}
+          fromName={row.fromName ?? row.title}
+          onSuccess={onChanged}
+        />
+      )}
     </div>
   );
 }
