@@ -48,6 +48,31 @@ export async function verifyDigestToken(
   }
 }
 
+/**
+ * A signed approval link scoped to exactly these drafts, valid 72 hours.
+ * Used by the daily digest and the instant "new replies" email.
+ */
+export async function createApprovalLink(
+  admin: SupabaseClient,
+  tenantSlug: string,
+  approverEmail: string,
+  dmIds: string[],
+  now: Date = new Date()
+): Promise<{ url: string } | { error: string }> {
+  const { data: digest, error } = await admin
+    .from("outreach_digests")
+    .insert({
+      tenant_slug: tenantSlug,
+      dm_ids: dmIds,
+      sent_to: approverEmail,
+      token_expires_at: new Date(now.getTime() + TTL_MS).toISOString(),
+    })
+    .select("id")
+    .single();
+  if (error || !digest) return { error: error?.message ?? "digest insert failed" };
+  return { url: `${getAppBaseUrl()}/approve/outreach/${await mintDigestToken(digest.id as string, now.getTime())}` };
+}
+
 export interface DigestTarget {
   tenantSlug: string;
   dmIds: string[];
@@ -187,19 +212,9 @@ export async function sendDigestForTenant(
 
   let url = `${getAppBaseUrl()}/autopilot`;
   if (list.length > 0) {
-    const expires = new Date(now.getTime() + TTL_MS).toISOString();
-    const { data: digest, error } = await admin
-      .from("outreach_digests")
-      .insert({
-        tenant_slug: tenantSlug,
-        dm_ids: list.map((d) => d.id),
-        sent_to: mailbox.approverEmail,
-        token_expires_at: expires,
-      })
-      .select("id")
-      .single();
-    if (error || !digest) return { sent: false, drafts: list.length, error: error?.message ?? "digest insert failed" };
-    url = `${getAppBaseUrl()}/approve/outreach/${await mintDigestToken(digest.id as string, now.getTime())}`;
+    const link = await createApprovalLink(admin, tenantSlug, mailbox.approverEmail, list.map((d) => d.id as string), now);
+    if ("error" in link) return { sent: false, drafts: list.length, error: link.error };
+    url = link.url;
   }
 
   const email = buildDigestEmail({
