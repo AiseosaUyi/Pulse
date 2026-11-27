@@ -81,6 +81,24 @@ describe("cron auth", () => {
     expect(res.ok).toBe(true);
   });
 
+  it("in production mode, accepts bearer + Vercel's cron user agent (what Vercel actually sends)", () => {
+    const res = verifyCronRequest({
+      getHeader: makeHeaders({ authorization: "Bearer right", "user-agent": "vercel-cron/1.0" }),
+      secret: "right",
+      requireVercelHeader: true,
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it("in production mode, a cron user agent without the secret is still rejected", () => {
+    const res = verifyCronRequest({
+      getHeader: makeHeaders({ authorization: "Bearer wrong", "user-agent": "vercel-cron/1.0" }),
+      secret: "right",
+      requireVercelHeader: true,
+    });
+    expect(res.ok).toBe(false);
+  });
+
   it("case-insensitive on the authorization header name", () => {
     // Next's Request.headers is case-insensitive; verifyCronRequest asks
     // via the provided getter. This asserts the gate uses lowercase.

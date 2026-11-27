@@ -126,3 +126,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ sent: sent.length, tenants: sent, errors });
 }
+
+// Vercel Cron invokes scheduled endpoints with GET; without this alias the
+// scheduler got 405 and this email never went out.
+export const GET = POST;
