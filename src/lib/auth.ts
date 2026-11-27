@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -19,11 +20,23 @@ export interface TenantMembership {
   accountType: AccountType;
 }
 
-// Returns the logged-in user + profile, or null. Does not redirect.
-export async function getCurrentUser(): Promise<UserProfile | null> {
+// Every helper below is cached per request (React `cache`): a layout plus its
+// page used to ask the Auth server "who is this?" four to six times and load
+// memberships twice for one page view. The cache never crosses requests, so a
+// cookie or membership change is seen on the next request as before.
+
+/** The verified auth user for this request (one Auth server call). */
+const getAuthUser = cache(async () => {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  return user;
+});
+
+// Returns the logged-in user + profile, or null. Does not redirect.
+export const getCurrentUser = cache(async (): Promise<UserProfile | null> => {
+  const user = await getAuthUser();
   if (!user) return null;
+  const supabase = await createClient();
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -38,7 +51,7 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
     displayName: profile?.display_name ?? null,
     avatarUrl: profile?.avatar_url ?? null,
   };
-}
+});
 
 // Redirects to /login if not authed. Returns the user.
 export async function requireUser(): Promise<UserProfile> {
@@ -48,10 +61,10 @@ export async function requireUser(): Promise<UserProfile> {
 }
 
 // Returns all tenants the current user is a member of.
-export async function getUserTenants(): Promise<TenantMembership[]> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+export const getUserTenants = cache(async (): Promise<TenantMembership[]> => {
+  const user = await getAuthUser();
   if (!user) return [];
+  const supabase = await createClient();
 
   // Must filter by user_id explicitly: the memberships RLS policy lets you
   // read any membership in a tenant you belong to (so /settings/team can
@@ -77,12 +90,12 @@ export async function getUserTenants(): Promise<TenantMembership[]> {
       };
     })
     .filter((x): x is TenantMembership => x !== null);
-}
+});
 
 // Reads the tenant cookie, validates the user belongs to that tenant,
 // falls back to an onboarded tenant (with brand voice) if no cookie is set,
 // or first membership. Returns null if user has no memberships.
-export async function getCurrentTenant(): Promise<TenantMembership | null> {
+export const getCurrentTenant = cache(async (): Promise<TenantMembership | null> => {
   const memberships = await getUserTenants();
   if (memberships.length === 0) return null;
 
@@ -116,7 +129,7 @@ export async function getCurrentTenant(): Promise<TenantMembership | null> {
   }
 
   return memberships[0];
-}
+});
 
 // Guard for pages/actions that must reject a role outside `allowed` for the
 // current tenant — e.g. a `support`-role member hitting a route the sidebar

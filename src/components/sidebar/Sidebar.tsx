@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SidebarNav } from "./SidebarNav";
 import { TenantSwitcher } from "./TenantSwitcher";
 import { Logo } from "@/components/ui/Logo";
@@ -31,11 +32,20 @@ export function Sidebar({
         accountType={currentAccountType}
         role={currentRole}
         features={features}
-        badges={{ "/dashboard": <ActionQueueBadge tenantSlug={currentTenantSlug} /> }}
+        badges={{
+          // Badges stream in after the page; they never hold it up.
+          "/dashboard": (
+            <Suspense fallback={null}>
+              <ActionQueueBadge tenantSlug={currentTenantSlug} />
+            </Suspense>
+          ),
+        }}
       />
 
       {currentRole !== "support" && (
-        <NeedsYouBadge tenantSlug={currentTenantSlug} accountType={currentAccountType} />
+        <Suspense fallback={null}>
+          <NeedsYouBadge tenantSlug={currentTenantSlug} accountType={currentAccountType} />
+        </Suspense>
       )}
 
       <TenantSwitcher tenants={tenants} currentSlug={currentTenantSlug} />

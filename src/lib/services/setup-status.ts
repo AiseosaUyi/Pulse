@@ -8,6 +8,7 @@
 // Registering a new blocker type = adding one entry to CHECK_DEFINITIONS.
 // It then runs for every tenant automatically.
 
+import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDiscoveryConfig } from "@/lib/scrape/discovery-config";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
@@ -212,7 +213,8 @@ const CHECK_DEFINITIONS: CheckDefinition[] = [
   },
 ];
 
-export async function getSetupStatus(
+/** Cached per request: the sidebar badge and the dashboard banner share one run. */
+export const getSetupStatus = cache(async function getSetupStatus(
   tenantSlug: string,
   accountType: "startup" | "individual" = "startup"
 ): Promise<SetupStatus> {
@@ -262,4 +264,4 @@ export async function getSetupStatus(
     total: items.length,
     allDone: doneCount === items.length,
   };
-}
+});
