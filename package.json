@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:local": "bash -c 'set -a && . ./.env.localdb && set +a && exec next dev \"$@\"' --",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -12,6 +13,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "db:seed": "node --env-file=.env.local scripts/seed.mjs",
+    "db:local": "bash scripts/local-db.sh",
     "verify:gruve": "tsx scripts/verify-gruve-contract.ts",
     "smoke:publish": "NODE_OPTIONS=--conditions=react-server tsx scripts/publish-smoke.ts",
     "check:contentful": "tsx scripts/check-contentful-model.ts",
