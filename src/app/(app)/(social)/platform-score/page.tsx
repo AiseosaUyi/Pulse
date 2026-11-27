@@ -11,7 +11,7 @@ export default async function PlatformScorePage() {
   return (
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">Platform Score</h1>
+        <h1 className="text-2xl font-bold text-foreground">Platform score</h1>
         <p className="text-text-secondary text-sm mt-0.5">
           Cross-platform health scorecard — derived from posts, connection state, and audience size.
         </p>

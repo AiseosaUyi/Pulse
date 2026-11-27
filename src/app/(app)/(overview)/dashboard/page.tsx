@@ -90,7 +90,7 @@ export default async function DashboardPage() {
       <div className="p-4 md:p-8 max-w-[1200px]">
         <div className="flex items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-foreground">Dashboard</h1>
+            <h1 className="text-xl md:text-2xl font-bold text-foreground">Home</h1>
             <p className="text-text-secondary text-sm mt-0.5">{queueSummary(queueResult.groups)}</p>
           </div>
           <NotificationBell notifications={notifications} />
@@ -131,7 +131,7 @@ export default async function DashboardPage() {
       {/* Header — live queue state instead of a static week label */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6 md:mb-8">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Dashboard</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Home</h1>
           <p className="text-text-secondary text-sm mt-0.5">{queueSummary(queueResult.groups)}</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">

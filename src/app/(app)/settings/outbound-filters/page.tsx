@@ -31,7 +31,7 @@ export default async function OutboundFiltersPage() {
     <div className="max-w-[760px] space-y-6">
       <SettingsPageHeading
         icon={Radar}
-        title="Outbound filters"
+        title="Who to skip"
         subtitle={`Keywords, locations, and platforms Pulse uses to find and score new leads for ${tenant?.name ?? tenantSlug}.`}
       />
 

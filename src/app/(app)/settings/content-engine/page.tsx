@@ -16,7 +16,7 @@ export default async function ContentEngineSettingsPage() {
       <div>
         <SettingsPageHeading
           icon={Film}
-          title="Content Engine"
+          title="Video formats"
           subtitle="Owners and admins only."
         />
         <div className="bg-card border border-border rounded-2xl p-8 text-center">
@@ -34,7 +34,7 @@ export default async function ContentEngineSettingsPage() {
     <div className="max-w-[820px]">
       <SettingsPageHeading
         icon={Film}
-        title="Content Engine"
+        title="Video formats"
         subtitle="Edit the video formats Pulse uses to generate content plans. Platform defaults are read-only — click 'Customize' to fork a copy you can tune for this workspace."
       />
       <ContentEngineClient

@@ -23,7 +23,7 @@ export default async function SharedInboxSettingsPage() {
     <div className="max-w-[720px]">
       <SettingsPageHeading
         icon={Inbox}
-        title="AI inbox coverage"
+        title="Inbox coverage"
         subtitle="Let AI draft — and, above a confidence bar you set, auto-send — replies to WhatsApp, Instagram, and LinkedIn messages when your team is away. Off by default; nothing sends until you turn this on."
       />
       <SharedInboxEditor tenantSlug={tenantSlug} initial={config} handoffStaleDays={handoffStaleDays} />

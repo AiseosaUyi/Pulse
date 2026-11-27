@@ -59,7 +59,7 @@ export default async function AutopilotPage() {
   return (
     <div className="max-w-[880px] space-y-6">
       <header>
-        <h1 className="text-xl md:text-2xl text-gray-1100 dark:text-foreground tracking-tight font-semibold">Autopilot</h1>
+        <h1 className="text-xl md:text-2xl text-gray-1100 dark:text-foreground tracking-tight font-semibold">Email autopilot</h1>
         <p className="text-sm text-gray-1000 dark:text-text-muted mt-1.5">
           Pulse drafts first emails and follow-ups, emails you once a day to approve them, sends what you approve from
           your own mailbox, and stops when someone replies.

@@ -17,7 +17,7 @@ export default async function ContentCalendarPage() {
   if (!tenant || !isContentCalendarEnabledForTenant(tenant.slug)) {
     return (
       <div className="p-4 md:p-8">
-        <h1 className="text-2xl font-bold text-foreground">Content calendar</h1>
+        <h1 className="text-2xl font-bold text-foreground">Topic calendar</h1>
         <p className="text-text-secondary text-sm mt-2">
           Not available for this account yet.
         </p>
