@@ -9,7 +9,10 @@ import type { TeamPerson } from "@/lib/types/tasks";
 export async function listPeopleAction(
   tenantSlug?: string
 ): Promise<{
+  /** Everyone on the roster, for showing names on existing assignments. */
   people: TeamPerson[];
+  /** Roster ids with a login in this workspace: the only ones offered in pickers and filters. */
+  teamIds: string[];
   currentUserId: string | null;
   isAdmin: boolean;
   tenantSlug: string;
@@ -20,12 +23,21 @@ export async function listPeopleAction(
   if (!slug) return null;
 
   const supabase = await createClient();
-  const people = await getTenantPeople(supabase, slug, { activeOnly: false });
+  const [people, { data: members }] = await Promise.all([
+    getTenantPeople(supabase, slug, { activeOnly: false }),
+    supabase.from("memberships").select("user_id").eq("tenant_slug", slug),
+  ]);
+  // Pickers and filters offer only people on the workspace's team (a login in
+  // this workspace). Roster-only names such as placeholders are left out of
+  // them; leads already assigned to them still show that name.
+  const memberIds = new Set((members ?? []).map((m) => m.user_id as string));
+  const teamIds = people.filter((p) => p.userId && memberIds.has(p.userId)).map((p) => p.id);
 
   const isAdmin = currentTenant?.role === "owner" || currentTenant?.role === "admin";
 
   return {
     people,
+    teamIds,
     currentUserId: user?.id ?? null,
     isAdmin,
     tenantSlug: slug,
