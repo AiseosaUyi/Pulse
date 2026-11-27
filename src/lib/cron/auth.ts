@@ -58,7 +58,13 @@ export function verifyCronRequest(opts: VerifyOptions): CronAuthResult {
   const requireVercel =
     opts.requireVercelHeader ?? process.env.NODE_ENV === "production";
   if (requireVercel) {
-    const vercelMarker = opts.getHeader("x-vercel-cron");
+    // Vercel's scheduler identifies itself with `user-agent: vercel-cron/1.0`;
+    // it does not send an `x-vercel-cron` header. Requiring only that header
+    // turned every scheduled run away with 401, so no cron ran in production.
+    // Either marker is accepted; the bearer secret above is the real check.
+    const vercelMarker =
+      opts.getHeader("x-vercel-cron") ||
+      /^vercel-cron\//i.test(opts.getHeader("user-agent") ?? "");
     if (!vercelMarker) {
       return {
         ok: false,
