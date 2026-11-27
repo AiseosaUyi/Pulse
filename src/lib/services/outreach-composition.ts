@@ -350,7 +350,12 @@ export async function composeAndSaveDrafts(
 
     compiledDrafts.push(draftItem);
 
-    // Save as draft in outbound_dms (status: 'drafted', never queued, never sent).
+    // Only a server-verified address becomes a recipient. Unverified or
+    // dropped emails still get a draft (for DM use) but can never be emailed.
+    const toEmail = p.email_status === "verified" && p.email ? String(p.email).trim().toLowerCase() : null;
+
+    // Save as draft in outbound_dms (status: 'drafted'). Nothing is sent from
+    // here: only a human approval (autopilot review) can queue a send.
     // A re-run replaces the engine's own unapproved draft instead of piling up
     // duplicates; anything else gets the next version number.
     const { data: prior } = await client
@@ -365,7 +370,7 @@ export async function composeAndSaveDrafts(
     if (prior && prior.status === "drafted" && prior.generator_model === "outreach-composition-engine") {
       await client
         .from("outbound_dms")
-        .update({ body: fullBody })
+        .update({ body: fullBody, subject, to_email: toEmail, lint_warnings: warnings })
         .eq("tenant_slug", workspace)
         .eq("id", prior.id);
     } else {
@@ -374,6 +379,10 @@ export async function composeAndSaveDrafts(
         prospect_id: p.id,
         version: prior ? (prior.version as number) + 1 : 1,
         body: fullBody,
+        subject,
+        to_email: toEmail,
+        kind: "cold_open",
+        lint_warnings: warnings,
         status: "drafted",
         generator_model: "outreach-composition-engine",
         generator_cost_usd: 0,

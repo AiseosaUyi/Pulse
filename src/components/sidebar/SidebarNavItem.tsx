@@ -29,6 +29,7 @@ import {
   CheckSquare,
   ChevronRight,
   type LucideIcon,
+  Send,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav-config";
 import { cn } from "@/lib/utils";
@@ -36,7 +37,7 @@ import { cn } from "@/lib/utils";
 const iconMap: Record<string, LucideIcon> = {
   LayoutDashboard, CircleDot, TrendingUp, Sparkles, Target, Diamond,
   PlusCircle, Radio, FolderOpen, Search, MessageCircle, Clock, Eye, FileText,
-  BarChart3, ShoppingCart, Film, PenLine, CalendarCheck, CalendarClock, MessagesSquare, Zap, CheckSquare,
+  BarChart3, ShoppingCart, Film, PenLine, CalendarCheck, CalendarClock, MessagesSquare, Zap, CheckSquare, Send,
 };
 
 interface SidebarNavItemProps {
