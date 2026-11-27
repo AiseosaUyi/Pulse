@@ -101,7 +101,13 @@ export function registerSalesTools(server: McpServer) {
         evidence: z.string().nullable().optional(),
         evidence_date: z.string().nullable().optional(),
         evidenceDate: z.string().nullable().optional(),
-        segment: z.string().nullable().optional(),
+        segment: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "Lead type, e.g. the kind of business this is. Must be one of this workspace's lead types (set in Settings > Outreach autopilot); it picks which proof/offer/ask lines drafts use. Unknown values fall back to the default lead type and the result carries lead_type_warning listing the valid ones."
+          ),
         country: z.string().nullable().optional(),
         city: z.string().nullable().optional(),
         team_size: z.string().nullable().optional(),

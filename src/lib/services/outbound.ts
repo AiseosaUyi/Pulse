@@ -363,6 +363,8 @@ export interface UpsertProspectResult {
     sent: false;
   };
   sent: false;
+  /** Set when the caller asked for a lead type this workspace doesn't have. */
+  lead_type_warning?: string;
 }
 
 /** Upsert-by-(tenant, platform, handle) — or, when externalAccountId is
@@ -513,13 +515,20 @@ export async function upsertProspect(
     }
   }
 
-  // 3. Segment: set only when the caller sent one, or on first insert.
+  // 3. Lead type (stored as `segment`): each workspace defines its own in
+  // Settings -> Outreach autopilot. Set only when the caller sent one, or on
+  // first insert. An unknown type falls back to the default, with a warning.
+  let leadTypeWarning: string | undefined;
   if (input.segment !== undefined || !existing) {
     try {
       const ventureConfig = await getOutreachConfig(client, tenantSlug);
       if (ventureConfig) {
-        const reqSeg = input.segment?.trim() || "";
-        fields.segment = reqSeg && ventureConfig.segments[reqSeg] ? reqSeg : ventureConfig.defaultSegment;
+        const reqSeg = input.segment?.trim().toLowerCase() || "";
+        const known = Boolean(reqSeg && ventureConfig.segments[reqSeg]);
+        fields.segment = known ? reqSeg : ventureConfig.defaultSegment;
+        if (reqSeg && !known) {
+          leadTypeWarning = `Unknown lead type "${reqSeg}", used "${ventureConfig.defaultSegment}". This workspace's lead types: ${Object.keys(ventureConfig.segments).join(", ")}.`;
+        }
       }
     } catch (err) {
       console.warn("[upsertProspect] Segment lookup error", err);
@@ -565,6 +574,7 @@ export async function upsertProspect(
     skipped: false,
     email_report: emailReport,
     sent: false,
+    ...(leadTypeWarning ? { lead_type_warning: leadTypeWarning } : {}),
   };
 }
 

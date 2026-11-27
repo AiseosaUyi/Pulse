@@ -35,7 +35,8 @@ export default async function OutreachSettingsPage() {
       <section className="bg-card border border-border rounded-2xl p-6">
         <h2 className="text-base font-semibold text-gray-1100 dark:text-foreground mb-1">What Pulse writes</h2>
         <p className="text-sm text-gray-1000 dark:text-text-muted mb-5">
-          Lines are rotated across emails. Use {"{greeting}"}, {"{company}"}, {"{first_name}"} and {"{signature}"} in
+          Each workspace has its own lead types. A lead&apos;s type picks which lines its first email uses, and
+          Pulse rotates between them. Use {"{greeting}"}, {"{company}"}, {"{first_name}"} and {"{signature}"} in
           follow-ups.
         </p>
         <CopyEditor

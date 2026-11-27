@@ -249,7 +249,7 @@ export function CopyEditor({ initial }: { initial: OutreachCopyInput }) {
         <Field label="Signature">
           <textarea className={inputCls} rows={2} value={v.signature} onChange={(e) => setV({ ...v, signature: e.target.value })} />
         </Field>
-        <Field label="Default segment">
+        <Field label="Default lead type" hint="Used when a lead has no type, or one not listed here.">
           <select className={inputCls} value={v.defaultSegment} onChange={(e) => setV({ ...v, defaultSegment: e.target.value })}>
             {segNames.map((s) => (
               <option key={s} value={s}>
@@ -263,11 +263,11 @@ export function CopyEditor({ initial }: { initial: OutreachCopyInput }) {
       {segNames.map((name) => (
         <fieldset key={name} className="rounded-xl border border-border p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <legend className="text-sm font-semibold text-gray-1100 dark:text-foreground">Segment: {name}</legend>
+            <legend className="text-sm font-semibold text-gray-1100 dark:text-foreground">Lead type: {name}</legend>
             {segNames.length > 1 && (
               <button
                 type="button"
-                aria-label={`Remove segment ${name}`}
+                aria-label={`Remove lead type ${name}`}
                 onClick={() =>
                   setV((p) => {
                     const rest = Object.fromEntries(Object.entries(p.segments).filter(([k]) => k !== name));
@@ -291,7 +291,7 @@ export function CopyEditor({ initial }: { initial: OutreachCopyInput }) {
       ))}
 
       <div className="flex gap-2">
-        <input className={inputCls + " mt-0"} placeholder="New segment name, e.g. hotels" value={newSeg} onChange={(e) => setNewSeg(e.target.value)} />
+        <input className={inputCls + " mt-0"} placeholder="New lead type, e.g. restaurants" value={newSeg} onChange={(e) => setNewSeg(e.target.value)} />
         <button
           type="button"
           onClick={() => {
