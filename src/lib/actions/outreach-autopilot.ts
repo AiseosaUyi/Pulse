@@ -27,6 +27,7 @@ import {
   type MailboxInput,
 } from "@/lib/outreach-autopilot/mailbox";
 import { rebuildBannedRegex, textToHtml } from "@/lib/outreach-autopilot/templates";
+import { findEmailsForTenant } from "@/lib/outreach-autopilot/enrich";
 
 const decideSchema = z.object({
   dmId: z.string().uuid(),
@@ -219,4 +220,29 @@ export async function saveOutreachCopyAction(
   const { error } = await admin.from("outreach_configs").upsert(row, { onConflict: "workspace" });
   revalidatePath("/settings/outreach");
   return error ? { ok: false, error: "Could not save" } : { ok: true };
+}
+
+// ── Find emails ─────────────────────────────────────────────────────────────
+
+/**
+ * One small pass of the email finder for the current workspace. Same rules as
+ * the daily job: only addresses verified on the lead's own site, never
+ * guessed. The workspace comes from the session, never from the browser.
+ */
+export async function findEmailsNowAction(): Promise<
+  { ok: true; found: number; checked: number } | { ok: false; error: string }
+> {
+  const who = await requireManager();
+  if ("error" in who) return { ok: false, error: who.error };
+  try {
+    const r = await findEmailsForTenant(createAdminClient(), who.tenantSlug, {
+      limit: 15,
+      searchBudget: 10,
+      deadlineMs: Date.now() + 90_000,
+    });
+    revalidatePath("/autopilot");
+    return { ok: true, found: r.found, checked: r.checked };
+  } catch {
+    return { ok: false, error: "Could not look for emails right now" };
+  }
 }

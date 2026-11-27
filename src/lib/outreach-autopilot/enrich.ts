@@ -150,6 +150,47 @@ async function findEmail(site: string): Promise<{ email: string; sourceUrl: stri
 }
 
 /**
+ * Lead statuses worth an email, best first. A lead that replied or was
+ * qualified is closer to a sale than a fresh one, so it gets searched first.
+ * Closed, dismissed and unqualified leads are never searched.
+ */
+export const ENRICH_STATUS_TIERS: readonly (readonly string[])[] = [
+  ["replied"],
+  ["qualified"],
+  ["new", "qualifying"],
+];
+
+/**
+ * Up to `limit` leads with no email yet and not searched in RETRY_DAYS,
+ * by tier (ENRICH_STATUS_TIERS), newest first inside a tier. PostgREST can't
+ * order by a custom status rank, so this runs one small query per tier.
+ */
+export async function selectEnrichCandidates(
+  admin: SupabaseClient,
+  tenantSlug: string,
+  limit: number,
+  retryBefore: string
+): Promise<EnrichCandidate[]> {
+  const out: EnrichCandidate[] = [];
+  for (const statuses of ENRICH_STATUS_TIERS) {
+    const left = limit - out.length;
+    if (left <= 0) break;
+    const { data, error } = await admin
+      .from("prospects")
+      .select("id, handle, display_name, company_name, website, bio, city")
+      .eq("tenant_slug", tenantSlug)
+      .is("email_status", null)
+      .in("status", [...statuses])
+      .or(`email_searched_at.is.null,email_searched_at.lt.${retryBefore}`)
+      .order("created_at", { ascending: false })
+      .limit(left);
+    if (error) throw new Error(`find emails: ${error.message}`);
+    out.push(...((data ?? []) as EnrichCandidate[]));
+  }
+  return out;
+}
+
+/**
  * Look for emails for up to `limit` leads in this workspace. Returns counts.
  * Stops early at `deadlineMs`.
  */
@@ -162,20 +203,10 @@ export async function findEmailsForTenant(
   const res: EnrichResult = { checked: 0, found: 0, searches: 0 };
   const retryBefore = new Date(now.getTime() - RETRY_DAYS * 86_400_000).toISOString();
 
-  const { data, error } = await admin
-    .from("prospects")
-    .select("id, handle, display_name, company_name, website, bio, city")
-    .eq("tenant_slug", tenantSlug)
-    .is("email_status", null)
-    .in("status", ["new", "qualified"])
-    .or(`email_searched_at.is.null,email_searched_at.lt.${retryBefore}`)
-    .order("email_searched_at", { ascending: true, nullsFirst: true })
-    .order("created_at", { ascending: false })
-    .limit(opts.limit);
-  if (error) throw new Error(`find emails: ${error.message}`);
+  const candidates = await selectEnrichCandidates(admin, tenantSlug, opts.limit, retryBefore);
 
   const budget = { searches: opts.searchBudget };
-  for (const c of (data ?? []) as EnrichCandidate[]) {
+  for (const c of candidates) {
     if (opts.deadlineMs && Date.now() > opts.deadlineMs) break;
     res.checked++;
     const before = budget.searches;

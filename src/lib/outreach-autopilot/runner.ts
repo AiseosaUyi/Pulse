@@ -181,6 +181,9 @@ export async function runAutopilotForTenant(
     const outreach = await getOutreachConfig(admin, tenantSlug);
 
     // Find emails for leads that have none, so there is someone to write to.
+    // The daily find-lead-emails cron skips workspaces whose mailbox is on
+    // with auto compose, so this is the only search for them (see
+    // find-emails-job.ts).
     if (config.autoCompose) {
       try {
         const e = await findEmailsForTenant(admin, tenantSlug, {
