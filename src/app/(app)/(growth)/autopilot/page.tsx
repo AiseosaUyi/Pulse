@@ -5,9 +5,11 @@ import { getMailbox } from "@/lib/outreach-autopilot/mailbox";
 import { listReviewDrafts } from "@/lib/outreach-autopilot/review";
 import { startOfLocalDay } from "@/lib/outreach-autopilot/schedule";
 import { DraftReview } from "@/components/autopilot/DraftReview";
-import { AutopilotToggle, UnapproveButton } from "./client";
+import { AutopilotToggle, FindEmailsButton, UnapproveButton } from "./client";
 
 export const dynamic = "force-dynamic";
+// "Find emails now" runs a capped pass (about 90s) in this page's function.
+export const maxDuration = 120;
 
 const KIND: Record<string, string> = {
   cold_open: "First email",
@@ -95,6 +97,16 @@ export default async function AutopilotPage() {
           </Link>
         </div>
       </section>
+
+      {canManage && (
+        <section className="bg-card border border-border rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
+          <p className="text-sm text-gray-1000 dark:text-text-muted max-w-[560px]">
+            Each day Pulse looks for an email on each lead&apos;s own website and keeps it only if it checks out. It
+            never guesses an address.
+          </p>
+          <FindEmailsButton />
+        </section>
+      )}
 
       <section className="space-y-3">
         <h2 className="text-base font-semibold text-gray-1100 dark:text-foreground">Waiting for your approval</h2>

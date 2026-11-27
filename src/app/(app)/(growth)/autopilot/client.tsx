@@ -3,7 +3,39 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/ui/Toaster";
-import { setAutopilotEnabled, unapproveInApp } from "@/lib/actions/outreach-autopilot";
+import { findEmailsNowAction, setAutopilotEnabled, unapproveInApp } from "@/lib/actions/outreach-autopilot";
+
+export function FindEmailsButton() {
+  const [pending, start] = useTransition();
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() =>
+        start(async () => {
+          const r = await findEmailsNowAction();
+          if (!r.ok) {
+            toast.error("Could not look for emails", r.error);
+            return;
+          }
+          if (r.checked === 0) {
+            toast.info("No leads to search", "Every lead has an email or was searched in the last 30 days.");
+          } else {
+            toast.success(
+              r.found === 1 ? "Found 1 email" : `Found ${r.found} emails`,
+              `Searched ${r.checked} ${r.checked === 1 ? "lead" : "leads"}.`
+            );
+          }
+          router.refresh();
+        })
+      }
+      className="rounded-full border border-border px-4 py-2 text-sm text-gray-1100 dark:text-foreground disabled:opacity-60"
+    >
+      {pending ? "Looking..." : "Find emails now"}
+    </button>
+  );
+}
 
 export function AutopilotToggle({ enabled }: { enabled: boolean }) {
   const [pending, start] = useTransition();

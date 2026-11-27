@@ -91,6 +91,23 @@ class Builder {
     this.filters.push((r) => (r[c] ?? null) !== v);
     return this;
   }
+  /** Minimal PostgREST `or`: comma-separated `col.op.value`, ops is.null / eq / lt / gt. */
+  or(expr: string) {
+    const parts = expr.split(",").map((p) => {
+      const [c, op, ...rest] = p.split(".");
+      const v = rest.join(".");
+      return (r: Row) => {
+        const x = r[c] ?? null;
+        if (op === "is") return v === "null" ? x === null : String(x) === v;
+        if (op === "eq") return x !== null && String(x) === v;
+        if (op === "lt") return x !== null && String(x) < v;
+        if (op === "gt") return x !== null && String(x) > v;
+        throw new Error(`fake or(${op}) unsupported`);
+      };
+    });
+    this.filters.push((r) => parts.some((f) => f(r)));
+    return this;
+  }
   private cmp(c: string, v: unknown, f: (a: string | number, b: string | number) => boolean) {
     this.filters.push((r) => r[c] !== null && r[c] !== undefined && f(r[c] as string, v as string));
     return this;
