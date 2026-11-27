@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyFromRequest } from "@/lib/cron/auth";
 import { withCronRun } from "@/lib/cron/run-tracker";
-import { generateWeeklyDigest } from "@/lib/actions/weekly-digest";
+import { generateWeeklyDigest } from "@/lib/services/weekly-digest-generate";
 import { generateWeeklyReview } from "@/lib/actions/weekly-reviews";
 
 export const dynamic = "force-dynamic";
