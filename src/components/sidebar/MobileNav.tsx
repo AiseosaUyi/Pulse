@@ -6,6 +6,7 @@ import { SidebarNav } from "./SidebarNav";
 import { TenantSwitcher } from "./TenantSwitcher";
 import { Logo } from "@/components/ui/Logo";
 import type { AccountType, TenantMembership } from "@/lib/auth";
+import type { FeatureKey } from "@/lib/features/registry";
 import { cn } from "@/lib/utils";
 
 interface MobileNavProps {
@@ -13,6 +14,7 @@ interface MobileNavProps {
   currentTenantSlug: string;
   currentAccountType: AccountType;
   currentRole: TenantMembership["role"];
+  features?: Partial<Record<FeatureKey, boolean>>;
 }
 
 export function MobileNav({
@@ -20,6 +22,7 @@ export function MobileNav({
   currentTenantSlug,
   currentAccountType,
   currentRole,
+  features,
 }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -61,7 +64,7 @@ export function MobileNav({
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col" onClick={() => setIsOpen(false)}>
-          <SidebarNav accountType={currentAccountType} role={currentRole} />
+          <SidebarNav accountType={currentAccountType} role={currentRole} features={features} />
         </div>
 
         <div className="shrink-0">
