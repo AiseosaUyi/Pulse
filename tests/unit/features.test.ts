@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FEATURES, featureForPath, resolveFeatures } from "@/lib/features/registry";
-import { navGroups, navGroupsForAccountType, navGroupsForFeatures } from "@/lib/nav-config";
+import { navGroups, navGroupsForAccountType, navGroupsForFeatures, navGroupsForRole } from "@/lib/nav-config";
 
 describe("resolveFeatures", () => {
   it("keeps an explicit switch over data", () => {
@@ -54,5 +54,35 @@ describe("navGroupsForFeatures", () => {
     const out = hrefs(navGroupsForFeatures(startup, { content_library: false }));
     expect(out).not.toContain("/content-vault");
     expect(out).not.toContain("/ai-content");
+  });
+});
+
+describe("simple sidebar", () => {
+  const top = (g: typeof navGroups) => g.flatMap((x) => x.items.map((i) => i.label));
+  const hrefs = (g: typeof navGroups) => g.flatMap((x) => x.items.flatMap((i) => [i.href, ...(i.children ?? []).map((c) => c.href)]));
+
+  it("startup sees four jobs", () => {
+    expect(top(navGroupsForAccountType("startup"))).toEqual(["Home", "Leads", "Content", "Insights"]);
+  });
+
+  it("every page reachable before is still in the nav for some persona", () => {
+    const all = new Set([...hrefs(navGroupsForAccountType("startup")), ...hrefs(navGroupsForAccountType("individual"))]);
+    for (const h of [
+      "/dashboard", "/tasks", "/own-analytics", "/leads", "/autopilot", "/conversations", "/intel-feed",
+      "/seo-tracker", "/composer", "/ai-content", "/content-vault", "/video", "/content-calendar",
+      "/schedule", "/broadcasts", "/post-history", "/platform-score", "/ads-tracker",
+    ]) expect(all.has(h), h).toBe(true);
+  });
+
+  it("a job with one tool left becomes a plain link to it", () => {
+    const g = navGroupsForFeatures(navGroupsForAccountType("startup"), { tasks: false });
+    const home = g[0].items.find((i) => i.href === "/dashboard")!;
+    expect(home.children).toBeUndefined();
+    expect(home.label).toBe("Home");
+  });
+
+  it("support sees only Home and Conversations", () => {
+    const g = navGroupsForRole(navGroupsForAccountType("startup"), "support");
+    expect(hrefs(g)).toEqual(["/dashboard", "/conversations"]);
   });
 });
