@@ -11,6 +11,7 @@ import {
   getWhatsappAccountByPhoneId,
 } from "@/lib/integrations/whatsapp";
 import { maybeAutoReply } from "@/lib/ai/shared-inbox-auto-reply";
+import { linkInboundToProspect } from "@/lib/services/prospect-inbound-link";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
   const tenantByPhone = new Map<string, string | null>();
   let ingested = 0;
   let unmatched = 0;
+  let linkedToProspect = 0;
 
   for (const m of messages) {
     if (!tenantByPhone.has(m.phoneNumberId)) {
@@ -79,6 +81,23 @@ export async function POST(req: Request) {
       .single();
     if (!error) {
       ingested += 1;
+      // If the sender's number belongs to exactly one prospect of this
+      // tenant, link this same row to them so the reply reaches Outbound
+      // (status -> replied, follow-ups cancelled, auto-analysis). The tenant
+      // comes from the receiving number above, never from the message.
+      // Unmatched messages stay as they are, in Conversations only.
+      if (m.from) {
+        const link = await linkInboundToProspect(admin, {
+          tenantSlug,
+          channel: "whatsapp",
+          platform: "whatsapp",
+          externalId: m.id,
+          body: m.text,
+          receivedAt,
+          phone: m.from,
+        });
+        if (link.linked) linkedToProspect += 1;
+      }
       // Track A Phase 3 — AI-covers-when-away. Merged-but-inert: gated on
       // the tenant's opt-in settings.sharedInbox.enabled (default false)
       // and the global AI_AUTO_REPLY_KILL_SWITCH, both checked first inside
@@ -107,5 +126,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, ingested, unmatched });
+  return NextResponse.json({ ok: true, ingested, unmatched, linkedToProspect });
 }

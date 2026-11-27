@@ -78,6 +78,22 @@ class Builder {
     this.filters.push((r) => vs.includes(r[c]));
     return this;
   }
+  like(c: string, pattern: string) {
+    return this.pushPattern(c, pattern, "");
+  }
+  ilike(c: string, pattern: string) {
+    return this.pushPattern(c, pattern, "i");
+  }
+  // SQL LIKE: % = any run, _ = any single char.
+  private pushPattern(c: string, pattern: string, flags: string) {
+    const src = pattern
+      .split("")
+      .map((ch) => (ch === "%" ? ".*" : ch === "_" ? "." : ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+      .join("");
+    const re = new RegExp(`^${src}$`, flags);
+    this.filters.push((r) => typeof r[c] === "string" && re.test(r[c] as string));
+    return this;
+  }
   contains(c: string, vs: unknown[]) {
     this.filters.push((r) => Array.isArray(r[c]) && vs.every((v) => (r[c] as unknown[]).includes(v)));
     return this;
