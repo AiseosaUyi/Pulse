@@ -55,16 +55,19 @@ export function SidebarNavItem({ label, href, iconName, childItems, badge }: Sid
   const Icon = iconMap[iconName] ?? LayoutDashboard;
 
   const hasChildren = childItems && childItems.length > 0;
-  const isChildActive = hasChildren && childItems.some((c) => pathname === c.href);
-  const isActive = pathname === href && !hasChildren;
+  const matches = (h: string) => pathname === h || pathname.startsWith(`${h}/`);
+  const isChildActive = hasChildren && childItems.some((c) => matches(c.href));
+  const isActive = matches(href) && !hasChildren;
 
-  const [isOpen, setIsOpen] = useState(isChildActive ?? false);
+  // Open while on one of its pages, unless the user closed it.
+  const [toggled, setToggled] = useState<boolean | null>(null);
+  const isOpen = toggled ?? Boolean(isChildActive);
 
   if (hasChildren) {
     return (
       <div>
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => setToggled(!isOpen)}
           className={cn(
             "flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full transition-colors duration-200 cursor-pointer",
             "outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30",
@@ -75,6 +78,7 @@ export function SidebarNavItem({ label, href, iconName, childItems, badge }: Sid
         >
           <Icon size={17} className={cn(isChildActive ? "text-primary-500" : "text-gray-500")} />
           <span className="flex-1 text-left [font-family:'Satoshi-500',var(--font-sans)]">{label}</span>
+          {badge}
           <ChevronRight
             size={14}
             className={cn("text-gray-400 transition-transform duration-200", isOpen && "rotate-90")}
@@ -85,7 +89,7 @@ export function SidebarNavItem({ label, href, iconName, childItems, badge }: Sid
           <div className="ml-5 mt-0.5 flex flex-col gap-0.5 border-l border-white-200 pl-2">
             {childItems.map((child) => {
               const ChildIcon = iconMap[child.iconName] ?? LayoutDashboard;
-              const childActive = pathname === child.href;
+              const childActive = matches(child.href);
               return (
                 <Link
                   key={child.href}
