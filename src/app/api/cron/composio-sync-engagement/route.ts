@@ -15,6 +15,7 @@ import {
   listInstagramMessages,
 } from "@/lib/composio/executors";
 import { maybeAutoReply } from "@/lib/ai/shared-inbox-auto-reply";
+import { linkInboundToProspect } from "@/lib/services/prospect-inbound-link";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -33,6 +34,7 @@ export async function POST(req: Request) {
     connectionsProcessed: 0,
     commentsAdded: 0,
     dmsAdded: 0,
+    dmsLinkedToProspects: 0,
     failed: 0,
     errors: [] as { tenant: string; alias: string; message: string }[],
   };
@@ -172,28 +174,33 @@ export async function POST(req: Request) {
             }
           }
 
-          // Best-effort linkage to a known prospect by handle.
+          // If the sender's handle belongs to exactly one Instagram prospect
+          // of this tenant (tenant from the connection, never the message),
+          // record the DM as that prospect's reply so it reaches Outbound:
+          // prospect-linked inbound_messages row, status -> replied,
+          // follow-ups cancelled, auto-analysis. Idempotent across the 24h
+          // re-scan window. Unmatched DMs stay in Conversations only.
           if (msg.fromHandle) {
-            const { data: prospect } = await admin
-              .from("prospects")
-              .select("id")
-              .eq("tenant_slug", conn.tenantSlug)
-              .eq("platform", "instagram")
-              .eq("handle", msg.fromHandle)
-              .maybeSingle();
-
-            if (prospect) {
-              await admin.from("inbound_messages").upsert(
-                {
-                  tenant_slug: conn.tenantSlug,
-                  prospect_id: prospect.id,
-                  platform: "instagram",
-                  external_id: msg.id,
-                  body: msg.message,
-                  received_at: msg.createdAt,
-                },
-                { onConflict: "tenant_slug,platform,external_id" }
-              );
+            const link = await linkInboundToProspect(admin, {
+              tenantSlug: conn.tenantSlug,
+              channel: "instagram",
+              platform: "instagram",
+              externalId: msg.id,
+              body: msg.message,
+              receivedAt: msg.createdAt,
+              handle: msg.fromHandle,
+            });
+            if (link.linked) {
+              summary.dmsLinkedToProspects += 1;
+              if (dmRow?.id) {
+                // Best-effort: tag the Conversations row too.
+                await admin
+                  .from("engagement_items")
+                  .update({ prospect_id: link.prospectId })
+                  .eq("tenant_slug", conn.tenantSlug)
+                  .eq("id", dmRow.id)
+                  .is("prospect_id", null);
+              }
             }
           }
         }
