@@ -13,13 +13,16 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getCurrentUser();
+  // One round of parallel reads; each helper is cached for the request, so
+  // pages calling them again cost nothing.
+  const [user, tenants, currentTenant] = await Promise.all([
+    getCurrentUser(),
+    getUserTenants(),
+    getCurrentTenant(),
+  ]);
   if (!user) redirect("/login");
-
-  const tenants = await getUserTenants();
   if (tenants.length === 0) redirect("/signup?step=company");
 
-  const currentTenant = await getCurrentTenant();
   const currentSlug = currentTenant?.slug ?? tenants[0].slug;
   const currentAccountType = currentTenant?.accountType ?? tenants[0].accountType;
   const currentRole = currentTenant?.role ?? tenants[0].role;
@@ -29,14 +32,12 @@ export default async function AppLayout({
   // we gate on the same check — but route to the persona's own setup flow.
   // Startups get the brand-audit wizard; individuals get the lighter personal
   // setup. Once voice is set (or skipped), they land in the app.
-  const voice = await getBrandVoice(currentSlug);
+  const [voice, features] = await Promise.all([getBrandVoice(currentSlug), getFeatures(currentSlug)]);
   if (!voice) {
     redirect(
       currentAccountType === "individual" ? "/onboarding/personal" : "/onboarding/audit"
     );
   }
-
-  const features = await getFeatures(currentSlug);
 
   return (
     <DialogProvider>
