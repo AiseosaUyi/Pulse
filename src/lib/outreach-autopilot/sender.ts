@@ -7,7 +7,8 @@
 //   * Each row is claimed (approved -> sending) before sending, so two cron
 //     runs can't double-send.
 //   * Re-checked right before sending: prospect replied / handed off / email
-//     dropped -> cancelled, not sent. A first email to a company the ledger
+//     dropped -> cancelled, not sent. An approved answer to a reply (kind
+//     'reply') is sent to a replied lead; a closed lead still cancels it. A first email to a company the ledger
 //     already has as CONTACTED -> cancelled.
 //   * A row stuck in 'sending' (crash mid-send) is marked failed, never resent:
 //     we can't know whether the server accepted it.
@@ -37,6 +38,8 @@ const BLOCKING_PROSPECT_STATUSES = new Set([
   "dismissed",
   "unqualified",
 ]);
+
+const REPLY_BLOCKING_STATUSES = new Set(["closed_lost", "dismissed", "unqualified"]);
 
 export interface SendTickResult {
   sent: number;
@@ -170,7 +173,10 @@ export async function sendDueForTenant(
         result.cancelled++;
         continue;
       }
-      if (BLOCKING_PROSPECT_STATUSES.has(prospect.status as string)) {
+      // An approved answer to their reply is the point of a "replied" lead;
+      // only a closed lead blocks it.
+      const blocking = dm.kind === "reply" ? REPLY_BLOCKING_STATUSES : BLOCKING_PROSPECT_STATUSES;
+      if (blocking.has(prospect.status as string)) {
         await cancel(admin, tenantSlug, dm.id, `Not sent: prospect is ${prospect.status}`);
         result.cancelled++;
         continue;
@@ -218,7 +224,7 @@ export async function sendDueForTenant(
           .eq("tenant_slug", tenantSlug)
           .eq("id", dm.parent_dm_id)
           .maybeSingle();
-        if (parent?.status === "replied") {
+        if (parent?.status === "replied" && dm.kind !== "reply") {
           await cancel(admin, tenantSlug, dm.id, "Not sent: they already replied");
           result.cancelled++;
           continue;

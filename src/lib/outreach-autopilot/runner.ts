@@ -2,17 +2,21 @@
 // every 30 minutes. Each step is isolated: a failure in one (say IMAP is down)
 // is recorded on the mailbox and the other steps still run.
 //
-//   1. read replies and bounces        (every pass)
+//   1. read replies and bounces,       (every pass)
+//      draft an answer to each reply and email the approver at once
 //   2. once a day at the digest hour:  draft new first emails, draft due
 //                                      follow-ups, email the owner to approve
 //   3. send approved email             (every pass, inside the window)
 
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getMailboxWithSecret, createSmtpTransport, setMailboxState } from "./mailbox";
+import { getMailboxWithSecret, createSmtpTransport, setMailboxState, type MailboxConfig } from "./mailbox";
 import { openImapInbox, pollReplies, type ReplyEvent } from "./replies";
 import { draftDueFollowUps } from "./followups";
-import { sendDigestForTenant } from "./digest";
+import { createApprovalLink, isDigestConfigured, sendDigestForTenant } from "./digest";
+import { draftRepliesForEvents, type ReplyDraftOutcome } from "./reply-draft";
+import { makeAiReplyWriter } from "./reply-writer";
+import { buildReplyAlertEmail } from "./reply-copy";
 import { sendDueForTenant, type SendTickResult } from "./sender";
 import { isDigestDue } from "./schedule";
 import { composeAndSaveDrafts, getOutreachConfig } from "@/lib/services/outreach-composition";
@@ -21,6 +25,8 @@ import { sendBrevoEmail, getAppBaseUrl } from "@/lib/integrations/brevo";
 export interface TenantPassResult {
   tenantSlug: string;
   replies: number;
+  /** Answers drafted for those replies, waiting for approval. */
+  replyDrafts: number;
   bounces: number;
   composed: number;
   followUps: number;
@@ -29,29 +35,69 @@ export interface TenantPassResult {
   errors: string[];
 }
 
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+/**
+ * Draft answers to this pass's replies, then email the approver once with
+ * the replies, the drafted answers and a one-tap approval link.
+ */
+async function handleReplies(
+  admin: SupabaseClient,
+  config: MailboxConfig,
+  tenantName: string,
+  replies: ReplyEvent[],
+  now: Date
+): Promise<{ drafted: number; error?: string }> {
+  if (!replies.length) return { drafted: 0 };
+  let error: string | undefined;
 
-async function alertReplies(approverEmail: string, tenantName: string, replies: ReplyEvent[]) {
-  if (!replies.length) return;
+  let outcomes: ReplyDraftOutcome[] = [];
+  try {
+    const { data: copy } = await admin
+      .from("outreach_configs")
+      .select("signature")
+      .eq("workspace", config.tenantSlug)
+      .maybeSingle();
+    const writer = await makeAiReplyWriter(config.tenantSlug);
+    outcomes = await draftRepliesForEvents(admin, config, replies, writer, (copy?.signature as string) ?? "");
+  } catch (err) {
+    error = `reply drafts: ${err instanceof Error ? err.message : String(err)}`;
+  }
+
+  const byLead = new Map(outcomes.map((o) => [o.event.prospectId, o]));
+  const seen = new Set<string>();
   const items = replies
-    .map(
-      (r) =>
-        `<li style="margin-bottom:12px"><strong>${esc(r.from)}</strong>${r.optOut ? " (asked to stop)" : ""}<br>` +
-        `<span style="color:#444">${esc(r.snippet)}</span></li>`
-    )
-    .join("");
-  await sendBrevoEmail({
-    to: { email: approverEmail },
-    subject: `${tenantName}: ${replies.length} new repl${replies.length === 1 ? "y" : "ies"}`,
-    htmlContent: `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px">
-<h2 style="margin:0 0 12px">New replies</h2><ul style="padding-left:18px">${items}</ul>
-<p>Follow-ups to these people have been stopped.</p>
-<p><a href="${getAppBaseUrl()}/autopilot" style="color:#ad112c">Open Autopilot</a></p></body></html>`,
-    textContent: replies.map((r) => `${r.from}: ${r.snippet}`).join("\n\n"),
+    .filter((r) => (seen.has(r.prospectId) ? false : (seen.add(r.prospectId), true)))
+    .map((r) => {
+      const o = byLead.get(r.prospectId);
+      return {
+        from: r.from,
+        company: o?.company ?? null,
+        snippet: r.snippet,
+        optOut: r.optOut,
+        intent: o?.intent ?? null,
+        draft: o?.draft ?? null,
+      };
+    });
+  const dmIds = outcomes.map((o) => o.dmId).filter((x): x is string => Boolean(x));
+
+  let approveUrl: string | null = null;
+  if (dmIds.length && isDigestConfigured()) {
+    const link = await createApprovalLink(admin, config.tenantSlug, config.approverEmail, dmIds, now).catch(
+      (e: unknown) => ({ error: e instanceof Error ? e.message : String(e) })
+    );
+    if ("url" in link) approveUrl = link.url;
+    else error = `reply link: ${link.error}`;
+  }
+
+  const email = buildReplyAlertEmail({ tenantName, items, approveUrl, autopilotUrl: `${getAppBaseUrl()}/autopilot` });
+  const sent = await sendBrevoEmail({
+    to: { email: config.approverEmail },
+    subject: email.subject,
+    htmlContent: email.html,
+    textContent: email.text,
     tags: ["outreach-replies"],
   });
+  if (!sent.ok) error = `reply alert: ${sent.error ?? "send failed"}`;
+  return { drafted: dmIds.length, error };
 }
 
 /** New verified prospects with no email drafted yet, oldest first. */
@@ -94,6 +140,7 @@ export async function runAutopilotForTenant(
   const res: TenantPassResult = {
     tenantSlug,
     replies: 0,
+    replyDrafts: 0,
     bounces: 0,
     composed: 0,
     followUps: 0,
@@ -117,7 +164,9 @@ export async function runAutopilotForTenant(
       const r = await pollReplies(admin, config, reader);
       res.replies = r.replies.length;
       res.bounces = r.bounces;
-      await alertReplies(config.approverEmail, tenantName, r.replies);
+      const h = await handleReplies(admin, config, tenantName, r.replies, now);
+      res.replyDrafts = h.drafted;
+      if (h.error) res.errors.push(h.error);
     } catch (err) {
       res.errors.push(`replies: ${err instanceof Error ? err.message : String(err)}`);
     }

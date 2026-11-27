@@ -30,6 +30,7 @@ export async function GET(req: Request) {
         passes.push({
           tenantSlug: slug,
           replies: 0,
+          replyDrafts: 0,
           bounces: 0,
           composed: 0,
           followUps: 0,
