@@ -27,12 +27,15 @@ export function OwnerChip({
 }: OwnerChipProps) {
   const [editing, setEditing] = useState(false);
   const hookPeople = usePeople();
+  // Offer only teammates; show any existing owner's name from the whole roster.
   const people = propPeople || hookPeople.activePeople;
 
   // Resolve display name
   let displayOwner = "Unassigned";
   if (ownerPersonId) {
-    const p = people.find((item) => item.id === ownerPersonId);
+    const p =
+      people.find((item) => item.id === ownerPersonId) ??
+      hookPeople.people.find((item) => item.id === ownerPersonId);
     if (p) displayOwner = p.name;
     else if (owner && owner.trim()) displayOwner = owner.trim();
   } else if (owner && owner.trim() && owner.toLowerCase() !== "unassigned") {
@@ -63,7 +66,7 @@ export function OwnerChip({
         <option value="">Unassigned</option>
         {people.map((p) => (
           <option key={p.id} value={p.id}>
-            {p.name} {p.tags?.includes("ambassador") ? "(Ambassador)" : ""}
+            {p.name}
           </option>
         ))}
       </select>

@@ -6,7 +6,9 @@ import type { TeamPerson } from "@/lib/types/tasks";
 import { listPeopleAction } from "@/lib/actions/people";
 
 export interface PeopleHookResult {
+  /** Whole roster: use to show the name on an existing assignment. */
   people: TeamPerson[];
+  /** Active people on the workspace's team: the only ones to offer in pickers and filters. */
   activePeople: TeamPerson[];
   tagGroups: string[];
   currentUserId: string | null;
@@ -26,6 +28,7 @@ export function usePeople(tenantSlug?: string): PeopleHookResult {
   const searchParams = useSearchParams();
 
   const [people, setPeople] = useState<TeamPerson[]>([]);
+  const [teamIds, setTeamIds] = useState<string[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -38,6 +41,7 @@ export function usePeople(tenantSlug?: string): PeopleHookResult {
       const res = await listPeopleAction(tenantSlug);
       if (res) {
         setPeople(res.people);
+        setTeamIds(res.teamIds);
         setCurrentUserId(res.currentUserId);
         setIsAdmin(res.isAdmin);
       }
@@ -52,7 +56,10 @@ export function usePeople(tenantSlug?: string): PeopleHookResult {
     fetchPeople();
   }, [fetchPeople]);
 
-  const activePeople = useMemo(() => people.filter((p) => p.active), [people]);
+  const activePeople = useMemo(() => {
+    const onTeam = new Set(teamIds);
+    return people.filter((p) => p.active && onTeam.has(p.id));
+  }, [people, teamIds]);
 
   const tagGroups = useMemo(() => {
     const set = new Set<string>();

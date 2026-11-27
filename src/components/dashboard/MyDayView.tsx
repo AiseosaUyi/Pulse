@@ -85,6 +85,14 @@ export function MyDayView({
     });
   }, [selectedAssignee, tenantSlug]);
 
+  // The dropdown's value: a person picked by name (old links) maps to their id.
+  const selectValue =
+    activePeople.find((p) => p.name.toLowerCase() === selectedPerson.toLowerCase())?.id ?? selectedPerson;
+  const knownValue =
+    ["all", "me", "unassigned"].includes(selectValue) ||
+    activePeople.some((p) => p.id === selectValue) ||
+    tagGroups.some((t) => `tag:${t}` === selectValue);
+
   function switchPerson(newPerson: string) {
     setSelectedAssignee(newPerson);
   }
@@ -287,83 +295,38 @@ export function MyDayView({
     <div className="space-y-6">
       {/* ── Person Switcher ─────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/40">
-        <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
-          <button
-            type="button"
-            onClick={() => switchPerson("all")}
-            className={cn(
-              "px-3 py-1.5 text-xs font-semibold rounded-full border transition-all whitespace-nowrap cursor-pointer",
-              selectedPerson === "all"
-                ? "bg-primary-500 text-white border-primary-500 shadow-sm"
-                : "border-border/60 bg-card text-text-secondary hover:text-foreground hover:bg-card-hover"
-            )}
+        <label className="flex items-center gap-2 text-xs text-text-secondary">
+          <span className="font-semibold">Showing</span>
+          <select
+            value={selectValue}
+            onChange={(e) => switchPerson(e.target.value)}
+            aria-label="Whose work to show"
+            className="h-9 min-w-[180px] rounded-lg border border-border/60 bg-card px-3 pr-8 text-sm font-medium text-foreground cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
-            Everyone
-          </button>
-          <button
-            type="button"
-            onClick={() => switchPerson("me")}
-            className={cn(
-              "px-3 py-1.5 text-xs font-semibold rounded-full border transition-all whitespace-nowrap cursor-pointer",
-              selectedPerson === "me"
-                ? "bg-primary-500 text-white border-primary-500 shadow-sm"
-                : "border-border/60 bg-card text-text-secondary hover:text-foreground hover:bg-card-hover"
+            <option value="all">Everyone</option>
+            <option value="me">Me</option>
+            <option value="unassigned">Unassigned</option>
+            {activePeople.length > 0 && (
+              <optgroup label="Team">
+                {activePeople.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                  </option>
+                ))}
+              </optgroup>
             )}
-          >
-            Me
-          </button>
-          <button
-            type="button"
-            onClick={() => switchPerson("unassigned")}
-            className={cn(
-              "px-3 py-1.5 text-xs font-semibold rounded-full border transition-all whitespace-nowrap cursor-pointer",
-              selectedPerson === "unassigned"
-                ? "bg-primary-500 text-white border-primary-500 shadow-sm"
-                : "border-border/60 bg-card text-text-secondary hover:text-foreground hover:bg-card-hover"
+            {tagGroups.length > 0 && (
+              <optgroup label="Groups">
+                {tagGroups.map((tagName) => (
+                  <option key={tagName} value={`tag:${tagName}`}>
+                    #{tagName}
+                  </option>
+                ))}
+              </optgroup>
             )}
-          >
-            Unassigned
-          </button>
-          {activePeople.map((person) => {
-            const isSelected =
-              selectedPerson === person.id ||
-              selectedPerson.toLowerCase() === person.name.toLowerCase();
-            return (
-              <button
-                key={person.id}
-                type="button"
-                onClick={() => switchPerson(person.id)}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-semibold rounded-full border transition-all whitespace-nowrap cursor-pointer",
-                  isSelected
-                    ? "bg-primary-500 text-white border-primary-500 shadow-sm"
-                    : "border-border/60 bg-card text-text-secondary hover:text-foreground hover:bg-card-hover"
-                )}
-              >
-                {person.name}
-              </button>
-            );
-          })}
-          {tagGroups.map((tagName) => {
-            const tagId = `tag:${tagName}`;
-            const isSelected = selectedPerson === tagId;
-            return (
-              <button
-                key={tagId}
-                type="button"
-                onClick={() => switchPerson(tagId)}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-semibold rounded-full border transition-all whitespace-nowrap cursor-pointer",
-                  isSelected
-                    ? "bg-primary-500 text-white border-primary-500 shadow-sm"
-                    : "border-border/60 bg-card text-text-secondary hover:text-foreground hover:bg-card-hover"
-                )}
-              >
-                #{tagName}
-              </button>
-            );
-          })}
-        </div>
+            {!knownValue && <option value={selectValue}>Not on the team</option>}
+          </select>
+        </label>
 
         <Link
           href="/settings/team"
