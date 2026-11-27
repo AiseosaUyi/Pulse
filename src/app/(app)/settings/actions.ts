@@ -380,3 +380,39 @@ export async function linkPersonToUserAction(personId: string, userId: string | 
   revalidatePath("/dashboard");
   return result(true, userId ? "Linked to login" : "Unlinked from login");
 }
+
+/**
+ * Settings > Team: share new leads among the team. Owners/admins only.
+ * Merges into tenants.settings.leadAssignment (sibling keys kept). Turning it
+ * on shares a first batch right away.
+ */
+export async function saveLeadAssignment(formData: FormData) {
+  const tenant = await getCurrentTenant();
+  if (!tenant) return result(false, "No active tenant");
+  if (tenant.role !== "owner" && tenant.role !== "admin") {
+    return result(false, "Only owners and admins can change this");
+  }
+  const enabled = formData.get("enabled") === "on";
+  const perPersonPerDay = Math.min(Math.max(Math.floor(Number(formData.get("perPersonPerDay")) || 15), 1), 100);
+
+  const admin = createAdminClient();
+  const { data } = await admin.from("tenants").select("settings").eq("slug", tenant.slug).maybeSingle();
+  const settings = (data?.settings as Record<string, unknown>) ?? {};
+  const { error } = await admin
+    .from("tenants")
+    .update({ settings: { ...settings, leadAssignment: { enabled, perPersonPerDay } } })
+    .eq("slug", tenant.slug);
+  if (error) return result(false, error.message);
+
+  revalidatePath("/settings/team");
+  if (!enabled) return result(true, "Saved. Leads are no longer shared out.");
+  const { assignNewLeads } = await import("@/lib/outbound/assign-leads");
+  const r = await assignNewLeads(admin, tenant.slug, { perPersonPerDay });
+  revalidatePath("/leads");
+  return result(
+    true,
+    r.people
+      ? `Saved. Shared ${r.assigned} lead${r.assigned === 1 ? "" : "s"} among ${r.people} teammate${r.people === 1 ? "" : "s"}; more every morning.`
+      : "Saved, but nobody on the team has a login yet. Invite teammates first."
+  );
+}

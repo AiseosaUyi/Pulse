@@ -8,7 +8,9 @@ import { SettingsForm } from "@/components/settings/SettingsForm";
 import { InviteLink } from "@/components/settings/InviteLink";
 import { TeamRosterSection } from "@/components/settings/TeamRosterSection";
 import { listTeamMembers } from "@/lib/services/team";
-import { inviteTeammate, revokeInvitation, removeMember } from "../actions";
+import { inviteTeammate, revokeInvitation, removeMember, saveLeadAssignment } from "../actions";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { readLeadAssignment } from "@/lib/outbound/assign-leads";
 import { SettingsPageHeading } from "../_shared";
 
 interface Member {
@@ -96,10 +98,12 @@ export default async function TeamSettingsPage() {
   if (!tenant) redirect("/signup?step=company");
 
   const supabase = await createClient();
-  const [{ members, invites }, teamRoster] = await Promise.all([
+  const [{ members, invites }, teamRoster, { data: tenantRow }] = await Promise.all([
     loadTeam(tenant.slug),
     listTeamMembers(supabase, tenant.slug),
+    createAdminClient().from("tenants").select("settings").eq("slug", tenant.slug).maybeSingle(),
   ]);
+  const leadAssignment = readLeadAssignment(tenantRow?.settings);
   const canInvite = tenant.role === "owner" || tenant.role === "admin";
 
   return (
@@ -227,6 +231,38 @@ export default async function TeamSettingsPage() {
           </p>
         )}
       </section>
+
+      {canInvite && (
+        <section className="bg-card border border-border rounded-2xl p-6 mt-6">
+          <h3 className="text-sm font-semibold text-foreground mb-1">Share new leads among the team</h3>
+          <p className="text-xs text-text-muted mb-4">
+            Every morning, leads with no owner go to teammates with a login, best leads first, to whoever has the
+            fewest open leads. Nothing is sent and no lead status changes.
+          </p>
+          <SettingsForm action={saveLeadAssignment} submitLabel="Save" className="space-y-4">
+            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                name="enabled"
+                defaultChecked={leadAssignment.enabled}
+                className="h-4 w-4 accent-primary-500"
+              />
+              Share new leads automatically
+            </label>
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <span>Leads per person per day</span>
+              <Input
+                type="number"
+                name="perPersonPerDay"
+                min={1}
+                max={100}
+                defaultValue={leadAssignment.perPersonPerDay}
+                className="w-24"
+              />
+            </label>
+          </SettingsForm>
+        </section>
+      )}
 
       <TeamRosterSection members={teamRoster} tenantSlug={tenant.slug} loginMembers={members} />
     </div>
