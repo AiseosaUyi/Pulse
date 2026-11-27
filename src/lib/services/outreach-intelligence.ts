@@ -216,18 +216,19 @@ export async function getOutreachToday(
   coldCutoff.setDate(coldCutoff.getDate() - COLD_DAYS);
 
   const [overdueRes, dueTodayRes, newRepliesRes, coldRes] = await Promise.all([
-    // Overdue: follow_up_at before today midnight
+    // Overdue: follow_up_at before today midnight (exclude handed-off)
     supabase
       .from("prospects")
       .select("*")
       .eq("tenant_slug", tenantSlug)
       .not("follow_up_at", "is", null)
       .lt("follow_up_at", todayStart)
-      .not("status", "in", "(closed_won,closed_lost,dismissed,unqualified)")
+      .not("status", "in", "(closed_won,closed_lost,dismissed,unqualified,handed_off)")
+      .eq("channel_handoff", "none")
       .order("follow_up_at", { ascending: true })
       .limit(30),
 
-    // Due today: follow_up_at between today start and today end
+    // Due today: follow_up_at between today start and today end (exclude handed-off)
     supabase
       .from("prospects")
       .select("*")
@@ -235,7 +236,8 @@ export async function getOutreachToday(
       .not("follow_up_at", "is", null)
       .gte("follow_up_at", todayStart)
       .lte("follow_up_at", todayEnd.toISOString())
-      .not("status", "in", "(closed_won,closed_lost,dismissed,unqualified)")
+      .not("status", "in", "(closed_won,closed_lost,dismissed,unqualified,handed_off)")
+      .eq("channel_handoff", "none")
       .order("follow_up_at", { ascending: true })
       .limit(30),
 
@@ -255,12 +257,13 @@ export async function getOutreachToday(
       .order("received_at", { ascending: true })
       .limit(50),
 
-    // Going cold: sent but no reply after COLD_DAYS with no follow-up scheduled
+    // Going cold: sent but no reply after COLD_DAYS with no follow-up scheduled (exclude handed-off)
     supabase
       .from("prospects")
       .select("*")
       .eq("tenant_slug", tenantSlug)
       .eq("status", "sent")
+      .eq("channel_handoff", "none")
       .lt("last_touched_at", coldCutoff.toISOString())
       .is("follow_up_at", null)
       .order("last_touched_at", { ascending: true })
@@ -326,16 +329,24 @@ export async function getOutreachToday(
     dueToday: (dueTodayRes.data ?? []).map((r) =>
       toWithFollowUp(r as Record<string, unknown>)
     ),
-    newReplies: (newRepliesRes.data ?? []).map((r) => ({
-      id: r.id as string,
-      prospectId: (r.prospect_id as string | null) ?? "",
-      body: r.body as string,
-      receivedAt: r.received_at as string,
-      prospect: replyProspectsMap.get((r.prospect_id as string | null) ?? "") ?? null,
-      isAging:
-        now.getTime() - new Date(r.received_at as string).getTime() >
-        48 * 60 * 60 * 1000,
-    })),
+    newReplies: (newRepliesRes.data ?? [])
+      .map((r) => {
+        const p = replyProspectsMap.get((r.prospect_id as string | null) ?? "") ?? null;
+        return {
+          id: r.id as string,
+          prospectId: (r.prospect_id as string | null) ?? "",
+          body: r.body as string,
+          receivedAt: r.received_at as string,
+          prospect: p,
+          isAging:
+            now.getTime() - new Date(r.received_at as string).getTime() >
+            48 * 60 * 60 * 1000,
+        };
+      })
+      .filter((nr) => {
+        if (!nr.prospect) return true;
+        return nr.prospect.channelHandoff === "none" && nr.prospect.status !== "handed_off";
+      }),
     goingCold: (coldRes.data ?? []).map((r) =>
       toWithFollowUp(r as Record<string, unknown>)
     ),

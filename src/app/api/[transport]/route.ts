@@ -37,6 +37,7 @@ import { registerNotificationsTools } from "@/lib/mcp/tools/notifications";
 import { registerAdsPlatformTools } from "@/lib/mcp/tools/ads-platform";
 import { registerActionQueueTools } from "@/lib/mcp/tools/action-queue";
 import { registerTasksTools } from "@/lib/mcp/tools/tasks";
+import { registerLedgerTools } from "@/lib/mcp/tools/ledger";
 
 // [transport] is a literal dynamic segment mcp-handler resolves itself
 // (it becomes "mcp" for streamable HTTP, "sse"/"message" for SSE) — it
@@ -58,6 +59,7 @@ const handler = createMcpHandler(
     registerAdsPlatformTools(server);
     registerActionQueueTools(server);
     registerTasksTools(server);
+    registerLedgerTools(server);
   },
   {},
   {

@@ -47,6 +47,7 @@ const STATUS_TO_ACTIVITY: Record<QueueStatus, QueueActivityAction | null> = {
   dismissed: "dismissed",
   snoozed: "snoozed",
   archived: null,
+  handed_off: null,
 };
 
 export async function setRowStatus(

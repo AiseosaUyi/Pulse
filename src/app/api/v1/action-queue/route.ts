@@ -9,7 +9,7 @@ import { listActionQueue, type QueueKind, type QueuePriority, type QueueStatus }
 export const dynamic = "force-dynamic";
 
 const METHODS = "GET";
-const STATUSES = new Set(["open", "snoozed", "resolved", "dismissed"]);
+const STATUSES = new Set(["open", "snoozed", "resolved", "dismissed", "handed_off"]);
 const KINDS = new Set(["reply", "follow_up", "decision", "escalation", "opportunity", "chore"]);
 const PRIORITIES = new Set(["urgent", "high", "normal", "low"]);
 

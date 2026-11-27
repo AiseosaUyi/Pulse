@@ -21,7 +21,7 @@ pnpm smoke:cleanup      # scripts/smoke-cleanup.ts — tears down data left behi
 
 Single test: `pnpm test tests/unit/foo.test.ts`. Tests live under `tests/unit`, `tests/integration`, `tests/smoke`, `tests/e2e`. Playwright config at `playwright.config.ts`, Vitest at `vitest.config.ts`.
 
-DB migrations live in `supabase/migrations/`, named `NNN_*.sql` — currently through 113. Key recent milestones: 063 cadence_loop, 066 platform_connections, 067 scheduled_posts, 068 metrics_sync, 069 r2_storage, 073 social_drafts_variants, 074 gsc_contentful_providers, 075 seo_posts, 076 outbound_template_type + outreach_campaigns, 077 global_outbound_templates + prospect_follow_up, 078 conversation_analyses, 079 prospect_notes, 080 prospect_enrichment_fields, 081 add_phone_to_prospects, 082 analytics_reports, 083 own_post_metrics_dedup, 084 analytics_import_sessions, 085 event_scraper_runs, 086 content_slots, 087 content_slots_scheduled_date, 088 api_v1_token_scopes, 089 scheduled_posts_reconcile, 090 own_post_metrics_full_unique_index, 091 approval_requests, 092 oauth_authorization_server, 094-097 ads platform (ad_accounts/ad_campaigns/ad_sets/ads/ad_creatives/ad_insights_daily), 098 coach_ads_signal_source, 099 unpublish_audit_fields, 100 stage1_data_integrity, 101 blog_draft_sections, 102 shared_inbox_conversations, 103 support_role, 104 prospect_quality (adds `prospects.quality` — `unscored|hot|warm|cold|dead` — and `prospects.duplicate_of_id`, a soft self-FK), 105 action_queue (widens `engagement_items`/`inbound_messages` status model, adds `action_items` + `agent_runs` tables — see Action Queue below), 106 queue_activity_log, 107 engagement_agent_write_parity (adds `why`/`body`/`prospect_id` to `engagement_items`, `prospects.external_account_id`), 108 my_day_and_prospect_owners (adds `prospects.owner`, `prospects.priority`, `action_items.owner`, `engagement_items.owner`, `tenant_team_members` table, and widens action status to include `archived`), 109 tasks_and_team_people (adds `tenants.timezone`, `team_people`, `tasks`, `task_checklist_items`, `task_occurrences`, `task_occurrence_checks`, `task_comments`, `person_leave`, `task_events`, storage bucket `task-proofs`), **110 one_assignee_model** (unifies single assignee model on `team_people`, deprecates `tenant_team_members`, adds `owner_person_id` to `prospects`/`action_items`/`engagement_items`, creates `unassign_departed_person` RPC and membership sync triggers), **111 my_day_structured_approvals** (structured fields on `prospects`: `approved_message`, `approved_channel`, `approved_contact`, `approved_by`, `approved_at`, `is_auto_generated`, `status_updated_at`; `waiting_on_person_id` on action/engagement/inbound items), **112 tasks_security_and_constraints** (support-role exclusion policies on 7 tasks tables, tenant-isolated `task-proofs` storage RLS, `ON DELETE SET NULL` on `created_by`/`author`, observable pre-cleanup audit, and DB check constraints), **113 tasks_member_select_only** (post-deploy migration replacing permissive member writes with select-only RLS on tasks and team_people). Apply via Supabase SQL Editor (paste + run) or `supabase db push` after `supabase login --token <pat>` and `supabase link --project-ref <ref>`. The user typically runs migrations by hand in the SQL Editor, so the migration *number* (not the SQL) is what they need from you.
+DB migrations live in `supabase/migrations/`, named `NNN_*.sql` — currently through 116. Key recent milestones: 063 cadence_loop, 066 platform_connections, 067 scheduled_posts, 068 metrics_sync, 069 r2_storage, 073 social_drafts_variants, 074 gsc_contentful_providers, 075 seo_posts, 076 outbound_template_type + outreach_campaigns, 077 global_outbound_templates + prospect_follow_up, 078 conversation_analyses, 079 prospect_notes, 080 prospect_enrichment_fields, 081 add_phone_to_prospects, 082 analytics_reports, 083 own_post_metrics_dedup, 084 analytics_import_sessions, 085 event_scraper_runs, 086 content_slots, 087 content_slots_scheduled_date, 088 api_v1_token_scopes, 089 scheduled_posts_reconcile, 090 own_post_metrics_full_unique_index, 091 approval_requests, 092 oauth_authorization_server, 094-097 ads platform (ad_accounts/ad_campaigns/ad_sets/ads/ad_creatives/ad_insights_daily), 098 coach_ads_signal_source, 099 unpublish_audit_fields, 100 stage1_data_integrity, 101 blog_draft_sections, 102 shared_inbox_conversations, 103 support_role, 104 prospect_quality (adds `prospects.quality` — `unscored|hot|warm|cold|dead` — and `prospects.duplicate_of_id`, a soft self-FK), 105 action_queue (widens `engagement_items`/`inbound_messages` status model, adds `action_items` + `agent_runs` tables — see Action Queue below), 106 queue_activity_log, 107 engagement_agent_write_parity (adds `why`/`body`/`prospect_id` to `engagement_items`, `prospects.external_account_id`), 108 my_day_and_prospect_owners (adds `prospects.owner`, `prospects.priority`, `action_items.owner`, `engagement_items.owner`, `tenant_team_members` table, and widens action status to include `archived`), 109 tasks_and_team_people (adds `tenants.timezone`, `team_people`, `tasks`, `task_checklist_items`, `task_occurrences`, `task_occurrence_checks`, `task_comments`, `person_leave`, `task_events`, storage bucket `task-proofs`), **110 one_assignee_model** (unifies single assignee model on `team_people`, deprecates `tenant_team_members`, adds `owner_person_id` to `prospects`/`action_items`/`engagement_items`, creates `unassign_departed_person` RPC and membership sync triggers), **111 my_day_structured_approvals** (structured fields on `prospects`: `approved_message`, `approved_channel`, `approved_contact`, `approved_by`, `approved_at`, `is_auto_generated`, `status_updated_at`; `waiting_on_person_id` on action/engagement/inbound items), **112 tasks_security_and_constraints** (support-role exclusion policies on 7 tasks tables, tenant-isolated `task-proofs` storage RLS, `ON DELETE SET NULL` on `created_by`/`author`, observable pre-cleanup audit, and DB check constraints), **113 tasks_member_select_only** (post-deploy migration replacing permissive member writes with select-only RLS on tasks and team_people), **114 conversation_handoffs_and_engagement_fixes** (creates `conversation_handoffs` table with partial unique index, adds `thread_external_id` to `engagement_items`, adds `chk_engagement_items_no_open_replied` check constraint, widens status enum to include `handed_off`, backfills thread_external_id, repairs inconsistent open/resolved rows), **115 lead_research_and_outreach_memory** (creates `outreach_ledger`, `outreach_configs`, `prospect_replies`, `engagement_item_messages`; extends `prospects`, `engagement_items`, `agent_runs`; trigger `trg_outreach_ledger_no_downgrade` blocks CONTACTED->DROPPED downgrade), **116 outreach_autopilot** (email/sequence/claim columns on `outbound_dms` incl. `send_via`, `kind`, `parent_dm_id`, `message_id`; `outreach_mailboxes` (service-role only, encrypted SMTP password); `outreach_digests`; editable follow-up copy on `outreach_configs`). Apply via Supabase SQL Editor (paste + run) or `supabase db push` after `supabase login --token <pat>` and `supabase link --project-ref <ref>`. The user typically runs migrations by hand in the SQL Editor, so the migration *number* (not the SQL) is what they need from you.
 
 **Duplicate migration numbers exist** (076 and 077 each have two files). When writing new migrations, check the highest actual file number first — don't trust the sequence to be gapless.
 
@@ -259,3 +259,87 @@ Key routing rules:
 - Design system, brand → invoke design-consultation
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review
+
+## Lead Research, Outreach Memory & Approved-Only Sending Invariant
+
+Pulse powers verified, no-bounce lead research and outreach memory for two distinct ventures:
+- **Gruve (`gruve`)**: Event ticketing, registration, and voting in Nigeria (organisers, venues, lounges, promoters, pageants, festivals, planners).
+- **Sippy (`sippy`)**: Drinks distribution across Lagos, Abuja, and Calabar (bars, lounges, hotels, restaurants, event caterers, retailers).
+
+### 1. Invariants & Tenant Isolation
+- **Approved-Only Sending** (replaced "zero automated sending" with migration 116): Pulse sends outreach EMAIL only after a human approved that exact message, and only through the Autopilot sender (`src/lib/outreach-autopilot/sender.ts`). A row is sendable only when `status='approved' AND send_via='mailbox'`; `send_via` is set solely by `decideDraft` (approval email link or the in-app `/autopilot` page). Pulse never sends DMs or WhatsApp. No MCP tool or AI path can approve or send: they all still return `sent: false`. Each tenant sends from its own mailbox (`outreach_mailboxes`, Sippy = contact@sippy.life on the shared mailcow at mx.gruve.events); the mailbox starts disabled.
+
+### Outreach Autopilot (migration 116)
+- Cron `/api/cron/outreach-autopilot` every 30 min, per enabled mailbox (`runner.ts`): read replies over IMAP -> once a day at `digest_hour` draft first emails for new verified prospects, draft due follow-ups, email the approver a digest -> send approved email inside the send window, paced under `daily_cap`.
+- Digest link `/approve/outreach/<token>` (HS256 with `APPROVAL_TOKEN_SECRET`, 72h, scoped to the drafts in that email). Opening it changes nothing; only the buttons do (mail scanners prefetch links).
+- Sender rules: claim `approved -> sending` before sending (no double send); re-check prospect (replied / handed off / email dropped -> cancelled) and the ledger for first emails; a row stuck in `sending` becomes `failed`, never resent; temporary SMTP errors retry up to 3 times.
+- Replies: matched by `In-Reply-To`/`References` then sender address; recorded via `recordInboundMessage`, pending follow-ups cancelled, approver alerted. Out-of-office ignored. Bounces mark the email failed and the prospect `email_status='dropped'`. "unsubscribe / remove me" closes the prospect.
+- Admin: `/settings/outreach` (mailbox, window, cap, follow-up timing, copy, banned words) and `/autopilot` (queue, pull back, recent). Owners/admins decide; support role is excluded.
+- **Tenant Scoping**: All tables (`outreach_ledger`, `outreach_configs`, `prospect_replies`, `prospects`, `agent_runs`) are strictly scoped by `workspace` / `tenant_slug`. Gruve data is NEVER visible from the Sippy MCP server or API, and vice-versa. MCP tools derive tenant context solely from the authenticated session token (`gate.context.tenantSlug`) and reject user-supplied tenant overrides.
+
+### 2. Outreach Ledger (`outreach_ledger`)
+- Lives in the database (replaces flat `ledger.json` / `exclude.txt`).
+- Table unique constraint: `(workspace, key_type, key)`.
+  - `key_type`: `DOMAIN` | `EMAIL` | `HANDLE` | `PHONE`
+  - `kind`: `CONTACTED` | `DROPPED`
+  - Columns: `reason`, `run_id`, `company_name`, `created_at`, `updated_at`.
+- **No-Downgrade Invariant**: A `CONTACTED` row can NEVER be downgraded to `DROPPED`. Enforced at both the application service layer (`src/lib/services/outreach-ledger.ts`) and at the database trigger layer (`trg_outreach_ledger_no_downgrade`).
+- **Key Normalisation**:
+  - `DOMAIN`: lowercase, strip scheme (`http://`, `https://`), strip `www.` and trailing slashes.
+  - `EMAIL`: lowercase, trim whitespace.
+  - `HANDLE`: lowercase, strip leading `@` and trim whitespace.
+  - `PHONE`: E.164 formatted string (`normalizePhone`).
+- **Writers**: When an email or DM is marked sent (`pulse_mark_dm_sent`, `pulse_record_sent_reply`, etc.), it records `CONTACTED` best-effort for that prospect's domain, email, handle, and phone. Ledger failure never breaks send-recording.
+- **MCP Tools**:
+  - `ledger_add`: args `(kind, domain?, email?, handle?, phone?, company_name?, reason?, run_id?)`. Returns `{ success: true, added, sent: false }`.
+  - `ledger_list`: args `(domains?, emails?, handles?, phones?, kind?, run_id?, limit?)`. Returns `{ entries, sent: false }`.
+- **Upsert Pre-Check**: `pulse_upsert_prospect` checks the ledger first for the prospect's website domain, social handle, and phone. If found, it skips the write and returns `{ skipped: true, ledger: {...}, sent: false }`, unless `ignore_ledger: true` is passed. Lookup fails open: if the ledger query errors, it logs and proceeds.
+
+### 3. Server-Side Email Evidence Verification
+Email addresses on prospects are only considered verified when all four conditions pass, verified by the server (`src/lib/outbound/email-evidence.ts`), never trusting the caller's word or caller-passed flags:
+1. `email_source_url` is on the company's own site (same registrable domain, correctly handling multi-part suffixes like `.com.ng`, `.co.uk`, `.com.au`, `.co.za`).
+2. The address appears in the raw page HTML. Decodes HTML entities (`&#64;`, `&commat;`) and `%40`. Never decodes Cloudflare email protection (`__cf_email__`, `cdn-cgi/l/email-protection` drops as `HIDDEN_CF`).
+3. The email domain matches the website domain (or valid redirect on sibling domain). Free mailboxes (`gmail.com`, `yahoo.com`, `hotmail.com`, `outlook.com`, `icloud.com`, etc.) are dropped as `FREE_MAIL`.
+4. The email domain has real MX records (`dns.promises.resolveMx`). Null MX or A-record-only drops as `NO_MX`.
+- **Network Safety**: Plain fetch, default User-Agent, 12s timeout, SSRF guard blocking private, loopback, and cloud metadata IPs (`169.254.169.254`, `10.*`, `172.16-31.*`, `192.168.*`, `127.*`, `::1`, `fc00::/7`, `fe80::/10`) on every redirect hop. No anti-bot bypasses.
+- **Status Codes**: `VERIFIED`, `NOT_ON_PAGE`, `HIDDEN_CF`, `PAGE_BLOCKED`, `PAGE_ERROR`, `NO_MX`, `FREE_MAIL`, `DOMAIN_MISMATCH`, `SOURCE_OFFSITE`, `NO_SOURCE`, `NO_WEBSITE`.
+- **Decision Engine**: Pure function `evaluateEmailEvidence` separated from network I/O for 100% deterministic unit testing.
+- **Outcomes**:
+  - `kept`: verified, stored in `prospects.email` with `email_status = 'verified'`.
+  - `dropped`: verification failed. NOT stored in `prospects.email`. Recorded in `outreach_ledger` as `EMAIL DROPPED` with reason.
+  - `unverified`: no `email_source_url` provided. Stored in `prospects.unverified_email` with `email_status = 'unverified'` as a hint only; never used for outreach.
+  - `email_report`: `{ kept: [...], dropped: [{ who, email, status, reason }], unverified: [...], sent: false }`.
+  - No email guessing or pattern building is permitted anywhere.
+
+### 4. Lead Research Rounds
+- `agent_runs` extended with `run_id`, `search_budget`, `slice_label`.
+- `pulse_start_run` accepts `agent`, `runId`, `searchBudget`, `sliceLabel`. Returns `{ runId, agentRunId, sent: false }`.
+- `run_report(run_id)` returns metrics and produces this exact summary line:
+  `"Run <run_id>: researched X, skipped Y (ledger), upserted Z. Emails: kept A, dropped B (reasons), unverified C. Nothing was sent."`
+
+### 5. Outreach Composition (Drafts Only) & Batches
+- Venture outreach settings stored in `outreach_configs`: segments, 2+ variants of proofs/offers/asks, banned-words regex, promise regex, word count limits, signature, blocked countries.
+- `pulse_compose_drafts(run_id?, prospect_ids?, batch_size?)`:
+  - Builds greeting (`Hi <FirstName>,` or `Hi <Brand> team,`), personalized hook and idea from researcher, rotated proof, offer, and ask lines, and venture signature.
+  - Default voice: "Hi" or "Hello" with time of day, short complete sentences, person's name, specifics from site, ends with a question, never leads with price.
+  - Gruve copy rule: never uses the word "partnership".
+  - Linter: checks banned words, promises, word limits (subject ≤7, hook ≤30, idea 25-45), and forbidden punctuation (no em dashes `—`, en dashes `–`, semicolons `;`, or exclamation marks `!`).
+  - Drafts are saved to `outbound_dms` with `status: 'drafted'` in the human approval queue, with `subject`, `to_email` (verified addresses only) and `lint_warnings`. Composing never queues a send; only a human approval does (see Outreach Autopilot).
+  - Batches: deals drafts round-robin into batches of ~40, interleaving segments, prioritizing named contacts.
+
+### 6. Inbox, Handoff & Reply Intelligence
+- **Inbox status bug fixed**: `pulse_upsert_inbox_item` never reopens a human-resolved/replied row if a caller passes `status: "open"`. Ignores the status field, updates the rest of the row, and returns a warning.
+- **Message history**: Child table `engagement_item_messages` stores append-only message history so new incoming or outgoing messages never erase earlier context.
+- **Channel Handoff**: `channel_handoff` (`whatsapp` | `phone` | `email` | `none`), `handoff_contact`, `handoff_at` on `prospects` and `engagement_items`. Inbox and follow-up engines do not flag handed-off threads as overdue or going cold.
+- **Brand Voice Gate**: `pulse_reply_draft` checks `getBrandVoiceHealth(tenantSlug)` and refuses to draft with a 400 error until brand voice is authored and active.
+- **Reply Logging**: `pulse_record_reply` records date, channel, short quote, status (`interested`, `declined`, `dormant`, `closed`), next step, and missing capability. `pulse_replies_insights` surfaces missing capabilities aggregated over 7+ days.
+
+### 7. Deployment Order (MANDATORY)
+1. **Apply database schema changes FIRST** (114, 115, then 116; all safe to re-run):
+   Execute `supabase db query --linked -f supabase/migrations/115_lead_research_and_outreach_memory.sql` (or run migration 115 in Supabase SQL editor) and verify the tables `outreach_ledger`, `outreach_configs`, `prospect_replies`, and `engagement_item_messages` exist.
+2. **Deploy Code**: Merge and deploy application code.
+3. **Smoke Test**: Run `pnpm vitest run tests/smoke/mcp-lead-research.smoke.test.ts` to verify on both `gruve` and `sippy` MCP servers:
+   - `ledger_add` a test domain as `DROPPED`
+   - `pulse_upsert_prospect` for that domain returns `skipped: true`
+   - `run_report` executes and outputs `"Nothing was sent."`
+

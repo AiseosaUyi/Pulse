@@ -41,6 +41,7 @@ export const navGroups: NavGroup[] = [
     label: "",
     items: [
       { label: "Outbound", href: "/leads", iconName: "Target", surfaces: ["startup"] },
+      { label: "Autopilot", href: "/autopilot", iconName: "Send", surfaces: ["startup"] },
       { label: "Conversations", href: "/conversations", iconName: "MessagesSquare" },
     ],
   },

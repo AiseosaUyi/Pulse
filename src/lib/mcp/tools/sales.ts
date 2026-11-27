@@ -82,7 +82,7 @@ export function registerSalesTools(server: McpServer) {
     {
       title: "Upsert prospect",
       description:
-        "Create or update a prospect, deduplicated by (platform, handle) — or by externalAccountId when given, which is preferred: Instagram handles change, and a renamed account without externalAccountId creates a duplicate instead of updating. Mutates data.",
+        "Create or update a prospect, deduplicated by (platform, handle) or externalAccountId. Checks outreach ledger for exclusions first. Server-side verifies email evidence before storing email. Mutates data. Never sends any messages (sent: false).",
       inputSchema: {
         platform: z.enum(OUTBOUND_PLATFORMS),
         handle: z.string().min(1),
@@ -93,15 +93,73 @@ export function registerSalesTools(server: McpServer) {
         followerCount: z.number().int().nullable().optional(),
         signalSummary: z.string().nullable().optional(),
         signalData: z.record(z.string(), z.unknown()).optional(),
+        email: z.string().nullable().optional(),
+        email_source_url: z.string().nullable().optional(),
+        emailSourceUrl: z.string().nullable().optional(),
+        evidence_url: z.string().nullable().optional(),
+        evidenceUrl: z.string().nullable().optional(),
+        evidence: z.string().nullable().optional(),
+        evidence_date: z.string().nullable().optional(),
+        evidenceDate: z.string().nullable().optional(),
+        segment: z.string().nullable().optional(),
+        country: z.string().nullable().optional(),
+        city: z.string().nullable().optional(),
+        team_size: z.string().nullable().optional(),
+        teamSize: z.string().nullable().optional(),
+        website: z.string().nullable().optional(),
+        company_name: z.string().nullable().optional(),
+        companyName: z.string().nullable().optional(),
+        flags: z.array(z.string()).optional(),
+        run_id: z.string().nullable().optional(),
+        runId: z.string().nullable().optional(),
+        ignore_ledger: z.boolean().optional(),
+        ignoreLedger: z.boolean().optional(),
+        phone: z.string().nullable().optional(),
+        channel_handoff: z.enum(["whatsapp", "phone", "email", "none"]).optional(),
+        channelHandoff: z.enum(["whatsapp", "phone", "email", "none"]).optional(),
+        handoff_contact: z.string().nullable().optional(),
+        handoffContact: z.string().nullable().optional(),
+        handoff_at: z.string().nullable().optional(),
+        handoffAt: z.string().nullable().optional(),
+        email_verified: z.boolean().optional(),
       },
     },
     async (args, extra: ToolHandlerExtra) => {
       const gate = requireToolScope(extra, "sales:write");
       if (!gate.ok) return gate.error;
       const { tenantSlug, admin } = gate.context;
-      const result = await upsertProspect(admin, tenantSlug, args);
+      const result = await upsertProspect(admin, tenantSlug, {
+        platform: args.platform,
+        handle: args.handle,
+        externalAccountId: args.externalAccountId,
+        displayName: args.displayName,
+        profileUrl: args.profileUrl,
+        bio: args.bio,
+        followerCount: args.followerCount,
+        signalSummary: args.signalSummary,
+        signalData: args.signalData,
+        email: args.email,
+        emailSourceUrl: args.emailSourceUrl ?? args.email_source_url,
+        evidenceUrl: args.evidenceUrl ?? args.evidence_url,
+        evidence: args.evidence,
+        evidenceDate: args.evidenceDate ?? args.evidence_date,
+        segment: args.segment,
+        country: args.country,
+        city: args.city,
+        teamSize: args.teamSize ?? args.team_size,
+        website: args.website,
+        companyName: args.companyName ?? args.company_name,
+        flags: args.flags,
+        runId: args.runId ?? args.run_id,
+        ignoreLedger: args.ignoreLedger ?? args.ignore_ledger,
+        phone: args.phone,
+        channelHandoff: args.channelHandoff ?? args.channel_handoff,
+        handoffContact: args.handoffContact ?? args.handoff_contact,
+        handoffAt: args.handoffAt ?? args.handoff_at,
+        email_verified: args.email_verified,
+      });
       if (!result) return mcpToolError("Upsert failed");
-      return mcpToolResult(result);
+      return mcpToolResult({ ...result, sent: false });
     }
   );
 
