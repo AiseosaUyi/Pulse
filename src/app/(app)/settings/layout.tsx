@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { SettingsNav } from "@/components/settings/SettingsNav";
+import { SettingsNav, SettingsTabs } from "@/components/settings/SettingsNav";
+import { getFeatures } from "@/lib/features/server";
 import { getCurrentTenant } from "@/lib/auth";
 
 // `support`-role members are UI-restricted to the Account group (Profile,
@@ -35,11 +36,17 @@ export default async function SettingsLayout({
     if (!isAllowed) redirect("/settings/profile");
   }
 
+  const features = tenant ? await getFeatures(tenant.slug) : undefined;
+  const navProps = { accountType: tenant?.accountType ?? "startup", role: tenant?.role, features } as const;
+
   return (
     <div className="p-4 md:p-8 max-w-[1200px] mx-auto">
       <div className="md:flex md:gap-8">
-        <SettingsNav accountType={tenant?.accountType ?? "startup"} role={tenant?.role} />
-        <div className="flex-1 min-w-0 mt-4 md:mt-0">{children}</div>
+        <SettingsNav {...navProps} />
+        <div className="flex-1 min-w-0 mt-4 md:mt-0">
+          <SettingsTabs {...navProps} />
+          {children}
+        </div>
       </div>
     </div>
   );

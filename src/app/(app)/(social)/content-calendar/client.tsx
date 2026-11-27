@@ -362,7 +362,7 @@ export default function ContentCalendarClient({
     <div className="p-4 md:p-8 max-w-[1100px]">
       <div className="flex items-start justify-between mb-6 gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Content calendar</h1>
+          <h1 className="text-2xl font-bold text-foreground">Topic calendar</h1>
           <p className="text-text-secondary text-sm mt-0.5">
             AI picks the topic and briefs you on it. You film, upload, mark it posted.
           </p>

@@ -14,7 +14,7 @@ export default async function CadenceSettingsPage() {
     <div className="max-w-[720px]">
       <SettingsPageHeading
         icon={CalendarCheck}
-        title="Posting cadence"
+        title="Posting rhythm"
         subtitle="Set your posting windows, a daily target, and your timezone. The Composer and Today views track your beat and a daily digest nudges you when you're behind."
       />
       <CadenceEditor tenantSlug={tenantSlug} initial={config} />

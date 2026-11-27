@@ -11,7 +11,7 @@ export default async function ContentCalendarSettingsPage() {
   return (
     <div className="max-w-[720px]">
       <SettingsPageHeading
-        title="Content calendar"
+        title="Topic calendar"
         subtitle="Tell the AI what you actually want to talk about, so topic picks are personalized instead of generic trending news."
       />
       <ContentCalendarSettingsEditor tenantSlug={tenantSlug} initial={config} />

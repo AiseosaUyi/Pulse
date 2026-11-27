@@ -18,10 +18,10 @@ export function SEOPageHeader() {
     <>
       <div className="mb-2">
         <h1 className="text-2xl font-bold text-foreground">
-          SEO Command Center
+          SEO and blog
         </h1>
         <p className="text-text-secondary text-sm mt-0.5">
-          100x your organic growth with AI-powered SEO
+          Keywords, topics and blog posts that bring people in from search.
         </p>
       </div>
       <SEOTabNav />

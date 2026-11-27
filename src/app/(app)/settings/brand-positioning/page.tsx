@@ -43,7 +43,7 @@ export default async function BrandPositioningPage() {
     <div className="max-w-[960px]">
       <SettingsPageHeading
         icon={Target}
-        title="Brand positioning"
+        title="Positioning"
         subtitle="The *what* and *who* that feeds every AI generation. Brand voice (tone, do/don't) lives separately — both layer together on every call."
       />
 
