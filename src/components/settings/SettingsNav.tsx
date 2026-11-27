@@ -6,146 +6,88 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  UserCircle,
-  Users,
-  Lock,
-  Bell,
-  Palette,
-  Sparkles,
-  Zap,
-  TrendingUp,
-  HardDrive,
-  Target,
-  Plug,
-  Radar,
-  Send,
-  Film,
-  Activity,
-  CalendarCheck,
-  Share2,
-  Radio,
-  ScanSearch,
-  Inbox,
-  ToggleRight,
-  type LucideIcon,
-} from "lucide-react";
+import { UserCircle, Users, Target, PenLine, Plug, Activity, type LucideIcon } from "lucide-react";
+import type { FeatureKey } from "@/lib/features/registry";
 
 type SettingsAccountType = "startup" | "individual";
 type SettingsRole = "owner" | "admin" | "member" | "support";
 
-export interface SettingsNavGroup {
+/**
+ * Settings in six sections. The left menu lists sections; the current
+ * section's pages show as tabs above the page. Pages owned by a feature the
+ * workspace switched off are hidden from the tabs (their URLs still work).
+ */
+export interface SettingsTab {
   label: string;
-  items: Array<{
-    label: string;
-    href: string;
-    icon: LucideIcon;
-    // Omitted = shown to all account types.
-    surfaces?: SettingsAccountType[];
-  }>;
+  href: string;
+  /** Omitted = shown to all account types. */
+  surfaces?: SettingsAccountType[];
+  /** Hidden when this workspace feature is switched off. */
+  feature?: FeatureKey;
 }
 
-export const SETTINGS_NAV: SettingsNavGroup[] = [
+export interface SettingsSection {
+  label: string;
+  icon: LucideIcon;
+  tabs: SettingsTab[];
+}
+
+export const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     label: "Account",
-    items: [
-      { label: "Profile", href: "/settings/profile", icon: UserCircle },
-      { label: "Security", href: "/settings/security", icon: Lock },
-      { label: "Notifications", href: "/settings/notifications", icon: Bell },
-      { label: "Appearance", href: "/settings/appearance", icon: Palette },
+    icon: UserCircle,
+    tabs: [
+      { label: "Profile", href: "/settings/profile" },
+      { label: "Security", href: "/settings/security" },
+      { label: "Notifications", href: "/settings/notifications" },
+      { label: "Appearance", href: "/settings/appearance" },
     ],
   },
   {
-    label: "Brand",
-    items: [
-      { label: "Team", href: "/settings/team", icon: Users },
-      { label: "Features", href: "/settings/features", icon: ToggleRight },
-      {
-        label: "Brand positioning",
-        href: "/settings/brand-positioning",
-        icon: Target,
-      },
-      { label: "Brand voice", href: "/settings/brand-voice", icon: Sparkles },
-      {
-        label: "Brand audit",
-        href: "/settings/brand-audit",
-        icon: ScanSearch,
-      },
+    label: "Workspace",
+    icon: Users,
+    tabs: [
+      { label: "Team", href: "/settings/team" },
+      { label: "Features", href: "/settings/features" },
+      { label: "Brand voice", href: "/settings/brand-voice" },
+      { label: "Positioning", href: "/settings/brand-positioning" },
+      { label: "Brand audit", href: "/settings/brand-audit" },
     ],
   },
   {
-    // Controls what appears in Intel Feed → X Signals + Growth tools
-    label: "Social signals",
-    items: [
-      {
-        label: "X listening",
-        href: "/settings/x-listening",
-        icon: Radio,
-      },
-      {
-        label: "Trend scouts",
-        href: "/settings/trend-scouts",
-        icon: TrendingUp,
-        surfaces: ["startup"],
-      },
-      {
-        label: "Discovery sources",
-        href: "/settings/discovery",
-        icon: Radar,
-        surfaces: ["startup"],
-      },
-      {
-        label: "Outbound filters",
-        href: "/settings/outbound-filters",
-        icon: Radar,
-        surfaces: ["startup"],
-      },
-      {
-        label: "Outreach autopilot",
-        href: "/settings/outreach",
-        icon: Send,
-        surfaces: ["startup"],
-      },
-      {
-        label: "AI inbox coverage",
-        href: "/settings/conversations",
-        icon: Inbox,
-      },
+    label: "Leads",
+    icon: Target,
+    tabs: [
+      { label: "Lead types and email", href: "/settings/outreach", surfaces: ["startup"], feature: "autopilot" },
+      { label: "Where to find leads", href: "/settings/discovery", surfaces: ["startup"] },
+      { label: "Who to skip", href: "/settings/outbound-filters", surfaces: ["startup"] },
+      { label: "Inbox coverage", href: "/settings/conversations" },
     ],
   },
   {
-    label: "Publishing",
-    items: [
-      {
-        label: "Content engine",
-        href: "/settings/content-engine",
-        icon: Film,
-        surfaces: ["startup"],
-      },
-      {
-        label: "Social publishing",
-        href: "/settings/social-publishing",
-        icon: Share2,
-      },
-      {
-        label: "Posting cadence",
-        href: "/settings/cadence",
-        icon: CalendarCheck,
-      },
-      {
-        label: "Content calendar",
-        href: "/settings/content-calendar",
-        icon: Sparkles,
-      },
+    label: "Content",
+    icon: PenLine,
+    tabs: [
+      { label: "Social accounts", href: "/settings/social-publishing" },
+      { label: "Posting rhythm", href: "/settings/cadence", feature: "composer" },
+      { label: "Video formats", href: "/settings/content-engine", surfaces: ["startup"], feature: "video" },
+      { label: "Topic calendar", href: "/settings/content-calendar", feature: "content_calendar" },
+      { label: "X listening", href: "/settings/x-listening", feature: "intel" },
+      { label: "Trend scouts", href: "/settings/trend-scouts", surfaces: ["startup"], feature: "intel" },
     ],
   },
   {
-    label: "Integrations & usage",
-    items: [
-      { label: "Integrations", href: "/settings/integrations", icon: Plug },
-      { label: "System health", href: "/settings/system-health", icon: Activity },
-      { label: "AI usage", href: "/settings/ai-usage", icon: Zap },
-      { label: "Storage", href: "/settings/storage", icon: HardDrive },
+    label: "Connections",
+    icon: Plug,
+    tabs: [{ label: "Integrations", href: "/settings/integrations" }],
+  },
+  {
+    label: "Usage",
+    icon: Activity,
+    tabs: [
+      { label: "AI usage", href: "/settings/ai-usage" },
+      { label: "Storage", href: "/settings/storage" },
+      { label: "System health", href: "/settings/system-health" },
     ],
   },
 ];
@@ -157,47 +99,54 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/** Sections and tabs this person can see. Pure; exported for tests. */
+export function visibleSettings(
+  accountType: SettingsAccountType,
+  role: SettingsRole | undefined,
+  features: Partial<Record<FeatureKey, boolean>> | undefined
+): SettingsSection[] {
+  const sections = role === "support" ? SETTINGS_SECTIONS.filter((x) => x.label === "Account") : SETTINGS_SECTIONS;
+  return sections
+    .map((section) => ({
+      ...section,
+      tabs: section.tabs.filter(
+        (t) =>
+          (!t.surfaces || t.surfaces.includes(accountType)) && !(t.feature && features?.[t.feature] === false)
+      ),
+    }))
+    .filter((section) => section.tabs.length > 0);
+}
+
 export function SettingsNav({
   accountType = "startup",
   role,
+  features,
 }: {
   accountType?: SettingsAccountType;
   role?: SettingsRole;
+  features?: Partial<Record<FeatureKey, boolean>>;
 }) {
   const pathname = usePathname();
-
-  // Mirrors the redirect guard in (app)/settings/layout.tsx: a `support`
-  // role only sees the Account group. UI convenience only — the real
-  // boundary is migration 103's RLS, see that layout's comment.
-  const visibleGroups =
-    role === "support" ? SETTINGS_NAV.filter((g) => g.label === "Account") : SETTINGS_NAV;
-
-  const nav = visibleGroups
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => !item.surfaces || item.surfaces.includes(accountType)),
-    }))
-    .filter((group) => group.items.length > 0);
+  const sections = visibleSettings(accountType, role, features);
+  const current = sections.find((x) => x.tabs.some((t) => isActive(pathname, t.href)));
 
   return (
     <>
-      {/* Mobile: horizontal-scrolling chip row pinned below the app header */}
+      {/* Mobile: section chips */}
       <nav className="md:hidden sticky top-0 z-10 -mx-4 px-4 py-2 bg-background/90 backdrop-blur border-b border-border/40 overflow-x-auto">
         <ul className="flex items-center gap-1 min-w-max">
-          {nav.flatMap((g) => g.items).map((item) => {
-            const active = isActive(pathname, item.href);
+          {sections.map((section) => {
+            const active = section === current;
             return (
-              <li key={item.href}>
+              <li key={section.label}>
                 <Link
-                  href={item.href}
+                  href={section.tabs[0].href}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
-                    active
-                      ? "bg-primary-500 text-white"
-                      : "text-text-muted hover:text-foreground hover:bg-sidebar"
+                    active ? "bg-primary-500 text-white" : "text-text-muted hover:text-foreground hover:bg-sidebar"
                   }`}
                 >
-                  <item.icon size={12} />
-                  {item.label}
+                  <section.icon size={12} />
+                  {section.label}
                 </Link>
               </li>
             );
@@ -205,38 +154,70 @@ export function SettingsNav({
         </ul>
       </nav>
 
-      {/* Desktop: left sidebar */}
-      <nav className="hidden md:block w-56 shrink-0">
-        <div className="sticky top-6 space-y-6">
-          {nav.map((group) => (
-            <div key={group.label}>
-              <p className="text-[10px] uppercase tracking-wider text-text-muted font-semibold mb-2 px-3">
-                {group.label}
-              </p>
-              <ul className="space-y-0.5">
-                {group.items.map((item) => {
-                  const active = isActive(pathname, item.href);
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                          active
-                            ? "bg-primary-500/10 text-primary-500 font-medium"
-                            : "text-text-secondary hover:text-foreground hover:bg-sidebar"
-                        }`}
-                      >
-                        <item.icon size={14} />
-                        {item.label}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
+      {/* Desktop: section list */}
+      <nav className="hidden md:block w-48 shrink-0">
+        <ul className="sticky top-6 space-y-0.5">
+          {sections.map((section) => {
+            const active = section === current;
+            return (
+              <li key={section.label}>
+                <Link
+                  href={section.tabs[0].href}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    active
+                      ? "bg-primary-500/10 text-primary-500 font-medium"
+                      : "text-text-secondary hover:text-foreground hover:bg-sidebar"
+                  }`}
+                >
+                  <section.icon size={14} />
+                  {section.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </nav>
     </>
+  );
+}
+
+/** The current section's pages as tabs, above the page content. */
+export function SettingsTabs({
+  accountType = "startup",
+  role,
+  features,
+}: {
+  accountType?: SettingsAccountType;
+  role?: SettingsRole;
+  features?: Partial<Record<FeatureKey, boolean>>;
+}) {
+  const pathname = usePathname();
+  const current = visibleSettings(accountType, role, features).find((x) =>
+    x.tabs.some((t) => isActive(pathname, t.href))
+  );
+  if (!current || current.tabs.length < 2) return null;
+  return (
+    <nav aria-label={`${current.label} settings`} className="mb-6 border-b border-border overflow-x-auto">
+      <ul className="flex gap-1 min-w-max">
+        {current.tabs.map((t) => {
+          const active = isActive(pathname, t.href);
+          return (
+            <li key={t.href}>
+              <Link
+                href={t.href}
+                aria-current={active ? "page" : undefined}
+                className={`inline-block px-3 py-2 text-sm border-b-2 -mb-px transition-colors ${
+                  active
+                    ? "border-primary-500 text-primary-500 font-medium"
+                    : "border-transparent text-text-secondary hover:text-foreground"
+                }`}
+              >
+                {t.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }
