@@ -18,6 +18,7 @@ import { createApprovalLink, isDigestConfigured, sendDigestForTenant } from "./d
 import { draftRepliesForEvents, type ReplyDraftOutcome } from "./reply-draft";
 import { makeAiReplyWriter } from "./reply-writer";
 import { buildReplyAlertEmail } from "./reply-copy";
+import { makeAiPersonalizer } from "./personalize";
 import { sendDueForTenant, type SendTickResult } from "./sender";
 import { isDigestDue } from "./schedule";
 import { composeAndSaveDrafts, getOutreachConfig } from "@/lib/services/outreach-composition";
@@ -198,7 +199,13 @@ export async function runAutopilotForTenant(
       try {
         const ids = await prospectsToCompose(admin, tenantSlug, config.dailyCap);
         if (ids.length) {
-          const c = await composeAndSaveDrafts(admin, tenantSlug, { prospectIds: ids });
+          // First emails written from the lead's own website and bio.
+          const personalize = await makeAiPersonalizer(tenantSlug, {
+            tenantName,
+            rules: { ideaPrefix: outreach.ideaPrefix, wordLimits: outreach.wordLimits },
+            deadlineMs: deadlineMs ? deadlineMs - 60_000 : Date.now() + 150_000,
+          }).catch(() => null);
+          const c = await composeAndSaveDrafts(admin, tenantSlug, { prospectIds: ids, personalize });
           res.composed = c.totalDrafts;
         }
       } catch (err) {
