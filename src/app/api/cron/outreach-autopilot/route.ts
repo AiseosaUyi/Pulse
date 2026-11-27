@@ -32,6 +32,7 @@ export async function GET(req: Request) {
           replies: 0,
           replyDrafts: 0,
           bounces: 0,
+          emailsFound: 0,
           composed: 0,
           followUps: 0,
           digestSent: false,

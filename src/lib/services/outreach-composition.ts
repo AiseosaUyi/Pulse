@@ -335,6 +335,12 @@ export async function composeAndSaveDrafts(
       config
     );
 
+    // Autopilot found this lead's website by web search: ask the approver to
+    // check it is the right business before this goes out.
+    if (typeof p.email_search_note === "string" && p.email_search_note.startsWith("Website found by web search")) {
+      warnings.push(p.email_search_note);
+    }
+
     totalWarningsCount += warnings.length;
 
     const draftItem: OutreachDraftMessage = {

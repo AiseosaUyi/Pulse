@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getMailboxWithSecret, createSmtpTransport, setMailboxState, type MailboxConfig } from "./mailbox";
 import { openImapInbox, pollReplies, type ReplyEvent } from "./replies";
 import { draftDueFollowUps } from "./followups";
+import { findEmailsForTenant } from "./enrich";
 import { createApprovalLink, isDigestConfigured, sendDigestForTenant } from "./digest";
 import { draftRepliesForEvents, type ReplyDraftOutcome } from "./reply-draft";
 import { makeAiReplyWriter } from "./reply-writer";
@@ -28,6 +29,7 @@ export interface TenantPassResult {
   /** Answers drafted for those replies, waiting for approval. */
   replyDrafts: number;
   bounces: number;
+  emailsFound: number;
   composed: number;
   followUps: number;
   digestSent: boolean;
@@ -142,6 +144,7 @@ export async function runAutopilotForTenant(
     replies: 0,
     replyDrafts: 0,
     bounces: 0,
+    emailsFound: 0,
     composed: 0,
     followUps: 0,
     digestSent: false,
@@ -175,6 +178,21 @@ export async function runAutopilotForTenant(
   // 2. Daily: compose, follow-ups, digest.
   if (isDigestDue(now, timeZone, config.digestHour, config.lastDigestAt)) {
     const outreach = await getOutreachConfig(admin, tenantSlug);
+
+    // Find emails for leads that have none, so there is someone to write to.
+    if (config.autoCompose) {
+      try {
+        const e = await findEmailsForTenant(admin, tenantSlug, {
+          limit: 25,
+          searchBudget: 15,
+          now,
+          deadlineMs: deadlineMs ? deadlineMs - 120_000 : Date.now() + 120_000,
+        });
+        res.emailsFound = e.found;
+      } catch (err) {
+        res.errors.push(`find emails: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
 
     if (config.autoCompose && outreach) {
       try {
