@@ -20,8 +20,24 @@ export async function GET(req: Request) {
     const admin = createAdminClient();
     const tenants = await listEnabledMailboxTenants(admin);
     const passes: TenantPassResult[] = [];
+    // Stop claiming new sends well before the 300s function limit.
+    const deadlineMs = Date.now() + 240_000;
     for (const slug of tenants) {
-      passes.push(await runAutopilotForTenant(admin, slug));
+      // One workspace's failure (bad key, bad config) must not stop the others.
+      try {
+        passes.push(await runAutopilotForTenant(admin, slug, new Date(), deadlineMs));
+      } catch (err) {
+        passes.push({
+          tenantSlug: slug,
+          replies: 0,
+          bounces: 0,
+          composed: 0,
+          followUps: 0,
+          digestSent: false,
+          send: null,
+          errors: [`run: ${err instanceof Error ? err.message : String(err)}`],
+        });
+      }
     }
     const errors = passes.flatMap((p) => p.errors.map((e) => `${p.tenantSlug}: ${e}`));
     return {

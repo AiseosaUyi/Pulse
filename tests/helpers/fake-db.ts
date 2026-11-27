@@ -78,6 +78,10 @@ class Builder {
     this.filters.push((r) => vs.includes(r[c]));
     return this;
   }
+  contains(c: string, vs: unknown[]) {
+    this.filters.push((r) => Array.isArray(r[c]) && vs.every((v) => (r[c] as unknown[]).includes(v)));
+    return this;
+  }
   is(c: string, v: unknown) {
     this.filters.push((r) => (r[c] ?? null) === v);
     return this;

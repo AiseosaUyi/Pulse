@@ -23,11 +23,14 @@ type RowState = "open" | "approved" | "skipped";
 
 export function DraftReview({ drafts, mode }: { drafts: ReviewDraft[]; mode: Mode }) {
   const [state, setState] = useState<Record<string, RowState>>({});
+  // Latest version stamp per draft (changes after "Save only").
+  const [versions, setVersions] = useState<Record<string, string>>({});
+  const versionOf = (d: ReviewDraft) => versions[d.id] ?? d.updatedAt;
   const [bulkPending, startBulk] = useTransition();
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
 
   const open = drafts.filter((d) => (state[d.id] ?? "open") === "open");
-  const decide = (input: { dmId: string; action: "approve" | "skip"; subject?: string; body?: string }) =>
+  const decide = (input: DecideInput) =>
     mode.kind === "token" ? decideFromDigest(mode.token, input) : decideInApp(input);
 
   const approveAll = () =>
@@ -35,7 +38,7 @@ export function DraftReview({ drafts, mode }: { drafts: ReviewDraft[]; mode: Mod
       let ok = 0;
       let failed = 0;
       for (const d of open) {
-        const r = await decide({ dmId: d.id, action: "approve" });
+        const r = await decide({ dmId: d.id, action: "approve", expectedUpdatedAt: versionOf(d) });
         if (r.ok) {
           ok++;
           setState((s) => ({ ...s, [d.id]: "approved" }));
@@ -76,6 +79,8 @@ export function DraftReview({ drafts, mode }: { drafts: ReviewDraft[]; mode: Mod
         <DraftCard
           key={d.id}
           draft={d}
+          version={versionOf(d)}
+          onSaved={(v) => setVersions((p) => ({ ...p, [d.id]: v }))}
           rowState={state[d.id] ?? "open"}
           onDecided={(s) => setState((prev) => ({ ...prev, [d.id]: s }))}
           decide={decide}
@@ -86,28 +91,39 @@ export function DraftReview({ drafts, mode }: { drafts: ReviewDraft[]; mode: Mod
   );
 }
 
+type DecideInput = {
+  dmId: string;
+  action: "approve" | "skip";
+  subject?: string;
+  body?: string;
+  expectedUpdatedAt?: string;
+};
+type Result = { ok: true; status: string; updatedAt?: string } | { ok: false; error: string };
+
 function DraftCard({
   draft,
+  version,
+  onSaved,
   rowState,
   onDecided,
   decide,
   save,
 }: {
   draft: ReviewDraft;
+  version: string;
+  onSaved: (updatedAt: string) => void;
   rowState: RowState;
   onDecided: (s: RowState) => void;
-  decide: (i: { dmId: string; action: "approve" | "skip"; subject?: string; body?: string }) => Promise<
-    { ok: true; status: string } | { ok: false; error: string }
-  >;
-  save: (i: { dmId: string; subject: string; body: string }) => Promise<
-    { ok: true; status: string } | { ok: false; error: string }
-  >;
+  decide: (i: DecideInput) => Promise<Result>;
+  save: (i: { dmId: string; subject: string; body: string; expectedUpdatedAt: string }) => Promise<Result>;
 }) {
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body);
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [pending, start] = useTransition();
-  const edited = subject !== draft.subject || body !== draft.body;
+  // Text as last stored, so "edited" resets after Save only.
+  const [saved, setSaved] = useState({ subject: draft.subject, body: draft.body });
+  const edited = subject !== saved.subject || body !== saved.body;
 
   if (rowState !== "open") {
     return (
@@ -119,11 +135,11 @@ function DraftCard({
     );
   }
 
-  const run = (fn: () => Promise<{ ok: true; status: string } | { ok: false; error: string }>, onOk: () => void) =>
+  const run = (fn: () => Promise<Result>, onOk: (r: Extract<Result, { ok: true }>) => void) =>
     start(async () => {
       setMsg(null);
       const r = await fn();
-      if (r.ok) onOk();
+      if (r.ok) onOk(r);
       else setMsg({ tone: "err", text: r.error });
     });
 
@@ -184,6 +200,7 @@ function DraftCard({
                 decide({
                   dmId: draft.id,
                   action: "approve",
+                  expectedUpdatedAt: version,
                   ...(edited ? { subject, body } : {}),
                 }),
               () => onDecided("approved")
@@ -199,8 +216,12 @@ function DraftCard({
             disabled={pending}
             onClick={() =>
               run(
-                () => save({ dmId: draft.id, subject, body }),
-                () => setMsg({ tone: "ok", text: "Saved. Still waiting for approval." })
+                () => save({ dmId: draft.id, subject, body, expectedUpdatedAt: version }),
+                (r) => {
+                  if (r.updatedAt) onSaved(r.updatedAt);
+                  setSaved({ subject, body });
+                  setMsg({ tone: "ok", text: "Saved. Still waiting for approval." });
+                }
               )
             }
             className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm text-gray-1100 dark:text-foreground disabled:opacity-60"

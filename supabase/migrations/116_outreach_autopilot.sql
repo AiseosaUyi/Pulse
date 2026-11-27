@@ -123,3 +123,54 @@ alter table outreach_configs
     E'{greeting}\n\nBringing this back to the top of your inbox. Would a short call this week be useful to see how this could work for {company}?\n\n{signature}',
   add column if not exists follow_up_2_body text not null default
     E'{greeting}\n\nLast note from me on this. If the timing is better later, a quick reply is all it takes and we can pick it up then.\n\n{signature}';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 5. Only the server (service role) can make a row sendable or change one
+--    the mailbox will send.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- outbound_dms keeps its member write policy from 030 for the old in-app DM
+-- flow. Without this guard a member session could set send_via, re-approve a
+-- failed mailbox row, or edit an already-approved email so text nobody
+-- approved goes out. Approvals happen server-side (service role) after the
+-- approver is checked, so end-user sessions are blocked here.
+create or replace function public.guard_outbound_dms_send_fields()
+returns trigger
+language plpgsql
+as $$
+begin
+  if current_user not in ('authenticated', 'anon') then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.send_via is not null or new.scheduled_send_at is not null or new.message_id is not null then
+      raise exception 'outbound_dms: send fields are server-only' using errcode = '42501';
+    end if;
+    return new;
+  end if;
+
+  if new.send_via is distinct from old.send_via
+     or new.to_email is distinct from old.to_email
+     or new.scheduled_send_at is distinct from old.scheduled_send_at
+     or new.message_id is distinct from old.message_id
+     or new.claimed_at is distinct from old.claimed_at
+     or new.kind is distinct from old.kind
+     or new.parent_dm_id is distinct from old.parent_dm_id then
+    raise exception 'outbound_dms: send fields are server-only' using errcode = '42501';
+  end if;
+
+  if old.send_via is not null and (
+       new.status is distinct from old.status
+       or new.body is distinct from old.body
+       or new.subject is distinct from old.subject) then
+    raise exception 'outbound_dms: use Autopilot to change a mailbox email' using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_outbound_dms_guard_send_fields on outbound_dms;
+create trigger trg_outbound_dms_guard_send_fields
+  before insert or update on outbound_dms
+  for each row execute function public.guard_outbound_dms_send_fields();

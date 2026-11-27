@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/services/outreach-intelligence", () => ({ analyzeConversationSystem: vi.fn(async () => undefined) }));
 
 import { FakeDb, fakeClient } from "../helpers/fake-db";
-import { sendDueForTenant } from "@/lib/outreach-autopilot/sender";
+import { classifySendError, sendDueForTenant } from "@/lib/outreach-autopilot/sender";
 import { draftDueFollowUps } from "@/lib/outreach-autopilot/followups";
 import { decideDraft, unapproveDraft } from "@/lib/outreach-autopilot/review";
 import { applyMail, parseRawMail, pollReplies, type InboxReader } from "@/lib/outreach-autopilot/replies";
@@ -214,6 +214,48 @@ describe("sender", () => {
   });
 });
 
+describe("sender safety", () => {
+  it("classifies SMTP failures so a maybe-delivered email is never resent", () => {
+    expect(classifySendError({ responseCode: 421 })).toBe("retry");
+    expect(classifySendError({ responseCode: 451, command: "DATA" })).toBe("retry"); // server refused it
+    expect(classifySendError({ responseCode: 550 })).toBe("failed");
+    expect(classifySendError({ code: "ECONNREFUSED", command: "CONN" })).toBe("retry");
+    expect(classifySendError({ code: "ETIMEDOUT", command: "RCPT TO" })).toBe("retry");
+    expect(classifySendError({ code: "ETIMEDOUT", command: "DATA" })).toBe("unknown");
+    expect(classifySendError({ code: "ECONNRESET" })).toBe("unknown");
+    expect(classifySendError(new Error("weird"))).toBe("unknown");
+  });
+
+  it("a timeout after the message body marks it failed, not retried", async () => {
+    const db = new FakeDb({ prospects: [prospect("p1")], outbound_dms: [dm("d1", "p1")], outreach_ledger: [] });
+    const t = fakeTransport(async () => {
+      throw Object.assign(new Error("timeout"), { code: "ETIMEDOUT", command: "DATA" });
+    });
+    await sendDueForTenant(fakeClient(db), mailbox(), deps(t.t));
+    const row = db.rows("outbound_dms")[0];
+    expect(row.status).toBe("failed");
+    expect(String(row.error)).toContain("outcome unknown");
+    expect(row.message_id).toMatch(/@sippy\.life>$/); // kept so a reply still matches
+  });
+
+  it("never sends more than 8 in one run, even with a big cap", async () => {
+    const ps = Array.from({ length: 20 }, (_, i) => prospect(`q${i}`));
+    const ds = ps.map((p, i) => dm(`e${i}`, p.id as string));
+    const db = new FakeDb({ prospects: ps, outbound_dms: ds, outreach_ledger: [] });
+    const { t, sent } = fakeTransport();
+    await sendDueForTenant(fakeClient(db), mailbox({ dailyCap: 200 }), deps(t, new Date("2026-11-27T15:00:00Z")));
+    expect(sent).toHaveLength(8);
+  });
+
+  it("stops claiming once the time budget is spent", async () => {
+    const db = new FakeDb({ prospects: [prospect("p1")], outbound_dms: [dm("d1", "p1")], outreach_ledger: [] });
+    const { t, sent } = fakeTransport();
+    await sendDueForTenant(fakeClient(db), mailbox(), { ...deps(t), deadlineMs: Date.now() - 1 });
+    expect(sent).toHaveLength(0);
+    expect(db.rows("outbound_dms")[0].status).toBe("approved");
+  });
+});
+
 describe("follow-ups", () => {
   const copy = { followUp1Body: "{greeting}\n\nAny thoughts on {company}?\n\n{signature}", followUp2Body: "{greeting}\n\nLast one.\n\n{signature}", signature: "Sippy" };
   const now = new Date("2026-11-27T09:00:00Z");
@@ -266,31 +308,46 @@ describe("follow-ups", () => {
 });
 
 describe("review decisions", () => {
-  const draft = () => new FakeDb({ outbound_dms: [dm("d1", "p1", { status: "drafted", send_via: null })] });
+  const V = "2026-11-27T08:00:00.000Z";
+  const draft = () => new FakeDb({ outbound_dms: [dm("d1", "p1", { status: "drafted", send_via: null, updated_at: V })] });
 
   it("approve queues it for the mailbox with any edits", async () => {
     const db = draft();
-    const r = await decideDraft(fakeClient(db), T, { dmId: "d1", action: "approve", subject: "New subject" }, { via: "email_digest", userId: null });
+    const r = await decideDraft(fakeClient(db), T, { dmId: "d1", action: "approve", subject: "New subject", expectedUpdatedAt: V }, { via: "email_digest", userId: null });
     expect(r.ok).toBe(true);
     expect(db.rows("outbound_dms")[0]).toMatchObject({ status: "approved", send_via: "mailbox", subject: "New subject", approved_via: "email_digest" });
   });
 
   it("a digest link can only touch its own drafts, in its own tenant, once", async () => {
     const db = draft();
-    expect((await decideDraft(fakeClient(db), T, { dmId: "d1", action: "approve" }, { via: "email_digest", userId: null, allowedIds: ["other"] })).ok).toBe(false);
-    expect((await decideDraft(fakeClient(db), "gruve", { dmId: "d1", action: "approve" }, { via: "in_app", userId: "u" })).ok).toBe(false);
+    expect((await decideDraft(fakeClient(db), T, { dmId: "d1", action: "approve", expectedUpdatedAt: V }, { via: "email_digest", userId: null, allowedIds: ["other"] })).ok).toBe(false);
+    expect((await decideDraft(fakeClient(db), "gruve", { dmId: "d1", action: "approve", expectedUpdatedAt: V }, { via: "in_app", userId: "u" })).ok).toBe(false);
     expect((await decideDraft(fakeClient(db), T, { dmId: "d1", action: "skip" }, { via: "in_app", userId: "u" })).ok).toBe(true);
-    const again = await decideDraft(fakeClient(db), T, { dmId: "d1", action: "approve" }, { via: "in_app", userId: "u" });
+    const again = await decideDraft(fakeClient(db), T, { dmId: "d1", action: "approve", expectedUpdatedAt: V }, { via: "in_app", userId: "u" });
     expect(again).toEqual({ ok: false, error: "Already decided or not found" });
     expect(db.rows("outbound_dms")[0].status).toBe("cancelled");
   });
 
   it("rejects empty edits and can pull back an approved email", async () => {
     const db = draft();
-    expect((await decideDraft(fakeClient(db), T, { dmId: "d1", action: "approve", body: "  " }, { via: "in_app", userId: "u" })).ok).toBe(false);
-    await decideDraft(fakeClient(db), T, { dmId: "d1", action: "approve" }, { via: "in_app", userId: "u" });
+    expect((await decideDraft(fakeClient(db), T, { dmId: "d1", action: "approve", body: "  ", expectedUpdatedAt: V }, { via: "in_app", userId: "u" })).ok).toBe(false);
+    db.rows("outreach_digests").push({ id: "g1", tenant_slug: T, dm_ids: ["d1", "d9"] });
+    await decideDraft(fakeClient(db), T, { dmId: "d1", action: "approve", expectedUpdatedAt: V }, { via: "in_app", userId: "u" });
     expect((await unapproveDraft(fakeClient(db), T, "d1")).ok).toBe(true);
     expect(db.rows("outbound_dms")[0]).toMatchObject({ status: "drafted", send_via: null });
+    // The old approval link no longer covers it.
+    expect(db.rows("outreach_digests")[0].dm_ids).toEqual(["d9"]);
+  });
+
+  it("only approves the version the reviewer saw", async () => {
+    const db = draft();
+    db.rows("outbound_dms")[0].body = "Changed by a re-compose";
+    db.rows("outbound_dms")[0].updated_at = "2026-11-27T08:05:00.000Z";
+    const r = await decideDraft(fakeClient(db), T, { dmId: "d1", action: "approve", expectedUpdatedAt: V }, { via: "email_digest", userId: null });
+    expect(r).toEqual({ ok: false, error: expect.stringContaining("changed since you opened it") });
+    expect(db.rows("outbound_dms")[0].status).toBe("drafted");
+    // No version at all is refused too.
+    expect((await decideDraft(fakeClient(db), T, { dmId: "d1", action: "approve" }, { via: "in_app", userId: "u" })).ok).toBe(false);
   });
 });
 
@@ -358,6 +415,14 @@ describe("replies", () => {
     expect(db.rows("prospects")[0].status).toBe("closed_lost");
   });
 
+  it("a one-click unsubscribe (subject only, empty body) closes the prospect", async () => {
+    const mail = await parseRawMail(raw("From: p1@p1.com\nSubject: unsubscribe", ""));
+    const db = seeded();
+    const r = await applyMail(fakeClient(db), T, mail, ["contact@sippy.life"]);
+    expect(r.kind === "reply" && r.event.optOut).toBe(true);
+    expect(db.rows("prospects")[0].status).toBe("closed_lost");
+  });
+
   it("ignores mail from strangers and from our own address", async () => {
     const db = seeded();
     const stranger = await parseRawMail(raw("From: someone@else.com\nSubject: hi", "hello"));
@@ -395,6 +460,34 @@ describe("replies", () => {
     expect(second.processed).toBe(1);
     expect(second.replies).toHaveLength(1);
     expect(db.rows("outreach_mailboxes")[0].imap_last_uid).toBe(50);
+  });
+
+  it("a database error leaves the message to be retried next run", async () => {
+    const db = new FakeDb({
+      outreach_mailboxes: [{ tenant_slug: T, imap_last_uid: 60 }],
+      prospects: [prospect("p1", { status: "sent" })],
+      outbound_dms: [dm("d1", "p1", { status: "sent", sent_at: "2026-11-24T09:00:00.000Z", message_id: "<orig@sippy.life>" })],
+    });
+    const client = fakeClient(db) as unknown as { from: (t: string) => unknown };
+    const broken = {
+      from: (t: string) => {
+        if (t === "inbound_messages") {
+          return { insert: () => ({ select: () => ({ single: async () => ({ data: null, error: { message: "db down" } }) }) }) };
+        }
+        return client.from(t);
+      },
+    } as never;
+    const reply = raw("From: p1@p1.com\nSubject: Re\nIn-Reply-To: <orig@sippy.life>", "yes please");
+    const r = await pollReplies(broken, mailbox({ imapLastUid: 60, imapUidValidity: 7 }), {
+      uidValidity: 7,
+      uidNext: 62,
+      async *fetchSince() {
+        yield { uid: 61, source: reply };
+      },
+      close: async () => undefined,
+    });
+    expect(r.replies).toHaveLength(0);
+    expect(db.rows("outreach_mailboxes")[0].imap_last_uid).toBe(60);
   });
 });
 

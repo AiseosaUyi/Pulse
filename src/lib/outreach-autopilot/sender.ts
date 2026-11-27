@@ -25,6 +25,8 @@ import {
 } from "@/lib/services/outreach-ledger";
 
 export const TICKS_PER_HOUR = 2; // cron runs every 30 minutes
+/** Hard ceiling per run, whatever the cap: keeps a run well inside the function time limit. */
+export const MAX_SENDS_PER_TICK = 8;
 const STALE_CLAIM_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 3;
 const BLOCKING_PROSPECT_STATUSES = new Set([
@@ -48,18 +50,32 @@ export interface SenderDeps {
   timeZone: string;
   getTransport: () => Promise<MailTransport>;
   sleep?: (ms: number) => Promise<void>;
+  /** Stop claiming new rows after this epoch-ms (time budget for the cron). */
+  deadlineMs?: number;
 }
 
 const EMAIL_RE = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
 
-function isTransient(err: unknown): boolean {
-  const e = err as { responseCode?: number; code?: string };
+const NETWORK_CODES = ["ECONNECTION", "ETIMEDOUT", "ESOCKET", "ECONNRESET", "EDNS", "EPIPE", "ECONNREFUSED"];
+const PRE_DATA_COMMAND = /^(CONN|EHLO|HELO|STARTTLS|AUTH|MAIL|RCPT)/i;
+
+/**
+ * What a failed send means:
+ *  retry   - the server definitely did not take it (a 4xx reply, or the
+ *            connection broke before the message body was sent)
+ *  unknown - the connection broke during or after the body: it may have been
+ *            delivered, so never resend automatically
+ *  failed  - the server refused it (5xx)
+ */
+export function classifySendError(err: unknown): "retry" | "unknown" | "failed" {
+  const e = err as { responseCode?: number; code?: string; command?: string };
   const code = Number(e?.responseCode);
-  if (code >= 500) return false;
-  if (code >= 400) return true;
-  return ["ECONNECTION", "ETIMEDOUT", "ESOCKET", "ECONNRESET", "EDNS", "EPIPE", "ECONNREFUSED"].includes(
-    String(e?.code ?? "")
-  );
+  if (code >= 500) return "failed";
+  if (code >= 400) return "retry";
+  if (NETWORK_CODES.includes(String(e?.code ?? ""))) {
+    return PRE_DATA_COMMAND.test(String(e?.command ?? "")) ? "retry" : "unknown";
+  }
+  return "unknown";
 }
 
 async function cancel(admin: SupabaseClient, tenantSlug: string, id: string, reason: string) {
@@ -107,6 +123,7 @@ export async function sendDueForTenant(
     sendWindowEnd: mailbox.sendWindowEnd,
     ticksPerHour: TICKS_PER_HOUR,
   });
+  const limit = Math.min(quota, MAX_SENDS_PER_TICK);
   if (quota === 0) return { ...result, skippedReason: "daily cap reached" };
 
   const { data: due } = await admin
@@ -117,7 +134,7 @@ export async function sendDueForTenant(
     .eq("send_via", "mailbox")
     .lte("scheduled_send_at", now.toISOString())
     .order("scheduled_send_at", { ascending: true })
-    .limit(quota);
+    .limit(limit);
 
   if (!due || due.length === 0) return { ...result, skippedReason: "nothing approved" };
 
@@ -126,10 +143,14 @@ export async function sendDueForTenant(
 
   try {
     for (const [i, dm] of due.entries()) {
-      // Claim: only one run can move approved -> sending.
+      if (deps.deadlineMs && Date.now() > deps.deadlineMs) break;
+
+      // Claim: only one run can move approved -> sending. The Message-ID is
+      // stored now, so a reply can be matched even if this run dies mid-send.
+      const messageId = `<${randomUUID()}@${messageIdDomain(mailbox.fromEmail)}>`;
       const { data: claimed } = await admin
         .from("outbound_dms")
-        .update({ status: "sending", claimed_at: now.toISOString() })
+        .update({ status: "sending", claimed_at: now.toISOString(), message_id: messageId })
         .eq("tenant_slug", tenantSlug)
         .eq("id", dm.id)
         .eq("status", "approved")
@@ -205,7 +226,6 @@ export async function sendDueForTenant(
         parentMessageId = (parent?.message_id as string) ?? null;
       }
 
-      const messageId = `<${randomUUID()}@${messageIdDomain(mailbox.fromEmail)}>`;
       const text = String(dm.body ?? "").trim();
       const subject = String(dm.subject ?? "").trim() || "Hello";
 
@@ -227,8 +247,11 @@ export async function sendDueForTenant(
         });
       } catch (err) {
         const attempts = Number(dm.send_attempts ?? 0) + 1;
-        const retry = isTransient(err) && attempts < MAX_ATTEMPTS;
-        const message = err instanceof Error ? err.message.slice(0, 300) : "Send failed";
+        const kind = classifySendError(err);
+        const retry = kind === "retry" && attempts < MAX_ATTEMPTS;
+        const raw = err instanceof Error ? err.message.slice(0, 250) : "Send failed";
+        const message =
+          kind === "unknown" ? `Send outcome unknown (${raw}). Check the Sent folder before resending.` : raw;
         await admin
           .from("outbound_dms")
           .update({

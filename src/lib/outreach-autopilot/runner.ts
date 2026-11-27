@@ -75,10 +75,21 @@ async function prospectsToCompose(admin: SupabaseClient, tenantSlug: string, lim
   return ids.filter((id) => !has.has(id)).slice(0, limit);
 }
 
+function validTimeZone(tz: string | null | undefined): string {
+  if (!tz) return "Africa/Lagos";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    return "Africa/Lagos";
+  }
+}
+
 export async function runAutopilotForTenant(
   admin: SupabaseClient,
   tenantSlug: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  deadlineMs?: number
 ): Promise<TenantPassResult> {
   const res: TenantPassResult = {
     tenantSlug,
@@ -97,7 +108,7 @@ export async function runAutopilotForTenant(
 
   const { data: tenant } = await admin.from("tenants").select("name, timezone").eq("slug", tenantSlug).maybeSingle();
   const tenantName = (tenant?.name as string) ?? tenantSlug;
-  const timeZone = (tenant?.timezone as string) || "Africa/Lagos";
+  const timeZone = validTimeZone(tenant?.timezone as string | null);
 
   // 1. Replies and bounces.
   if (config.imapHost) {
@@ -171,6 +182,7 @@ export async function runAutopilotForTenant(
       now,
       timeZone,
       getTransport: () => createSmtpTransport(config, password),
+      deadlineMs,
     });
   } catch (err) {
     res.errors.push(`send: ${err instanceof Error ? err.message : String(err)}`);

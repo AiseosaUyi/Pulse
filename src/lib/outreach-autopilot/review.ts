@@ -15,6 +15,8 @@ export interface ReviewDraft {
   lintWarnings: string[];
   companyName: string | null;
   createdAt: string;
+  /** Version stamp: an approval only applies to the exact text the reviewer saw. */
+  updatedAt: string;
 }
 
 export async function listReviewDrafts(
@@ -24,7 +26,7 @@ export async function listReviewDrafts(
 ): Promise<ReviewDraft[]> {
   let q = admin
     .from("outbound_dms")
-    .select("id, prospect_id, kind, subject, body, to_email, status, lint_warnings, created_at, prospects(company_name, display_name)")
+    .select("id, prospect_id, kind, subject, body, to_email, status, lint_warnings, created_at, updated_at, prospects(company_name, display_name)")
     .eq("tenant_slug", tenantSlug)
     .not("to_email", "is", null)
     .order("created_at", { ascending: true })
@@ -47,6 +49,7 @@ export async function listReviewDrafts(
       lintWarnings: Array.isArray(r.lint_warnings) ? (r.lint_warnings as string[]) : [],
       companyName: p?.company_name || p?.display_name || null,
       createdAt: r.created_at as string,
+      updatedAt: r.updated_at as string,
     };
   });
 }
@@ -58,9 +61,13 @@ export interface DecideInput {
   action: ReviewAction;
   subject?: string;
   body?: string;
+  /** updated_at of the version the reviewer was looking at. Required to approve. */
+  expectedUpdatedAt?: string;
 }
 
-export type DecideResult = { ok: true; status: string } | { ok: false; error: string };
+export type DecideResult = { ok: true; status: string; updatedAt?: string } | { ok: false; error: string };
+
+const CHANGED = "This draft changed since you opened it. Reload to see the latest version.";
 
 /**
  * Approve (optionally with edits) or skip one drafted email. Only acts on a
@@ -92,6 +99,9 @@ export async function decideDraft(
   }
 
   const nowIso = (meta.now ?? new Date()).toISOString();
+  if (input.action === "approve" && !input.expectedUpdatedAt) {
+    return { ok: false, error: CHANGED };
+  }
   if (input.action === "approve") {
     Object.assign(patch, {
       status: "approved",
@@ -106,26 +116,36 @@ export async function decideDraft(
     Object.assign(patch, { status: "cancelled", error: "Skipped by reviewer" });
   }
 
-  const { data, error } = await admin
+  let q = admin
     .from("outbound_dms")
     .update(patch)
     .eq("tenant_slug", tenantSlug)
     .eq("id", input.dmId)
     .eq("status", "drafted")
-    .not("to_email", "is", null)
-    .select("id, status")
-    .maybeSingle();
+    .not("to_email", "is", null);
+  if (input.expectedUpdatedAt) q = q.eq("updated_at", input.expectedUpdatedAt);
+  const { data, error } = await q.select("id, status, updated_at").maybeSingle();
 
   if (error) return { ok: false, error: "Could not save" };
-  if (!data) return { ok: false, error: "Already decided or not found" };
-  return { ok: true, status: data.status as string };
+  if (!data) return { ok: false, error: await whyNot(admin, tenantSlug, input.dmId) };
+  return { ok: true, status: data.status as string, updatedAt: data.updated_at as string };
+}
+
+async function whyNot(admin: SupabaseClient, tenantSlug: string, dmId: string): Promise<string> {
+  const { data } = await admin
+    .from("outbound_dms")
+    .select("status")
+    .eq("tenant_slug", tenantSlug)
+    .eq("id", dmId)
+    .maybeSingle();
+  return data?.status === "drafted" ? CHANGED : "Already decided or not found";
 }
 
 /** Edit without deciding (save a draft change). */
 export async function editDraft(
   admin: SupabaseClient,
   tenantSlug: string,
-  input: { dmId: string; subject: string; body: string },
+  input: { dmId: string; subject: string; body: string; expectedUpdatedAt: string },
   allowedIds?: string[]
 ): Promise<DecideResult> {
   if (allowedIds && !allowedIds.includes(input.dmId)) {
@@ -141,9 +161,12 @@ export async function editDraft(
     .eq("tenant_slug", tenantSlug)
     .eq("id", input.dmId)
     .eq("status", "drafted")
-    .select("id, status")
+    .eq("updated_at", input.expectedUpdatedAt)
+    .select("id, status, updated_at")
     .maybeSingle();
-  return data ? { ok: true, status: data.status as string } : { ok: false, error: "Already decided or not found" };
+  return data
+    ? { ok: true, status: data.status as string, updatedAt: data.updated_at as string }
+    : { ok: false, error: await whyNot(admin, tenantSlug, input.dmId) };
 }
 
 /** Pull an approved email back before it goes out. */
@@ -160,5 +183,19 @@ export async function unapproveDraft(
     .eq("status", "approved")
     .select("id, status")
     .maybeSingle();
-  return data ? { ok: true, status: "drafted" } : { ok: false, error: "Already sending or sent" };
+  if (!data) return { ok: false, error: "Already sending or sent" };
+
+  // An old approval link must not be able to re-approve a pulled-back email.
+  const { data: digests } = await admin
+    .from("outreach_digests")
+    .select("id, dm_ids")
+    .eq("tenant_slug", tenantSlug)
+    .contains("dm_ids", [dmId]);
+  for (const d of digests ?? []) {
+    await admin
+      .from("outreach_digests")
+      .update({ dm_ids: ((d.dm_ids as string[]) ?? []).filter((x) => x !== dmId) })
+      .eq("id", d.id);
+  }
+  return { ok: true, status: "drafted" };
 }

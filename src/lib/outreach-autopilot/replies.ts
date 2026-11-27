@@ -99,7 +99,7 @@ export async function applyMail(
   tenantSlug: string,
   mail: ParsedMail,
   ownAddresses: string[]
-): Promise<{ kind: "reply"; event: ReplyEvent } | { kind: "bounce" | "ignored" }> {
+): Promise<{ kind: "reply"; event: ReplyEvent } | { kind: "bounce" | "ignored" | "error" }> {
   if (mail.bouncedRecipient) {
     const { data: dm } = await admin
       .from("outbound_dms")
@@ -163,11 +163,13 @@ export async function applyMail(
     body,
     inReplyToDmId: dm.id,
   });
-  if (!res.ok) return { kind: "ignored" };
+  // A failed write must be retried next run, not skipped (or follow-ups continue).
+  if (!res.ok) return { kind: "error" };
 
   await cancelPendingFollowUps(admin, tenantSlug, dm.prospect_id, "They replied");
 
-  const optOut = isOptOut(body);
+  // One-click List-Unsubscribe sends subject "unsubscribe" with an empty body.
+  const optOut = isOptOut(body) || isOptOut(mail.subject);
   if (optOut) {
     await admin
       .from("prospects")
@@ -244,13 +246,24 @@ export async function pollReplies(
 
     let lastUid = mailbox.imapLastUid;
     for await (const { uid, source } of reader.fetchSince(lastUid, MAX_PER_RUN)) {
+      let mail: ParsedMail | null = null;
       try {
-        const mail = await parseRawMail(source);
-        const r = await applyMail(admin, tenantSlug, mail, own);
+        mail = await parseRawMail(source);
+      } catch (err) {
+        // Unreadable message: skip it rather than block the inbox forever.
+        console.warn("[autopilot] could not parse message", uid, err instanceof Error ? err.message : err);
+      }
+      if (mail) {
+        let r: Awaited<ReturnType<typeof applyMail>>;
+        try {
+          r = await applyMail(admin, tenantSlug, mail, own);
+        } catch {
+          r = { kind: "error" };
+        }
+        // Database trouble: stop here and retry this message next run.
+        if (r.kind === "error") break;
         if (r.kind === "reply") out.replies.push(r.event);
         if (r.kind === "bounce") out.bounces++;
-      } catch (err) {
-        console.warn("[autopilot] could not process message", uid, err instanceof Error ? err.message : err);
       }
       out.processed++;
       lastUid = uid;

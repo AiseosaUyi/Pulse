@@ -33,8 +33,14 @@ const decideSchema = z.object({
   action: z.enum(["approve", "skip"]),
   subject: z.string().optional(),
   body: z.string().optional(),
+  expectedUpdatedAt: z.string().min(10).max(64).optional(),
 });
-const editSchema = z.object({ dmId: z.string().uuid(), subject: z.string(), body: z.string() });
+const editSchema = z.object({
+  dmId: z.string().uuid(),
+  subject: z.string(),
+  body: z.string(),
+  expectedUpdatedAt: z.string().min(10).max(64),
+});
 
 async function requireManager(): Promise<{ tenantSlug: string; userId: string } | { error: string }> {
   const [tenant, user] = await Promise.all([getCurrentTenant(), getCurrentUser()]);
