@@ -8,6 +8,8 @@
 // client where auth.uid() is null (same trap markInboxReplied documents).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { recordContactedFromProspect } from "@/lib/services/outreach-ledger";
+import { ownedProspectId } from "@/lib/services/prospect-scope";
 import { getOutreachToday, type ProspectWithFollowUp } from "@/lib/services/outreach-intelligence";
 import {
   getActiveHandoff,
@@ -585,8 +587,11 @@ export async function upsertEngagementItem(
     proposedReplyAuthor?: "agent" | "human" | "ai_generated";
     status?: QueueStatus;
     prospectId?: string | null;
+    channelHandoff?: "whatsapp" | "phone" | "email" | "none";
+    handoffContact?: string | null;
+    handoffAt?: string | null;
   }
-): Promise<{ ok: true; id: string; statusIgnored?: boolean } | { ok: false; error: string }> {
+): Promise<{ ok: true; id: string; statusIgnored?: boolean; warnings?: string[] } | { ok: false; error: string }> {
   const threadExternalId =
     input.threadExternalId ?? parseThreadExternalId(input.externalId);
 
@@ -601,9 +606,20 @@ export async function upsertEngagementItem(
 
   if (existing) {
     // REPEAT UPSERT:
-    // IGNORE status when the row already exists. Only honour it on first insert.
-    // Return statusIgnored: true when it was dropped, so callers can log it. Do not error.
-    const statusIgnored = input.status !== undefined;
+    // Step 5a: pulse_upsert_inbox_item must never reopen a row a human resolved.
+    // If a caller passes status "open" on a row that is replied or resolved,
+    // ignore the status field and keep the rest of the write. Return a warning.
+    const warnings: string[] = [];
+    let statusIgnored = false;
+    const isHumanResolved =
+      existing.replied === true || existing.status === "resolved" || existing.status === "dismissed";
+
+    if (input.status === "open" && isHumanResolved) {
+      statusIgnored = true;
+      warnings.push("Ignored status 'open' because this row was already resolved or replied. Human-resolved items cannot be reopened by upsert.");
+    } else if (input.status !== undefined) {
+      statusIgnored = true;
+    }
 
     const patch: Record<string, unknown> = {
       type: input.type,
@@ -620,7 +636,12 @@ export async function upsertEngagementItem(
     };
     if (input.why !== undefined) patch.why = input.why;
     if (input.body !== undefined) patch.body = input.body;
-    if (input.prospectId !== undefined) patch.prospect_id = input.prospectId;
+    if (input.prospectId !== undefined) {
+      patch.prospect_id = await ownedProspectId(client, tenantSlug, input.prospectId);
+    }
+    if (input.channelHandoff !== undefined) patch.channel_handoff = input.channelHandoff;
+    if (input.handoffContact !== undefined) patch.handoff_contact = input.handoffContact;
+    if (input.handoffAt !== undefined) patch.handoff_at = input.handoffAt;
     if (input.proposedReply !== undefined) {
       patch.proposed_reply = input.proposedReply;
       patch.proposed_reply_author = input.proposedReplyAuthor ?? "agent";
@@ -652,12 +673,29 @@ export async function upsertEngagementItem(
           .select("id")
           .single();
         if (!retryErr && retryData) {
-          return { ok: true, id: retryData.id as string, statusIgnored };
+          return { ok: true, id: retryData.id as string, statusIgnored, warnings: warnings.length ? warnings : undefined };
         }
       }
       return { ok: false, error: error?.message ?? "Update failed" };
     }
-    return { ok: true, id: data.id as string, statusIgnored };
+
+    // Step 5b: Preserve message history in engagement_item_messages
+    if (input.content) {
+      try {
+        await client.from("engagement_item_messages").insert({
+          tenant_slug: tenantSlug,
+          engagement_item_id: existing.id,
+          from_name: input.fromName,
+          from_handle: input.fromHandle ?? null,
+          content: input.content,
+          received_at: input.receivedAt || new Date().toISOString(),
+        });
+      } catch (msgErr) {
+        console.warn("[upsertEngagementItem] Failed to log message history", msgErr);
+      }
+    }
+
+    return { ok: true, id: data.id as string, statusIgnored, warnings: warnings.length ? warnings : undefined };
   }
 
   // FIRST INSERT:
@@ -705,10 +743,13 @@ export async function upsertEngagementItem(
     meta: input.meta ?? {},
     why: whyText,
     body: input.body ?? null,
-    prospect_id: input.prospectId,
+    prospect_id: input.prospectId === undefined ? undefined : await ownedProspectId(client, tenantSlug, input.prospectId),
     status: consistency.status,
     replied: consistency.replied,
     resolved_at: consistency.resolved_at,
+    channel_handoff: input.channelHandoff ?? "none",
+    handoff_contact: input.handoffContact ?? null,
+    handoff_at: input.handoffAt ?? null,
   };
 
   if (input.proposedReply !== undefined) {
@@ -723,6 +764,23 @@ export async function upsertEngagementItem(
     .single();
 
   if (error || !data) return { ok: false, error: error?.message ?? "Insert failed" };
+
+  // Step 5b: Preserve message history in engagement_item_messages
+  if (input.content) {
+    try {
+      await client.from("engagement_item_messages").insert({
+        tenant_slug: tenantSlug,
+        engagement_item_id: data.id as string,
+        from_name: input.fromName,
+        from_handle: input.fromHandle ?? null,
+        content: input.content,
+        received_at: input.receivedAt || new Date().toISOString(),
+      });
+    } catch (msgErr) {
+      console.warn("[upsertEngagementItem] Failed to log message history", msgErr);
+    }
+  }
+
   return { ok: true, id: data.id as string, statusIgnored: false };
 }
 
@@ -758,10 +816,35 @@ export async function recordSentReply(
     })
     .eq("tenant_slug", tenantSlug)
     .eq("id", rowRef.id)
-    .select("id")
+    .select("id, from_handle, prospect_id")
     .maybeSingle();
   if (error) return { ok: false, status: 500, error: error.message };
   if (!data) return { ok: false, status: 404 };
+
+  // Step 1: record CONTACTED in ledger (best-effort)
+  if (data.prospect_id) {
+    const { data: p } = await client
+      .from("prospects")
+      .select("handle, email, phone, website, company_name, display_name, run_id")
+      .eq("tenant_slug", tenantSlug)
+      .eq("id", data.prospect_id)
+      .maybeSingle();
+    if (p) {
+      await recordContactedFromProspect(client, tenantSlug, {
+        handle: p.handle,
+        email: p.email,
+        phone: p.phone,
+        website: p.website,
+        companyName: p.company_name || p.display_name,
+        runId: p.run_id,
+      }, "Sent reply recorded");
+    }
+  } else if (data.from_handle) {
+    await recordContactedFromProspect(client, tenantSlug, {
+      handle: data.from_handle as string,
+    }, "Sent reply recorded");
+  }
+
   return { ok: true };
 }
 
@@ -788,6 +871,7 @@ export async function upsertActionItem(
     meta?: Record<string, unknown>;
   }
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const prospectId = await ownedProspectId(client, tenantSlug, input.prospectId);
   const { data, error } = await client
     .from("action_items")
     .upsert(
@@ -804,7 +888,7 @@ export async function upsertActionItem(
         proposed_reply: input.proposedReply ?? null,
         proposed_reply_author: input.proposedReplyAuthor ?? null,
         dedupe_key: input.dedupeKey,
-        prospect_id: input.prospectId ?? null,
+        prospect_id: prospectId,
         engagement_item_id: input.engagementItemId ?? null,
         due_at: input.dueAt ?? null,
         source: input.source ?? "agent",
@@ -1020,15 +1104,30 @@ export async function setDueAt(
 export async function startAgentRun(
   client: SupabaseClient,
   tenantSlug: string,
-  input: { agent: string; surface?: string }
+  input: {
+    agent: string;
+    surface?: string;
+    runId?: string;
+    searchBudget?: number;
+    slice?: string;
+    sliceLabel?: string;
+  }
 ): Promise<{ runId: string }> {
+  const insertPayload: Record<string, unknown> = {
+    tenant_slug: tenantSlug,
+    agent: input.agent,
+    surface: input.surface ?? null,
+    run_id: input.runId ?? null,
+    search_budget: input.searchBudget ?? null,
+    slice_label: input.sliceLabel ?? input.slice ?? null,
+  };
   const { data, error } = await client
     .from("agent_runs")
-    .insert({ tenant_slug: tenantSlug, agent: input.agent, surface: input.surface ?? null })
-    .select("id")
+    .insert(insertPayload)
+    .select("id, run_id")
     .single();
   if (error || !data) throw new Error(error?.message ?? "Failed to start run");
-  return { runId: data.id as string };
+  return { runId: (data.run_id as string) || (data.id as string) };
 }
 
 export async function finishAgentRun(
@@ -1037,13 +1136,19 @@ export async function finishAgentRun(
   runId: string,
   summary: Record<string, unknown>
 ): Promise<{ ok: true } | { ok: false; status: 404 }> {
-  const { data, error } = await client
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(runId);
+  let query = client
     .from("agent_runs")
     .update({ finished_at: new Date().toISOString(), summary })
-    .eq("tenant_slug", tenantSlug)
-    .eq("id", runId)
-    .select("id")
-    .maybeSingle();
+    .eq("tenant_slug", tenantSlug);
+
+  if (isUuid) {
+    query = query.or(`id.eq.${runId},run_id.eq.${runId}`);
+  } else {
+    query = query.eq("run_id", runId);
+  }
+
+  const { data, error } = await query.select("id").maybeSingle();
   if (error || !data) return { ok: false, status: 404 };
   return { ok: true };
 }

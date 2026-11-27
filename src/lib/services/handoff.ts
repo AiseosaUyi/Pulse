@@ -229,18 +229,39 @@ export async function markHandoff(
     handoffId = inserted.id;
   }
 
-  // Marking a handoff sets every OPEN row in that thread to handed_off
-  const { error: rowsErr } = await client
+  // Marking a handoff sets every OPEN row in that thread to handed_off and stamps channel_handoff fields
+  const normChan = input.channel.toLowerCase();
+  const validChan = ["whatsapp", "phone", "email"].includes(normChan) ? normChan : "other";
+
+  const { data: updatedItems, error: rowsErr } = await client
     .from("engagement_items")
-    .update({ status: "handed_off" })
+    .update({
+      status: "handed_off",
+      channel_handoff: validChan === "other" ? "none" : validChan,
+      handoff_contact: input.contact ?? null,
+      handoff_at: nowIso,
+    })
     .eq("tenant_slug", tenantSlug)
     .eq("platform", input.platform)
     .eq("thread_external_id", input.threadExternalId)
-    .eq("status", "open");
+    .select("prospect_id");
 
   if (rowsErr) {
-    // Non-fatal, but return warning / error message if needed
     console.error("Failed to cascade handed_off to open rows:", rowsErr.message);
+  } else if (updatedItems && updatedItems.length) {
+    const prospectIds = [...new Set(updatedItems.map((r) => r.prospect_id).filter(Boolean))];
+    if (prospectIds.length) {
+      await client
+        .from("prospects")
+        .update({
+          channel_handoff: validChan === "other" ? "none" : validChan,
+          handoff_contact: input.contact ?? null,
+          handoff_at: nowIso,
+          status: "handed_off",
+        })
+        .eq("tenant_slug", tenantSlug)
+        .in("id", prospectIds);
+    }
   }
 
   return {
@@ -283,6 +304,34 @@ export async function clearHandoff(
     .is("cleared_at", null);
 
   if (error) return { ok: false, error: error.message };
+
+  const { data: items } = await client
+    .from("engagement_items")
+    .update({
+      channel_handoff: "none",
+      handoff_contact: null,
+      handoff_at: null,
+    })
+    .eq("tenant_slug", tenantSlug)
+    .eq("platform", input.platform)
+    .eq("thread_external_id", input.threadExternalId)
+    .select("prospect_id");
+
+  if (items && items.length) {
+    const prospectIds = [...new Set(items.map((r) => r.prospect_id).filter(Boolean))];
+    if (prospectIds.length) {
+      await client
+        .from("prospects")
+        .update({
+          channel_handoff: "none",
+          handoff_contact: null,
+          handoff_at: null,
+        })
+        .eq("tenant_slug", tenantSlug)
+        .in("id", prospectIds);
+    }
+  }
+
   return { ok: true };
 }
 

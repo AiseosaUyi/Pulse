@@ -7,6 +7,7 @@ import type {
 } from "@/lib/types/engagement";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getBrandVoiceHealth } from "@/lib/services/brand-voice-health";
 import {
   generateEngagementReplyDraft,
   type ReplyDraft,
@@ -155,7 +156,16 @@ export async function draftAndSaveReply(
   tenantSlug: string,
   tenantName: string,
   itemId: string
-): Promise<{ draft: ReplyDraft } | { error: string; status: 404 | 500 }> {
+): Promise<{ draft: ReplyDraft } | { error: string; status: 400 | 404 | 500 }> {
+  // Step 5d: Refuse to draft until real per-venture brand voice is authored
+  const health = await getBrandVoiceHealth(tenantSlug);
+  if (health.unauthored) {
+    return {
+      error: `Brand voice is required before drafting replies. Please configure a real brand voice for this venture in settings. (${health.reasons.join("; ")})`,
+      status: 400,
+    };
+  }
+
   const { data: item } = await client
     .from("engagement_items")
     .select("id, type, platform, content, from_handle")

@@ -3,6 +3,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BrandVoice } from "@/lib/ai/brand-voice";
 import type { BrandPositioning } from "@/lib/ai/brand-positioning";
 import { draftOutboundDmAi, OutboundAiError } from "@/lib/ai/outbound";
+import {
+  ledgerCheck,
+  ledgerAdd,
+  recordContactedFromProspect,
+  normalizeDomain,
+  normalizeEmail,
+  normalizePhone,
+  companyDomainFromEmail,
+} from "@/lib/services/outreach-ledger";
+import { verifyEmailEvidence } from "@/lib/outbound/email-evidence";
+import { getOutreachConfig } from "@/lib/services/outreach-composition";
+import type { OutreachLedgerEntry } from "@/lib/types/ledger";
 import type {
   InboundMessageRecord,
   OutboundDmRecord,
@@ -31,6 +43,17 @@ type ProspectRow = Omit<
   | "lastTouchedAt"
   | "createdAt"
   | "updatedAt"
+  | "runId"
+  | "emailSourceUrl"
+  | "emailStatus"
+  | "unverifiedEmail"
+  | "evidenceUrl"
+  | "evidenceDate"
+  | "teamSize"
+  | "companyName"
+  | "channelHandoff"
+  | "handoffContact"
+  | "handoffAt"
 > & {
   tenant_slug: string;
   search_id: string | null;
@@ -51,6 +74,24 @@ type ProspectRow = Omit<
   phone: string | null;
   owner?: string | null;
   priority?: string | null;
+  run_id?: string | null;
+  email?: string | null;
+  email_source_url?: string | null;
+  email_status?: string | null;
+  unverified_email?: string | null;
+  evidence_url?: string | null;
+  evidence?: string | null;
+  evidence_date?: string | null;
+  segment?: string | null;
+  country?: string | null;
+  city?: string | null;
+  team_size?: string | null;
+  website?: string | null;
+  company_name?: string | null;
+  flags?: string[] | null;
+  channel_handoff?: string | null;
+  handoff_contact?: string | null;
+  handoff_at?: string | null;
   last_reachout_at: string | null;
   last_touched_at: string | null;
   created_at: string;
@@ -85,6 +126,24 @@ function prospectRowTo(row: ProspectRow): ProspectRecord {
     phone: row.phone,
     owner: (row.owner as string | null) ?? ((row.signal_data as Record<string, unknown>)?.owner as string | null) ?? null,
     priority: (row.priority as string | null) ?? ((row.signal_data as Record<string, unknown>)?.priority as string | null) ?? null,
+    runId: (row.run_id as string) || null,
+    email: (row.email as string) || null,
+    emailSourceUrl: (row.email_source_url as string) || null,
+    emailStatus: (row.email_status as ProspectRecord["emailStatus"]) || null,
+    unverifiedEmail: (row.unverified_email as string) || null,
+    evidenceUrl: (row.evidence_url as string) || null,
+    evidence: (row.evidence as string) || null,
+    evidenceDate: (row.evidence_date as string) || null,
+    segment: (row.segment as string) || null,
+    country: (row.country as string) || null,
+    city: (row.city as string) || null,
+    teamSize: (row.team_size as string) || null,
+    website: (row.website as string) || null,
+    companyName: (row.company_name as string) || null,
+    flags: Array.isArray(row.flags) ? (row.flags as string[]) : [],
+    channelHandoff: (row.channel_handoff as ProspectRecord["channelHandoff"]) || "none",
+    handoffContact: (row.handoff_contact as string) || null,
+    handoffAt: (row.handoff_at as string) || null,
     lastReachoutAt: row.last_reachout_at,
     lastTouchedAt: row.last_touched_at,
     createdAt: row.created_at,
@@ -271,6 +330,39 @@ export interface UpsertProspectInput {
   followerCount?: number | null;
   signalSummary?: string | null;
   signalData?: Record<string, unknown>;
+  email?: string | null;
+  emailSourceUrl?: string | null;
+  evidenceUrl?: string | null;
+  evidence?: string | null;
+  evidenceDate?: string | null;
+  segment?: string | null;
+  country?: string | null;
+  city?: string | null;
+  teamSize?: string | null;
+  website?: string | null;
+  companyName?: string | null;
+  flags?: string[] | null;
+  runId?: string | null;
+  ignoreLedger?: boolean;
+  channelHandoff?: "whatsapp" | "phone" | "email" | "none";
+  handoffContact?: string | null;
+  handoffAt?: string | null;
+  phone?: string | null;
+  email_verified?: boolean; // Strictly ignored
+}
+
+export interface UpsertProspectResult {
+  prospect: ProspectRecord | null;
+  dm: OutboundDmRecord | null;
+  skipped?: boolean;
+  ledger?: OutreachLedgerEntry | null;
+  email_report: {
+    kept: Array<{ who: string; email: string }>;
+    dropped: Array<{ who: string; email: string; status: string; reason: string }>;
+    unverified: Array<{ who: string; email: string }>;
+    sent: false;
+  };
+  sent: false;
 }
 
 /** Upsert-by-(tenant, platform, handle) — or, when externalAccountId is
@@ -282,69 +374,184 @@ export interface UpsertProspectInput {
  * for the first time); fall back to the handle-keyed upsert unchanged
  * when no id is given, so existing callers with no id see no behavior
  * change. uq_prospects_external_account (migration 107) is the DB-level
- * backstop against a duplicate id slipping through either path.
- *
- * Mirrors the logic inline in `/api/ext/prospect` (POST) — extracted
- * here so /api/v1 shares it without touching the extension route's own
- * copy. */
+ * backstop against a duplicate id slipping through either path. */
 export async function upsertProspect(
   client: SupabaseClient,
   tenantSlug: string,
   input: UpsertProspectInput
-): Promise<{ prospect: ProspectRecord; dm: OutboundDmRecord | null } | null> {
+): Promise<UpsertProspectResult | null> {
   const handle = normalizeHandle(input.handle);
   if (!handle) return null;
 
-  const fields = {
+  const emailReport = {
+    kept: [] as Array<{ who: string; email: string }>,
+    dropped: [] as Array<{ who: string; email: string; status: string; reason: string }>,
+    unverified: [] as Array<{ who: string; email: string }>,
+    sent: false as const,
+  };
+
+  const domain = input.website
+    ? normalizeDomain(input.website)
+    : companyDomainFromEmail(input.email) || null;
+
+  // 1. Check ledger first unless ignoreLedger is passed (fails open on DB error)
+  if (!input.ignoreLedger) {
+    const ledgerResult = await ledgerCheck(client, tenantSlug, {
+      domain,
+      handle,
+      email: input.email,
+      phone: input.phone,
+    });
+
+    if (ledgerResult.inLedger) {
+      return {
+        prospect: null,
+        dm: null,
+        skipped: true,
+        ledger: ledgerResult.entry ?? null,
+        email_report: emailReport,
+        sent: false,
+      };
+    }
+  }
+
+  // Find the existing row first: by the stable external id when given, else by
+  // handle. Needed so an update never clobbers data it wasn't sent (H2) and so
+  // a weaker email result never overwrites a verified email.
+  let existing: { id: string; email_status: string | null } | null = null;
+  if (input.externalAccountId) {
+    const { data: byId } = await client
+      .from("prospects")
+      .select("id, email_status")
+      .eq("tenant_slug", tenantSlug)
+      .eq("platform", input.platform)
+      .eq("external_account_id", input.externalAccountId)
+      .maybeSingle();
+    existing = byId ?? null;
+  }
+  if (!existing) {
+    const { data: byHandle } = await client
+      .from("prospects")
+      .select("id, email_status")
+      .eq("tenant_slug", tenantSlug)
+      .eq("platform", input.platform)
+      .eq("handle", handle)
+      .maybeSingle();
+    existing = byHandle ?? null;
+  }
+  const hasVerifiedEmail = existing?.email_status === "verified";
+
+  // Only keys the caller actually sent are written. Absent input leaves the
+  // stored value alone. Handoff columns are never written here: the handoff
+  // service owns them.
+  const fields: Record<string, unknown> = {
     display_name: input.displayName ?? null,
     profile_url: input.profileUrl ?? null,
     bio: input.bio ?? null,
     follower_count: input.followerCount ?? null,
     signal_summary: input.signalSummary ?? null,
-    signal_data: input.signalData ?? undefined,
   };
+  if (input.signalData !== undefined) fields.signal_data = input.signalData;
+  const setIfGiven = (col: string, val: unknown) => {
+    if (val !== undefined) fields[col] = val;
+  };
+  setIfGiven("run_id", input.runId);
+  setIfGiven("evidence_url", input.evidenceUrl);
+  setIfGiven("evidence", input.evidence);
+  setIfGiven("evidence_date", input.evidenceDate);
+  setIfGiven("country", input.country);
+  setIfGiven("city", input.city);
+  setIfGiven("team_size", input.teamSize);
+  setIfGiven("website", input.website);
+  setIfGiven("company_name", input.companyName);
+  if (input.flags !== undefined) fields.flags = input.flags ?? [];
+  if (input.phone !== undefined) {
+    fields.phone = input.phone ? normalizePhone(input.phone) || null : null;
+  }
+
+  // 2. Server-side email evidence check (caller email_verified is completely ignored)
+  const emailSourceUrl = input.emailSourceUrl?.trim() || null;
+  const companyOrWho = input.companyName || input.displayName || handle;
+
+  if (input.email) {
+    const rawEmail = normalizeEmail(input.email);
+    if (emailSourceUrl) {
+      const site = input.website || (rawEmail.includes("@") ? `https://${rawEmail.split("@")[1]}` : "");
+      const verification = await verifyEmailEvidence(rawEmail, site, emailSourceUrl);
+      if (verification.status === "VERIFIED") {
+        fields.email = rawEmail;
+        fields.email_source_url = emailSourceUrl;
+        fields.email_status = "verified";
+        emailReport.kept.push({ who: companyOrWho, email: rawEmail });
+      } else {
+        if (!hasVerifiedEmail) fields.email_status = "dropped";
+        emailReport.dropped.push({
+          who: companyOrWho,
+          email: rawEmail,
+          status: verification.status,
+          reason: verification.reason,
+        });
+
+        // Ledger only the EMAIL key, never the company DOMAIN: one bad address
+        // must not block the company. Transient fetch failures are not
+        // ledgered at all, so the address can be retried on a later run.
+        const transient = verification.status === "PAGE_ERROR" || verification.status === "PAGE_BLOCKED";
+        if (!transient) {
+          await ledgerAdd(client, tenantSlug, {
+            kind: "DROPPED",
+            email: rawEmail,
+            companyName: companyOrWho,
+            reason: `${verification.status}: ${verification.reason}`,
+            runId: input.runId ?? undefined,
+          });
+        }
+      }
+    } else {
+      fields.unverified_email = rawEmail;
+      if (!hasVerifiedEmail) fields.email_status = "unverified";
+      emailReport.unverified.push({ who: companyOrWho, email: rawEmail });
+    }
+  }
+
+  // 3. Segment: set only when the caller sent one, or on first insert.
+  if (input.segment !== undefined || !existing) {
+    try {
+      const ventureConfig = await getOutreachConfig(client, tenantSlug);
+      if (ventureConfig) {
+        const reqSeg = input.segment?.trim() || "";
+        fields.segment = reqSeg && ventureConfig.segments[reqSeg] ? reqSeg : ventureConfig.defaultSegment;
+      }
+    } catch (err) {
+      console.warn("[upsertProspect] Segment lookup error", err);
+    }
+  }
 
   let data: Record<string, unknown> | null = null;
   let error: { message: string } | null = null;
 
-  if (input.externalAccountId) {
-    const { data: existing } = await client
-      .from("prospects")
-      .select("id")
-      .eq("tenant_slug", tenantSlug)
-      .eq("platform", input.platform)
-      .eq("external_account_id", input.externalAccountId)
-      .maybeSingle();
-
-    if (existing) {
-      // Known account, possibly renamed — update handle too, don't leave
-      // the stale one behind.
-      ({ data, error } = await client
-        .from("prospects")
-        .update({ handle, ...fields })
-        .eq("id", existing.id)
-        .select("*")
-        .single());
-    } else {
-      // First time this account gets a stable id — still upsert on
-      // handle so a prospect matched by handle before today gets the id
-      // attached instead of duplicated.
-      ({ data, error } = await client
-        .from("prospects")
-        .upsert(
-          { tenant_slug: tenantSlug, platform: input.platform, handle, external_account_id: input.externalAccountId, ...fields },
-          { onConflict: "tenant_slug,platform,handle" }
-        )
-        .select("*")
-        .single());
-    }
-  } else {
+  if (existing) {
+    const patch: Record<string, unknown> = { handle, ...fields };
+    if (input.externalAccountId) patch.external_account_id = input.externalAccountId;
     ({ data, error } = await client
       .from("prospects")
-      .upsert(
-        { tenant_slug: tenantSlug, platform: input.platform, handle, ...fields },
-        { onConflict: "tenant_slug,platform,handle" }
-      )
+      .update(patch)
+      .eq("id", existing.id)
+      .eq("tenant_slug", tenantSlug)
+      .select("*")
+      .single());
+  } else {
+    const row: Record<string, unknown> = {
+      tenant_slug: tenantSlug,
+      platform: input.platform,
+      handle,
+      ...fields,
+    };
+    if (input.externalAccountId) row.external_account_id = input.externalAccountId;
+    // Upsert on the handle key so a concurrent insert for the same handle
+    // still lands as one row.
+    ({ data, error } = await client
+      .from("prospects")
+      .upsert(row, { onConflict: "tenant_slug,platform,handle" })
       .select("*")
       .single());
   }
@@ -352,7 +559,13 @@ export async function upsertProspect(
   if (error || !data) return null;
   const prospect = prospectRowTo(data as ProspectRow);
   const dm = await latestDm(client, tenantSlug, prospect.id);
-  return { prospect, dm };
+  return {
+    prospect,
+    dm,
+    skipped: false,
+    email_report: emailReport,
+    sent: false,
+  };
 }
 
 /** AI-draft a DM for a prospect and save it as the next version,
@@ -451,11 +664,25 @@ export async function markDmSent(
     .update({ status: "sent", sent_at: nowIso })
     .eq("tenant_slug", tenantSlug)
     .eq("id", dm.id);
-  await client
+  const { data: prospect } = await client
     .from("prospects")
     .update({ status: "sent", last_touched_at: nowIso })
     .eq("tenant_slug", tenantSlug)
-    .eq("id", dm.prospect_id);
+    .eq("id", dm.prospect_id)
+    .select("*")
+    .maybeSingle();
+
+  // Step 1: marking a DM sent records CONTACTED for that prospect's domain, email, handle and phone (best-effort)
+  if (prospect) {
+    await recordContactedFromProspect(client, tenantSlug, {
+      handle: prospect.handle,
+      email: prospect.email,
+      phone: prospect.phone,
+      website: prospect.website,
+      companyName: prospect.company_name || prospect.display_name,
+      runId: prospect.run_id,
+    }, "Outbound DM marked sent");
+  }
 
   return { prospectId: dm.prospect_id as string };
 }

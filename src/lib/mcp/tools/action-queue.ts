@@ -83,15 +83,26 @@ export function registerActionQueueTools(server: McpServer) {
           "Honoured ONLY on first insert. Ignored on repeat upserts of an existing row. E.g. 'resolved' records history without entering the open queue."
         ),
         prospectId: z.string().nullable().optional().describe("Link to a known prospect. Omit to leave an existing link untouched."),
+        channelHandoff: z.enum(["whatsapp", "phone", "email", "none"]).optional(),
+        channel_handoff: z.enum(["whatsapp", "phone", "email", "none"]).optional(),
+        handoffContact: z.string().nullable().optional(),
+        handoff_contact: z.string().nullable().optional(),
+        handoffAt: z.string().nullable().optional(),
+        handoff_at: z.string().nullable().optional(),
       },
     },
     async (args, extra: ToolHandlerExtra) => {
       const gate = requireToolScope(extra, "engage:write");
       if (!gate.ok) return gate.error;
       const { tenantSlug, admin } = gate.context;
-      const result = await upsertEngagementItem(admin, tenantSlug, args);
+      const result = await upsertEngagementItem(admin, tenantSlug, {
+        ...args,
+        channelHandoff: args.channelHandoff ?? args.channel_handoff,
+        handoffContact: args.handoffContact ?? args.handoff_contact,
+        handoffAt: args.handoffAt ?? args.handoff_at,
+      });
       if (!result.ok) return mcpToolError(result.error);
-      return mcpToolResult(result);
+      return mcpToolResult({ ...result, sent: false });
     }
   );
 
@@ -284,18 +295,31 @@ export function registerActionQueueTools(server: McpServer) {
     {
       title: "Open an agent run",
       description:
-        "Log the start of a daily/periodic run (e.g. 'agent-social' working Instagram) so 'new since the last run' is answerable later. Returns a runId to pass to pulse_finish_run. Mutates data.",
+        "Log the start of a daily/periodic run or lead research round (with optional runId, searchBudget, and sliceLabel) so 'new since the last run' and run summaries are answerable later. Returns a runId. Mutates data. Never sends any messages (sent: false).",
       inputSchema: {
         agent: z.string().min(1),
         surface: z.string().optional(),
+        runId: z.string().optional(),
+        run_id: z.string().optional(),
+        searchBudget: z.number().int().optional(),
+        search_budget: z.number().int().optional(),
+        slice: z.string().optional(),
+        sliceLabel: z.string().optional(),
+        slice_label: z.string().optional(),
       },
     },
-    async ({ agent, surface }, extra: ToolHandlerExtra) => {
+    async (args, extra: ToolHandlerExtra) => {
       const gate = requireToolScope(extra, "engage:write");
       if (!gate.ok) return gate.error;
       const { tenantSlug, admin } = gate.context;
-      const result = await startAgentRun(admin, tenantSlug, { agent, surface });
-      return mcpToolResult(result);
+      const result = await startAgentRun(admin, tenantSlug, {
+        agent: args.agent,
+        surface: args.surface,
+        runId: args.runId ?? args.run_id,
+        searchBudget: args.searchBudget ?? args.search_budget,
+        sliceLabel: args.sliceLabel ?? args.slice_label ?? args.slice,
+      });
+      return mcpToolResult({ ...result, sent: false });
     }
   );
 
@@ -303,7 +327,7 @@ export function registerActionQueueTools(server: McpServer) {
     "pulse_finish_run",
     {
       title: "Close an agent run",
-      description: "Close a run opened with pulse_start_run, with a summary of what happened. Mutates data.",
+      description: "Close a run opened with pulse_start_run, with a summary of what happened. Mutates data. Never sends any messages (sent: false).",
       inputSchema: {
         runId: z.string(),
         summary: z.record(z.string(), z.unknown()).optional(),
@@ -315,7 +339,7 @@ export function registerActionQueueTools(server: McpServer) {
       const { tenantSlug, admin } = gate.context;
       const result = await finishAgentRun(admin, tenantSlug, runId, summary ?? {});
       if (!result.ok) return mcpToolError("Run not found");
-      return mcpToolResult({ success: true });
+      return mcpToolResult({ success: true, sent: false });
     }
   );
 }
