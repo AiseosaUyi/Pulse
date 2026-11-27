@@ -14,15 +14,14 @@ import { getMailboxWithSecret, createSmtpTransport, setMailboxState, type Mailbo
 import { openImapInbox, pollReplies, type ReplyEvent } from "./replies";
 import { draftDueFollowUps } from "./followups";
 import { findEmailsForTenant } from "./enrich";
-import { createApprovalLink, isDigestConfigured, sendDigestForTenant } from "./digest";
+import { sendDigestForTenant } from "./digest";
 import { draftRepliesForEvents, type ReplyDraftOutcome } from "./reply-draft";
 import { makeAiReplyWriter } from "./reply-writer";
-import { buildReplyAlertEmail } from "./reply-copy";
+import { sendReplyAlerts } from "./reply-alerts";
 import { makeAiPersonalizer } from "./personalize";
 import { sendDueForTenant, type SendTickResult } from "./sender";
 import { isDigestDue } from "./schedule";
 import { composeAndSaveDrafts, getOutreachConfig } from "@/lib/services/outreach-composition";
-import { sendBrevoEmail, getAppBaseUrl } from "@/lib/integrations/brevo";
 
 export interface TenantPassResult {
   tenantSlug: string;
@@ -39,8 +38,9 @@ export interface TenantPassResult {
 }
 
 /**
- * Draft answers to this pass's replies, then email the approver once with
- * the replies, the drafted answers and a one-tap approval link.
+ * Draft answers to this pass's replies, then email each approver (the lead
+ * owner, else the workspace approver) once with their replies, the drafted
+ * answers and a one-tap approval link scoped to those drafts.
  */
 async function handleReplies(
   admin: SupabaseClient,
@@ -65,41 +65,13 @@ async function handleReplies(
     error = `reply drafts: ${err instanceof Error ? err.message : String(err)}`;
   }
 
-  const byLead = new Map(outcomes.map((o) => [o.event.prospectId, o]));
-  const seen = new Set<string>();
-  const items = replies
-    .filter((r) => (seen.has(r.prospectId) ? false : (seen.add(r.prospectId), true)))
-    .map((r) => {
-      const o = byLead.get(r.prospectId);
-      return {
-        from: r.from,
-        company: o?.company ?? null,
-        snippet: r.snippet,
-        optOut: r.optOut,
-        intent: o?.intent ?? null,
-        draft: o?.draft ?? null,
-      };
-    });
   const dmIds = outcomes.map((o) => o.dmId).filter((x): x is string => Boolean(x));
-
-  let approveUrl: string | null = null;
-  if (dmIds.length && isDigestConfigured()) {
-    const link = await createApprovalLink(admin, config.tenantSlug, config.approverEmail, dmIds, now).catch(
-      (e: unknown) => ({ error: e instanceof Error ? e.message : String(e) })
-    );
-    if ("url" in link) approveUrl = link.url;
-    else error = `reply link: ${link.error}`;
+  try {
+    const alerts = await sendReplyAlerts(admin, config, tenantName, replies, outcomes, now);
+    if (alerts.errors.length) error = [error, ...alerts.errors].filter(Boolean).join(" | ");
+  } catch (err) {
+    error = [error, `reply alert: ${err instanceof Error ? err.message : String(err)}`].filter(Boolean).join(" | ");
   }
-
-  const email = buildReplyAlertEmail({ tenantName, items, approveUrl, autopilotUrl: `${getAppBaseUrl()}/autopilot` });
-  const sent = await sendBrevoEmail({
-    to: { email: config.approverEmail },
-    subject: email.subject,
-    htmlContent: email.html,
-    textContent: email.text,
-    tags: ["outreach-replies"],
-  });
-  if (!sent.ok) error = `reply alert: ${sent.error ?? "send failed"}`;
   return { drafted: dmIds.length, error };
 }
 
@@ -242,6 +214,9 @@ export async function runAutopilotForTenant(
       const d = await sendDigestForTenant(admin, config, tenantName, now);
       res.digestSent = d.sent;
       if (d.error) res.errors.push(`digest: ${d.error}`);
+      // Some approvers got theirs: keep the day marked done so nobody is
+      // emailed twice. The drafts stay in /autopilot and in tomorrow's digest.
+      for (const w of d.warnings ?? []) res.errors.push(`digest: ${w}`);
       // Mark the day done even when there was nothing to report, so the
       // digest doesn't re-run every 30 minutes. A failed send retries.
       if (!d.error) await setMailboxState(admin, tenantSlug, { last_digest_at: now.toISOString() });

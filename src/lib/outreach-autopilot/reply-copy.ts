@@ -86,9 +86,25 @@ export function buildReplyAlertEmail(opts: {
   items: ReplyAlertItem[];
   approveUrl: string | null;
   autopilotUrl: string;
+  /** Replies that went to their lead owners instead (workspace approver only). */
+  routedToOwners?: number;
 }): { subject: string; html: string; text: string } {
   const n = opts.items.length;
   const drafts = opts.items.filter((i) => i.draft).length;
+  const routedN = opts.routedToOwners ?? 0;
+  const routed = routedN > 0
+    ? `${routedN} ${routedN === 1 ? "reply" : "replies"} went to ${routedN === 1 ? "its lead owner" : "their lead owners"}.`
+    : "";
+
+  // Only replies for lead owners this pass: a short heads-up, nothing to act on.
+  if (n === 0) {
+    const subject = `${opts.tenantName}: ${routed.replace(/\.$/, "")}`;
+    const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111">
+<p style="color:#444">${esc(routed)} They will approve the answers.</p>
+<p><a href="${esc(opts.autopilotUrl)}" style="color:#ad112c">Open Autopilot</a></p></body></html>`;
+    return { subject, html, text: `${routed} They will approve the answers.\n\nOpen Autopilot: ${opts.autopilotUrl}` };
+  }
+
   const subject = `${opts.tenantName}: ${n} new repl${n === 1 ? "y" : "ies"}${drafts ? `, ${drafts} answer${drafts === 1 ? "" : "s"} ready` : ""}`;
 
   const rows = opts.items
@@ -111,12 +127,16 @@ export function buildReplyAlertEmail(opts: {
 <h2 style="margin:0 0 12px">New replies</h2><ul style="padding-left:18px">${rows}</ul>
 <p style="color:#444">Follow-ups to these people have been stopped.${drafts ? " Nothing is sent until you approve it." : ""}</p>
 ${button}
+${routed ? `<p style="color:#444">${esc(routed)}</p>` : ""}
 <p><a href="${esc(opts.autopilotUrl)}" style="color:#ad112c">Open Autopilot</a></p></body></html>`;
 
   const text = [
     ...opts.items.map((i) => `${i.from}${i.intent ? ` [${INTENT_LABEL[i.intent]}]` : ""}: ${i.snippet}${i.draft ? `\n  Draft answer:\n  ${i.draft.replace(/\n/g, "\n  ")}` : ""}`),
     opts.approveUrl ? `Review and send: ${opts.approveUrl}` : `Open Autopilot: ${opts.autopilotUrl}`,
-  ].join("\n\n");
+    routed,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   return { subject, html, text };
 }

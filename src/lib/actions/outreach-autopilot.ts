@@ -57,9 +57,12 @@ export async function decideFromDigest(token: string, input: unknown): Promise<D
   const admin = createAdminClient();
   const d = await resolveDigest(admin, token);
   if (!d.ok) return { ok: false, error: d.reason === "expired" ? "This link has expired" : "This link is not valid" };
+  // Who approved comes from the signed link itself: a lead owner's link
+  // carries their user id; the workspace approver's link has none (null, as
+  // before). outreach_digests.sent_to keeps the email it went to.
   return decideDraft(admin, d.digest.tenantSlug, parsed.data, {
     via: "email_digest",
-    userId: null,
+    userId: d.digest.approverUserId,
     allowedIds: d.digest.dmIds,
   });
 }
