@@ -26,8 +26,8 @@ export default async function OutreachSettingsPage() {
       <section className="bg-card border border-border rounded-2xl p-6">
         <h2 className="text-base font-semibold text-gray-1100 dark:text-foreground mb-1">Sending mailbox</h2>
         <p className="text-sm text-gray-1000 dark:text-text-muted mb-5">
-          Use the workspace&apos;s own mailbox so replies come back to it (for Sippy, contact@sippy.life). Pulse reads
-          replies from the same mailbox to stop follow-ups.
+          Send from this workspace&apos;s own mailbox so replies come back to it. Pulse reads replies from the same
+          mailbox to stop follow-ups.
         </p>
         <MailboxForm initial={mailbox} />
       </section>
