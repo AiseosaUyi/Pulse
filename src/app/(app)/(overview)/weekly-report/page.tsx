@@ -2,7 +2,8 @@ import { getCurrentTenant } from "@/lib/auth";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Sparkles, TrendingUp, Target, Search, Users, Zap } from "lucide-react";
 import { getLatestDigest } from "@/lib/services/insights";
-import { GenerateDigestButton } from "./client";
+import { GenerateDigestButton, EmailMeButton, ReportActionTask } from "./client";
+import { reportActionsWithTasks } from "@/lib/actions/weekly-report-tasks";
 import type {
   RecommendedAction,
   WeeklyDigestRecord,
@@ -39,6 +40,7 @@ export default async function WeeklyReportPage() {
   const tenantSlug = tenant?.slug ?? "";
 
   const digest = await getLatestDigest(tenantSlug);
+  const withTasks = digest ? await reportActionsWithTasks(digest.id) : [];
 
   return (
     <div className="p-4 md:p-8 max-w-[1000px]">
@@ -61,13 +63,16 @@ export default async function WeeklyReportPage() {
             </p>
           </div>
         </div>
-        <GenerateDigestButton tenantSlug={tenantSlug} hasDigest={digest !== null} />
+        <div className="flex items-center gap-2">
+          {digest && <EmailMeButton digestId={digest.id} />}
+          <GenerateDigestButton hasDigest={digest !== null} />
+        </div>
       </div>
 
       {!digest ? (
         <EmptyDigest />
       ) : (
-        <DigestView digest={digest} />
+        <DigestView digest={digest} withTasks={withTasks} />
       )}
     </div>
   );
@@ -79,7 +84,7 @@ function EmptyDigest() {
       <Sparkles size={24} className="mx-auto text-text-muted mb-3" />
       <h3 className="text-foreground font-semibold mb-1">No weekly digest yet</h3>
       <p className="text-text-muted text-sm max-w-md mx-auto">
-        Click &quot;Generate digest&quot; to synthesize this week&apos;s intel,
+        Click &quot;Make this week&apos;s report&quot; to pull together this week&apos;s intel,
         trends, own-post metrics, SEO, and leads into a strategic brief with
         3–5 priority actions.
       </p>
@@ -87,7 +92,7 @@ function EmptyDigest() {
   );
 }
 
-function DigestView({ digest }: { digest: WeeklyDigestRecord }) {
+function DigestView({ digest, withTasks }: { digest: WeeklyDigestRecord; withTasks: string[] }) {
   const own = digest.ownPerformance;
   const seo = digest.seoSummary;
   const leads = digest.leadsSummary;
@@ -112,9 +117,9 @@ function DigestView({ digest }: { digest: WeeklyDigestRecord }) {
           </h2>
           <div className="space-y-3">
             {digest.recommendedActions
-              .slice()
-              .sort((a, b) => a.priority - b.priority)
-              .map((a, i) => {
+              .map((a, index) => ({ a, index }))
+              .sort((x, y) => x.a.priority - y.a.priority)
+              .map(({ a, index }, i) => {
                 const Icon = a.target_module ? MODULE_ICON[a.target_module] : Target;
                 return (
                   <div
@@ -147,6 +152,13 @@ function DigestView({ digest }: { digest: WeeklyDigestRecord }) {
                           <ArrowRight size={12} />
                         </Link>
                       )}
+                      <div className="mt-3">
+                        <ReportActionTask
+                          digestId={digest.id}
+                          index={index}
+                          alreadyTask={withTasks.includes(a.action)}
+                        />
+                      </div>
                     </div>
                   </div>
                 );

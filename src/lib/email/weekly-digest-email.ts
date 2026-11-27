@@ -1,7 +1,14 @@
 export interface WeeklyDigestEmailProps {
   tenantName: string;
   weekOf: string;
-  narrative: string;
+  /** The business review narrative; falls back to the strategic brief. */
+  narrative: string | null;
+  /** The weekly report's strategic brief. */
+  strategicBrief?: string | null;
+  /** The weekly report's recommended actions, each one a task to plan. */
+  actions?: Array<{ priority: number; action: string; rationale: string }>;
+  /** Where to turn the actions into tasks. */
+  reportUrl?: string;
   wins: string[];
   drags: string[];
   nextWeekFocus: Array<{ title: string; why: string }>;
@@ -9,7 +16,42 @@ export interface WeeklyDigestEmailProps {
 }
 
 export function weeklyDigestHtml(p: WeeklyDigestEmailProps): string {
-  const { tenantName, weekOf, narrative, wins, drags, nextWeekFocus, aiCostUsd } = p;
+  const { tenantName, weekOf, wins, drags, nextWeekFocus, aiCostUsd } = p;
+  const narrative = p.narrative || p.strategicBrief || "";
+  const showBriefSeparately = Boolean(p.narrative && p.strategicBrief);
+
+  const actionsHtml = (p.actions ?? [])
+    .slice()
+    .sort((a, b) => a.priority - b.priority)
+    .map(
+      (a) => `
+    <tr>
+      <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
+        <p style="margin:0 0 4px;font-weight:600;color:#111;"><span style="color:#ad112c;">P${a.priority}</span> ${esc(a.action)}</p>
+        <p style="margin:0;font-size:13px;color:#555;">${esc(a.rationale)}</p>
+      </td>
+    </tr>`
+    )
+    .join("");
+  const actionsBlock = actionsHtml
+    ? `
+        <tr>
+          <td style="padding:0 32px 28px;">
+            <p style="margin:0 0 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#111;">Recommended actions</p>
+            <table width="100%" cellpadding="0" cellspacing="0">${actionsHtml}</table>
+            ${p.reportUrl ? `<p style="margin:16px 0 0;"><a href="${esc(p.reportUrl)}" style="display:inline-block;background:#ad112c;color:#fff;padding:11px 20px;border-radius:999px;text-decoration:none;font-weight:600;font-size:14px;">Turn these into tasks</a></p>` : ""}
+          </td>
+        </tr>`
+    : "";
+  const briefBlock = showBriefSeparately
+    ? `
+        <tr>
+          <td style="padding:0 32px 20px;">
+            <p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555;">Strategic brief</p>
+            <p style="margin:0;font-size:14px;line-height:1.6;color:#333;">${esc(p.strategicBrief ?? "")}</p>
+          </td>
+        </tr>`
+    : "";
 
   const winsHtml = wins
     .map((w) => `<li style="margin-bottom:6px;">${esc(w)}</li>`)
@@ -63,11 +105,13 @@ export function weeklyDigestHtml(p: WeeklyDigestEmailProps): string {
           </td>
         </tr>
 
+${briefBlock}
+${actionsBlock}
         <!-- Wins -->
         <tr>
           <td style="padding:0 32px 20px;">
             <p style="margin:0 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#ad112c;">Wins</p>
-            <ul style="margin:0;padding-left:18px;color:#333;font-size:14px;line-height:1.6;">${winsHtml}</ul>
+            <ul style="margin:0;padding-left:18px;color:#333;font-size:14px;line-height:1.6;">${winsHtml || `<li style="color:#888;">Nothing notable.</li>`}</ul>
           </td>
         </tr>
 
@@ -83,7 +127,7 @@ export function weeklyDigestHtml(p: WeeklyDigestEmailProps): string {
         <tr>
           <td style="padding:0 32px 28px;">
             <p style="margin:0 0 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#111;">This week's priorities</p>
-            <table width="100%" cellpadding="0" cellspacing="0">${focusHtml}</table>
+            <table width="100%" cellpadding="0" cellspacing="0">${focusHtml || `<tr><td style="color:#888;font-size:14px;">See the recommended actions above.</td></tr>`}</table>
           </td>
         </tr>
 
@@ -111,5 +155,5 @@ export function weeklyDigestHtml(p: WeeklyDigestEmailProps): string {
 }
 
 function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

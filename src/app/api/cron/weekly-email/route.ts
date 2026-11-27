@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyFromRequest } from "@/lib/cron/auth";
 import { brevo } from "@/lib/email/brevo";
 import { weeklyDigestHtml } from "@/lib/email/weekly-digest-email";
+import { getAppBaseUrl } from "@/lib/integrations/brevo";
 import type { WeeklyReview } from "@/lib/ai/weekly-review";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,8 @@ interface DigestRow {
   id: string;
   tenant_slug: string;
   narrative: string | null;
+  strategic_brief: string | null;
+  recommended_actions: Array<{ priority: number; action: string; rationale: string }> | null;
   business_review: Partial<WeeklyReview> | null;
   week_of: string;
   tenants: { name: string } | null;
@@ -34,10 +37,12 @@ export async function POST(req: Request) {
 
   const { data: digests, error: digestErr } = await admin
     .from("weekly_digests")
-    .select("id, tenant_slug, narrative, business_review, week_of, tenants(name)")
+    .select("id, tenant_slug, narrative, strategic_brief, recommended_actions, business_review, week_of, tenants(name)")
     .gte("created_at", sevenDaysAgo)
     .is("email_sent_at", null)
-    .not("narrative", "is", null);
+    // A report with a strategic brief is worth sending even if the narrative
+    // review failed to generate (that gate meant nothing was ever sent).
+    .or("narrative.not.is.null,strategic_brief.not.is.null");
 
   if (digestErr) {
     return NextResponse.json({ error: digestErr.message }, { status: 500 });
@@ -49,7 +54,7 @@ export async function POST(req: Request) {
   })) as DigestRow[];
 
   for (const digest of rows) {
-    if (!digest.narrative) continue;
+    if (!digest.narrative && !digest.strategic_brief) continue;
 
     const tenantName = digest.tenants?.name ?? digest.tenant_slug;
     const review = digest.business_review as WeeklyReview | null;
@@ -67,6 +72,9 @@ export async function POST(req: Request) {
       tenantName,
       weekOf: digest.week_of,
       narrative: digest.narrative,
+      strategicBrief: digest.strategic_brief,
+      actions: digest.recommended_actions ?? [],
+      reportUrl: `${getAppBaseUrl()}/weekly-report`,
       wins: review?.wins ?? [],
       drags: review?.drags ?? [],
       nextWeekFocus: review?.next_week_focus ?? [],
@@ -84,7 +92,7 @@ export async function POST(req: Request) {
         await brevo.transactionalEmails.sendTransacEmail({
           sender: { name: "Pulse", email: process.env.BREVO_FROM_EMAIL ?? "digest@pulse.gruve.events" },
           to: [{ email }],
-          subject: `Your Pulse Weekly Review — ${digest.week_of}`,
+          subject: `${tenantName}: your weekly report, week of ${digest.week_of}`,
           htmlContent: html,
         });
         tenantSent = true;
