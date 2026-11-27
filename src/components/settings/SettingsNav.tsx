@@ -19,6 +19,7 @@ import {
   Target,
   Plug,
   Radar,
+  Send,
   Film,
   Activity,
   CalendarCheck,
@@ -95,6 +96,12 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Outbound filters",
         href: "/settings/outbound-filters",
         icon: Radar,
+        surfaces: ["startup"],
+      },
+      {
+        label: "Outreach autopilot",
+        href: "/settings/outreach",
+        icon: Send,
         surfaces: ["startup"],
       },
       {
