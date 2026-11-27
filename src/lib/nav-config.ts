@@ -1,3 +1,5 @@
+import { featureForPath, type FeatureKey } from "@/lib/features/registry";
+
 export type NavAccountType = "startup" | "individual";
 
 // Kept independent from auth.ts's TenantMembership["role"] the same way
@@ -101,6 +103,30 @@ export function navGroupsForAccountType(accountType: NavAccountType): NavGroup[]
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => isItemVisible(item, accountType)),
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
+/**
+ * Drop items owned by a feature this workspace switched off (see
+ * src/lib/features/registry.ts). Hidden, not deleted: the page and its data
+ * are still there and come back when the feature is switched on.
+ */
+export function navGroupsForFeatures(
+  groups: NavGroup[],
+  features: Partial<Record<FeatureKey, boolean>> | undefined
+): NavGroup[] {
+  if (!features) return groups;
+  const on = (href: string) => {
+    const key = featureForPath(href);
+    return !key || features[key] !== false;
+  };
+  return groups
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .map((item) => (item.children ? { ...item, children: item.children.filter((c) => on(c.href)) } : item))
+        .filter((item) => (item.children ? item.children.length > 0 : on(item.href))),
     }))
     .filter((group) => group.items.length > 0);
 }

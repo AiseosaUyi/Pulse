@@ -27,6 +27,7 @@ import {
   Radio,
   ScanSearch,
   Inbox,
+  ToggleRight,
   type LucideIcon,
 } from "lucide-react";
 
@@ -58,6 +59,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     label: "Brand",
     items: [
       { label: "Team", href: "/settings/team", icon: Users },
+      { label: "Features", href: "/settings/features", icon: ToggleRight },
       {
         label: "Brand positioning",
         href: "/settings/brand-positioning",

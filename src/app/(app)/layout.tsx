@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/Toaster";
 import { RouteProgress } from "@/components/ui/RouteProgress";
 import { getCurrentUser, getUserTenants, getCurrentTenant } from "@/lib/auth";
 import { getBrandVoice } from "@/lib/ai/brand-voice";
+import { getFeatures } from "@/lib/features/server";
 
 export default async function AppLayout({
   children,
@@ -35,6 +36,8 @@ export default async function AppLayout({
     );
   }
 
+  const features = await getFeatures(currentSlug);
+
   return (
     <DialogProvider>
       <RouteProgress />
@@ -43,6 +46,7 @@ export default async function AppLayout({
         currentTenantSlug={currentSlug}
         currentAccountType={currentAccountType}
         currentRole={currentRole}
+        features={features}
       />
       <div className="flex h-full">
         <div className="hidden md:block">
@@ -51,6 +55,7 @@ export default async function AppLayout({
             currentTenantSlug={currentSlug}
             currentAccountType={currentAccountType}
             currentRole={currentRole}
+            features={features}
           />
         </div>
         <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
