@@ -5,6 +5,8 @@ import type {
   OutreachBatch,
   SegmentConfig,
 } from "@/lib/types/outreach-config";
+import { mapWithConcurrency } from "@/lib/utils/concurrency";
+import { personalCopyWarnings, type Personalizer, type PersonalCopy } from "@/lib/outreach-autopilot/personal-copy";
 
 export const SURNAME_FIRST_REGEX =
   /^(nguyen|tran|le|pham|hoang|vu|vo|dang|bui|do|ho|ngo|duong|ly|wang|li|zhang|liu|chen|yang|huang|zhao|wu|zhou|xu|sun|ma|zhu|hu|guo|lin|tan|lim|lee|ng|ong|teo|kim|park|choi|jung|kang|cho|yoon|jang)$/i;
@@ -41,6 +43,19 @@ export function buildGreeting(person?: string | null, brandOrTeamName?: string |
     : p;
 
   return `Hi ${formattedFirst},`;
+}
+
+const PLATFORM_NAMES: Record<string, string> = {
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  twitter: "X",
+  linkedin: "LinkedIn",
+};
+
+/** Neutral opening when nothing is known about the lead. Pure. */
+export function plainHook(company: string, platform?: string | null): string {
+  const where = platform ? PLATFORM_NAMES[platform] : undefined;
+  return where ? `I came across ${company} on ${where}.` : `I came across ${company} recently.`;
 }
 
 /**
@@ -255,6 +270,8 @@ export async function composeAndSaveDrafts(
     runId?: string;
     prospectIds?: string[];
     batchSize?: number;
+    /** Writes subject/hook/idea for leads a researcher hasn't. Autopilot passes the AI one. */
+    personalize?: Personalizer | null;
   } = {}
 ): Promise<{ batches: OutreachBatch[]; totalDrafts: number; totalWarnings: number; sent: false }> {
   const config = await getOutreachConfig(client, workspace);
@@ -290,6 +307,20 @@ export async function composeAndSaveDrafts(
     return list[(turnCounters[key] - 1) % list.length];
   };
 
+  // Personal lines for leads with no researcher-written hook, a few at a time.
+  const personal = new Map<string, PersonalCopy>();
+  if (opts.personalize) {
+    const needs = prospects.filter((p) => {
+      const sd = (p.signal_data || {}) as Record<string, unknown>;
+      return !clean(sd.hook as string) && !clean(sd.idea as string);
+    });
+    const personalize = opts.personalize;
+    await mapWithConcurrency(needs, 4, async (p) => {
+      const copy = await personalize(p).catch(() => null);
+      if (copy) personal.set(p.id as string, copy);
+    });
+  }
+
   const compiledDrafts: OutreachDraftMessage[] = [];
   let totalWarningsCount = 0;
 
@@ -305,9 +336,19 @@ export async function composeAndSaveDrafts(
 
     // Extract hook and idea from signal_data or notes or fallback to standard shape
     const sigData = (p.signal_data || {}) as Record<string, unknown>;
-    const subject = clean(sigData.subject as string) || `${company} x ${config.signature}`;
-    const hook = ensureSentence(clean(sigData.hook as string) || clean(p.signal_summary) || `Saw your recent event updates on ${p.platform}.`);
-    const idea = clean(sigData.idea as string) || `${config.ideaPrefix} quick digital check-in directly for your upcoming event dates?`;
+    const ai = personal.get(p.id as string);
+    const researched = clean(sigData.hook as string) || clean(sigData.idea as string);
+    const subject = clean(sigData.subject as string) || ai?.subject || `${company} x ${config.signature}`;
+    const hook = ensureSentence(
+      clean(sigData.hook as string) || ai?.hook || clean(p.signal_summary) || plainHook(company, p.platform as string)
+    );
+    const idea =
+      clean(sigData.idea as string) || ai?.idea || `${config.ideaPrefix} a short call to see whether we can help ${company}?`;
+    const extraWarnings = ai
+      ? personalCopyWarnings(ai)
+      : researched || clean(p.signal_summary)
+        ? []
+        : ["No personal opening line: nothing found about this lead. Edit the opening before approving."];
 
     const proof = pickRotated(`proof:${workspace}:${segKey}`, seg.proof);
     const offer = pickRotated(`offer:${workspace}:${segKey}`, seg.offer);
@@ -341,6 +382,7 @@ export async function composeAndSaveDrafts(
       warnings.push(p.email_search_note);
     }
 
+    warnings.push(...extraWarnings);
     totalWarningsCount += warnings.length;
 
     const draftItem: OutreachDraftMessage = {
