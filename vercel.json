@@ -141,6 +141,10 @@
     {
       "path": "/api/cron/outreach-autopilot",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/assign-leads",
+      "schedule": "0 5 * * *"
     }
   ]
 }
