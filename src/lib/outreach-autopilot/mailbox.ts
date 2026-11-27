@@ -1,6 +1,5 @@
-// One sending mailbox per workspace (migration 116). Gruve sends from a Gruve
-// mailbox, Sippy from contact@sippy.life, both on the same mailcow server the
-// two businesses already use. The password is stored AES-GCM encrypted and is
+// One sending mailbox per workspace (migration 116): each workspace sends from
+// its own address on its own SMTP/IMAP server. The password is stored AES-GCM encrypted and is
 // never returned to a page.
 
 import "server-only";

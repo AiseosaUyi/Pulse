@@ -35,11 +35,11 @@ export function MailboxForm({ initial }: { initial: MailboxConfig | null }) {
     fromEmail: initial?.fromEmail ?? "",
     fromName: initial?.fromName ?? "",
     replyTo: initial?.replyTo ?? null,
-    smtpHost: initial?.smtpHost ?? "mx.gruve.events",
+    smtpHost: initial?.smtpHost ?? "",
     smtpPort: initial?.smtpPort ?? 587,
     smtpUser: initial?.smtpUser ?? "",
     smtpPassword: "",
-    imapHost: initial?.imapHost ?? "mx.gruve.events",
+    imapHost: initial?.imapHost ?? "",
     imapPort: initial?.imapPort ?? 993,
     enabled: initial?.enabled ?? false,
     dailyCap: initial?.dailyCap ?? 30,
@@ -71,25 +71,25 @@ export function MailboxForm({ initial }: { initial: MailboxConfig | null }) {
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Send from (email)">
-          <input className={inputCls} value={v.fromEmail} onChange={(e) => set("fromEmail", e.target.value)} placeholder="contact@sippy.life" />
+          <input className={inputCls} value={v.fromEmail} onChange={(e) => set("fromEmail", e.target.value)} placeholder="hello@yourcompany.com" />
         </Field>
         <Field label="Sender name">
-          <input className={inputCls} value={v.fromName} onChange={(e) => set("fromName", e.target.value)} placeholder="Sippy Sales" />
+          <input className={inputCls} value={v.fromName} onChange={(e) => set("fromName", e.target.value)} placeholder="Jane from Your Company" />
         </Field>
         <Field label="Reply-to (optional)" hint="Leave empty to get replies at the send-from address.">
-          <input className={inputCls} value={v.replyTo ?? ""} onChange={(e) => set("replyTo", e.target.value || null)} />
+          <input className={inputCls} value={v.replyTo ?? ""} onChange={(e) => set("replyTo", e.target.value || null)} placeholder="sales@yourcompany.com" />
         </Field>
         <Field label="Send me the approval email at">
-          <input className={inputCls} value={v.approverEmail} onChange={(e) => set("approverEmail", e.target.value)} />
+          <input className={inputCls} value={v.approverEmail} onChange={(e) => set("approverEmail", e.target.value)} placeholder="you@yourcompany.com" />
         </Field>
         <Field label="Mail server (SMTP)">
-          <input className={inputCls} value={v.smtpHost} onChange={(e) => set("smtpHost", e.target.value)} />
+          <input className={inputCls} value={v.smtpHost} onChange={(e) => set("smtpHost", e.target.value)} placeholder="mail.yourcompany.com" />
         </Field>
         <Field label="SMTP port">
           <input className={inputCls} type="number" value={v.smtpPort} onChange={num("smtpPort")} />
         </Field>
         <Field label="Mailbox login">
-          <input className={inputCls} value={v.smtpUser} onChange={(e) => set("smtpUser", e.target.value)} autoComplete="off" />
+          <input className={inputCls} value={v.smtpUser} onChange={(e) => set("smtpUser", e.target.value)} autoComplete="off" placeholder="hello@yourcompany.com" />
         </Field>
         <Field label="Mailbox password" hint={initial?.hasPassword ? "Saved. Leave empty to keep it." : "Stored encrypted. Never shown again."}>
           <input
@@ -98,10 +98,11 @@ export function MailboxForm({ initial }: { initial: MailboxConfig | null }) {
             value={v.smtpPassword}
             onChange={(e) => set("smtpPassword", e.target.value)}
             autoComplete="new-password"
+            placeholder="••••••••"
           />
         </Field>
         <Field label="Read replies from (IMAP)" hint="Same mailbox and login. Empty turns reply reading off.">
-          <input className={inputCls} value={v.imapHost ?? ""} onChange={(e) => set("imapHost", e.target.value || null)} />
+          <input className={inputCls} value={v.imapHost ?? ""} onChange={(e) => set("imapHost", e.target.value || null)} placeholder="mail.yourcompany.com" />
         </Field>
         <Field label="IMAP port">
           <input className={inputCls} type="number" value={v.imapPort} onChange={num("imapPort")} />
