@@ -34,7 +34,7 @@ export default async function LeadsPage() {
   if (!tenant) {
     return (
       <div className="p-4 md:p-8">
-        <h1 className="text-2xl font-bold text-foreground">Outbound</h1>
+        <h1 className="text-2xl font-bold text-foreground">Leads</h1>
         <p className="text-text-secondary text-sm mt-2">Select a tenant first.</p>
       </div>
     );
@@ -104,7 +104,7 @@ export default async function LeadsPage() {
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="flex items-start justify-between mb-6 gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Outbound</h1>
+          <h1 className="text-2xl font-bold text-foreground">Leads</h1>
           <p className="text-text-secondary text-sm mt-0.5">
             AI finds prospects, scores fit, drafts DMs. You approve each one
             before send. Replies show up in the inbox.

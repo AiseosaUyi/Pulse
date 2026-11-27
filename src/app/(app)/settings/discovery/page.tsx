@@ -18,7 +18,7 @@ export default async function DiscoverySettingsPage() {
       <div>
         <SettingsPageHeading
           icon={Radar}
-          title="Discovery sources"
+          title="Where to find leads"
           subtitle="Owners and admins only."
         />
         <div className="bg-card border border-border rounded-2xl p-8 text-center">
@@ -35,7 +35,7 @@ export default async function DiscoverySettingsPage() {
     <div className="max-w-[760px]">
       <SettingsPageHeading
         icon={Radar}
-        title="Discovery sources"
+        title="Where to find leads"
         subtitle="Platforms Pulse crawls nightly to find new prospects. Add the directories your audience hangs out on — ticketing sites, bar finders, booking apps — and matches surface as leads in Outbound."
       />
       <DiscoveryClient initial={config} />

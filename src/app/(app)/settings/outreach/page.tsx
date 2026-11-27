@@ -19,7 +19,7 @@ export default async function OutreachSettingsPage() {
   return (
     <div className="max-w-[760px] space-y-6">
       <SettingsPageHeading
-        title="Outreach autopilot"
+        title="Lead types and email"
         subtitle={`The mailbox ${tenant.name} sends from, when it sends, and the words it uses. Nothing is sent until you approve it.`}
       />
 

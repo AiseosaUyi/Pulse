@@ -66,7 +66,7 @@ export default async function ContentPage({
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Content</h1>
+          <h1 className="text-2xl font-bold text-foreground">Calendar & briefs</h1>
           <p className="text-text-secondary text-sm mt-0.5">
             Brief ideas grounded in your brand voice. Calendar + one-click
             scheduling on the left, the full brief library on the right.

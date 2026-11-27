@@ -69,7 +69,7 @@ export default async function PostHistoryPage() {
     <div className="p-4 md:p-8 max-w-[1200px]">
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Post History</h1>
+          <h1 className="text-2xl font-bold text-foreground">Post history</h1>
           <p className="text-text-secondary text-sm mt-0.5">Content performance over time</p>
         </div>
         <AddPostButton />
