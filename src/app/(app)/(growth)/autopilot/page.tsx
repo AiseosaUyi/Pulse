@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { requireTenantRole } from "@/lib/auth";
+import { getCurrentUser, requireTenantRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMailbox } from "@/lib/outreach-autopilot/mailbox";
-import { listReviewDrafts } from "@/lib/outreach-autopilot/review";
+import { listReviewDrafts, type ReviewScope } from "@/lib/outreach-autopilot/review";
 import { startOfLocalDay } from "@/lib/outreach-autopilot/schedule";
 import { DraftReview } from "@/components/autopilot/DraftReview";
+import { ChatImport } from "@/components/autopilot/ChatImport";
 import { AutopilotToggle, FindEmailsButton, UnapproveButton } from "./client";
 
 export const dynamic = "force-dynamic";
@@ -29,9 +30,30 @@ export default async function AutopilotPage() {
   const tz = (t?.timezone as string) || "Africa/Lagos";
   const todayStart = startOfLocalDay(new Date(), tz).toISOString();
 
+  // Members review only the leads they own (same rule as the server actions).
+  let scope: ReviewScope | undefined;
+  let notOnTeam = false;
+  if (!canManage) {
+    const user = await getCurrentUser();
+    const { data: person } = user
+      ? await admin
+          .from("team_people")
+          .select("id")
+          .eq("tenant_slug", slug)
+          .eq("user_id", user.id)
+          .eq("active", true)
+          .maybeSingle()
+      : { data: null };
+    notOnTeam = !person;
+    scope = { ownerPersonId: (person?.id as string) ?? "00000000-0000-0000-0000-000000000000" };
+  }
+
   const [mailbox, drafts, queued, recent, sentTodayRes] = await Promise.all([
     getMailbox(admin, slug),
-    listReviewDrafts(admin, slug),
+    // Drafts to decide, plus approved WhatsApp / Instagram replies still waiting to be sent by hand.
+    listReviewDrafts(admin, slug, { scope, statuses: ["drafted", "approved"] }).then((list) =>
+      list.filter((d) => d.status === "drafted" || (d.channel !== "email" && d.sendVia === "by_hand"))
+    ),
     admin
       .from("outbound_dms")
       .select("id, subject, to_email, kind, scheduled_send_at, error")
@@ -110,12 +132,17 @@ export default async function AutopilotPage() {
 
       <section className="space-y-3">
         <h2 className="text-base font-semibold text-gray-1100 dark:text-foreground">Waiting for your approval</h2>
-        {canManage ? (
-          <DraftReview drafts={drafts} mode={{ kind: "app" }} />
-        ) : (
-          <p className="text-sm text-gray-1000 dark:text-text-muted">{drafts.length} drafts waiting. An owner or admin approves them.</p>
+        {!canManage && (
+          <p className="text-sm text-gray-1000 dark:text-text-muted">
+            {notOnTeam
+              ? "Ask an owner to add you to the team. Then you will see drafts for the leads assigned to you."
+              : "These are drafts for the leads assigned to you."}
+          </p>
         )}
+        <DraftReview drafts={drafts} mode={{ kind: "app" }} />
       </section>
+
+      {!notOnTeam && <ChatImport />}
 
       <section className="space-y-3">
         <h2 className="text-base font-semibold text-gray-1100 dark:text-foreground">Approved, going out next</h2>
