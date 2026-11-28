@@ -129,7 +129,7 @@ export async function linkInboundToProspect(
 /** Moves the prospect to "replied" when that is a forward move and the
  * thread is not handed off. Always refreshes last_touched_at. Returns
  * whether the status changed. */
-async function markProspectReplied(
+export async function markProspectReplied(
   client: SupabaseClient,
   tenantSlug: string,
   prospectId: string
@@ -155,7 +155,7 @@ async function markProspectReplied(
 }
 
 /** Same rule as the email autopilot: once they reply, queued follow-ups stop. */
-async function cancelPendingFollowUps(
+export async function cancelPendingFollowUps(
   client: SupabaseClient,
   tenantSlug: string,
   prospectId: string

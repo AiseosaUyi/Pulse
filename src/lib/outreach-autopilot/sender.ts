@@ -131,7 +131,7 @@ export async function sendDueForTenant(
 
   const { data: due } = await admin
     .from("outbound_dms")
-    .select("id, prospect_id, subject, body, to_email, kind, parent_dm_id, send_attempts")
+    .select("id, prospect_id, subject, body, to_email, kind, parent_dm_id, send_attempts, channel")
     .eq("tenant_slug", tenantSlug)
     .eq("status", "approved")
     .eq("send_via", "mailbox")
@@ -147,6 +147,9 @@ export async function sendDueForTenant(
   try {
     for (const [i, dm] of due.entries()) {
       if (deps.deadlineMs && Date.now() > deps.deadlineMs) break;
+      // Email only. WhatsApp / Instagram drafts are sent by a person from
+      // their phone and never by this sender (also a DB check, migration 119).
+      if (((dm.channel as string | null) ?? "email") !== "email") continue;
 
       // Claim: only one run can move approved -> sending. The Message-ID is
       // stored now, so a reply can be matched even if this run dies mid-send.
