@@ -31,6 +31,8 @@ export interface ReplyWriterInput {
   /** Oldest first. */
   thread: Array<{ direction: "outbound" | "inbound"; body: string }>;
   latest: string;
+  /** Where the answer goes. Chat answers are shorter and more casual. Default email. */
+  channel?: "email" | "whatsapp" | "instagram";
 }
 
 export type ReplyWriter = (input: ReplyWriterInput) => Promise<ReplyWriterResult | null>;

@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, X, Save, AlertTriangle } from "lucide-react";
+import { Check, X, Save, AlertTriangle, Send, Copy } from "lucide-react";
 import {
   decideFromDigest,
   decideInApp,
   editFromDigest,
   editInApp,
+  markSentFromDigest,
+  markSentInApp,
 } from "@/lib/actions/outreach-autopilot";
 import type { ReviewDraft } from "@/lib/outreach-autopilot/review";
 
@@ -19,7 +21,13 @@ const KIND_LABEL: Record<string, string> = {
   reply: "Reply",
 };
 
-type RowState = "open" | "approved" | "skipped";
+const CHANNEL_LABEL: Record<string, string> = { whatsapp: "WhatsApp", instagram: "Instagram" };
+
+type RowState = "open" | "approved" | "skipped" | "sent";
+
+const isChat = (d: ReviewDraft) => d.channel !== "email";
+// An approved chat draft is still on screen: it waits for someone to send it from their phone.
+const initialState = (d: ReviewDraft): RowState => (d.status === "approved" ? "approved" : "open");
 
 export function DraftReview({ drafts, mode }: { drafts: ReviewDraft[]; mode: Mode }) {
   const [state, setState] = useState<Record<string, RowState>>({});
@@ -29,7 +37,8 @@ export function DraftReview({ drafts, mode }: { drafts: ReviewDraft[]; mode: Mod
   const [bulkPending, startBulk] = useTransition();
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
 
-  const open = drafts.filter((d) => (state[d.id] ?? "open") === "open");
+  const stateOf = (d: ReviewDraft) => state[d.id] ?? initialState(d);
+  const open = drafts.filter((d) => stateOf(d) === "open");
   const decide = (input: DecideInput) =>
     mode.kind === "token" ? decideFromDigest(mode.token, input) : decideInApp(input);
 
@@ -37,14 +46,22 @@ export function DraftReview({ drafts, mode }: { drafts: ReviewDraft[]; mode: Mod
     startBulk(async () => {
       let ok = 0;
       let failed = 0;
+      let chats = 0;
       for (const d of open) {
         const r = await decide({ dmId: d.id, action: "approve", expectedUpdatedAt: versionOf(d) });
         if (r.ok) {
           ok++;
+          if (isChat(d)) chats++;
           setState((s) => ({ ...s, [d.id]: "approved" }));
         } else failed++;
       }
-      setBulkMsg(`${ok} approved${failed ? `, ${failed} could not be approved` : ""}. They go out inside your send window.`);
+      const emails = ok - chats;
+      const parts = [
+        `${ok} approved${failed ? `, ${failed} could not be approved` : ""}.`,
+        emails ? `${emails === 1 ? "The email goes" : "Emails go"} out inside your send window.` : "",
+        chats ? `Send the ${chats === 1 ? "chat reply" : `${chats} chat replies`} from your phone below.` : "",
+      ];
+      setBulkMsg(parts.filter(Boolean).join(" "));
     });
 
   if (drafts.length === 0) {
@@ -60,6 +77,7 @@ export function DraftReview({ drafts, mode }: { drafts: ReviewDraft[]; mode: Mod
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-gray-1000 dark:text-text-muted">
           {open.length} of {drafts.length} still need a decision. Nothing is sent until you approve it.
+          {drafts.some(isChat) && " WhatsApp and Instagram replies are sent by you, from your phone."}
         </p>
         {open.length > 1 && (
           <button
@@ -81,10 +99,11 @@ export function DraftReview({ drafts, mode }: { drafts: ReviewDraft[]; mode: Mod
           draft={d}
           version={versionOf(d)}
           onSaved={(v) => setVersions((p) => ({ ...p, [d.id]: v }))}
-          rowState={state[d.id] ?? "open"}
+          rowState={stateOf(d)}
           onDecided={(s) => setState((prev) => ({ ...prev, [d.id]: s }))}
           decide={decide}
           save={(input) => (mode.kind === "token" ? editFromDigest(mode.token, input) : editInApp(input))}
+          markSent={() => (mode.kind === "token" ? markSentFromDigest(mode.token, d.id) : markSentInApp(d.id))}
         />
       ))}
     </div>
@@ -108,6 +127,7 @@ function DraftCard({
   onDecided,
   decide,
   save,
+  markSent,
 }: {
   draft: ReviewDraft;
   version: string;
@@ -116,6 +136,7 @@ function DraftCard({
   onDecided: (s: RowState) => void;
   decide: (i: DecideInput) => Promise<Result>;
   save: (i: { dmId: string; subject: string; body: string; expectedUpdatedAt: string }) => Promise<Result>;
+  markSent: () => Promise<Result>;
 }) {
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body);
@@ -125,12 +146,21 @@ function DraftCard({
   const [saved, setSaved] = useState({ subject: draft.subject, body: draft.body });
   const edited = subject !== saved.subject || body !== saved.body;
 
+  const chat = isChat(draft);
+  const who = draft.companyName ?? draft.toContact ?? draft.toEmail;
+
+  if (rowState === "approved" && chat) {
+    return <SendFromPhone draft={draft} body={body} who={who} markSent={markSent} onSent={() => onDecided("sent")} />;
+  }
+
   if (rowState !== "open") {
+    const label =
+      rowState === "approved" ? "approved, will send in your window" : rowState === "sent" ? "marked as sent" : "skipped";
     return (
       <div className="bg-card border border-border rounded-2xl px-5 py-4 text-sm flex items-center gap-2 text-gray-1000 dark:text-text-muted">
-        {rowState === "approved" ? <Check className="h-4 w-4 text-green-600" /> : <X className="h-4 w-4" />}
-        <span className="font-medium text-gray-1100 dark:text-foreground">{draft.companyName ?? draft.toEmail}</span>
-        <span>{rowState === "approved" ? "approved, will send in your window" : "skipped"}</span>
+        {rowState === "skipped" ? <X className="h-4 w-4" /> : <Check className="h-4 w-4 text-green-600" />}
+        <span className="font-medium text-gray-1100 dark:text-foreground">{who}</span>
+        <span>{label}</span>
       </div>
     );
   }
@@ -148,10 +178,10 @@ function DraftCard({
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <p className="font-semibold text-gray-1100 dark:text-foreground">{draft.companyName ?? "Unknown company"}</p>
-          <p className="text-xs text-gray-1000 dark:text-text-muted">to {draft.toEmail}</p>
+          <p className="text-xs text-gray-1000 dark:text-text-muted">to {chat ? draft.toContact : draft.toEmail}</p>
         </div>
         <span className="rounded-full border border-border px-2.5 py-0.5 text-xs text-gray-1000 dark:text-text-muted">
-          {KIND_LABEL[draft.kind] ?? draft.kind}
+          {chat ? `${CHANNEL_LABEL[draft.channel]} reply` : (KIND_LABEL[draft.kind] ?? draft.kind)}
         </span>
       </header>
 
@@ -166,15 +196,17 @@ function DraftCard({
         </ul>
       )}
 
-      <label className="block">
-        <span className="text-xs font-medium text-gray-1000 dark:text-text-muted">Subject</span>
-        <input
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          maxLength={200}
-          className="mt-1 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-gray-1100 dark:text-foreground"
-        />
-      </label>
+      {!chat && (
+        <label className="block">
+          <span className="text-xs font-medium text-gray-1000 dark:text-text-muted">Subject</span>
+          <input
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            maxLength={200}
+            className="mt-1 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-gray-1100 dark:text-foreground"
+          />
+        </label>
+      )}
       <label className="block">
         <span className="text-xs font-medium text-gray-1000 dark:text-text-muted">Message</span>
         <textarea
@@ -236,6 +268,99 @@ function DraftCard({
           className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm text-gray-1000 dark:text-text-muted disabled:opacity-60"
         >
           <X className="h-4 w-4" /> Skip
+        </button>
+      </div>
+    </article>
+  );
+}
+
+/** wa.me wants digits only: country code and number, no "+". */
+const waLink = (phone: string, text: string) => `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`;
+const igLink = (handle: string) => `https://ig.me/m/${encodeURIComponent(handle.replace(/^@/, ""))}`;
+
+/**
+ * An approved WhatsApp / Instagram reply. Pulse never sends these: the button
+ * opens the chat on this phone with the text ready, the person presses send
+ * there, then taps "I sent it" so Pulse knows.
+ */
+function SendFromPhone({
+  draft,
+  body,
+  who,
+  markSent,
+  onSent,
+}: {
+  draft: ReviewDraft;
+  body: string;
+  who: string | null;
+  markSent: () => Promise<Result>;
+  onSent: () => void;
+}) {
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+  const contact = draft.toContact ?? "";
+
+  const openInstagram = async () => {
+    try {
+      await navigator.clipboard.writeText(body);
+      setMsg({ tone: "ok", text: "Message copied. Paste it in the Instagram chat and send." });
+    } catch {
+      setMsg({ tone: "err", text: "Could not copy. Select the message above and copy it." });
+    }
+    window.open(igLink(contact), "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <article className="bg-card border border-border rounded-2xl p-5 space-y-3">
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <p className="font-semibold text-gray-1100 dark:text-foreground">{who ?? "Unknown lead"}</p>
+          <p className="text-xs text-gray-1000 dark:text-text-muted">
+            Approved. Send it from your phone to {contact}.
+          </p>
+        </div>
+        <span className="rounded-full border border-border px-2.5 py-0.5 text-xs text-gray-1000 dark:text-text-muted">
+          {CHANNEL_LABEL[draft.channel]} reply
+        </span>
+      </header>
+      <p className="whitespace-pre-wrap rounded-lg border border-border px-3 py-2 text-sm leading-relaxed text-gray-1100 dark:text-foreground">
+        {body}
+      </p>
+      {msg && (
+        <p className={msg.tone === "ok" ? "text-sm text-green-700 dark:text-green-400" : "text-sm text-red-600"}>{msg.text}</p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {draft.channel === "whatsapp" ? (
+          <a
+            href={waLink(contact, body)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary-500 px-4 py-2 text-sm font-semibold text-white"
+          >
+            <Send className="h-4 w-4" /> Open in WhatsApp
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={openInstagram}
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary-500 px-4 py-2 text-sm font-semibold text-white"
+          >
+            <Copy className="h-4 w-4" /> Copy and open Instagram
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              const r = await markSent();
+              if (r.ok) onSent();
+              else setMsg({ tone: "err", text: r.error });
+            })
+          }
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm text-gray-1100 dark:text-foreground disabled:opacity-60"
+        >
+          <Check className="h-4 w-4" /> {pending ? "Saving..." : "I sent it"}
         </button>
       </div>
     </article>

@@ -3,6 +3,8 @@
 // Outreach autopilot actions.
 //   *FromDigest: authorised by the signed link in the approval email, limited
 //     to that tenant and to the drafts listed in that email.
+//   decide/edit/unapprove/mark-sent in the app: owners and admins act on any
+//     draft; members act only on drafts for leads they own (team_people).
 //   everything else: a signed-in owner/admin of the current tenant.
 // All writes use the admin client after that check (outreach tables are
 // service-role-only for writes, migrations 115/116).
@@ -15,8 +17,10 @@ import { resolveDigest } from "@/lib/outreach-autopilot/digest";
 import {
   decideDraft,
   editDraft,
+  markSentByHand,
   unapproveDraft,
   type DecideResult,
+  type ReviewScope,
 } from "@/lib/outreach-autopilot/review";
 import {
   createSmtpTransport,
@@ -50,6 +54,28 @@ async function requireManager(): Promise<{ tenantSlug: string; userId: string } 
   return { tenantSlug: tenant.slug, userId: user.id };
 }
 
+/**
+ * Who may review drafts in the app. Owners/admins: every draft (no scope).
+ * Members: only leads they own, via their team_people row. Support: nobody.
+ */
+async function requireReviewer(): Promise<
+  { tenantSlug: string; userId: string; scope?: ReviewScope } | { error: string }
+> {
+  const [tenant, user] = await Promise.all([getCurrentTenant(), getCurrentUser()]);
+  if (!tenant || !user) return { error: "Sign in again" };
+  if (tenant.role === "owner" || tenant.role === "admin") return { tenantSlug: tenant.slug, userId: user.id };
+  if (tenant.role !== "member") return { error: "You can't review outreach" };
+  const { data: person } = await createAdminClient()
+    .from("team_people")
+    .select("id")
+    .eq("tenant_slug", tenant.slug)
+    .eq("user_id", user.id)
+    .eq("active", true)
+    .maybeSingle();
+  if (!person) return { error: "Ask an owner to add you to the team first" };
+  return { tenantSlug: tenant.slug, userId: user.id, scope: { ownerPersonId: person.id as string } };
+}
+
 // ── Approval-email link ─────────────────────────────────────────────────────
 
 export async function decideFromDigest(token: string, input: unknown): Promise<DecideResult> {
@@ -63,6 +89,18 @@ export async function decideFromDigest(token: string, input: unknown): Promise<D
   // before). outreach_digests.sent_to keeps the email it went to.
   return decideDraft(admin, d.digest.tenantSlug, parsed.data, {
     via: "email_digest",
+    userId: d.digest.approverUserId,
+    allowedIds: d.digest.dmIds,
+  });
+}
+
+/** "I sent it" from the approval-email page, limited to that email's drafts. */
+export async function markSentFromDigest(token: string, dmId: string): Promise<DecideResult> {
+  if (!z.string().uuid().safeParse(dmId).success) return { ok: false, error: "Invalid request" };
+  const admin = createAdminClient();
+  const d = await resolveDigest(admin, token);
+  if (!d.ok) return { ok: false, error: d.reason === "expired" ? "This link has expired" : "This link is not valid" };
+  return markSentByHand(admin, d.digest.tenantSlug, dmId, {
     userId: d.digest.approverUserId,
     allowedIds: d.digest.dmIds,
   });
@@ -82,11 +120,12 @@ export async function editFromDigest(token: string, input: unknown): Promise<Dec
 export async function decideInApp(input: unknown): Promise<DecideResult> {
   const parsed = decideSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid request" };
-  const who = await requireManager();
+  const who = await requireReviewer();
   if ("error" in who) return { ok: false, error: who.error };
   const res = await decideDraft(createAdminClient(), who.tenantSlug, parsed.data, {
     via: "in_app",
     userId: who.userId,
+    scope: who.scope,
   });
   revalidatePath("/autopilot");
   return res;
@@ -95,16 +134,26 @@ export async function decideInApp(input: unknown): Promise<DecideResult> {
 export async function editInApp(input: unknown): Promise<DecideResult> {
   const parsed = editSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid request" };
-  const who = await requireManager();
+  const who = await requireReviewer();
   if ("error" in who) return { ok: false, error: who.error };
-  return editDraft(createAdminClient(), who.tenantSlug, parsed.data);
+  return editDraft(createAdminClient(), who.tenantSlug, parsed.data, undefined, who.scope);
 }
 
 export async function unapproveInApp(dmId: string): Promise<DecideResult> {
   if (!z.string().uuid().safeParse(dmId).success) return { ok: false, error: "Invalid request" };
-  const who = await requireManager();
+  const who = await requireReviewer();
   if ("error" in who) return { ok: false, error: who.error };
-  const res = await unapproveDraft(createAdminClient(), who.tenantSlug, dmId);
+  const res = await unapproveDraft(createAdminClient(), who.tenantSlug, dmId, who.scope);
+  revalidatePath("/autopilot");
+  return res;
+}
+
+/** "I sent it": a person sent an approved WhatsApp / Instagram draft from their phone. */
+export async function markSentInApp(dmId: string): Promise<DecideResult> {
+  if (!z.string().uuid().safeParse(dmId).success) return { ok: false, error: "Invalid request" };
+  const who = await requireReviewer();
+  if ("error" in who) return { ok: false, error: who.error };
+  const res = await markSentByHand(createAdminClient(), who.tenantSlug, dmId, { userId: who.userId, scope: who.scope });
   revalidatePath("/autopilot");
   return res;
 }
@@ -248,4 +297,81 @@ export async function findEmailsNowAction(): Promise<
   } catch {
     return { ok: false, error: "Could not look for emails right now" };
   }
+}
+
+// ── WhatsApp / Instagram chats ──────────────────────────────────────────────
+
+const chatImportSchema = z.object({
+  channel: z.enum(["whatsapp", "instagram"]),
+  contact: z.string().trim().min(2).max(80),
+  prospectId: z.string().uuid().nullable().optional(),
+  messages: z
+    .array(
+      z.object({
+        from: z.enum(["them", "us"]),
+        text: z.string().max(5000),
+        at: z.string().min(8).max(40),
+      })
+    )
+    .min(1)
+    .max(2000),
+});
+
+export type ChatImportActionInput = z.infer<typeof chatImportSchema>;
+
+/**
+ * Stores a WhatsApp / Instagram chat a teammate exported or pasted, and drafts
+ * the reply if the lead spoke last. Nothing is sent: the draft waits for
+ * approval, then the teammate sends it from their own phone.
+ */
+export async function importChatAction(input: unknown) {
+  const parsed = chatImportSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Check the chat and the contact" };
+  const who = await requireReviewer();
+  if ("error" in who) return { ok: false as const, error: who.error };
+  const admin = createAdminClient();
+
+  const [{ importChatAndDraft }, { makeAiReplyWriter }] = await Promise.all([
+    import("@/lib/outreach-autopilot/chat-reply"),
+    import("@/lib/outreach-autopilot/reply-writer"),
+  ]);
+  const [{ data: me }, { data: tenant }] = await Promise.all([
+    admin.from("team_people").select("name").eq("tenant_slug", who.tenantSlug).eq("user_id", who.userId).maybeSingle(),
+    admin.from("tenants").select("name").eq("slug", who.tenantSlug).maybeSingle(),
+  ]);
+  const senderName = [(me?.name as string) || "", (tenant?.name as string) || ""].filter(Boolean).join(" from ") || "our team";
+
+  const res = await importChatAndDraft(admin, who.tenantSlug, parsed.data, {
+    writer: await makeAiReplyWriter(who.tenantSlug),
+    senderName,
+    ownerPersonId: who.scope?.ownerPersonId,
+  });
+  revalidatePath("/autopilot");
+  return res;
+}
+
+/** Leads to pick from when a chat's number or handle matches nobody. Members see their own. */
+export async function searchLeadsForChatAction(query: string) {
+  const q = String(query ?? "").trim().replace(/[%,()]/g, " ").slice(0, 60);
+  if (q.length < 2) return { ok: true as const, leads: [] };
+  const who = await requireReviewer();
+  if ("error" in who) return { ok: false as const, error: who.error };
+  let req = createAdminClient()
+    .from("prospects")
+    .select("id, company_name, display_name, handle, phone")
+    .eq("tenant_slug", who.tenantSlug)
+    .is("duplicate_of_id", null)
+    .or(`company_name.ilike.%${q}%,display_name.ilike.%${q}%,handle.ilike.%${q}%`)
+    .limit(10);
+  if (who.scope) req = req.eq("owner_person_id", who.scope.ownerPersonId);
+  const { data } = await req;
+  return {
+    ok: true as const,
+    leads: (data ?? []).map((r) => ({
+      id: r.id as string,
+      name: ((r.company_name as string) || (r.display_name as string) || (r.handle as string) || "Lead") as string,
+      handle: (r.handle as string) ?? null,
+      phone: (r.phone as string) ?? null,
+    })),
+  };
 }

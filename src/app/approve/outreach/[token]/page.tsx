@@ -34,17 +34,20 @@ export default async function OutreachApprovePage({ params }: { params: Promise<
   }
 
   const [drafts, tenant] = await Promise.all([
-    listReviewDrafts(admin, d.digest.tenantSlug, { ids: d.digest.dmIds }),
+    // Approved chat replies stay listed so the link can still mark them sent.
+    listReviewDrafts(admin, d.digest.tenantSlug, { ids: d.digest.dmIds, statuses: ["drafted", "approved"] }).then(
+      (list) => list.filter((x) => x.status === "drafted" || (x.channel !== "email" && x.sendVia === "by_hand"))
+    ),
     admin.from("tenants").select("name").eq("slug", d.digest.tenantSlug).maybeSingle(),
   ]);
 
   return (
     <PublicPageShell className="max-w-[720px] pb-16">
       <h1 className="text-xl font-semibold text-gray-1100 dark:text-foreground mb-1">
-        {(tenant.data?.name as string) ?? d.digest.tenantSlug}: emails to approve
+        {(tenant.data?.name as string) ?? d.digest.tenantSlug}: messages to approve
       </h1>
       <p className="text-sm text-gray-1000 dark:text-text-muted mb-5">
-        Edit anything you like. Approved emails go out from your mailbox inside your send window.
+        Edit anything you like. Approved emails go out from your mailbox inside your send window. WhatsApp and Instagram replies open on your phone for you to send.
       </p>
       <DraftReview drafts={drafts} mode={{ kind: "token", token }} />
     </PublicPageShell>
