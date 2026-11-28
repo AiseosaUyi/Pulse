@@ -32,7 +32,7 @@ const SECONDARY_MAX_H = "240px";
 // display-only split of "needs_decision" (see the filter below) that
 // exists only in this component's local layout, never sent to the API.
 type BoardSectionKey = QueueGroupKey | "chores";
-type ViewMode = "queue" | "handed_off" | "resolved";
+type ViewMode = "queue" | "handed_off" | "resolved" | "archived";
 
 // Mobile splits the 6 possible sections into two tab groups of at most 3
 // each — a single 6-way pill strip meant Opportunities/Going cold/Chores
@@ -134,17 +134,20 @@ export function ActionQueueBoard({
   const nonEmptySections = sections.filter((s) => s.rows.length > 0);
   const allEmpty = nonEmptySections.length === 0;
 
-  if (viewMode === "resolved") {
+  if (viewMode === "resolved" || viewMode === "archived") {
     const resolvedRows = result.groups[0]?.rows ?? [];
+    const isArchivedView = viewMode === "archived";
     return (
       <div className="rounded-2xl border border-border bg-card">
         <BoardHeader viewMode={viewMode} onChangeViewMode={setViewMode} />
         <div className="p-5">
           {resolvedRows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-text-secondary">Nothing resolved yet.</p>
+            <p className="py-8 text-center text-sm text-text-secondary">
+              {isArchivedView ? "Nothing archived. Items open with no activity for 30 days land here." : "Nothing resolved yet."}
+            </p>
           ) : (
             <div className="max-h-[560px] overflow-y-auto pr-1">
-              <QueueGroup label="Resolved" rows={resolvedRows} variant="line" canSeeActivity={canSeeActivity} onChanged={onChanged} />
+              <QueueGroup label={isArchivedView ? "Archived" : "Resolved"} rows={resolvedRows} variant="line" canSeeActivity={canSeeActivity} onChanged={onChanged} />
             </div>
           )}
         </div>
@@ -395,6 +398,18 @@ function BoardHeader({
           )}
         >
           Resolved today
+        </button>
+        <button
+          type="button"
+          onClick={() => onChangeViewMode("archived")}
+          className={cn(
+            "px-2.5 py-1 rounded-md transition-colors",
+            viewMode === "archived"
+              ? "bg-primary-500/10 text-primary-600 dark:text-primary-400 font-medium"
+              : "text-text-secondary hover:text-foreground"
+          )}
+        >
+          Archived
         </button>
       </div>
     </div>

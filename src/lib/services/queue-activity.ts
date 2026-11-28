@@ -5,7 +5,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { QueueSource } from "@/lib/services/action-queue";
 
-export type QueueActivityAction = "opened" | "copied_reply" | "resolved" | "reopened" | "dismissed" | "snoozed";
+export type QueueActivityAction = "opened" | "copied_reply" | "resolved" | "reopened" | "dismissed" | "snoozed" | "archived";
 
 export interface QueueActivityEntry {
   id: string;

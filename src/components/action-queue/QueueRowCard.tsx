@@ -47,6 +47,7 @@ const ACTIVITY_LABEL: Record<QueueActivityEntry["action"], string> = {
   reopened: "reopened",
   dismissed: "dismissed",
   snoozed: "snoozed",
+  archived: "archived it after 30 days with no activity",
 };
 
 const UNSUPPORTED_SOURCES = new Set(["coach", "prospect"]);
@@ -75,7 +76,7 @@ export function QueueRowCard({
 
   const rowRef = { source: row.source, id: row.id };
   const status = optimisticStatus ?? row.status;
-  const isResolved = status === "resolved" || status === "dismissed";
+  const isResolved = status === "resolved" || status === "dismissed" || status === "archived";
   const overdue = !!row.dueAt && new Date(row.dueAt).getTime() < Date.now() && !isResolved;
   const aged = variant === "compose" && !isResolved && Date.now() - new Date(row.receivedAt).getTime() > AGE_SLA_MS;
   const canEditReply = !UNSUPPORTED_SOURCES.has(row.source);
@@ -192,7 +193,7 @@ export function QueueRowCard({
       {!activityLoading &&
         activity?.map((entry) => (
           <p key={entry.id} className="text-xs text-text-secondary" suppressHydrationWarning>
-            <span className="font-medium text-foreground">{entry.actorName ?? "Someone"}</span>{" "}
+            <span className="font-medium text-foreground">{entry.actorName ?? (entry.actorId ? "Someone" : "Pulse")}</span>{" "}
             {ACTIVITY_LABEL[entry.action]} · {formatRelativeTime(entry.createdAt)}
           </p>
         ))}
